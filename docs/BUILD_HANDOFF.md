@@ -127,8 +127,7 @@ explicit transition records, impact review and preserved played games. Complete 
 acceptance cases in TD_OPERATIONS.md before calling the first TD release usable.
 
 The earlier inline dropdown concept does not satisfy the user’s results-entry
-requirement. The first results slice must exercise W/L/D advance, decimal 0.5
-without premature commit, reciprocal result updates, stable focus and fast correction.
+requirement. The first results slice must exercise 1/0/5 and W/L/D immediate advance, correct half-point draw storage, reciprocal result updates, stable focus and fast correction.
 Duty review also requires lightweight ruling/appeal handover, announced policy
 visibility, house-player handling and submission-correction tracking at the scope
 defined in the duty matrix. Do not replace those workflows with decorative dashboards.

@@ -151,9 +151,9 @@ revision and indicate that previous paper/web copies are stale.
 ### 6. Enter results at tournament speed
 
 The authoritative contract is [Results entry](RESULT_ENTRY.md). Use a large,
-keyboard-operated board table with a clearly labelled result perspective. W/L/D
-commits and advances immediately; numeric 1/0/0.5 commits with Enter/Tab so the
-first 0 of 0.5 cannot accidentally become a loss. Store both opponents atomically.
+keyboard-operated board table with a clearly labelled result perspective. 1/0/5 and W/L/D
+commit and advance immediately, without Enter. 5 records a half-point draw; the
+visible legend and result perspective make the commands explicit. Store both opponents atomically.
 Support arrows, skipping blanks, Undo, explicit correction, board-number jump and
 a player-by-round matrix. Stable row order and focus are essential.
 

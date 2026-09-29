@@ -29,7 +29,7 @@ Every P0 must pass its acceptance scenario before that release is called complet
 | P02 | P0 | Pairing proposal, review, publish and manual overrides | Stale proposals fail; override records reason and re-runs integrity checks |
 | P03 | P0 | Double-round games | Six pairing rounds produce 12 games/player; both colors and results are preserved |
 | P04 | P0 | No unexplained fallback | Unsatisfiable constraints identify conflicts rather than inventing illegal pairings |
-| G01 | P0 | Large keyboard results grid with automatic advancement | W/L/D advances once; 1/0/0.5 Enter/Tab commits safely; held keys never fill multiple games; see RESULT_ENTRY.md |
+| G01 | P0 | Large keyboard results grid with automatic advancement | 1/0/5 and W/L/D save and advance without Enter; 5 means a half-point draw; held keys never fill multiple games; see RESULT_ENTRY.md |
 | G02 | P0 | Distinct played result, forfeit, bye, absence | Equal scores from a win and a bye remain different for rating and tie-breaks |
 | G03 | P0 | Revisioned corrections | Earlier result correction marks dependent standings/pairing proposals stale |
 | G04 | P0 | RR withdrawal semantics | Completed games remain in rating history even when excluded from prize standings |

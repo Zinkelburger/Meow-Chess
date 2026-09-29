@@ -77,7 +77,7 @@ The screen names refer to [TD experience](TD_EXPERIENCE.md).
 | P02 | Explain pairing constraints, integrity validation and unsatisfied preferences | Pairing inspector / Issues | A: distinguish illegal state from allowed policy exception |
 | P03 | Manual swaps, color reversal, boards, forced pairings/byes, locks, replacement players | Pairing review / inspector | A: manual edits and locks show impact before applying |
 | P04 | Board and alphabetical pairings, team lists and complete RR schedule | Rounds → View / Reports | A individual; C team: all views reference same published revision |
-| P05 | Keyboard results grid: W/L/D auto-advance, decimal-safe 1/0/0.5, all-round matrix, text import, clear selected results | Rounds | A editor; B batch import: preview conflicts and missing opponents |
+| P05 | Keyboard results grid: 1/0/5 and W/L/D immediate auto-advance, all-round matrix, text import, clear selected results | Rounds | A editor; B batch import: preview conflicts and missing opponents |
 | P06 | Played results, forfeits/byes, unplayed/disputed status and separate TD-approved temporary pairing treatment | Result cell → outcome | A: preserve result semantics separately from score |
 | P07 | Correct earlier results; withdraw; go back/replace round; preserve later games | Rounds → History | A: explicit impact review; no silent deletion/re-pairing |
 | P08 | Board history, opponents/colors and published revision history | Player / pairing inspector | A: old printed pairing can be traced to revision |

@@ -1,10 +1,11 @@
 # Results entry: a first-class TD work surface
 
 User requirement: type results into a large table and continue directly into the
-next cell. This is an interaction contract, not an implemented interface.
+next cell. Default numeric shortcuts are **1 = win, 0 = loss, 5 = draw**, as
+explicitly selected by the user; W/L/D are equivalent shortcuts. This is an interaction contract, not an implemented interface.
 US Chess's result collection/posting duty motivates the workflow (rules 15H/28O);
 US Chess does not prescribe these keystrokes. See [duty evidence](../research/notes/TD_DUTIES.md).
-This contract supersedes the earlier sketch's underspecified 1 / = / 0 shortcuts.
+This contract supersedes the earlier proposal requiring Enter/Tab for numeric input.
 
 ## The table
 
@@ -31,8 +32,10 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 | W or w | Win for labelled player | Save and advance immediately |
 | L or l | Loss for labelled player | Save and advance immediately |
 | D or d | Draw | Save and advance immediately |
-| 1 / 0 / 0.5 | Decimal result | Type value, Enter commits and advances down; Tab commits to next result cell |
-| .5 / ½ / = | Draw aliases | `.5` uses numeric commit; single-character `½` or `=` saves and advances |
+| 1 | Win for labelled player | Save and advance immediately; no Enter needed |
+| 0 | Loss for labelled player | Save and advance immediately; no Enter needed |
+| 5 | Draw | Save a half-point draw and advance immediately; never store five points |
+| ½ / = | Additional draw aliases | Save and advance immediately |
 | Arrow keys | Navigate cells | No result created by moving focus |
 | Enter on blank | Skip unknown game | Leave unreported and advance |
 | Shift+Enter / Shift+Tab | Reverse traversal | Commit a valid edit, then move backward |
@@ -41,19 +44,18 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 | Delete on selected saved result | Clear result deliberately | Restore unreported state with history/undo; review dependencies if necessary |
 | Undo | Revert latest applicable change | Restore both opponents and focus to that game; review historical dependencies |
 
-There is a genuine parsing ambiguity: `0` is both a complete loss and the beginning
-of `0.5`. Do not commit the first `0`, use a typing-speed timeout, or rely on how
-fast the TD presses the decimal point. W/L/D supplies immediate one-key entry;
-numeric input uses an explicit Enter/Tab terminator. The UI must explain this once
-in the legend. This supports the requested numeric values safely while preserving
-a fast one-keystroke path. A later optional numeric-keypad mode may map 1/0/5 to
-win/loss/draw, but must be explicitly selected and cannot silently reinterpret 0.5.
+Show a persistent compact legend: **1 Win · 0 Loss · 5 Draw · W/L/D also work**.
+Support both the number row and numpad. These keys are commands, not decimal text
+entry: 5 stores/displays a draw (½ or 0.5), not five points. There is no Enter/Tab
+requirement, typing-speed timeout or automatic mode inference for these shortcuts.
+The focused-cell context always states whose result is being entered.
 
-A typed `0.` stays pending; `0.5` commits only on the numeric terminator. Invalid
-values stay in the same cell with a concise message; no save or advance. Number-row
-and numpad digits work. Reject incomplete decimals on commit. Decide locale decimal
-separator support explicitly and test it; never treat a decimal separator as a
-column delimiter in an individual cell.
+Decimal strings such as 0.5 belong to an explicit text-edit/import/paste path, if
+provided, with a complete-value parser and explicit commit. They are not accepted
+as a multi-keystroke sequence in the default immediate-entry grid. Do not advertise
+both decimal typing and instant 0 commitment in the same input mode. Invalid command
+keys do not save or advance; show the short legend instead of interpreting them as
+an outcome. Keep bulk paste separate from individual keyboard events.
 
 Keyboard shortcuts apply only when a result cell owns focus. Typing in names,
 search, notes or another window must never enter a result. Ignore key-repeat events
@@ -109,8 +111,9 @@ outcome through an explicit action, not overwrite a derived total accidentally.
 | Fixture | Must hold |
 |---|---|
 | W, L, D sequence across three missing games | Correct reciprocal outcomes; one advancement per released key |
-| 1 Enter, 0 Enter, 0.5 Enter, .5 Tab | Win/loss/draw/draw; no premature loss while typing decimal |
-| Pause after 0 or 0. for any duration | No timer-triggered commit or focus movement |
+| 1, 0, 5 sequence without Enter | Win/loss/draw on three games; reciprocal results correct; one advancement each |
+| Numpad 1, 0, 5 and number-row equivalents | Identical behavior; draw stores half a point, never five |
+| Decimal 0.5 through explicit text/paste path, if offered | Parse full value before commit; do not dispatch individual shortcut events |
 | Hold W; deliver duplicate event | At most one game entered for one physical key press |
 | Enter on blank, invalid value, Escape | No invented loss; invalid input stays; cancel restores |
 | Black player's all-round cell receives W | Black wins; reciprocal white cell becomes loss |

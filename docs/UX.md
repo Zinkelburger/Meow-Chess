@@ -1,7 +1,7 @@
 # Event workspace and design system
 
-> Result entry now follows [RESULT_ENTRY.md](RESULT_ENTRY.md); its decimal-safe
-> W/L/D and numeric entry contract supersedes earlier shortcut sketches here.
+> Result entry now follows [RESULT_ENTRY.md](RESULT_ENTRY.md); its immediate
+> 1/0/5 and W/L/D entry contract supersedes earlier shortcut sketches here.
 
 > Expanded scope: [full SwissSys feature map](FULL_FEATURE_MAP.md),
 > [current TD experience](TD_EXPERIENCE.md), and [build handoff](BUILD_HANDOFF.md).
@@ -72,8 +72,8 @@ Pairing generation opens a proposal in place. Show score-group/color explanation
 byes and unresolved restrictions. Publish is the strongest action. Re-pairing a
 posted round previews its impact and creates a new revision.
 
-Result cells follow [RESULT_ENTRY.md](RESULT_ENTRY.md): W/L/D saves and advances;
-numeric 1/0/0.5 uses Enter/Tab to avoid committing the 0 prefix prematurely.
+Result cells follow [RESULT_ENTRY.md](RESULT_ENTRY.md): 1/0/5 and W/L/D
+save and advance immediately without Enter; 5 records a half-point draw.
 Support tab/arrow navigation; never apply result shortcuts while typing in search. Provide a labelled menu for byes/forfeits
 and other states. `--` means unreported, not zero. A double-round match expands to
 two leg results; aggregate entry must be unambiguous or require the individual
