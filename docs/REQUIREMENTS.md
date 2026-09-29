@@ -1,6 +1,6 @@
 # Requirements and acceptance criteria
 
-Status: proposed specification, not implemented. **P0** = first usable TD release;
+Status: target specification. See IMPLEMENTATION.md for the tested implementation and outstanding release gates. **P0** = first usable TD release;
 **P1** = next extension; **Research** = capability whose contract is unresolved.
 Every P0 must pass its acceptance scenario before that release is called complete.
 
@@ -83,6 +83,39 @@ The UI mechanisms below are proposals, not keystrokes mandated by US Chess.
 | J04 | P0 | House-player role and reviewed manual extra-game handling | Distinguish house player from ordinary entrant, membership exception and prize eligibility; preserve actual opponent |
 | J05 | P0 | Submission/correction follow-through | Export, portal submission and acceptance are different; correction identifies original event and changed records |
 | J06 | P0 | Results-entry usability rehearsal | Enter 20 outcomes with blanks/correction keyboard-only; stable perspective/focus; no wrong reciprocal result |
+
+## Tournament-day usability gates
+
+Derived from [a tournament day, in order](TD_DAY.md). These exist because the plan
+was strong on correctness and weak on the clock-driven physical flow: the door, the
+wall, the walk around the room, the next-round deadline. All are proposed
+interactions to rehearse with TDs, not federation mandates.
+
+| ID | Priority | Requirement | Acceptance scenario |
+|---|---|---|---|
+| K01 | P0 | Check-in mode: keyboard mark-present, inline walk-up registration, “not yet here” filter/print, once-per-round policy for unchecked pre-registrations | 40 check-ins and 3 walk-ups in under five minutes keyboard-only; 3 absentees resolved with one choice, not three dialogs |
+| K02 | P0 | Door-side resolution of validation findings: renewed on site, TD exception with note, leave open | Resolution and reason visible in round-one preflight and export preflight; flag never silently disappears |
+| K03 | P0 | Section eligibility check at import, check-in and transfer: rating ceiling/floor, age or grade where configured | A 1520 entered in U1500 is flagged at each entry point with a move-up option; override records a reason |
+| K04 | P0 | Round-one preflight and end-of-day checklists on the Event tab; each row opens the resolving action | Every blocker in the example lists in TD_DAY.md is reachable in one click; no row is a dead checkbox |
+| K05 | P0 | Post all ready sections in one action with a combined print job; per-section review only when a warning exists | Quads day: make quads → post → print in three actions; 15 warning-free quad rounds open zero review screens |
+| K06 | P0 | Round clock: scheduled start, estimated finish from the actual start, time control and an explicit move-count assumption, boards still playing; multi-day events open on today's round | Tuesday Swiss opened on week 3 shows round 3 without navigation; posting pairings does not start the clock; G/65 d10 shows an estimate with its move-count assumption, never an “ends by” guarantee |
+| K07 | P0 | Event-wide results grid in global board order with the same keystrokes as the section grid | 20 results across five sections entered without changing tabs; section standings update correctly |
+| K08 | P0 | Forfeit keystrokes and a post-forfeit offer to withdraw the absent player | F then 1/0 records a forfeit win/loss, X a double forfeit; the withdraw offer can be declined without side effects |
+| K09 | P0 | Printed pairing sheet is the result-collection instrument: identical board order to the entry grid, writable result column, time control and round start in the header, reprint one section | Results transcribed from the sheet in board order with no reordering; a one-section reprint changes no other page |
+| K10 | P0 | Round packet print: pairings, alphabetical pairings and current standings (wallchart optional) in one job, with a name-order preference for wall sheets | One action produces the whole packet; “Last, First” on the wall does not alter stored names |
+| K11 | P0 | Player lookup by name or pairing number: board, color, opponent, score, next bye, in a large panel that can face the player; never enters a result | Lookup in under five seconds; typing W or 1 in lookup changes nothing |
+| K12 | P0 | Pairing numbers visible and searchable everywhere a player appears | “Number 14” finds the same player from Players, Rounds, Standings and lookup |
+| K13 | P0 | Global shortcut table (find, print, undo, next/previous section, next missing result, zoom) and Undo that names its action | Undo control reads “Undo result, board 9”; workspace zoom does not clip actions |
+| K14 | P0 | Interruption survival: any half-completed form, draft or entry sequence persists across navigation and restart | Abandon a half-filled walk-up form, restart the app, resume it |
+| K15 | P0 | Secondary backup folder receives a consistent copy at every posted round and at export; continue on another laptop is a rehearsed scenario | Open the secondary copy on a second machine and recover exactly the last verified backup revision; edits saved locally after that copy are explicitly outside the secondary recovery guarantee. A handoff first makes and verifies a fresh copy |
+| K16 | P0 | Practice copy of any event: one action, clearly marked, cannot export a rating report | A newer TD rehearses a round on the copy; the real event is untouched |
+| K17 | P0 | Standings filtered and grouped by prize class, on screen and in print | U1900 prize winners readable from the class view without a calculator |
+| K18 | P0 | Private notes on a player or event, shown at check-in, in the inspector and in the pairing draft | “Must leave by 3” is visible when posting round 3; never printed on public reports |
+| K19 | P0 | Late add asks about missed rounds inline | Adding a player after round 1 records the round-1 treatment in the same flow; no separate trip to the bye editor |
+| K20 | P0 | Bye recipient and reason at the top of every draft and posted round | The odd section's bye is the first line, with the rule-linked reason |
+| K21 | P0 | Merge suggestion from the announced section minimum before round one | A six-player section under an announced minimum of eight proposes Combine with the adjacent section; declining is one action |
+| K22 | P0 | TD vocabulary in the UI: Post/Posted for the local revision, Share online for the network action, wall sheet, pairing number, house player | Terminology reviewed with two TDs before the first pilot; “Publish” does not appear as a visible verb |
+| K23 | P1 | Second-screen read-only pairings/standings display for a TV or projector, no network required | Display follows the last posted revision and never shows private fields |
 
 ## Core invariants
 

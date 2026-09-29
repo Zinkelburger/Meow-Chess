@@ -2,3 +2,13 @@
 research/local/
 *.pyc
 __pycache__/
+.dart_tool/
+.packages
+build/
+.flutter-plugins-dependencies
+.idea/
+*.iml
+*.meow
+*.meow-wal
+*.meow-shm
+artifacts/

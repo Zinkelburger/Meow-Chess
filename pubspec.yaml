@@ -1,0 +1,40 @@
+name: meow_chess
+description: An offline tournament director workspace.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ^3.11.0
+dependencies:
+  flutter:
+    sdk: flutter
+  sqlite3: ^3.6.0
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  file_selector: ^1.0.4
+  csv: ^8.0.0
+  pdf: ^3.11.3
+  printing: ^5.14.2
+  uuid: ^4.5.3
+  http: ^1.6.0
+  flutter_secure_storage: ^10.0.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fonts/Inter-Regular.ttf
+    - assets/fonts/LICENSE-Inter.txt
+    - assets/fonts/LICENSE-SourceCodePro.txt
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+    - family: SourceCodePro
+      fonts:
+        - asset: assets/fonts/SourceCodePro-Regular.ttf

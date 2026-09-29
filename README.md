@@ -1,14 +1,17 @@
 # Meow-Chess
 
-Planning for an offline-first, cross-platform Flutter tournament director's app.
+An offline-first Flutter desktop tournament director workspace.
 US Chess first; Swiss events, easy quads, reliable identity/rating checks, and
 usable printing. Inspired by SwissSys workflows and Chess Auto Prep V2's UI.
 
-**Research phase only. No application has been implemented.** The existing
-AGPLv3 [LICENSE](LICENSE) is retained. Platform and release boundaries below
-are recommendations awaiting product decisions, not promises of shipped features.
+**Development pilot: an application now exists; federation and platform release
+qualification is still pending.** See [implementation status](docs/IMPLEMENTATION.md).
+The existing
+AGPLv3 [LICENSE](LICENSE) is retained. The planning documents retain the full target; implementation status records the
+subset actually built and tested.
 
-Start with [the TD’s actual duties and supporting sources](research/notes/TD_DUTIES.md)
+Start with [the TD’s actual duties and supporting sources](research/notes/TD_DUTIES.md),
+[a tournament day, in order](docs/TD_DAY.md)
 and [the keyboard results-entry contract](docs/RESULT_ENTRY.md). Then read the expanded [full feature map](docs/FULL_FEATURE_MAP.md),
 [TD experience specification](docs/TD_EXPERIENCE.md),
 [first-class TD operations](docs/TD_OPERATIONS.md), and
@@ -39,3 +42,26 @@ Sources were checked September 28–29, 2026 (Eastern / UTC boundary). Statement
 labelled **observed**, **documented**, **proposed**, and **unverified** intentionally
 have different strength. No US Chess upload, payment, registration, email, or
 tournament modification was performed.
+
+## Run and develop
+
+With Flutter installed, run `flutter pub get`, then `flutter run -d linux`
+(or `-d windows` / `-d macos` on the corresponding host). On this workstation,
+use `scripts/ci.sh build` for a bounded Linux release build; the executable is
+`build/linux/x64/release/bundle/meow_chess`. Start with **Explore a practice event**
+for 22 synthetic entrants in four quads and a six-player Swiss.
+
+Linux build prerequisites include GTK 3, CMake, Ninja, C++ tooling and libsecret
+development headers (`libsecret-1-dev` on Debian/Ubuntu, `libsecret-devel` on Fedora).
+The workstation wrapper discovers the local dependency prefix if present.
+
+Events are `.meow` files; use the app’s Save independent copy or backup actions
+to transfer an open event safely. `MEOW_DATA_DIR` overrides the recent-event library
+location for isolated testing. A filename argument opens that event.
+
+Run `scripts/ci.sh analyze`, `scripts/ci.sh lint`, `scripts/ci.sh test`, and
+`scripts/ci.sh integration` here. On another machine, configure `MEOW_JOB_RUNNER`
+or run the corresponding standard Flutter commands in your own resource limits.
+
+No real tournament submissions, account changes or player communications are made
+by the app. US Chess validation packages remain explicitly unverified.

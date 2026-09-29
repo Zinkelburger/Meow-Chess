@@ -9,6 +9,14 @@ This contract supersedes the earlier proposal requiring Enter/Tab for numeric in
 
 ## The table
 
+Two grids share one contract: the section grid and the **event-wide grid** in
+global board order (K07). Boards are numbered across the room, not per section,
+and the TD collects results by walking the room or reading the wall sheet in
+board order. During play the event-wide grid is the default; switching to a section
+grid is a filter, not a different editor. The round number is the largest text on
+the surface, because entering into the wrong round is the mistake this layout
+exists to prevent.
+
 Default: board-ordered rows for the selected round. Columns: Board, White, white
 pre-round score, **White result**, Black, black pre-round score. Label the perspective
 in both the column heading and focused-cell accessible name. A white loss sets the
@@ -36,6 +44,9 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 | 0 | Loss for labelled player | Save and advance immediately; no Enter needed |
 | 5 | Draw | Save a half-point draw and advance immediately; never store five points |
 | ½ / = | Additional draw aliases | Save and advance immediately |
+| F then 1/W or 0/L | Forfeit win / forfeit loss for labelled player | Save as an unplayed forfeit and advance; legend shows the pending modifier; Escape cancels it |
+| X | Double forfeit | Save both sides unplayed and advance |
+| M or context-menu key | Outcome menu | Byes, unfinished, disputed and other labelled outcomes; keyboard-accessible |
 | Arrow keys | Navigate cells | No result created by moving focus |
 | Enter on blank | Skip unknown game | Leave unreported and advance |
 | Shift+Enter / Shift+Tab | Reverse traversal | Commit a valid edit, then move backward |
@@ -44,7 +55,7 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 | Delete on selected saved result | Clear result deliberately | Restore unreported state with history/undo; review dependencies if necessary |
 | Undo | Revert latest applicable change | Restore both opponents and focus to that game; review historical dependencies |
 
-Show a persistent compact legend: **1 Win · 0 Loss · 5 Draw · W/L/D also work**.
+Show a persistent compact legend: **1 Win · 0 Loss · 5 Draw · F+1/F+0 Forfeit · W/L/D also work**.
 Support both the number row and numpad. These keys are commands, not decimal text
 entry: 5 stores/displays a draw (½ or 0.5), not five points. There is no Enter/Tab
 requirement, typing-speed timeout or automatic mode inference for these shortcuts.
@@ -95,9 +106,12 @@ or confirmation modal after every result. Network publishing cannot block entry.
 Undo is always discoverable; a simple same-round typo needs no multi-screen wizard.
 Historical changes only open impact review when dependencies actually exist.
 
-A win/loss key records a played result by default. Forfeits, double forfeits,
-requested/allocated byes, disputed and unfinished games use labelled outcomes in
-an adjacent menu with a keyboard-accessible command. `0` is not “absent,” “no result,”
+A win/loss key records a played result by default. Forfeits have their own
+keystrokes because a no-show is the second most common outcome after a played
+game. After a forfeit loss, offer once to withdraw the absent player from the
+remaining rounds (K08); declining has no side effect, and the app never withdraws
+on its own. Requested/allocated byes, disputed and unfinished games use labelled
+outcomes in an adjacent menu with a keyboard-accessible command. `0` is not “absent,” “no result,”
 or “withdrawn.” A disputed result has an unresolved status; any TD-authorized
 pairing assumption is stored separately from the actual result and rating record.
 
@@ -124,6 +138,10 @@ outcome through an explicit action, not overwrite a derived total accidentally.
 | Type W/0.5 into player-name/search fields | No results changed |
 | Double-game match with split wins | Two actual games retained; not converted to draws |
 | Keyboard/screen reader at 200% text | Names/perspective announced, focus visible, grid escapable |
+| TD reads “0.5” in the score column and types 0 then 5 | Named typo fixture: the legend and perspective line are tested against it; two Undo actions restore the two independently committed boards; each Undo restores both opponents of one game. Never infer a grouped mistake from valid keystrokes |
+| F then 1, then X on the next board | Forfeit win and double forfeit recorded as unplayed; rating export excludes both; withdraw offer shown once |
+| Event-wide grid across five sections | Global board order; each section's standings update; no cross-section reciprocal error |
+| Entry abandoned mid-sequence, app restarted | Cursor position and Missing-only filter restored; no result invented (K14) |
 
 Rehearsal target: 20 mixed results, two intentional blanks and one corrected typo,
 without mouse use or incorrect records. Measure time and error rate with working

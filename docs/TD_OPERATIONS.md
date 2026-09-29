@@ -4,7 +4,7 @@ This specification records the user's explicit priority: running the tournament
 means handling changes easily, throughout the event. Editing players, assigning or
 changing byes, withdrawing/reinstating players, moving players and combining sections
 are **first-release requirements**, not specialist utilities or later polish.
-Planning only: no application implementation is authorized by this document.
+Target specification: implementation is now authorized; IMPLEMENTATION.md records tested scope.
 
 ## The everyday interaction contract
 
@@ -18,6 +18,8 @@ Planning only: no application implementation is authorized by this document.
 | Combine Quad 4 with bottom Swiss | Quad 4 tab context menu → Combine with… | Choose Bottom Swiss and preview the resulting playing pool |
 | Change grouping before play | Quad builder / Manage sections | Move players between groups or combine entire groups without restarting setup |
 | Repair pairing/result | Rounds → select pairing → Edit / Correct | Manual opponent/color/board/outcome controls and dependency review |
+| Check in / register a walk-up | Check-in shortcut; Enter marks present; unknown name becomes a walk-up | Door-side flag resolutions and private notes in the same flow (K01–K03, K18) |
+| Look up a player without changing anything | Lookup shortcut; name or pairing number | Board, color, opponent, score, next bye; never enters a result (K11) |
 
 Every context-menu action also has a visible button/menu entry. Right-click and
 double-click are accelerators, not the only way to find essential features.
@@ -196,7 +198,9 @@ shortcut to withdrawing or moving them.
 | Bulk change with one conflicting player | Reviewed subset or atomic rejection; never an unnoticed partial application |
 | Undo a transfer after subsequent play | Dependency review preserves every played game |
 
-Suggested usability targets, to measure: open an editable player in one gesture;
+Suggested usability targets, to measure: check in a player in one keystroke after
+typing a few letters; register a walk-up in under thirty seconds; open an editable
+player in one gesture;
 assign a straightforward future bye in under ten seconds; combine the unplayed
 four-plus-six example in under thirty seconds once the TD knows the destination.
 These are design targets, not measured claims. Essential TD operations are release

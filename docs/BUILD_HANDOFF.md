@@ -1,14 +1,14 @@
 # Build-agent handoff
 
-The repository is still a research/planning repository. This file is a proposed
-future implementation brief; the current user request does **not** authorize
-starting the application build. No production application has been scaffolded.
+Application implementation is authorized by the user’s September 28, 2026 request.
+This document describes the target; IMPLEMENTATION.md records what exists and what
+has been tested. DELIVERY.md owns the sequence.
 
 ## Read first
 
-Start with [actual TD duties and their evidence](../research/notes/TD_DUTIES.md).
-For every core workflow, trace duty → realistic scenario → interaction → acceptance
-test. A competitor menu item alone does not establish priority or usability.
+Start with [actual TD duties and their evidence](../research/notes/TD_DUTIES.md)
+and [a tournament day, in order](TD_DAY.md). For every core workflow, trace duty →
+moment on the clock → interaction → acceptance test. A competitor menu item alone does not establish priority or usability.
 Read [Results entry](RESULT_ENTRY.md) before implementing any results table.
 
 
@@ -48,10 +48,10 @@ The original release scope is a first tranche of this larger product.
 | Slice | Result the TD can exercise | Gate |
 |---|---|---|
 | 0. Evidence and UX | TD walkthrough of roster → quad preview → round → correction → print | Reconcile source gaps; observe novice/experienced TDs; record revisions |
-| 1. Event and safety | Create, edit, close, reopen, undo, recover a synthetic event | Transaction/crash/backup/migration checks; stable identity model |
+| 1. Event, safety and export feasibility | Create, edit, close, reopen, undo, recover a synthetic event | Transaction/crash/backup/migration checks; stable identity model; early independent DBF codec verification |
 | 2. Registration | Import, edit player details, assign byes, withdraw/reinstate and transfer entries | Reimport diff; no data loss; ratings provider fakes and cache behavior |
 | 3. Quads and scoring | Make and combine quad/Swiss groups, review/publish, enter/correct games | Pure domain invariants, seeded schedule fixtures, keyboard walkthrough |
-| 4. Swiss and reporting | Run a complete US Chess event, print and export DBFs | TD-reviewed pairing cases, accepted DBF comparison, authorized portal test |
+| 4. Swiss and external reporting qualification | Run a complete US Chess event, print and export DBFs | TD-reviewed pairing cases, accepted DBF comparison, authorized portal test |
 | 5. Full club operation | Double games, prizes, team totals, recurring templates and extended print suite | Scoring/report consistency and documented edge cases |
 | 6. Specialist parity | Fixed-board teams, Scheveningen, ladder, merged schedules, side games, databases | Feature-by-feature documented and reference-app comparisons; basic section combination/transfer must already work in earlier slices |
 | 7. International and integrations | Verified federation policies, native interchange, hosting and collaboration | Format/version compatibility matrix; OS and integration validation |
@@ -117,6 +117,15 @@ Suggested first future-agent prompt:
 > concrete acceptance fixtures. Preserve US Chess-first delivery and full-parity
 > traceability. Do not silently approximate export formats or pairing rules. Build
 > only the slice explicitly authorized in this task, and report its tested scope.
+
+## Priority correction: the tournament day is the spec
+
+Build the screens the timeline names: Check-in, Event preflight and end-of-day
+lists, Post all ready sections with Print packet, the round clock, the event-wide
+results grid and Lookup. Batch post is the default path; per-section review is
+the exception. Use TD vocabulary in every visible label (Post, not Publish). The
+K01–K22 gates in [Requirements](REQUIREMENTS.md) are release gates for the first
+usable TD release, alongside D01–D07 and J01–J06.
 
 ## Priority correction: TD flexibility is core
 

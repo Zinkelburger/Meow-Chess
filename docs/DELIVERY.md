@@ -6,7 +6,8 @@
 
 
 Planning completed for the accessible public evidence; application implementation
-has not begun. These are dependency-ordered milestones, not time estimates. Unanswered
+has not begun. This document owns the implementation sequence; BUILD_HANDOFF.md maps its slices
+to these milestones and does not define a competing order. These are dependency-ordered milestones, not time estimates. Unanswered
 product preferences use the documented defaults rather than invented approval.
 
 ## 0. Evidence and policy decisions
@@ -24,7 +25,7 @@ Exit: agreed supported-format matrix and a precise list of still-unverified
 integration claims. Owner: product lead + experienced TD; provider answers require
 US Chess. No messages were sent by this planning task.
 
-## 1. Pure Dart domain and report conformance
+## 1. Pure Dart domain and early report feasibility
 
 Implement typed entrants/sections/games, score outcomes, basic RR/quad policy and
 US Chess report mapping. Build independent fixtures for played/unplayed outcomes,
@@ -32,9 +33,10 @@ mixed sections and field limits. Create a narrow DBF codec or select a maintaine
 compatible library after evaluating available options; package choice is not
 settled by this plan. Validate writer output with an independent decoder.
 
-Exit: a synthetic mixed-quad event can produce internally correct reports and
-pass the agreed external validation route. If reporting evidence is unavailable,
-label this milestone partially verified and keep release blocked.
+Exit: synthetic supported events produce reports decoded by an independent reader.
+Run this feasibility work alongside the first durable vertical slice. External
+acceptance is a release gate, not a prerequisite for all subsequent development.
+Keep unsupported formats unavailable and record precisely which validation is absent.
 
 ## 2. Durable event lifecycle
 
@@ -63,9 +65,11 @@ results, crosstable, print/PDF/ASCII and export center. Run 22 entrants through 
 quads plus a six-player Swiss using hand-verified or TD-approved pairings until the
 Swiss engine milestone is complete. Do not call that a shipped automatic Swiss.
 
-Exit: full scripted day including absent entrant, ID correction, late arrival,
-forfeit, old-result correction, printer preview and restart. TD reviews usability
-and report content.
+Exit: full scripted day following [TD_DAY.md](TD_DAY.md): check-in with walk-ups
+and an absent entrant, ID correction, preflight, batch post and packet print, a
+lookup, a late arrival, a forfeit with the withdraw offer, old-result correction,
+event-wide results entry, printer preview, restart, and continuing on a second
+laptop from the secondary backup. TD reviews usability and report content.
 
 ## 5. US Chess Swiss and double-round blitz
 
@@ -92,8 +96,9 @@ Publishing/releases need a later explicit request; this task only plans.
 
 ## Later milestones
 
-Individual-team scoring → permanent bughouse teams → online events/double quads →
-fixed-roster leagues → experimental rotating-partner pairing → FIDE conformance.
+Second-screen read-only display (K23) → individual-team scoring → permanent
+bughouse teams → online events/double quads → fixed-roster leagues → experimental
+rotating-partner pairing → FIDE conformance.
 Reorder according to TD feedback. Hosted registration/payments and collaborative
 editing are independent later projects, not hidden prerequisites.
 
@@ -109,6 +114,7 @@ editing are independent later projects, not hidden prerequisites.
 | Import | Quoting/BOM/encoding, ambiguous headers, provisional ratings, duplicate IDs, re-import |
 | Reports | Independent DBF parser, known accepted files, source-revision consistency, strict ASCII and page layout |
 | UI | Keyboard TD tasks, retained tabs, 200% scaling, screen-reader labels, visible errors |
+| Tournament day | Timed rehearsal of every TD_DAY.md moment against its target; check-in, preflight, post-and-print, lookup, forfeit, second-laptop continuation |
 | System | Complete quad/Swiss/blitz days, disconnect/restart/correction during play |
 
 Do not test only a writer against its own reader or an algorithm against itself.
@@ -149,6 +155,15 @@ Avoid building a throwaway UI until those risks have clear answers.
 A research question is not automatically an implementation blocker. Continue
 independent work when authorized later, while maintaining truthful capability
 status for contracts that cannot yet be tested.
+
+## Tournament-day usability gate
+
+The first usable release also requires the K01–K22 gates in
+[Requirements](REQUIREMENTS.md): check-in mode, door-side resolutions, eligibility
+checks, preflight and end-of-day lists, batch post with packet print, the round
+clock, the event-wide results grid, forfeit keystrokes, lookup, global shortcuts,
+interruption survival, secondary backup and practice copy. Rehearse
+[the timeline](TD_DAY.md) with one experienced and one newer TD before widening scope.
 
 ## Core TD flexibility gate
 
