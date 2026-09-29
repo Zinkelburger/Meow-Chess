@@ -488,5 +488,30 @@
     "id": "chessroster-about-fide-pairing",
     "title": "FIDE Pairing Engine",
     "url": "https://docs.chessroster.com/chessroster/about/fide-pairing/"
+  },
+  {
+    "id": "pairing-bbp-license",
+    "url": "https://raw.githubusercontent.com/BieremaBoyzProgramming/bbpPairings/master/LICENSE.txt",
+    "title": "pairing-bbp-license"
+  },
+  {
+    "id": "uscf-fide-events",
+    "url": "https://new.uschess.org/tournament-directors/fide-rated-events",
+    "title": "uscf-fide-events"
+  },
+  {
+    "id": "chessroster-public-home",
+    "url": "https://www.chessroster.com/",
+    "title": "chessroster-public-home"
+  },
+  {
+    "id": "chessroster-public-tournaments",
+    "url": "https://www.chessroster.com/tournaments",
+    "title": "chessroster-public-tournaments"
+  },
+  {
+    "id": "chessroster-public-quad",
+    "url": "https://fmca.chessroster.com/quad-oct-3-2026",
+    "title": "chessroster-public-quad"
   }
 ]

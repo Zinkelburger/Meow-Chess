@@ -1,0 +1,16 @@
+MEOW-CHESS - REPORT FORMAT EXAMPLE (SYNTHETIC, NOT RATED)
+Event: Example Quad Day    Section: Quad 1    Round: 3 of 3
+Pair#  Name              Seed   R1    R2    R3    Score
+----------------------------------------------------
+    1  Ada Example       1810   W4    D3    L2      1.5
+    2  Ben Example       1790   D3    W4    W1      2.5
+    3  Cal Example       1770   D2    D1    W4      2.0
+    4  Dee Example       1750   L1    L2    L3      0.0
+----------------------------------------------------
+W=win, D=draw, L=loss; the number is the opponent's Pair#.
+Pair numbers stay fixed when standings are sorted by score.
+Example standings: 2, 3, 1, 4. No tiebreaks needed here.
+
+Actual reports also carry event/section metadata, revision,
+generation time, page numbers and applicable bye/forfeit legends.
+This file specifies a possible layout; no report exporter exists.

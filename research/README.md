@@ -3,6 +3,11 @@
 Research date: 2026-09-28 Eastern / 2026-09-29 UTC. This is a dated snapshot,
 not a promise that federation rules or third-party products will remain unchanged.
 
+The selected catalog contains **103 references**; **102 returned HTTP 200** and
+one publisher page returned 403. See [validation](VALIDATION.md) for the checks
+and their limits. The 102 successful fetches include catalog/index pages as well
+as substantive documents; they are not 102 independently verified specifications.
+
 ## Layout
 
 - `sources.json`: selected URLs and stable local IDs.
