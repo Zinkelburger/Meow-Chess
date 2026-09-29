@@ -5,7 +5,7 @@ because that is how a TD experiences the product. Every moment names what the TD
 is trying to do, what the screen must offer without hunting, the target speed, and
 the requirement IDs that own it (see [Requirements](REQUIREMENTS.md), section
 “Tournament-day usability gates”). It is a design proposal to be rehearsed with
-working TDs, not a measured result. No application exists yet.
+working TDs, not a measured result. See IMPLEMENTATION.md for the current pilot and measured evidence.
 
 The example is a Saturday quads event with a public pre-registration list, one TD,
 one laptop and one printer, with a Tuesday-night weekly Swiss noted where it differs.
@@ -62,7 +62,7 @@ Announced minimum 8        Bottom Swiss (6) is below the announced merge minimum
 Pairings: none posted
 ```
 
-- Make quads shows the whole partition, the bottom Swiss and why (Q01–Q04, X01).
+- Make quads shows the whole partition, the bottom Swiss and why (Q01–Q04, CAP-X01).
 - Unchecked pre-registrations are resolved once for the round, not per person (K01).
 - On the Tuesday Swiss, an under-minimum section proposes the announced merge from
   the event conditions rather than waiting for the TD to remember (J02, K21).
@@ -80,8 +80,9 @@ Target: preflight clean in under two minutes after the last check-in.
 - Print the round packet: board-order pairings with a result column, alphabetical
   pairings, and current standings if a round has been played. Boards are numbered
   globally across sections; the printed order matches the entry grid exactly (K09, K10).
-- The round clock starts: scheduled start, expected latest finish from the time
-  control, and “boards still playing” once results begin (K06).
+- After players are seated, Start round records the actual start separately from
+  posting. Show scheduled/actual start and any estimated finish with its move-count
+  assumption; never claim a hard finish time from delay/increment alone (K06).
 
 Target: make quads → post → print in three actions; under sixty seconds from a
 clean preflight to paper on the wall.

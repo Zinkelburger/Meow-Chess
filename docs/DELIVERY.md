@@ -5,8 +5,9 @@
 > The initial US Chess release below is a tranche of the larger product target.
 
 
-Planning completed for the accessible public evidence; application implementation
-has not begun. These are dependency-ordered milestones, not time estimates. Unanswered
+Application implementation is underway; [implementation status](IMPLEMENTATION.md)
+records delivered scope and verification. The milestones below remain the full release target. This document owns the implementation sequence; BUILD_HANDOFF.md maps its slices
+to these milestones and does not define a competing order. These are dependency-ordered milestones, not time estimates. Unanswered
 product preferences use the documented defaults rather than invented approval.
 
 ## 0. Evidence and policy decisions
@@ -24,7 +25,7 @@ Exit: agreed supported-format matrix and a precise list of still-unverified
 integration claims. Owner: product lead + experienced TD; provider answers require
 US Chess. No messages were sent by this planning task.
 
-## 1. Pure Dart domain and report conformance
+## 1. Pure Dart domain and early report feasibility
 
 Implement typed entrants/sections/games, score outcomes, basic RR/quad policy and
 US Chess report mapping. Build independent fixtures for played/unplayed outcomes,
@@ -32,9 +33,10 @@ mixed sections and field limits. Create a narrow DBF codec or select a maintaine
 compatible library after evaluating available options; package choice is not
 settled by this plan. Validate writer output with an independent decoder.
 
-Exit: a synthetic mixed-quad event can produce internally correct reports and
-pass the agreed external validation route. If reporting evidence is unavailable,
-label this milestone partially verified and keep release blocked.
+Exit: synthetic supported events produce reports decoded by an independent reader.
+Run this feasibility work alongside the first durable vertical slice. External
+acceptance is a release gate, not a prerequisite for all subsequent development.
+Keep unsupported formats unavailable and record precisely which validation is absent.
 
 ## 2. Durable event lifecycle
 
@@ -90,7 +92,8 @@ than inferring support from one successful Linux build.
 
 Exit: all P0 scenarios in [Requirements](REQUIREMENTS.md), license notices and source
 distribution, packaging, backup recovery documentation, and known limitations.
-Publishing/releases need a later explicit request; this task only plans.
+Publishing/releases need a later explicit request; local implementation does not
+authorize distribution.
 
 ## Later milestones
 
@@ -151,7 +154,7 @@ Avoid building a throwaway UI until those risks have clear answers.
 | Before compliance claim | Current accepted DBF fixtures and authorized portal validation | Hard release gate |
 
 A research question is not automatically an implementation blocker. Continue
-independent work when authorized later, while maintaining truthful capability
+the authorized independent implementation work, while maintaining truthful capability
 status for contracts that cannot yet be tested.
 
 ## Tournament-day usability gate

@@ -1,8 +1,8 @@
 # Build-agent handoff
 
-The repository is still a research/planning repository. This file is a proposed
-future implementation brief; the current user request does **not** authorize
-starting the application build. No production application has been scaffolded.
+Application implementation is authorized by the user’s September 28, 2026 request.
+This document describes the target; IMPLEMENTATION.md records what exists and what
+has been tested. DELIVERY.md owns the sequence.
 
 ## Read first
 
@@ -48,10 +48,10 @@ The original release scope is a first tranche of this larger product.
 | Slice | Result the TD can exercise | Gate |
 |---|---|---|
 | 0. Evidence and UX | TD walkthrough of roster → quad preview → round → correction → print | Reconcile source gaps; observe novice/experienced TDs; record revisions |
-| 1. Event and safety | Create, edit, close, reopen, undo, recover a synthetic event | Transaction/crash/backup/migration checks; stable identity model |
+| 1. Event, safety and export feasibility | Create, edit, close, reopen, undo, recover a synthetic event | Transaction/crash/backup/migration checks; stable identity model; early independent DBF codec verification |
 | 2. Registration | Import, edit player details, assign byes, withdraw/reinstate and transfer entries | Reimport diff; no data loss; ratings provider fakes and cache behavior |
 | 3. Quads and scoring | Make and combine quad/Swiss groups, review/publish, enter/correct games | Pure domain invariants, seeded schedule fixtures, keyboard walkthrough |
-| 4. Swiss and reporting | Run a complete US Chess event, print and export DBFs | TD-reviewed pairing cases, accepted DBF comparison, authorized portal test |
+| 4. Swiss and external reporting qualification | Run a complete US Chess event, print and export DBFs | TD-reviewed pairing cases, accepted DBF comparison, authorized portal test |
 | 5. Full club operation | Double games, prizes, team totals, recurring templates and extended print suite | Scoring/report consistency and documented edge cases |
 | 6. Specialist parity | Fixed-board teams, Scheveningen, ladder, merged schedules, side games, databases | Feature-by-feature documented and reference-app comparisons; basic section combination/transfer must already work in earlier slices |
 | 7. International and integrations | Verified federation policies, native interchange, hosting and collaboration | Format/version compatibility matrix; OS and integration validation |
@@ -109,14 +109,14 @@ one checkbox. “Archived” must never automatically mark “reviewed.” A com
 feature has a requirement ID, source links, exact supported variants, tests and
 known gaps. A source topic may map to several IDs; a feature can span many pages.
 
-Suggested first future-agent prompt:
+Continuation prompt:
 
 > Read docs/BUILD_HANDOFF.md and its linked planning documents. First reconcile
 > the SwissSys page checklist against the full capability map and identify any
-> unsupported assumptions. Then propose the smallest first vertical slice with
+> unsupported assumptions. Read IMPLEMENTATION.md and continue the outstanding release work with
 > concrete acceptance fixtures. Preserve US Chess-first delivery and full-parity
-> traceability. Do not silently approximate export formats or pairing rules. Build
-> only the slice explicitly authorized in this task, and report its tested scope.
+> traceability. Do not silently approximate export formats or pairing rules. The user has authorized implementation; continue independent work while external
+> validation is pending, and report the exact tested scope.
 
 ## Priority correction: the tournament day is the spec
 

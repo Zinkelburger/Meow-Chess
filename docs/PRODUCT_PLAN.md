@@ -93,4 +93,4 @@ The current recommendations stand for planning until answered: desktop first;
 OTB Swiss/quads/double blitz before online and leagues; permanent bughouse teams
 before rotating partners. We also need actual sample exports and a chosen rating
 policy. A prioritized interview and evidence checklist lives in
-[Delivery](DELIVERY.md). No implementation is authorized by this planning document.
+[Delivery](DELIVERY.md). The user subsequently authorized implementation. See IMPLEMENTATION.md for delivered scope and evidence.

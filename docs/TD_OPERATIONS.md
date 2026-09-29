@@ -4,7 +4,7 @@ This specification records the user's explicit priority: running the tournament
 means handling changes easily, throughout the event. Editing players, assigning or
 changing byes, withdrawing/reinstating players, moving players and combining sections
 are **first-release requirements**, not specialist utilities or later polish.
-Planning only: no application implementation is authorized by this document.
+Target specification: implementation is now authorized; IMPLEMENTATION.md records tested scope.
 
 ## The everyday interaction contract
 

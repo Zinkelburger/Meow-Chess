@@ -1,7 +1,7 @@
 # Meow-Chess: tournament director experience
 
 Proposed design, September 2026. This expands and refines [UX.md](UX.md); where
-navigation names differ, this document is the current proposal. No app UI exists.
+navigation names differ, this document is the current proposal. IMPLEMENTATION.md records the current app and remaining gaps.
 The in-conversation concept illustrates layout and local interactions only.
 Read [a tournament day, in order](TD_DAY.md) first: it puts every interaction
 below on the clock and owns the usability gates K01–K23 in
@@ -20,7 +20,7 @@ No confetti, fake success scores, distracting motion or playful error messages.
 Use one persistent event workspace, in the visual style of Chess Auto Prep V2.
 
 ```
-Meow-Chess  /  Saturday Quads    Saved locally   Round 2 started 11:15 · ends by 13:35   Find   Event menu
+Meow-Chess  /  Saturday Quads    Saved locally   Round 2 started 11:15 · estimated finish 13:35   Find   Event menu
 Event | Quad 1 | Quad 2 | Quad 3 | Quad 4 | Bottom Swiss       All sections / +
 Players    Rounds    Standings    Reports                 Section settings
 Round 2 of 3    Posted · revision 1       2 boards still playing      Print packet
@@ -179,8 +179,9 @@ explanation for each pairing, reserved boards and unpaired entries. A warning sa
 what will happen and whether it blocks publishing. TD policy overrides record a
 reason; structural invalidity (one player on two boards) cannot be waived.
 
-Posting makes a durable local revision available to print and starts the round
-clock (K06). Share online is a separately configured action with its own status;
+Posting makes a durable local revision available to print. A separate Start round
+action records the actual start; posting or reprinting never starts or resets the
+clock (K06). Any finish estimate states its move-count assumption. Share online is a separately configured action with its own status;
 its failure does not roll back local pairings. Manual edits after posting produce a
 replacement revision, mark previous paper/web copies stale, and offer to reprint
 only the affected section. Target: a two-player swap posted and reprinted in under
@@ -355,7 +356,7 @@ The following are proposed targets to measure, not results already achieved:
 | Post round one for four quads and a Swiss, then print | Three actions from a clean preflight; no review screen without a warning |
 | Fix a wrong pairing after posting | Swap, replacement revision, single-section reprint in under sixty seconds |
 | Record a no-show forfeit | Two keystrokes; withdraw offer understood and declined or accepted correctly |
-| Continue on a second laptop from the secondary backup | Next round posted with no acknowledged edit lost |
+| Continue on a second laptop from the secondary backup | Next round posted from the last verified backup revision; a planned handoff verifies a fresh copy first |
 | Distribute U1900 prizes from the class view | Winners identified without a calculator or settings screen |
 
 Record failed steps and revise the prototype first. Completion rate and error rate

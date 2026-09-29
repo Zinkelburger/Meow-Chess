@@ -81,8 +81,8 @@ ROUTES = [
 def route(title):
     for pattern, ids, home in ROUTES:
         if re.search(pattern, title, re.I):
-            return ids.split(), home
-    return ['U01'], 'Orientation / index / tutorial (check linked feature topics)'
+            return [f'CAP-{value}' for value in ids.split()], home
+    return ['CAP-U01'], 'Orientation / index / tutorial (check linked feature topics)'
 
 
 def main():

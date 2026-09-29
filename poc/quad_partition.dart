@@ -3,8 +3,9 @@
 // color choices for the US Chess 30G quad schedule. No files/network/data stores.
 
 List<int> groupSizes(int entrants) {
-  if (entrants < 4)
+  if (entrants < 4) {
     throw ArgumentError.value(entrants, 'entrants', 'TD choice');
+  }
   final remainder = entrants % 4;
   if (remainder == 0) return List.filled(entrants ~/ 4, 4);
   final swissSize = 4 + remainder;

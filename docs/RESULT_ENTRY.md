@@ -138,7 +138,7 @@ outcome through an explicit action, not overwrite a derived total accidentally.
 | Type W/0.5 into player-name/search fields | No results changed |
 | Double-game match with split wins | Two actual games retained; not converted to draws |
 | Keyboard/screen reader at 200% text | Names/perspective announced, focus visible, grid escapable |
-| TD reads “0.5” in the score column and types 0 then 5 | Named typo fixture: the legend and perspective line are tested against it; Undo restores both boards in one step |
+| TD reads “0.5” in the score column and types 0 then 5 | Named typo fixture: the legend and perspective line are tested against it; two Undo actions restore the two independently committed boards; each Undo restores both opponents of one game. Never infer a grouped mistake from valid keystrokes |
 | F then 1, then X on the next board | Forfeit win and double forfeit recorded as unplayed; rating export excludes both; withdraw offer shown once |
 | Event-wide grid across five sections | Global board order; each section's standings update; no cross-section reciprocal error |
 | Entry abandoned mid-sequence, app restarted | Cursor position and Missing-only filter restored; no result invented (K14) |
