@@ -1,8 +1,9 @@
 # Meow-Chess: tournament director experience
 
-Proposed design, September 2026. This expands and refines [UX.md](UX.md); where
-navigation names differ, this document is the current proposal. No app UI exists.
-The in-conversation concept illustrates layout and local interactions only.
+Proposed design, September 2026. This is the authoritative navigation and workspace
+contract. [UX.md](UX.md) retains visual-source provenance and report-layout details.
+No application UI exists; the earlier concept illustrates layout only. The
+[usability review](TD_USABILITY_REVIEW.md) records gaps, refinements and rehearsals.
 
 ## Product promise
 
@@ -20,8 +21,8 @@ Use one persistent event workspace, in the visual style of Chess Auto Prep V2.
 Meow-Chess  /  Saturday Quads         Saved locally     Find / commands   Event menu
 Event | Quad 1 | Quad 2 | Quad 3 | Quad 4 | Bottom Swiss       All sections / +
 Players    Rounds    Standings    Reports                 Section settings
-Round 2 of 3    Published · revision 1       2 results missing      Print pairings
-Board  White                         Result             Black
+Round 2 of 3    Approved · revision 1       2 results missing      Print pairings
+Board  White                         White result       Black
 9      Alex Chen       1.0            1–0                Jamie Patel    1.0
 10     Morgan Reed     0.5            —                  Sam Rivera     0.5
 11     Taylor Brooks   0.0            —                  Casey Park     0.0
@@ -34,7 +35,7 @@ controls. Do not add a second permanent app sidebar to these two navigation leve
 The inspector is contextual and closable, not a permanent analytics dashboard.
 
 **Default opening behavior:** recent event resumes the previous section and view.
-A new section opens Players; first published round offers to open Rounds; selecting
+A new section opens Players; first approved round offers to open Rounds; selecting
 a section preserves that section's view, round, filters, scroll and selected row.
 Never jump the user's screen automatically because background validation finished.
 The Event tab summarizes section progress and actionable blockers across the event.
@@ -46,7 +47,7 @@ The Event tab summarizes section progress and actionable blockers across the eve
 | Event library | Open recent event, restore, start from template, manage club directory | New event; explicit last saved/opened timestamps |
 | Event | See section readiness, missing results and imminent rounds; manage sections, boards and schedule | Contextual event action; section rows jump directly to problem |
 | Players | Import, register, check in, validate IDs, assign teams/byes and make quads | Import before roster exists; Add player thereafter; check-in count visible |
-| Rounds | Review/publish pairings, enter outcomes, inspect/change historical rounds | Review pairings before play; next missing result during play |
+| Rounds | Review/approve pairings, enter outcomes, inspect/change historical rounds | Review pairings before play; next missing result during play |
 | Standings | Read official rank, crosstable and team score; explain ties; calculate prizes | Print standings; segmented Table / Crosstable / Prizes |
 | Reports | Preview and produce operational sheets, exports and federation package | Print or Export, with explicit scope and revision |
 | Teams, conditional | Set team roster, active boards, substitutes and match rules | Add team; only shown for meaningful team management |
@@ -58,6 +59,19 @@ names, sensible defaults, concise explanations and advanced disclosure in each
 relevant place. Keep a searchable command list with SwissSys synonyms: “wallchart,”
 “tinker,” “quad setup,” “rating report,” “pair numbers.” Results show the scope and
 location before running a command.
+
+### Find a player and return to work
+
+The persistent Find player / commands control searches across the event, not just
+visible rows. Names and federation IDs return entries with section, participation
+status and current round/board; repeated names or multiple entries remain separate
+choices. Board lookup includes section/round when board numbers overlap. No fuzzy
+identity match is silently selected. Enter opens the same editable inspector.
+
+Closing the inspector/search restores the prior section, view, filter, scroll and
+result cursor by stable game ID. Show the result perspective and both names before
+resuming entry. If that game changed while away, explain the change; never redirect
+a queued result to a different game. Search and text fields own their typing keys.
 
 ### Section strip at scale
 
@@ -90,6 +104,25 @@ Never offer unsupported federation or pairing modes as if functional. Show their
 availability honestly. Draft events can be created without affiliate/TD IDs;
 submission validation requires the necessary metadata later.
 
+### Registration and walk-ins
+
+Add player is always visible in Players and available from event-wide Find. Name
+and destination section (or unassigned pool) are sufficient to save a draft entry.
+Unknown ID/rating remain unknown with actionable findings; they do not require an
+internet lookup or a fabricated zero rating. Pairing eligibility is checked later
+under the event policy. Show possible duplicates without silently merging people.
+Save & add another keeps appropriate section defaults and clears personal fields.
+A late registration explicitly selects start round and past-round treatment; it
+never automatically changes approved pairings or awards missed-round points.
+
+Check-in enforcement is an explicit event setting, off in the generic template
+until chosen or inherited visibly from a club template. When off, the pairing pool
+uses active eligible entries; marking someone absent still excludes them. When on,
+show not-yet-checked-in entries and offer a reviewed attendance action. Import is
+never proof of presence or payment. Preflight accounts for every entry as included
+or excluded with reasons (bye, withdrawn, absent, unassigned, unresolved eligibility,
+required check-in missing); overlapping reasons must not double-count people.
+
 ### 2. Import a messy roster
 
 Paste rows or choose file → map columns → review → import. Preview actual interpreted
@@ -109,6 +142,9 @@ One action starts a queued lookup. Each row has a plain status: Verified, Name
 mismatch, ID not found, Membership issue, or Could not check. Clicking opens local
 and federation values side by side, with source timestamp and rating category.
 Accept a verified correction individually or apply a batch of reviewed safe changes.
+Default review shows changed/problem rows with counts and access to unchanged rows.
+Batch acceptance names fields and selected entries: a name correction does not also
+accept a rating change. Assigning a pairing rating is a separate visible choice.
 No fuzzy match is automatically accepted. A lookup failure is not evidence an ID is
 invalid. “Latest unavailable” is distinct from the published rating.
 
@@ -121,8 +157,9 @@ Data sources; missing credentials do not prevent local tournament operation.
 
 Players → Make quads opens a wide preview with three clear steps:
 
-1. **Choose pool:** checked-in entries by default; show excluded and unrated entries;
-   choose/freeze rating basis and tie ordering.
+1. **Choose pool:** active eligible entries under the explicit check-in policy above;
+   show every excluded/unrated entry and reconcile counts; choose/freeze rating basis
+   and tie ordering. No silently empty pool after import.
 2. **Review groups:** display compact four-player groups in seed order, rating range,
    board range and names. For 22 players propose four quads plus a six-player Swiss.
    Explain the last group directly: “Six players remain; play a three-round Swiss.”
@@ -132,21 +169,30 @@ Players → Make quads opens a wide preview with three clear steps:
    action creates all sections. Undo is available before dependent actions.
 
 This is a normal top-level workflow, not a hidden utility. Section generation is
-separate from publishing round-one pairings. A late player prompts a controlled
+separate from approving round-one pairings. A late player prompts a controlled
 choice about the affected group; it never silently repartitions every quad.
 
-### 5. Pair and publish a round
+### 5. Review and approve a round
 
-Click Review next round → inspect draft board table → resolve issues → Publish.
-Draft and published labels are unmistakable. Show changed/exception rows, an
+Click Review next round → inspect draft board table → resolve issues → Approve pairings.
+Draft and approved revision labels are unmistakable. Show changed/exception rows, an
 explanation for each pairing, reserved boards and unpaired entries. A warning says
-what will happen and whether it blocks publishing. TD policy overrides record a
+what will happen and whether it blocks approval. TD policy overrides record a
 reason; structural invalidity (one player on two boards) cannot be waived.
 
-Publish makes a durable local revision available to print. Public online posting is
-a separately configured action, with its own status. Failure to post online does
-not roll back local pairings. Manual edits after publication produce a replacement
-revision and indicate that previous paper/web copies are stale.
+Approve pairings makes a durable local revision available to print. Offer optional
+Approve & print using the current preset. Print and Post online are separate actions
+with separate statuses. A failed/cancelled print or online post never rolls back
+approval or requires pairing again. Internally this is a PublishedRevision; avoid
+using “Publish” alone as the user-facing verb. Manual changes create a replacement
+revision and identify which prior paper/web copies are stale.
+
+Approval, play status and result completeness are different facts. No result does
+not establish that a game has not started. A section can start/finish independently
+of others. Event overview lists each section's current round, missing-result count,
+unresolved games and next available action. Open an exact unresolved board from
+there and return. Do not add a compulsory per-board start-tracking chore; destructive
+re-pairing still requires the TD to establish affected games have not started.
 
 ### 6. Enter results at tournament speed
 
@@ -173,6 +219,15 @@ superseded. Keep audit trail and prior exports. The history view shows who/when/
 where available, and distinguishes correction from restoring an older event copy.
 
 ### 8. Print what the room needs
+
+Rounds offers **Print pairings** with section, round and revision visible; Standings
+offers the equivalent current report action. Use the remembered preset and normal
+OS print flow; do not require revisiting the Reports workspace each round. First
+use or a changed layout opens preview; Preview/settings remains directly available.
+All-section output has explicit scope and labelled section pages. Printer submission
+means “Sent to printer,” not proof that paper emerged. A failed/cancelled job keeps
+the approved revision and supports retry/PDF export without regenerating pairings.
+Stale reports show affected sections/revisions and offer the current replacement.
 
 Reports has a compact template list at left, page preview center and collapsible
 layout controls. Most-used templates first: pairings, alphabetical pairings,
@@ -247,18 +302,32 @@ requirements; Flutter sharing does not erase those differences.
 | Unsaved/error saving | Persistent high-priority explanation and recovery path; do not pretend saved |
 | Validation issue | Named problem, affected records, direct repair action |
 | No legal pairing found | Show constraints and unresolved entries; allow reviewed policy change/manual proposal |
-| Stale draft | Explain input changed; regenerate or review changes before publish |
+| Stale draft | Explain relevant input changed; regenerate or review before approval |
 | Deleted record with history | Archive/withdraw or explicit supported migration, never erase played games invisibly |
 | Operation cannot run | Explain missing prerequisite alongside control; not a mysterious disabled button |
 | Long operation | Progress/cancel where safe, repeat invocation prevented, last good state retained |
 
-Use a single issue system with scopes (event/section/player/game/report) and
-severities (blocking/warning/info), not independent red badges in every tab.
+Use a single issue system with scopes (event/section/player/game/report), severity
+and **blocked action**, not an undifferentiated event-wide error count. For example,
+“Affiliate ID needed for rating export” permits scoring and ordinary printing;
+“Player assigned twice in round 2” blocks approving those pairings. An API outage
+is unavailable verification, not automatic ineligibility. A real unresolved
+eligibility finding is handled under the selected event policy before affected
+pairing approval. An unsupported export transition is not a blanket editing lock.
+Repair links open the exact field/record and return to the originating task.
+
+Saved locally describes durable event state. A dirty inspector separately says
+Unsaved changes; pending result writes and backup failures have their own status.
+Event menu exposes active file location, event date, last saved activity and backup
+age. Restore previews timestamp/round counts/recent activity and opens a clearly
+named new copy by default, preserving the original. Handover uses existing section
+status, missing games and private unresolved rulings, without a separate task system.
 Ordinary actions are undoable. Confirmation belongs to destructive or externally
 visible actions with meaningful consequences, not every keystroke.
 
 ## Usability acceptance: validate before building the whole product
 
+Run the concrete [ten-scenario rehearsal](TD_USABILITY_REVIEW.md#rehearsal-before-committing-to-the-ui).
 Test with at least one experienced SwissSys TD and one newer TD; expand beyond two
 before claiming broad usability. Use realistic synthetic data and observe task
 completion, errors and recovery, not just whether participants like the colors.

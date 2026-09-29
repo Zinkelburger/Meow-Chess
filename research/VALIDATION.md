@@ -73,3 +73,20 @@ Added duty-to-workflow traceability and a concrete numeric/WLD results-grid cont
 No app code or browser prototype was changed in this refinement. Keyboard behavior,
 TD rehearsal, interpretation of exceptional rules and federation export paths remain
 acceptance work for the future implementation; none is claimed tested here.
+
+## TD usability planning review
+
+September 29, 2026 UTC: reviewed registration, interruption/recovery, section
+progress, player changes, result entry, manual pairing repair, printing and handover
+against the documented TD duties. Added 14 cross-workflow acceptance contracts and
+ten rehearsal scenarios. Reconciled obsolete navigation and delivery guidance.
+These are review findings and proposed acceptance tests, not observed user results.
+
+Documentation checks: 23 Markdown files, 101 local links (including new
+heading fragments), 14 one-to-one finding/requirement IDs and ten scenario IDs
+verified. Two additional UX reference pages returned HTTP 200; their four raw/text
+SHA-256 hashes match the private local cache. `git diff --check` passed.
+
+No application code or executable POC changed. Flutter tests, actual rapid typing,
+TD interviews/rehearsals, printer behavior and federation validation were not run;
+there is still no application scaffold. No new parity or release-readiness claim.

@@ -38,7 +38,8 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 | ½ / = | Additional draw aliases | Save and advance immediately |
 | Arrow keys | Navigate cells | No result created by moving focus |
 | Enter on blank | Skip unknown game | Leave unreported and advance |
-| Shift+Enter / Shift+Tab | Reverse traversal | Commit a valid edit, then move backward |
+| Shift+Enter | Previous result cell | Move backward; an explicit text editor commits only a valid complete value |
+| Tab / Shift+Tab in grid navigation | Leave grid forward/backward | Normal focus traversal; not a trap cycling through every result |
 | Escape | Cancel current uncommitted edit | Restore old display; do not create a result |
 | F2 or double-click existing result | Explicit correction | Edit directly; preserve history and review later-round dependencies when applicable |
 | Delete on selected saved result | Clear result deliberately | Restore unreported state with history/undo; review dependencies if necessary |
@@ -69,9 +70,13 @@ Default advance goes down the current round's result column, skipping byes,
 non-editable structural cells and already completed games. Provide a visible
 “Missing only” filter. Manual navigation can reach completed cells for correction.
 The all-round grid offers Down this round / Across this player, with the current
-mode labelled. Traversal is over result cells, not names/ratings/IDs or arbitrary
-DOM tab order. When leaving the grid, normal Tab navigation remains possible via
-an explicit exit/standard grid keyboard convention explained to assistive users.
+mode labelled. Automatic result advancement is over result cells, not names or
+ratings. The grid is one Tab stop: arrows move inside; Tab/Shift+Tab leave forward/
+backward. Returning restores the active cell. In an explicit text editor, Tab
+commits a valid complete edit and exits; invalid input explains the error and
+Escape always cancels it. Document/announce this convention; do not require a
+hidden exit shortcut. Player-name actions remain keyboard-accessible through a
+labelled game/player details control without making every name a Tab stop.
 
 Freeze row order during an entry sequence. Updating scores must not re-sort rows
 under the TD's fingers. When a missing-only row disappears, focus advances using
@@ -89,11 +94,30 @@ keyboard entry; it shares the same command/validation path.
 ## Correctness and recovery
 
 Commit both opponents and the audit record atomically; acknowledge saved state and
-advance only after durable local success. Keep focus and the pending text on failure.
-Local writes must feel immediate; measure latency rather than inserting a spinner
-or confirmation modal after every result. Network publishing cannot block entry.
-Undo is always discoverable; a simple same-round typo needs no multi-screen wizard.
-Historical changes only open impact review when dependencies actually exist.
+advance only after durable local success. Keep focus and pending input on failure.
+If the next released shortcut arrives before that write finishes, buffer it in order
+against the captured next eligible game IDs, show a pending count, and drain in
+sequence. Do not apply it twice to the still-focused game, drop it, or guess a new
+target after a filter/sort change. Pending input is not labelled saved. Pause on
+write failure or stale target and show exactly which outcomes remain uncommitted.
+Navigation/correction/undo during a pending sequence must resolve it explicitly
+(first finish saving, or cancel uncommitted queued input); never carry keys into a
+new section. An in-flight commit's outcome must be known before claiming it cancelled.
+After a crash only durably acknowledged outcomes are guaranteed; never imply queued
+keys were saved. Bound the buffer and visibly stop accepting further commands if
+full, with feedback; no silently discarded keystrokes.
+
+Local writes must feel immediate; measure latency rather than inserting a modal
+after every result. Network posting cannot block entry. Undo is discoverable and
+names the action/game/section it will reverse; it must not ambiguously undo an
+unrelated player edit made during an interruption. Result history offers correction
+of that specific game. A simple same-round typo needs no multi-screen wizard.
+
+Past rounds open in browse mode. Choose Correct results for the displayed historical
+round, or Correct this result, to deliberately enable edits with a visible banner;
+leaving that round exits the mode. Impact review appears only for actual dependencies,
+not for every navigation key. Restoring an interrupted current-round cursor shows
+both names, section, round and perspective again before result shortcuts resume.
 
 A win/loss key records a played result by default. Forfeits, double forfeits,
 requested/allocated byes, disputed and unfinished games use labelled outcomes in
@@ -121,6 +145,11 @@ outcome through an explicit action, not overwrite a derived total accidentally.
 | Score changes would alter standings sort | Entry order stays fixed until deliberate resort |
 | Change a completed game after later round | Explicit impact review; historical games preserved |
 | Storage error or app crash at commit boundary | No one-sided score; no false saved acknowledgement |
+| Five released keys 1, 0, 5, W, D at 100 ms intervals with 300 ms writes | Five intended stable game IDs receive exactly those results in order; pending/saved status truthful |
+| Fail the third write in that sequence; change filter or request navigation | First two durable; remaining inputs identifiable and not silently applied elsewhere |
+| Open historical round and type 1/0/5 before enabling correction | No result changed; visible browse/correction distinction |
+| Interrupt for event-wide player edit, then return | Same result cursor/context; Undo clearly identifies its target |
+| Tab/Shift+Tab from grid and invalid text editor | Grid can be left; Escape cancels invalid edit without trapping focus |
 | Type W/0.5 into player-name/search fields | No results changed |
 | Double-game match with split wins | Two actual games retained; not converted to draws |
 | Keyboard/screen reader at 200% text | Names/perspective announced, focus visible, grid escapable |

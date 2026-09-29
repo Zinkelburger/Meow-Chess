@@ -53,6 +53,7 @@ require the appropriate correction review.
 The inspector remains open after Save with clear saved feedback. If the TD invokes
 Byes/Move/Withdraw while details are dirty, offer Save and continue / Discard edits /
 Keep editing. Never lose typed changes or silently include them in another action.
+Show Unsaved changes in a dirty inspector even when the underlying event is saved.
 Ordinary valid edits save without a second confirmation dialog. History and Undo
 are reachable without leaving the workspace.
 
@@ -71,8 +72,11 @@ has been played, changing it requires the result-correction workflow, not replac
 it invisibly with a bye. If a deadline or policy prevents the default action, explain
 why and expose the applicable TD resolution path.
 
-Withdrawal defaults to the next unpaired round. If a current game has no result,
-ask whether withdrawal begins now or after that game, and show the unresolved game.
+Withdrawal proposes the next unpaired round but displays its exact number and
+scheduled date/time (for example, “From round 3 · Oct 8, 7 pm”), never just “Next.”
+If a current game has no result, offer withdrawal from that round or after that game,
+show the opponent/board, and require the TD to resolve the current-game implications.
+Scheduled time is distinct from actual play status.
 Do not assume a loss, award the opponent a point, or erase a pairing automatically.
 Offer to retain or cancel future requested byes and show the effect explicitly.
 Preserve completed games for rating history and apply the event's separate standings
@@ -80,7 +84,10 @@ policy, including round-robin withdrawal rules. Reinstatement restores future
 availability without inventing results for missed rounds.
 
 Bulk bye, withdrawal and move actions show all selected names, shared changes and
-per-player conflicts. An operation must not partially apply silently: either one
+per-player conflicts. Keep the selected count visible, including a count of hidden
+selected rows after filtering. Select all initially means the displayed filtered
+set; expanding to the whole section/event is a separate labelled choice. Preview
+lists the exact entries before committing; never expand scope silently. An operation must not partially apply silently: either one
 transaction commits the reviewed set, or a documented partial selection is reviewed
 before committing. Participation and scoring remain editable after export through
 a new revision; an exported file is not a lock on correcting the tournament.
@@ -152,7 +159,8 @@ and test the supported transition contract before implementing the command.
 ## Move one player, or several
 
 Use the same transition machinery with a smaller selection. Show source and target,
-effective round, eligibility findings, available boards, reserved byes, current
+effective round/date, eligibility findings, available/reserved boards, accessibility
+accommodations, reserved byes, current
 game and rating/prize differences. Moving an unpaired entry before play is immediate
 after the short preview; it does not require exporting or rebuilding the event.
 A source quad reduced to three players produces an actionable format/schedule issue
@@ -164,6 +172,22 @@ the same person. Explicitly distinguish a section transfer from re-entry with a 
 score. Preserve original games for reporting, and use the reviewed destination
 scoring policy. Never duplicate a person into overlapping pairings. Late arrival is
 an ordinary registration + participation workflow with explicit past-round handling.
+
+## Repair a pairing without rebuilding the round
+
+Select a board → Edit pairing. Show both players, colors and board assignment;
+opponent choices distinguish unpaired eligible entries from already assigned or
+ineligible entries. Selecting an assigned player opens an explicit swap/rearrangement
+preview covering all affected boards. Never silently duplicate an assignment or
+force a whole-round re-pair. Preserve unaffected pairings and explicit locks; allow
+reviewed color/board changes with constraint explanations. A TD exception records
+a reason where policy allows it; structural conflicts cannot be waived.
+
+For approved pairings, establish that affected games have not started before
+replacement; otherwise retain started games and use the appropriate participation
+or result-correction path. Approval makes a replacement revision and identifies
+stale output for reprinting. If automatic pairing fails, retain the last good
+proposal and expose the same repair controls with the specific unresolved constraints.
 
 ## Shared safeguards that support flexibility
 

@@ -84,6 +84,29 @@ The UI mechanisms below are proposals, not keystrokes mandated by US Chess.
 | J05 | P0 | Submission/correction follow-through | Export, portal submission and acceptance are different; correction identifies original event and changed records |
 | J06 | P0 | Results-entry usability rehearsal | Enter 20 outcomes with blanks/correction keyboard-only; stable perspective/focus; no wrong reciprocal result |
 
+## Usability contracts across workflows
+
+[TD usability review](TD_USABILITY_REVIEW.md) explains the original gap and evidence
+for each contract. These tighten existing capabilities; they do not assert that a
+prototype or TD study has passed. R1–R10 refer to that document's rehearsal scripts.
+
+| ID | Priority | Requirement | Acceptance scenario |
+|---|---|---|---|
+| UX01 | P0 | Event-wide find and return to task | Find duplicate surnames by name/ID with section/board context; edit correct entry and restore original cursor; R1/R3 |
+| UX02 | P0 | Fast offline walk-in registration | Save name + destination with missing ID/rating flagged; Save & add another; explicit late-entry treatment; R1 |
+| UX03 | P0 | Explicit attendance policy and complete pool accounting | Check-in on/off cases account for every entry/exclusion; import never asserts presence; R2 |
+| UX04 | P0 | Safe rapid results and interruption recovery | Ordered stable-ID buffering under delayed writes; historical browse guard; zero wrong-game edits; RESULT_ENTRY.md fixtures and R3/R7 |
+| UX05 | P0 | Section-local progress and exact missing-game navigation | One section advances while another remains unfinished; unrelated result does not invalidate proposal; R4 |
+| UX06 | P0 | Validation blocks the relevant action only | Missing export metadata or API outage does not stop unrelated scoring/printing; real eligibility issue remains actionable; R1/R4 |
+| UX07 | P0 | Clear save and bulk-selection scope | Dirty inspector never looks saved; hidden selected rows counted/named; routine edit needs no second confirmation; R1/R5 |
+| UX08 | P0 | Fast repeat printing with independent delivery status | Remembered preset, visible scope/revision, retry without new pairing; R8 |
+| UX09 | P0 | Distinct approval, play, printing and online status | Approve does not imply posted/printed/started; empty result not proof game unstarted; R4/R6/R8 |
+| UX10 | P0 | Exact effective rounds and preserved constraints | Withdrawal/transfer shows date/round/current game, byes and reserved boards; R5/R6 |
+| UX11 | P0 | Focused field-specific identity/rating review | Changes/problems first; accepting spelling does not change seeding; stale lookup cannot overwrite edit; R1 |
+| UX12 | P0 | Understandable restore and handover | Active event/date/file clear; backup state separate; restore new copy; unresolved games/rulings visible; R9 |
+| UX13 | P0 | Canonical interaction contracts and observed rehearsals | R1–R10 completed in relevant supported flows, errors/assists recorded; serious data/targeting faults block release; accessible paths included |
+| UX14 | P0 | Local pairing repair without whole-round regeneration | Eligible-opponent picker, explicit swap/rearrangement preview, preserved unaffected/locked boards; started games protected; R4 |
+
 ## Core invariants
 
 - Stable person, entry, section, round and game IDs. A row sort never changes them.

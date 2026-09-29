@@ -5,9 +5,11 @@
 > The initial US Chess release below is a tranche of the larger product target.
 
 
-Planning completed for the accessible public evidence; application implementation
-has not begun. These are dependency-ordered milestones, not time estimates. Unanswered
-product preferences use the documented defaults rather than invented approval.
+A public-evidence baseline and proposed interaction contracts are assembled;
+feature extraction, field observation and integration validation remain unfinished.
+Application implementation has not begun. These are milestone dependencies, not time
+estimates or a requirement to serialize independent UX and integration research.
+Unanswered preferences use documented defaults rather than invented approval.
 
 ## 0. Evidence and policy decisions
 
@@ -23,6 +25,20 @@ release, not a reason to stop all independent domain/UI work later.
 Exit: agreed supported-format matrix and a precise list of still-unverified
 integration claims. Owner: product lead + experienced TD; provider answers require
 US Chess. No messages were sent by this planning task.
+
+### Early TD usability track
+
+Before broad implementation, rehearse [R1–R10](TD_USABILITY_REVIEW.md#rehearsal-before-committing-to-the-ui)
+using paper/wireframes or a bounded prototype, then test actual keyboard/focus/save
+behavior in the first working slice. Include interrupted entry, walk-ins without
+network access, exact selection scope, quick reprint and recovery. Record task
+errors and unassisted completion, not just visual preference. No such study has
+been conducted. A later implementation authorization is required for an app build;
+this review adds specifications only.
+
+This track can progress independently of API access and accepted DBF fixtures.
+Those integration gates still block claims of release readiness. A prototype is
+throwaway evidence, never a passing production feature or federation test.
 
 ## 1. Pure Dart domain and report conformance
 
@@ -47,7 +63,8 @@ travel with the event.
 
 ## 3. Registration and identity
 
-CSV/TSV/paste preview, mapping, duplicate handling, check-in, exact-ID lookup, bounded
+Fast manual walk-in registration and event-wide finding/editing; CSV/TSV/paste
+preview, mapping, duplicate handling, explicit check-in policy, exact-ID lookup, bounded
 candidate search, membership findings, rating provenance and review/apply batch.
 Use synthetic responses while access is missing, then verify against authenticated
 production behavior. Latest-rating semantics are a named acceptance gate.
@@ -64,8 +81,11 @@ quads plus a six-player Swiss using hand-verified or TD-approved pairings until 
 Swiss engine milestone is complete. Do not call that a shipped automatic Swiss.
 
 Exit: full scripted day including absent entrant, ID correction, late arrival,
-forfeit, old-result correction, printer preview and restart. TD reviews usability
-and report content.
+forfeit, interrupted rapid keyboard results, old-result correction, quick reprint,
+printer failure and restart. TD reviews usability and report content. No accidental
+wrong-game entry, silently excluded entrant or lost acknowledged result is acceptable.
+Verify all UX01–UX14 contracts and R1–R10 rehearsals in the actual supported flows;
+where automatic Swiss is still absent, label that limitation explicitly.
 
 ## 5. US Chess Swiss and double-round blitz
 
@@ -130,7 +150,9 @@ Run: `dart run poc/quad_partition.dart`. Results are recorded in
 Potential later spikes, each with an explicit question: DBF codec against current
 accepted files; actual US Chess live-rating semantics; printer/PDF behavior on each
 desktop OS; cancellable worst-case Swiss search; and Bayesian bughouse simulation.
-Avoid building a throwaway UI until those risks have clear answers.
+Keep each spike bounded. Rehearse high-risk TD interactions early while these
+integration questions proceed independently; avoid broad UI construction before
+both workflow contracts and affected domain interfaces are understood.
 
 ## Remaining interview / evidence checklist
 

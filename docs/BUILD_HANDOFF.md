@@ -9,7 +9,10 @@ starting the application build. No production application has been scaffolded.
 Start with [actual TD duties and their evidence](../research/notes/TD_DUTIES.md).
 For every core workflow, trace duty → realistic scenario → interaction → acceptance
 test. A competitor menu item alone does not establish priority or usability.
-Read [Results entry](RESULT_ENTRY.md) before implementing any results table.
+Read [TD usability review](TD_USABILITY_REVIEW.md) for UX01–UX14 and the R1–R10
+rehearsals, then [Results entry](RESULT_ENTRY.md) before any results table. The
+feature catalog alone is not a build specification. A feature that exists but
+cannot be found or used safely during a live event has not passed acceptance.
 
 
 1. [Full capability map](FULL_FEATURE_MAP.md) — expanded scope and stable IDs.
@@ -22,7 +25,10 @@ Read [Results entry](RESULT_ENTRY.md) before implementing any results table.
 6. [Requirements](REQUIREMENTS.md), [delivery](DELIVERY.md) and research limitations.
 
 Full parity is the target, not an instruction to implement everything in one pass.
-The task navigation names in TD_EXPERIENCE.md supersede the earlier UX sketch.
+TD_EXPERIENCE.md owns navigation; TD_OPERATIONS.md owns player/section changes;
+RESULT_ENTRY.md owns keyboard/scoring behavior. UX.md retains design provenance and
+report layout, not a competing workspace sketch. TD_USABILITY_REVIEW.md records
+cross-workflow gaps and evaluation scenarios; REQUIREMENTS.md contains release gates.
 The original release scope is a first tranche of this larger product.
 
 ## Resolve before coding affected features
@@ -49,8 +55,8 @@ The original release scope is a first tranche of this larger product.
 |---|---|---|
 | 0. Evidence and UX | TD walkthrough of roster → quad preview → round → correction → print | Reconcile source gaps; observe novice/experienced TDs; record revisions |
 | 1. Event and safety | Create, edit, close, reopen, undo, recover a synthetic event | Transaction/crash/backup/migration checks; stable identity model |
-| 2. Registration | Import, edit player details, assign byes, withdraw/reinstate and transfer entries | Reimport diff; no data loss; ratings provider fakes and cache behavior |
-| 3. Quads and scoring | Make and combine quad/Swiss groups, review/publish, enter/correct games | Pure domain invariants, seeded schedule fixtures, keyboard walkthrough |
+| 2. Registration | Add walk-ins/import, find across event, edit details, assign byes, withdraw/reinstate and transfer entries | Reimport diff; no data loss; ratings provider fakes and cache behavior |
+| 3. Quads and scoring | Make and combine quad/Swiss groups, review/approve, print, enter/correct games and resume after interruptions | Pure domain invariants, seeded schedule fixtures, keyboard walkthrough |
 | 4. Swiss and reporting | Run a complete US Chess event, print and export DBFs | TD-reviewed pairing cases, accepted DBF comparison, authorized portal test |
 | 5. Full club operation | Double games, prizes, team totals, recurring templates and extended print suite | Scoring/report consistency and documented edge cases |
 | 6. Specialist parity | Fixed-board teams, Scheveningen, ladder, merged schedules, side games, databases | Feature-by-feature documented and reference-app comparisons; basic section combination/transfer must already work in earlier slices |
@@ -60,6 +66,10 @@ The original release scope is a first tranche of this larger product.
 Parallel modules can be built only after their data/command contracts are settled.
 Do not build 50 empty screens and call it progress. Each slice must use actual
 persisted data through the same commands and reports as the eventual application.
+Before calling a slice usable, run its relevant R1–R10 scenarios. Defer unrelated
+reporting issues without hiding them; explain exactly which action each blocks.
+Do not require internet access, repeated dialogs, or a fresh report-layout wizard
+for routine local play. Fast result entry must survive delayed writes and interrupts.
 No need for microservices, full event sourcing, a generic plugin framework, or a
 custom widget toolkit to get the first event running.
 
@@ -68,8 +78,10 @@ custom widget toolkit to get the first event running.
 - Pure Dart domain with explicit Person, Entry, Section, Round, Game, Team,
   RatingObservation and PublishedRevision identities. Multiple entries can share
   one person; multiple games can share one pairing round.
-- Pairing input snapshot → deterministic proposal → validated publication. Preserve
-  policy/version, seed/tie resolution and manual exception reasons.
+- Pairing input snapshot → deterministic proposal → validated approval. Preserve
+  policy/version, seed/tie resolution and manual exception reasons. Check relevant
+  dependency versions; an unrelated section's result must not stale the proposal.
+  Approve pairings, Print and Post online have distinct actions/statuses.
 - Separate tournament score, prize score, pairing adjustment and rated result.
   Avoid encoding “bye” as a missing opponent plus arbitrary numeric score.
 - Local SQLite transaction for command + audit + state; persist before claiming

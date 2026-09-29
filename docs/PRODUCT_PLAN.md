@@ -41,13 +41,16 @@ and interrupted writes. A beautiful roster with unverified exports is not a usab
 tournament program.
 
 US Chess reporting is a release gate, not an end-of-project afterthought. Establish
-the schema and a TD-assisted validation route before investing heavily in UI.
+the schema and a TD-assisted validation route early. Independently rehearse the
+core TD interactions before broad UI implementation; missing API credentials must
+not postpone finding basic usability problems. See [usability review](TD_USABILITY_REVIEW.md).
 
 ## Subsequent scope, explicitly retained
 
 | Capability | Proposed phase | Reason |
 |---|---|---|
-| Team labels and individual team standings | First release or first extension | Straightforward grouping, distinct from matching teams |
+| Team/club labels | First release | Editable/importable labels are a core player operation |
+| Individual team standings | First extension | Explicit aggregation policy, distinct from matching teams |
 | Fixed two-person bughouse teams | First extension | Separate, unrated match model; user explicitly wants this |
 | Rotating-partner bughouse / adaptive matchmaking | Experimental extension | Requires a fairness policy and evaluation, not just Elo arithmetic |
 | US Chess online events / six-week double quads | Next calendar-coverage phase | Separate online rating systems and reporting rules |
@@ -72,10 +75,13 @@ The [survey](../research/notes/BOYLSTON.md) makes that gap explicit.
 
 ## Main view
 
-An event workspace with persistent **Overview + one top tab per section**.
-Within a section: Players, Pairings & Results, Crosstable, Standings, and Settings.
-Before pairing, open Players; while running, open the current round's results.
-Remember the TD's last view, round, selection, and scroll position in each section.
+An event workspace with persistent **Event + one top tab per section**.
+Within a section: Players, Rounds, Standings, Reports, conditional Teams, and Section
+settings. Crosstable and prize views live within Standings. New sections open
+Players; existing sections resume the last view, round, selection and scroll.
+Event-wide Find player opens editable details and returns to the interrupted task.
+The authoritative interaction contract is [TD experience](TD_EXPERIENCE.md), with
+[TD operations](TD_OPERATIONS.md) and [results entry](RESULT_ENTRY.md) for details.
 
 Use compact dark surfaces, Inter and Source Code Pro, strong keyboard navigation,
 and restrained accents informed by Chess Auto Prep V2. Printing has its own white

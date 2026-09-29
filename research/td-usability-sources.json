@@ -1,0 +1,29 @@
+{
+  "note": "Private local snapshots retain publisher rights; only metadata and original planning are committed.",
+  "sources": [
+    {
+      "id": "ten-usability-heuristics",
+      "url": "https://www.nngroup.com/articles/ten-usability-heuristics/",
+      "final_url": "https://www.nngroup.com/articles/ten-usability-heuristics/",
+      "retrieved_at": "2026-09-29T02:03:05.468055+00:00",
+      "http_status": 200,
+      "raw_path": "research/local/td-usability/ten-usability-heuristics.html",
+      "text_path": "research/local/td-usability/ten-usability-heuristics.txt",
+      "raw_sha256": "de4dbb2d9300080626507cd782a9908dbffd571b80f7f86a9fa345a81517f0ce",
+      "text_sha256": "60e7ba5ac6cdaada5bc20f2b16b7d4e81a910adce709f5636ba1559143d431a4",
+      "review": "General review-method guidance, not a TD requirement source or observed usability evidence."
+    },
+    {
+      "id": "complex-applications",
+      "url": "https://www.nngroup.com/articles/usability-heuristics-complex-applications/",
+      "final_url": "https://www.nngroup.com/articles/usability-heuristics-complex-applications/",
+      "retrieved_at": "2026-09-29T02:03:05.984527+00:00",
+      "http_status": 200,
+      "raw_path": "research/local/td-usability/complex-applications.html",
+      "text_path": "research/local/td-usability/complex-applications.txt",
+      "raw_sha256": "65b53f9ab7723dcd2f7f5859c6caeacd8abe085b69a39f0cf911be8837e466ed",
+      "text_sha256": "a23e063efce5cc75ddea70c27964d26f1cf5095d130680a55a066b68f9c75ce6",
+      "review": "General review-method guidance, not a TD requirement source or observed usability evidence."
+    }
+  ]
+}

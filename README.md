@@ -8,7 +8,8 @@ usable printing. Inspired by SwissSys workflows and Chess Auto Prep V2's UI.
 AGPLv3 [LICENSE](LICENSE) is retained. Platform and release boundaries below
 are recommendations awaiting product decisions, not promises of shipped features.
 
-Start with [the TD’s actual duties and supporting sources](research/notes/TD_DUTIES.md)
+Start with [the TD usability review and realistic rehearsal scenarios](docs/TD_USABILITY_REVIEW.md),
+[the TD’s actual duties and supporting sources](research/notes/TD_DUTIES.md)
 and [the keyboard results-entry contract](docs/RESULT_ENTRY.md). Then read the expanded [full feature map](docs/FULL_FEATURE_MAP.md),
 [TD experience specification](docs/TD_EXPERIENCE.md),
 [first-class TD operations](docs/TD_OPERATIONS.md), and
@@ -30,7 +31,7 @@ Supporting plans:
 | [US Chess ratings API](research/notes/US_CHESS_API.md) | Public OpenAPI, live probes, identity review, latest-rating limitations |
 | [Pairing and bughouse](docs/PAIRING.md) | US Chess pairing, quads, team distinctions, experimental skill estimates |
 | [Architecture](docs/ARCHITECTURE.md) | Dart domain, SQLite transactions, commands, adapters, recovery |
-| [UX specification](docs/UX.md) | Reusable workspace, section tabs, results entry, printing |
+| [Design references and report layout](docs/UX.md) | V2 source provenance and print/ASCII details; current interaction contracts linked above |
 | [Delivery and validation](docs/DELIVERY.md) | Ordered milestones, release gates, research questions, POCs |
 | [Engineering reading / reuse](research/notes/ENGINEERING.md) | Books, patterns, library findings, licensing and future FIDE |
 | [Reference library](research/README.md) | Source catalog, local snapshots, provenance and research limits |

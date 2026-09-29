@@ -13,6 +13,10 @@ research topic, not a tested feature. The previous [research notes](../research/
 record deeper findings. A running licensed SwissSys installation and representative
 files are still needed for differential tests and undocumented behavior.
 
+[TD usability review](TD_USABILITY_REVIEW.md) adds cross-workflow acceptance criteria
+without changing this capability count. Read it alongside the map: menu/feature
+coverage alone does not show that a TD can complete the work.
+
 ## What “all features” means
 
 1. Cover the tournament outcomes SwissSys supports, with explicit acceptance cases.

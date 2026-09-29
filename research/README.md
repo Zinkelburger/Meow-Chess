@@ -87,3 +87,11 @@ user-requested workflows to acceptance cases. Seven additional official referenc
 are saved locally under `research/local/td-duties/`; their provenance is in
 [td-duty-sources.json](td-duty-sources.json). The 2026 rules/updates remain in the
 original curated source archive. No TD observation or user study has yet occurred.
+
+## TD usability review references
+
+[The usability review](../docs/TD_USABILITY_REVIEW.md) applies general interface
+review principles to the already documented TD duties and user scenarios. Two
+additional NN/g articles are recorded in [td-usability-sources.json](td-usability-sources.json)
+with local HTML/text paths and hashes. They supplement the original 103-source
+catalog; they are not federation rules or evidence of a completed TD study.
