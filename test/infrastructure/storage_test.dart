@@ -74,6 +74,30 @@ void main() {
     expect(notDirectory.readAsStringSync(), 'keep');
     expect(c.repository.load()!.players.length, 8);
   });
+  test(
+    'opening an unrelated SQLite file refuses without changing its schema or bytes',
+    () {
+      final path = p.join(directory.path, 'unrelated.meow');
+      final db = sqlite3.open(path);
+      db.execute('CREATE TABLE unrelated (value TEXT)');
+      db.execute("INSERT INTO unrelated VALUES('preserve me')");
+      db.close();
+      final original = File(path).readAsBytesSync();
+      expect(
+        () => SqliteEventRepository(path),
+        throwsA(isA<TournamentException>()),
+      );
+      expect(File(path).readAsBytesSync(), original);
+      final check = sqlite3.open(path);
+      expect(
+        check
+            .select("SELECT name FROM sqlite_master WHERE type='table'")
+            .map((r) => r['name']),
+        ['unrelated'],
+      );
+      check.close();
+    },
+  );
   test('future schema is refused without rewriting it', () {
     final path = p.join(directory.path, 'future.meow');
     final db = sqlite3.open(path);
@@ -95,5 +119,64 @@ void main() {
     final reopened = SqliteEventRepository(path);
     expect(reopened.readPreference('player-draft-new'), contains('Half typed'));
     reopened.close();
+  });
+  test(
+    'mid-transaction SQL failure rolls back every affected table and audit row',
+    () async {
+      final path = p.join(directory.path, 'fault.meow');
+      final c = fixture(path: path);
+      c.post(await c.propose());
+      final before = c.event!;
+      c.dispose();
+      final inject = sqlite3.open(path);
+      inject.execute(
+        r"CREATE TRIGGER fail_result BEFORE INSERT ON game WHEN json_extract(NEW.data, '$.outcome') = 'whiteWin' BEGIN SELECT RAISE(ABORT, 'injected write failure'); END",
+      );
+      inject.close();
+      final repository = SqliteEventRepository(path);
+      try {
+        final first = before.sections.first;
+        final round = first.rounds.first;
+        final after = before.copy(
+          sections: [
+            first.copy(
+              rounds: [
+                round.copy(
+                  games: [
+                    round.games.first.copy(outcome: Outcome.whiteWin),
+                    ...round.games.skip(1),
+                  ],
+                ),
+              ],
+            ),
+            ...before.sections.skip(1),
+          ],
+        );
+        expect(
+          () => repository.commit(
+            after,
+            expectedRevision: before.revision,
+            action: 'Fault',
+          ),
+          throwsA(isA<SqliteException>()),
+        );
+        expect(repository.load()!.encode(), before.encode());
+        expect(
+          repository.history().any((row) => row['action'] == 'Fault'),
+          false,
+        );
+      } finally {
+        repository.close();
+      }
+    },
+  );
+  test('undo cannot erase the fact that a round has started', () async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    c.post(await c.propose());
+    c.startRound(c.event!.sections.first.id);
+    c.undo();
+    expect(c.event!.sections.first.rounds.first.startedAt, isNotNull);
+    expect(c.undo, throwsA(isA<TournamentException>()));
   });
 }

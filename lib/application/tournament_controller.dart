@@ -201,6 +201,23 @@ class TournamentController extends ChangeNotifier {
 
   void startRound(String sectionId) {
     final e = event!;
+    final section = e.sections.firstWhere((s) => s.id == sectionId);
+    if (section.rounds.isEmpty) {
+      throw const TournamentException('Post a round before starting it.');
+    }
+    if (section.rounds.last.startedAt != null) {
+      throw const TournamentException('This round has already started.');
+    }
+    if (section.rounds.last.complete) {
+      throw const TournamentException('This round is already complete.');
+    }
+    if (section.rounds
+        .take(section.rounds.length - 1)
+        .any((r) => !r.complete)) {
+      throw const TournamentException(
+        'Earlier games are still unresolved. A pairing assumption permits posting, not simultaneous play.',
+      );
+    }
     change(
       'Start round',
       e.copy(
@@ -254,7 +271,12 @@ class TournamentController extends ChangeNotifier {
                         games: r.games
                             .map(
                               (g) => g.id == gameId
-                                  ? g.copy(outcome: outcome, note: reason)
+                                  ? g.copy(
+                                      outcome: outcome,
+                                      note: reason,
+                                      pairingAssumption: null,
+                                      pairingReason: '',
+                                    )
                                   : g,
                             )
                             .toList(),
@@ -264,6 +286,40 @@ class TournamentController extends ChangeNotifier {
               ),
             )
             .toList(),
+      ),
+    );
+  }
+
+  void setPairingAssumption(String gameId, Outcome assumption, String reason) {
+    final e = event!;
+    final game = e.games.firstWhere((g) => g.id == gameId);
+    if (game.outcome.resolved || !assumption.played || reason.trim().isEmpty) {
+      throw const TournamentException(
+        'Choose a win, draw or loss assumption for an unresolved game and record the TD’s reason.',
+      );
+    }
+    change(
+      'Temporary pairing treatment, board ${game.board}',
+      e.copy(
+        sections: [
+          for (final s in e.sections)
+            s.copy(
+              rounds: [
+                for (final r in s.rounds)
+                  r.copy(
+                    games: [
+                      for (final g in r.games)
+                        g.id == gameId
+                            ? g.copy(
+                                pairingAssumption: assumption,
+                                pairingReason: reason,
+                              )
+                            : g,
+                    ],
+                  ),
+              ],
+            ),
+        ],
       ),
     );
   }

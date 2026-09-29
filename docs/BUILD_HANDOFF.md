@@ -109,14 +109,14 @@ one checkbox. “Archived” must never automatically mark “reviewed.” A com
 feature has a requirement ID, source links, exact supported variants, tests and
 known gaps. A source topic may map to several IDs; a feature can span many pages.
 
-Suggested first future-agent prompt:
+Continuation prompt:
 
 > Read docs/BUILD_HANDOFF.md and its linked planning documents. First reconcile
 > the SwissSys page checklist against the full capability map and identify any
-> unsupported assumptions. Then propose the smallest first vertical slice with
+> unsupported assumptions. Read IMPLEMENTATION.md and continue the outstanding release work with
 > concrete acceptance fixtures. Preserve US Chess-first delivery and full-parity
-> traceability. Do not silently approximate export formats or pairing rules. Build
-> only the slice explicitly authorized in this task, and report its tested scope.
+> traceability. Do not silently approximate export formats or pairing rules. The user has authorized implementation; continue independent work while external
+> validation is pending, and report the exact tested scope.
 
 ## Priority correction: the tournament day is the spec
 

@@ -5,8 +5,8 @@
 > The initial US Chess release below is a tranche of the larger product target.
 
 
-Planning completed for the accessible public evidence; application implementation
-has not begun. This document owns the implementation sequence; BUILD_HANDOFF.md maps its slices
+Application implementation is underway; [implementation status](IMPLEMENTATION.md)
+records delivered scope and verification. The milestones below remain the full release target. This document owns the implementation sequence; BUILD_HANDOFF.md maps its slices
 to these milestones and does not define a competing order. These are dependency-ordered milestones, not time estimates. Unanswered
 product preferences use the documented defaults rather than invented approval.
 
@@ -92,7 +92,8 @@ than inferring support from one successful Linux build.
 
 Exit: all P0 scenarios in [Requirements](REQUIREMENTS.md), license notices and source
 distribution, packaging, backup recovery documentation, and known limitations.
-Publishing/releases need a later explicit request; this task only plans.
+Publishing/releases need a later explicit request; local implementation does not
+authorize distribution.
 
 ## Later milestones
 
@@ -153,7 +154,7 @@ Avoid building a throwaway UI until those risks have clear answers.
 | Before compliance claim | Current accepted DBF fixtures and authorized portal validation | Hard release gate |
 
 A research question is not automatically an implementation blocker. Continue
-independent work when authorized later, while maintaining truthful capability
+the authorized independent implementation work, while maintaining truthful capability
 status for contracts that cannot yet be tested.
 
 ## Tournament-day usability gate

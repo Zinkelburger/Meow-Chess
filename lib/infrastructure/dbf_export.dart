@@ -74,10 +74,11 @@ class ReportMetadata {
 }
 
 List<String> ratingPreflight(Event e) {
+  final sections = e.sections.where((s) => s.players.isNotEmpty).toList();
   return [
     if (e.practice) 'Practice copies cannot produce rating packages.',
-    if (e.sections.isEmpty) 'Create sections first.',
-    if (e.sections.any((s) => s.players.isNotEmpty && !s.finished))
+    if (sections.isEmpty) 'Create sections first.',
+    if (sections.any((s) => s.players.isNotEmpty && !s.finished))
       'Complete all scheduled rounds and results.',
     if (!RegExp(r'^\d{8}$').hasMatch(e.tdId))
       'Enter the chief TD’s eight-digit ID in event settings.',
@@ -87,14 +88,14 @@ List<String> ratingPreflight(Event e) {
       (p) => e.sectionOf(p.id) != null && p.memberId.isEmpty,
     ))
       '${player.name}: US Chess ID missing.',
-    if (e.sections.any((s) => s.doubleGames))
+    if (sections.any((s) => s.doubleGames))
       'Double-game report mapping awaits accepted reference fixtures.',
     if (e.transitions.any((t) => (t['effectiveRound'] as int) > 1))
       'Post-play transfers require an externally validated reporting mapping.',
-    if (e.sections.map((s) => s.rounds.length).toSet().length > 1)
+    if (sections.map((s) => s.rounds.length).toSet().length > 1)
       'Mixed round-count encoding awaits accepted reference fixtures.',
-    if (e.sections.length > 99 ||
-        e.sections.any((s) => s.rounds.length > 32 || s.players.length > 9999))
+    if (sections.length > 99 ||
+        sections.any((s) => s.rounds.length > 32 || s.players.length > 9999))
       'Event exceeds the supported 2C field limits.',
   ];
 }

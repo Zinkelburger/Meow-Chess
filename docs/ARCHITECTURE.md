@@ -25,7 +25,7 @@ Keep widgets thin; command handlers coordinate I/O; policies accept explicit
 immutable inputs. Use constructor injection at one composition root. Do not create
 an interface for every class or a generic repository framework.
 
-Suggested future layout, **not scaffolded yet**:
+Target module responsibilities (see IMPLEMENTATION.md for current file layout):
 
 ```text
 lib/
@@ -164,8 +164,7 @@ results, and use typed failures translated at the UI boundary. Use Effective Dar
 style and exhaustive sealed-result handling rather than magic strings/maps.
 
 Dependency choices, exact versions, license review, signing/notarization and release
-packaging remain implementation milestones. The planning repository intentionally
-does not pretend those choices have been built or tested.
+packaging remain implementation milestones. IMPLEMENTATION.md records adopted dependencies, checks and remaining platform gates.
 
 ## TD operations and effective section transitions
 

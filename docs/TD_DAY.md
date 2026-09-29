@@ -5,7 +5,7 @@ because that is how a TD experiences the product. Every moment names what the TD
 is trying to do, what the screen must offer without hunting, the target speed, and
 the requirement IDs that own it (see [Requirements](REQUIREMENTS.md), section
 “Tournament-day usability gates”). It is a design proposal to be rehearsed with
-working TDs, not a measured result. No application exists yet.
+working TDs, not a measured result. See IMPLEMENTATION.md for the current pilot and measured evidence.
 
 The example is a Saturday quads event with a public pre-registration list, one TD,
 one laptop and one printer, with a Tuesday-night weekly Swiss noted where it differs.

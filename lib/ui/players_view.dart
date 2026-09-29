@@ -23,8 +23,17 @@ Future<void> editPlayer(
           'club': player?.club ?? '',
           'notes': player?.notes ?? '',
         };
-  await editFields(
+  final result = await editFields(
     context,
+    secondaryActions: player == null
+        ? const {}
+        : {
+            'bye': 'Save & byes',
+            'move': 'Save & move',
+            'withdraw': player.withdrawn
+                ? 'Save & reinstate'
+                : 'Save & withdraw',
+          },
     title: player == null ? 'Register a player' : 'Edit ${player.name}',
     values: values,
     description:
@@ -54,6 +63,14 @@ Future<void> editPlayer(
       c.repository.writePreference(draftKey, '');
     },
   );
+  if (context.mounted && player != null && result?['_action'] != null) {
+    await playerOperation(
+      context,
+      c,
+      c.event!.player(player.id),
+      result!['_action']!,
+    );
+  }
 }
 
 Future<void> importRoster(BuildContext context, TournamentController c) async {
@@ -127,6 +144,85 @@ Future<void> importRoster(BuildContext context, TournamentController c) async {
   }
 }
 
+Future<void> playerOperation(
+  BuildContext context,
+  TournamentController c,
+  Player player,
+  String value,
+) async {
+  try {
+    switch (value) {
+      case 'edit':
+        await editPlayer(context, c, player: player);
+      case 'identity':
+        await checkIdentity(context, c, player);
+      case 'withdraw':
+        c.savePlayer(player.copy(withdrawn: !player.withdrawn));
+      case 'bye':
+        await editFields(
+          context,
+          title: 'Byes · ${player.name}',
+          description:
+              'Future rounds only. Points: 0, 0.5 or 1. Use “cancel” to remove a reservation.',
+          fields: const [
+            FieldSpec('round', 'Round', required: true),
+            FieldSpec('score', 'Points', required: true),
+          ],
+          values: {
+            'round':
+                '${(c.event!.sectionOf(player.id)?.rounds.length ?? 0) + 1}',
+            'score': '0.5',
+          },
+          onSave: (v) {
+            final round = int.tryParse(v['round']!);
+            final score = switch (v['score']!.trim()) {
+              '0' => 0,
+              '0.5' || '½' => 1,
+              '1' => 2,
+              'cancel' => -1,
+              _ => null,
+            };
+            if (round == null || round < 1 || score == null) {
+              throw const TournamentException(
+                'Enter a valid round and 0, 0.5, 1 or cancel.',
+              );
+            }
+            c.reserveBye(player.id, round, score);
+          },
+        );
+      case 'move':
+        final target = await showDialog<String>(
+          context: context,
+          builder: (context) => SimpleDialog(
+            title: const Text('Move to section'),
+            children: [
+              for (final s in c.event!.sections.where(
+                (s) => !s.players.contains(player.id),
+              ))
+                SimpleDialogOption(
+                  onPressed: () => Navigator.pop(context, s.id),
+                  child: Text(s.name),
+                ),
+            ],
+          ),
+        );
+        if (target != null && context.mounted) {
+          await editFields(
+            context,
+            title: 'Review section transfer',
+            description:
+                'Points, opponent history and played games are retained. The destination becomes Swiss. Post-play rating mapping is not yet externally validated.',
+            fields: const [FieldSpec('reason', 'Reason')],
+            onSave: (v) =>
+                c.movePlayers([player.id], target, reason: v['reason']!),
+          );
+        }
+    }
+  } catch (e) {
+    if (context.mounted) showFailure(context, e);
+  }
+}
+
 class PlayersView extends StatefulWidget {
   const PlayersView({
     required this.controller,
@@ -150,80 +246,8 @@ class _PlayersViewState extends State<PlayersView> {
     super.dispose();
   }
 
-  Future<void> action(Player player, String value) async {
-    final c = widget.controller;
-    try {
-      switch (value) {
-        case 'edit':
-          await editPlayer(context, c, player: player);
-        case 'identity':
-          await checkIdentity(context, c, player);
-        case 'withdraw':
-          c.savePlayer(player.copy(withdrawn: !player.withdrawn));
-        case 'bye':
-          await editFields(
-            context,
-            title: 'Byes · ${player.name}',
-            description:
-                'Future rounds only. Points: 0, 0.5 or 1. Use “cancel” to remove a reservation.',
-            fields: const [
-              FieldSpec('round', 'Round', required: true),
-              FieldSpec('score', 'Points', required: true),
-            ],
-            values: {
-              'round':
-                  '${(c.event!.sectionOf(player.id)?.rounds.length ?? 0) + 1}',
-              'score': '0.5',
-            },
-            onSave: (v) {
-              final round = int.tryParse(v['round']!);
-              final score = switch (v['score']!.trim()) {
-                '0' => 0,
-                '0.5' || '½' => 1,
-                '1' => 2,
-                'cancel' => -1,
-                _ => null,
-              };
-              if (round == null || round < 1 || score == null) {
-                throw const TournamentException(
-                  'Enter a valid round and 0, 0.5, 1 or cancel.',
-                );
-              }
-              c.reserveBye(player.id, round, score);
-            },
-          );
-        case 'move':
-          final target = await showDialog<String>(
-            context: context,
-            builder: (context) => SimpleDialog(
-              title: const Text('Move to section'),
-              children: [
-                for (final s in c.event!.sections.where(
-                  (s) => !s.players.contains(player.id),
-                ))
-                  SimpleDialogOption(
-                    onPressed: () => Navigator.pop(context, s.id),
-                    child: Text(s.name),
-                  ),
-              ],
-            ),
-          );
-          if (target != null && mounted) {
-            await editFields(
-              context,
-              title: 'Review section transfer',
-              description:
-                  'Points, opponent history and played games are retained. The destination becomes Swiss. Post-play rating mapping is not yet externally validated.',
-              fields: const [FieldSpec('reason', 'Reason')],
-              onSave: (v) =>
-                  c.movePlayers([player.id], target, reason: v['reason']!),
-            );
-          }
-      }
-    } catch (e) {
-      if (mounted) showFailure(context, e);
-    }
-  }
+  Future<void> action(Player player, String value) =>
+      playerOperation(context, widget.controller, player, value);
 
   @override
   Widget build(BuildContext context) {

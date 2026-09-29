@@ -16,6 +16,7 @@ class StandingsView extends StatefulWidget {
 
 class _StandingsViewState extends State<StandingsView> {
   bool wallchart = false;
+  bool prizes = false;
   int ceiling = 0;
   @override
   Widget build(BuildContext context) {
@@ -49,6 +50,11 @@ class _StandingsViewState extends State<StandingsView> {
                 ],
                 selected: {wallchart},
                 onSelectionChanged: (s) => setState(() => wallchart = s.first),
+              ),
+              FilterChip(
+                label: const Text('Prize projection'),
+                selected: prizes,
+                onSelected: (value) => setState(() => prizes = value),
               ),
               DropdownButton<int>(
                 value: ceiling,
@@ -116,7 +122,7 @@ class _StandingsViewState extends State<StandingsView> {
                           ],
                           rows: [
                             for (final (_, row)
-                                in standings(e, s)
+                                in standings(e, s, forPrizes: prizes)
                                     .where(
                                       (r) =>
                                           ceiling == 0 ||
@@ -156,7 +162,7 @@ class _StandingsViewState extends State<StandingsView> {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 24),
                       child: Text(
-                        'Points → played-opponent Buchholz → Sonneborn–Berger. Equal values are tied; alphabetical order is for display. Prize-class filters exclude unrated entries. This pilot uses the displayed tie-break policy.',
+                        'Points → played-opponent Buchholz → Sonneborn–Berger. Equal values are tied; alphabetical order is for display. Prize-class filters exclude unrated entries. Prize projection excludes early RR withdrawers and their games only from prizes; played games remain in the event and rating report. This pilot uses the displayed tie-break policy.',
                       ),
                     ),
                   ],

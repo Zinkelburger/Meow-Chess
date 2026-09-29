@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:meow_chess/application/demo.dart';
+import 'package:meow_chess/main.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
@@ -16,6 +18,41 @@ import 'package:pdf/widgets.dart' as pw;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  testWidgets(
+    'event library creates practice data, closes, and reopens its independent file',
+    (tester) async {
+      final directory = Directory.systemTemp.createTempSync('meow-library-');
+      await tester.pumpWidget(MeowApp(dataDirectory: directory));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Explore a practice event'));
+      await tester.pumpAndSettle();
+      expect(find.text('Practice copy'), findsOneWidget);
+      expect(find.text('Saturday at the club'), findsWidgets);
+      await tester.tap(find.byTooltip('Event menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Close event'));
+      await tester.pumpAndSettle();
+      expect(find.text('Recent events'), findsOneWidget);
+      final recent =
+          jsonDecode(File('${directory.path}/library.json').readAsStringSync())
+              as List;
+      expect(recent, hasLength(1));
+      final saved = SqliteEventRepository(recent.single as String);
+      expect(saved.load()!.players, hasLength(22));
+      expect(saved.load()!.practice, true);
+      saved.close();
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MeowApp(dataDirectory: directory, initialPath: recent.single as String),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Practice copy'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+      directory.deleteSync(recursive: true);
+    },
+  );
   testWidgets(
     'native tournament day: post, keyboard score, print PDF, reopen and recover backup',
     (tester) async {

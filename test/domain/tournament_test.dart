@@ -4,8 +4,24 @@ import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/domain/pairing.dart';
 import 'package:meow_chess/domain/standings.dart';
 import '../support.dart';
+import 'package:meow_chess/domain/round_clock.dart';
 
 void main() {
+  test(
+    'round start requires a posted unfinished round and is recorded once',
+    () async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      final id = c.event!.sections.first.id;
+      expect(() => c.startRound(id), throwsA(isA<TournamentException>()));
+      c.post(await c.propose());
+      c.startRound(id);
+      final firstStart = c.event!.sections.first.rounds.last.startedAt;
+      expect(firstStart, isNotNull);
+      expect(() => c.startRound(id), throwsA(isA<TournamentException>()));
+      expect(c.event!.sections.first.rounds.last.startedAt, firstStart);
+    },
+  );
   test('quad boundaries conserve entrants and isolate bottom Swiss', () {
     for (var n = 4; n <= 500; n++) {
       final sizes = quadGroupSizes(n);
@@ -213,4 +229,94 @@ void main() {
     );
     expect(c.event!.sections.every((s) => s.rounds.isEmpty), true);
   });
+  test(
+    'unfinished-game assumptions affect pairing only, and never permit overlapping starts',
+    () async {
+      final c = fixture(count: 6);
+      addTearDown(c.dispose);
+      c.post(await c.propose());
+      final games = c.event!.games.toList();
+      for (final g in games.skip(1)) {
+        c.recordResult(g.id, Outcome.draw);
+      }
+      c.setPairingAssumption(
+        games.first.id,
+        Outcome.draw,
+        'TD-approved pending adjudication',
+      );
+      final section = c.event!.sections.single;
+      expect(
+        standings(
+          c.event!,
+          section,
+        ).firstWhere((r) => r.player.id == games.first.white).points,
+        0,
+      );
+      expect(
+        standings(
+          c.event!,
+          section,
+          forPairing: true,
+        ).firstWhere((r) => r.player.id == games.first.white).points,
+        1,
+      );
+      c.post(await c.propose());
+      expect(
+        () => c.startRound(section.id),
+        throwsA(isA<TournamentException>()),
+      );
+      expect(c.event!.games.first.outcome, Outcome.unreported);
+      c.recordResult(
+        games.first.id,
+        Outcome.whiteWin,
+        reason: 'Adjudicated after pairing',
+      );
+      expect(c.event!.games.first.pairingAssumption, isNull);
+      c.startRound(section.id);
+      expect(c.event!.sections.single.rounds.last.startedAt, isNotNull);
+    },
+  );
+  test(
+    'round-robin prize exclusion preserves actual games and competition points',
+    () async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      c.post(await c.propose());
+      for (final g in c.event!.games.toList()) {
+        c.recordResult(g.id, Outcome.draw);
+      }
+      final early = c.event!.players.first;
+      c.savePlayer(early.copy(withdrawn: true));
+      final section = c.event!.sections.single;
+      expect(standings(c.event!, section).length, 4);
+      final prizes = standings(c.event!, section, forPrizes: true);
+      expect(prizes.length, 3);
+      final opponent = c.event!.games.first.white == early.id
+          ? c.event!.games.first.black
+          : c.event!.games.first.white;
+      expect(prizes.firstWhere((r) => r.player.id == opponent).points, 0);
+      expect(c.event!.games.where((g) => g.outcome.played).length, 2);
+    },
+  );
+  test('equal tie-break values retain equal ranks', () {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    expect(
+      standings(c.event!, c.event!.sections.single).map((r) => r.rank),
+      everyElement(1),
+    );
+  });
+  test(
+    'clock uses actual start and explicit move assumption, not posting time',
+    () {
+      final start = DateTime(2026, 9, 28, 10);
+      final estimate = estimateRoundFinish('G/65 d10', start)!;
+      expect(
+        estimate.finish,
+        start.add(const Duration(minutes: 143, seconds: 20)),
+      );
+      expect(estimate.assumedMoves, 40);
+      expect(estimateRoundFinish('40/90 SD/30', start), isNull);
+    },
+  );
 }

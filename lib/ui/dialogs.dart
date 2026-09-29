@@ -23,6 +23,7 @@ Future<Map<String, String>?> editFields(
   Map<String, String> values = const {},
   String? description,
   String saveLabel = 'Save',
+  Map<String, String> secondaryActions = const {},
   void Function(Map<String, String>)? onDraft,
   FutureOr<void> Function(Map<String, String>)? onSave,
 }) => showDialog<Map<String, String>>(
@@ -33,6 +34,7 @@ Future<Map<String, String>?> editFields(
     values: values,
     description: description,
     saveLabel: saveLabel,
+    secondaryActions: secondaryActions,
     onDraft: onDraft,
     onSave: onSave,
   ),
@@ -44,11 +46,13 @@ class _FieldsDialog extends StatefulWidget {
     required this.fields,
     required this.values,
     required this.saveLabel,
+    required this.secondaryActions,
     this.description,
     this.onDraft,
     this.onSave,
   });
   final String title, saveLabel;
+  final Map<String, String> secondaryActions;
   final List<FieldSpec> fields;
   final Map<String, String> values;
   final String? description;
@@ -76,12 +80,14 @@ class _FieldsDialogState extends State<_FieldsDialog> {
     super.dispose();
   }
 
-  Future<void> save() async {
+  Future<void> save([String? action]) async {
     if (!form.currentState!.validate() || busy) return;
     setState(() => busy = true);
     try {
       await widget.onSave?.call(values());
-      if (mounted) Navigator.pop(context, values());
+      if (mounted) {
+        Navigator.pop(context, {...values(), '_action': ?action});
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -151,6 +157,11 @@ class _FieldsDialogState extends State<_FieldsDialog> {
       ),
     ),
     actions: [
+      for (final entry in widget.secondaryActions.entries)
+        TextButton(
+          onPressed: busy ? null : () => save(entry.key),
+          child: Text(entry.value),
+        ),
       TextButton(
         onPressed: busy ? null : () => Navigator.pop(context),
         child: const Text('Cancel'),

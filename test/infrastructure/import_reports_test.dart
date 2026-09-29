@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:pdf/widgets.dart' as pw;
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -55,7 +57,15 @@ void main() {
       expect(text, isNot(contains('12000000')));
       final csv = standingsCsv(c.event!);
       expect(csv, isNot(contains('private')));
-      final pdf = await reportPdf(c.event!, ReportKind.packet);
+      final pdf = await reportPdf(
+        c.event!,
+        ReportKind.packet,
+        font: pw.Font.ttf(
+          ByteData.sublistView(
+            File('assets/fonts/Inter-Regular.ttf').readAsBytesSync(),
+          ),
+        ),
+      );
       expect(ascii.decode(pdf.take(5).toList()), '%PDF-');
     },
   );
@@ -126,6 +136,12 @@ void main() {
           ratingSystem: 'R',
         ),
       );
+      if (Platform.environment['MEOW_EXPORT_FIXTURES'] == '1') {
+        final folder = Directory('artifacts/dbf')..createSync(recursive: true);
+        for (final entry in files.entries) {
+          File('${folder.path}/${entry.key}').writeAsBytesSync(entry.value);
+        }
+      }
       expect(
         files.keys,
         containsAll(['THEXPORT.DBF', 'TSEXPORT.DBF', 'TDEXPORT.DBF']),

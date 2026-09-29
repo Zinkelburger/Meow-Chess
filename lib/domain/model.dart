@@ -127,16 +127,22 @@ class Game {
     this.leg = 1,
     this.outcome = Outcome.unreported,
     this.note = '',
+    this.pairingAssumption,
+    this.pairingReason = '',
   });
   final String id, white, black, note;
   final int board, leg;
   final Outcome outcome;
+  final Outcome? pairingAssumption;
+  final String pairingReason;
   Game copy({
     Outcome? outcome,
     String? white,
     String? black,
     int? board,
     String? note,
+    Object? pairingAssumption = _unset,
+    String? pairingReason,
   }) => Game(
     id: id,
     white: white ?? this.white,
@@ -145,6 +151,10 @@ class Game {
     leg: leg,
     outcome: outcome ?? this.outcome,
     note: note ?? this.note,
+    pairingAssumption: identical(pairingAssumption, _unset)
+        ? this.pairingAssumption
+        : pairingAssumption as Outcome?,
+    pairingReason: pairingReason ?? this.pairingReason,
   );
   Json toJson() => {
     'id': id,
@@ -154,6 +164,8 @@ class Game {
     'leg': leg,
     'outcome': outcome.name,
     'note': note,
+    'pairingAssumption': pairingAssumption?.name,
+    'pairingReason': pairingReason,
   };
   factory Game.fromJson(Json j) => Game(
     id: j['id'],
@@ -163,6 +175,10 @@ class Game {
     leg: j['leg'],
     outcome: Outcome.values.byName(j['outcome']),
     note: j['note'],
+    pairingAssumption: j['pairingAssumption'] == null
+        ? null
+        : Outcome.values.byName(j['pairingAssumption']),
+    pairingReason: j['pairingReason'] ?? '',
   );
 }
 
@@ -480,6 +496,8 @@ void validateEvent(Event e) {
       'Invalid bye reservation.',
     );
   }
+  final liveBoards = <int>{};
+  final livePeople = <String>{};
   for (final s in e.sections) {
     require(
       s.name.trim().isNotEmpty && s.plannedRounds > 0 && s.boardStart > 0,
@@ -491,6 +509,24 @@ void validateEvent(Event e) {
         'An entry belongs to more than one active section.',
       );
     }
+    final latest = s.rounds.lastOrNull;
+    if (latest != null && !latest.complete) {
+      final sectionBoards = latest.games.map((g) => g.board).toSet();
+      for (final board in sectionBoards) {
+        require(
+          liveBoards.add(board),
+          'Two active sections reserve the same board.',
+        );
+      }
+      final people = latest.games.expand((g) => [g.white, g.black]).toSet();
+      for (final id in people) {
+        require(ids.contains(id), 'Unknown player in an active round.');
+        require(
+          livePeople.add(e.player(id).personId ?? id),
+          'A person is scheduled in two active sections.',
+        );
+      }
+    }
     for (var i = 0; i < s.rounds.length; i++) {
       final r = s.rounds[i];
       require(r.number == i + 1, 'Round history must be consecutive.');
@@ -498,6 +534,13 @@ void validateEvent(Event e) {
       final boards = <String>{};
       for (final g in r.games) {
         require(gameIds.add(g.id), 'Duplicate game identity.');
+        require(
+          g.pairingAssumption == null ||
+              (!g.outcome.resolved &&
+                  g.pairingAssumption!.played &&
+                  g.pairingReason.trim().isNotEmpty),
+          'A temporary pairing treatment needs an unresolved game and a reason.',
+        );
         require(
           ids.contains(g.white) && ids.contains(g.black) && g.white != g.black,
           'A game needs two distinct registered entries.',

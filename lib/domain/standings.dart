@@ -15,7 +15,27 @@ class Standing {
 
 /// Buchholz includes played opponents only; SB is in quarter-point units.
 /// Forfeits and byes contribute points, never fictional opponents.
-List<Standing> standings(Event event, Section section) {
+List<Standing> standings(
+  Event event,
+  Section section, {
+  bool forPairing = false,
+  bool forPrizes = false,
+}) {
+  final excluded = <String>{};
+  if (forPrizes && section.format != Format.swiss) {
+    final scheduled = section.plannedRounds * (section.doubleGames ? 2 : 1);
+    for (final id in section.players) {
+      final played = section.rounds
+          .expand((r) => r.games)
+          .where((g) => g.outcome.played && (g.white == id || g.black == id))
+          .length;
+      if (event.player(id).withdrawn && played * 2 < scheduled) {
+        excluded.add(id);
+      }
+    }
+  }
+  bool contributes(Game g) =>
+      !excluded.contains(g.white) && !excluded.contains(g.black);
   final scores = <String, int>{for (final p in event.players) p.id: 0};
   for (final s in event.sections) {
     for (final r in s.rounds) {
@@ -23,15 +43,22 @@ List<Standing> standings(Event event, Section section) {
         scores[b.player] = scores[b.player]! + b.points;
       }
       for (final g in r.games) {
-        scores[g.white] = scores[g.white]! + g.outcome.whiteScore;
-        scores[g.black] = scores[g.black]! + g.outcome.blackScore;
+        if (!contributes(g)) continue;
+        final outcome = forPairing && !g.outcome.resolved
+            ? g.pairingAssumption ?? g.outcome
+            : g.outcome;
+        scores[g.white] = scores[g.white]! + outcome.whiteScore;
+        scores[g.black] = scores[g.black]! + outcome.blackScore;
       }
     }
   }
-  final rows = section.players.map((id) {
+  final rows = section.players.where((id) => !excluded.contains(id)).map((id) {
     var bh = 0, sb = 0, played = 0;
     for (final g in event.games.where(
-      (g) => g.outcome.played && (g.white == id || g.black == id),
+      (g) =>
+          g.outcome.played &&
+          contributes(g) &&
+          (g.white == id || g.black == id),
     )) {
       final opponent = g.white == id ? g.black : g.white;
       bh += scores[opponent]!;

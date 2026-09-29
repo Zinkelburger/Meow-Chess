@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../application/tournament_controller.dart';
 import 'theme.dart';
+import '../domain/round_clock.dart';
 
 class EventOverview extends StatelessWidget {
   const EventOverview({
@@ -42,10 +43,13 @@ class EventOverview extends StatelessWidget {
               Row(
                 children: [
                   Icon(icon, size: 20, color: c.primary),
-                  const Spacer(),
-                  Text(
-                    label,
-                    style: TextStyle(color: c.onSurfaceVariant, fontSize: 12),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.end,
+                      style: TextStyle(color: c.onSurfaceVariant, fontSize: 12),
+                    ),
                   ),
                 ],
               ),
@@ -225,7 +229,7 @@ class EventOverview extends StatelessWidget {
                       contentPadding: const EdgeInsets.all(16),
                       title: Text(s.name),
                       subtitle: Text(
-                        '${s.players.length} players · ${s.format.name} · Round ${s.rounds.length} of ${s.plannedRounds}',
+                        '${s.players.length} players · ${s.format.name} · Round ${s.rounds.length} of ${s.plannedRounds}${s.rounds.lastOrNull?.startedAt == null ? '' : '\n${estimateRoundFinish(e.timeControl, DateTime.parse(s.rounds.last.startedAt!).toLocal())?.label ?? 'Started ${DateTime.parse(s.rounds.last.startedAt!).toLocal().toString().substring(11, 16)}'}'}',
                       ),
                       trailing: StatusPill(
                         s.finished

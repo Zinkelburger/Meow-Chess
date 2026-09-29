@@ -1,7 +1,7 @@
 # Meow-Chess: tournament director experience
 
 Proposed design, September 2026. This expands and refines [UX.md](UX.md); where
-navigation names differ, this document is the current proposal. No app UI exists.
+navigation names differ, this document is the current proposal. IMPLEMENTATION.md records the current app and remaining gaps.
 The in-conversation concept illustrates layout and local interactions only.
 Read [a tournament day, in order](TD_DAY.md) first: it puts every interaction
 below on the clock and owns the usability gates K01–K23 in

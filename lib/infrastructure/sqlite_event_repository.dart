@@ -8,7 +8,9 @@ import '../domain/model.dart';
 /// One owned connection per event. Foreign keys and FULL synchronous commits
 /// protect acknowledged results; snapshots are produced by SQLite, never raw WAL copies.
 class SqliteEventRepository implements EventRepository {
-  SqliteEventRepository(String path) : _db = sqlite3.open(path) {
+  SqliteEventRepository(String path)
+    : _created = path == ':memory:' || !File(path).existsSync(),
+      _db = sqlite3.open(path) {
     try {
       _db.execute('PRAGMA foreign_keys = ON');
       _db.execute('PRAGMA busy_timeout = 1000');
@@ -18,6 +20,14 @@ class SqliteEventRepository implements EventRepository {
         throw const TournamentException(
           'This event was created by a newer Meow-Chess version.',
         );
+      }
+      if (!_created &&
+          _db
+              .select(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='event'",
+              )
+              .isEmpty) {
+        throw const TournamentException('This file is not a Meow-Chess event.');
       }
       _db.execute('PRAGMA locking_mode = EXCLUSIVE');
       _db.execute('PRAGMA journal_mode = WAL');
@@ -41,6 +51,7 @@ PRAGMA user_version = 1;''',
       rethrow;
     }
   }
+  final bool _created;
   final Database _db;
   @override
   Event? load() {
@@ -243,7 +254,25 @@ PRAGMA user_version = 1;''',
       final restored = before.copy(
         revision: current.revision + 1,
         practice: current.practice || before.practice,
+        sections: [
+          for (final section in before.sections)
+            section.copy(
+              rounds: [
+                for (final round in section.rounds)
+                  round.copy(
+                    startedAt: current.sections
+                        .where((s) => s.id == section.id)
+                        .firstOrNull
+                        ?.rounds
+                        .where((r) => r.number == round.number)
+                        .firstOrNull
+                        ?.startedAt,
+                  ),
+              ],
+            ),
+        ],
       );
+      validateEvent(restored);
       _write(restored);
       _db.execute('UPDATE audit SET undone=1 WHERE id=?', [row['id']]);
       _db.execute(

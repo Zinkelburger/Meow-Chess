@@ -307,11 +307,15 @@ class _ResultsViewState extends State<ResultsView> {
   }
 
   Future<void> menu() async {
-    final result = await showDialog<Outcome>(
+    final result = await showDialog<Object>(
       context: context,
       builder: (context) => SimpleDialog(
         title: const Text('White’s result'),
         children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'assumption'),
+            child: const Text('Temporary pairing treatment…'),
+          ),
           for (final outcome in Outcome.values)
             SimpleDialogOption(
               onPressed: () => Navigator.pop(context, outcome),
@@ -324,7 +328,40 @@ class _ResultsViewState extends State<ResultsView> {
         ],
       ),
     );
-    if (result != null) {
+    if (result == 'assumption' && mounted && active != null) {
+      final gameId = active!;
+      await editFields(
+        context,
+        title: 'Temporary pairing treatment',
+        description:
+            'This affects the next pairing only. It does not enter a result, award prize points or create a rated game. Earlier unfinished games must resolve before the next round starts.',
+        fields: const [
+          FieldSpec(
+            'score',
+            'Assumed White points · 1 / 0.5 / 0',
+            required: true,
+          ),
+          FieldSpec('reason', 'TD authorization / reason', required: true),
+        ],
+        values: const {'score': '0.5'},
+        onSave: (values) {
+          final outcome = switch (values['score']) {
+            '1' => Outcome.whiteWin,
+            '0.5' => Outcome.draw,
+            '0' => Outcome.blackWin,
+            _ => null,
+          };
+          if (outcome == null) {
+            throw const TournamentException('Use 1, 0.5 or 0.');
+          }
+          widget.controller.setPairingAssumption(
+            gameId,
+            outcome,
+            values['reason']!,
+          );
+        },
+      );
+    } else if (result is Outcome) {
       setState(() => correcting = true);
       await enter(result);
     }
@@ -507,7 +544,7 @@ class _ResultsViewState extends State<ResultsView> {
                                             ),
                                           ),
                                           Text(
-                                            '${row.section.name} · Round ${row.round.number} · White',
+                                            '${row.section.name} · Round ${row.round.number} · White${g.pairingAssumption == null ? '' : ' · pairing assumption recorded'}',
                                             style: const TextStyle(
                                               fontSize: 12,
                                             ),

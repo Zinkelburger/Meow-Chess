@@ -50,12 +50,20 @@ List<Section> makeQuads(Event e, String Function() id) {
 /// not advertised as a certified US Chess rules implementation.
 Round proposeRound(Event event, Section section, String Function() id) {
   final n = section.rounds.length + 1;
+  final colorLot =
+      section.id.codeUnits.fold<int>(
+        0,
+        (sum, c) => (sum * 31 + c) & 0x7fffffff,
+      ) &
+      3;
   if (n > section.plannedRounds) {
     throw const TournamentException('All planned rounds have been posted.');
   }
-  if (section.rounds.any((r) => !r.complete)) {
+  if (section.rounds
+      .expand((r) => r.games)
+      .any((g) => !g.outcome.resolved && g.pairingAssumption == null)) {
     throw const TournamentException(
-      'Resolve outstanding games before posting the next round.',
+      'Resolve outstanding games or record a TD-approved temporary pairing treatment before posting.',
     );
   }
   final byes = <ByeAward>[];
@@ -76,6 +84,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
     final schedule = roundRobinSchedule(
       section.players,
       quad: section.format == Format.quad,
+      colorLot: colorLot,
     );
     if (n > schedule.length) {
       throw const TournamentException('The round-robin schedule is complete.');
@@ -97,7 +106,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
       }
     }
   } else {
-    final table = standings(event, section);
+    final table = standings(event, section, forPairing: true);
     final scores = {for (final r in table) r.player.id: r.points};
     available.sort((a, b) {
       final score = scores[b]!.compareTo(scores[a]!);
@@ -114,7 +123,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
     final opponents = <String, Set<String>>{};
     final colors = <String, int>{};
     for (final g in event.games) {
-      if (g.outcome.played) {
+      if (g.outcome.played || g.pairingAssumption != null) {
         opponents.putIfAbsent(g.white, () => {}).add(g.black);
         opponents.putIfAbsent(g.black, () => {}).add(g.white);
         colors[g.white] = (colors[g.white] ?? 0) + 1;
@@ -209,8 +218,11 @@ Round proposeRound(Event event, Section section, String Function() id) {
     number: n,
     games: games,
     byes: byes,
+    note: section.format == Format.quad
+        ? 'Recorded final-round color lot: $colorLot (derived from the randomly assigned section ID).'
+        : '',
     policy: section.format == Format.quad
-        ? 'quad-30G-v1'
+        ? 'quad-30G-seeded-v1'
         : section.format == Format.swiss
         ? 'score-swiss-pilot-v1'
         : 'circle-rr-v1',
@@ -220,6 +232,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
 List<List<(String?, String?)>> roundRobinSchedule(
   List<String> players, {
   bool quad = false,
+  int colorLot = 0,
 }) {
   if (quad) {
     if (players.length != 4) {
@@ -229,7 +242,10 @@ List<List<(String?, String?)>> roundRobinSchedule(
     return [
       [(p[0], p[3]), (p[1], p[2])],
       [(p[2], p[0]), (p[3], p[1])],
-      [(p[0], p[1]), (p[2], p[3])],
+      [
+        colorLot & 1 == 0 ? (p[0], p[1]) : (p[1], p[0]),
+        colorLot & 2 == 0 ? (p[2], p[3]) : (p[3], p[2]),
+      ],
     ];
   }
   if (players.length < 2) {
