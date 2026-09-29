@@ -149,3 +149,11 @@ Avoid building a throwaway UI until those risks have clear answers.
 A research question is not automatically an implementation blocker. Continue
 independent work when authorized later, while maintaining truthful capability
 status for contracts that cannot yet be tested.
+
+## Core TD flexibility gate
+
+The first usable release also requires all [TD operations](TD_OPERATIONS.md): direct
+player editing, round-specific byes, withdraw/reinstate, individual/bulk transfers,
+and combining quad/Swiss sections. Exercise the 4+6→10 example before play, after
+publication and through a supported same-progress post-play transition. These are
+early vertical-slice requirements, not part of a later specialist-parity backlog.

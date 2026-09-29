@@ -55,6 +55,21 @@ Every P0 must pass its acceptance scenario before that release is called complet
 | F01 | Future | Federation-independent IDs/rating categories | FIDE ID/rating can coexist without changing US Chess entry identity |
 | F02 | Future | FIDE Dutch/TRF26 | Current rules, exact engine version and official validation path documented |
 
+## Core TD flexibility — explicit first-release gates
+
+See [TD operations](TD_OPERATIONS.md). These supplement the earlier requirements;
+UI access and safe historical behavior are both required, not optional polish.
+
+| ID | Priority | Requirement | Acceptance scenario |
+|---|---|---|---|
+| D01 | P0 | Double-click/Enter opens editable player with visible Byes/Move/Withdraw | Same record/actions from roster, pairings and standings; editing US Chess ID preserves provenance |
+| D02 | P0 | Round-specific bye editor and cancellation | Requested/allocated/forfeit outcomes distinct; current game conflicts resolved explicitly |
+| D03 | P0 | Withdraw/reinstate effective from a selected round | Preserve played games; unresolved pairing never silently becomes a loss |
+| D04 | P0 | Individual/bulk section transfer before and after play | Retain entry lineage, reviewed scoring/byes and export attribution; no overlapping pairing |
+| D05 | P0 | Combine sections directly, including quads into Swiss | Quad 4 + bottom six becomes ten-player Swiss; other sections unchanged; pre-play undo exact |
+| D06 | P0 | Reviewed transitions after publication/play | Confirm whether games started; retain played games; same-progress merge has tested score/prize/reporting mapping |
+| D07 | P0 | Dependency-aware undo and actionable conflict resolution | No silent partial batch, historical deletion, fabricated game or approximation of unsupported export |
+
 ## Core invariants
 
 - Stable person, entry, section, round and game IDs. A row sort never changes them.

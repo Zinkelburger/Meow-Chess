@@ -46,18 +46,18 @@ The screen names refer to [TD experience](TD_EXPERIENCE.md).
 | E03 | Event date/site, affiliate/TD, round schedule, time control, rated/unrated and rating category | Event settings / section settings | A: export and print use effective settings |
 | E04 | Linked defaults, explicit overrides, reusable club profiles and named event templates | Settings / library | B: preview every affected section before bulk change |
 | E05 | Board ranges, reserved/accessibility boards, collisions, room allocation | Event → Boards | A ranges/conflicts; B rooms: no simultaneous duplicate board assignment |
-| E06 | Combine playing pools while retaining original sections, merge schedules and results | Manage sections → Combine | C: original identity, prize eligibility and rating history survive |
+| E06 | First-class Combine with command; preserve entry/history/prize/reporting identities | Section tab menu / Manage sections → Combine | A: before-play 4+6→10 Swiss and tested same-progress transition; C: specialist unequal-schedule/re-entry variants |
 | E07 | Side-game sections and manually arranged games | Manage sections / Rounds | C: no double-counting main-event games |
 | E08 | Multiple clubs and reusable player lists, import/update club database | Event library → Club | B: event rating snapshots do not mutate retroactively |
 | R01 | Manual registration, paste table, CSV/TSV mapping, delimiter/encoding/header review | Players → Import / Add player | A: bad rows repairable without reimporting good rows |
 | R02 | Native SwissSys/ChessRoster interchange where documented and tested; DTF, TRF and legacy database adapters | Import / Export | D: versioned fixtures and loss report; no guessed proprietary schema |
 | R03 | Search club and federation records, distinguish persons from event entries | Players / Club | A basic exact ID; B search: duplicate identity requires review |
-| R04 | IDs, name variants, team/school, state/federation, class, membership, notes, fees | Player inspector | A core fields; B extended: original imported value retained |
+| R04 | Double-click/Enter on player opens editable details: ID, name, rating, team plus visible Byes/Move/Withdraw | Shared player inspector from Players, Rounds and Standings | A core editing/actions; B extended fields: original values retained |
 | R05 | Bulk identity validation, membership/eligibility checks and rating refresh | Players → Check players | A: incorrect ID never auto-replaced by a guessed digit |
 | R06 | Published/latest/assigned/provisional/unrated ratings, multiple rating systems, supplemental databases | Players → Ratings / Settings | A US Chess; D others: provenance/date visible; unknown not zero |
 | R07 | Choose/switch pairing, eligibility and prize rating bases; freeze/reseed explicitly | Section settings / rating review | A: live updates cannot silently reorder published pairings |
 | R08 | Late entries, check-in, requested byes by round, inactive status, withdrawal/reinstatement | Player inspector | A: future participation distinct from historical results |
-| R09 | Move entry to another section, re-entry/replacement workflow, retain prior entry history | Players → Move / entry history | B: already played games remain attributable and reportable |
+| R09 | First-class single/bulk section transfer, effective round, prior entry history | Player inspector / Players → Move to section | A: reviewed transfer before/after play; C: specialist multi-schedule re-entry |
 | R10 | Name formatting, flags, custom fields, bulk edit, sorting and pair-number adjustments | Players table / inspector | B: stable identity independent of displayed pairing number |
 | R11 | Local/supplement/custom/secondary database management, Excel databases, import/index/troubleshooting | Club → Data sources | B US Chess; D other formats: partial source failures isolated |
 | R12 | Multiple registration stations writing to a staging database, then reviewed import into the event | Event → Staff / Import | D: reference SwissSys network mode is registration staging, not concurrent round editing |
@@ -75,7 +75,7 @@ The screen names refer to [TD experience](TD_EXPERIENCE.md).
 | F11 | FIDE pairing modes and external engine integration | Section policy / engine details | D: current rules, engine rights/packaging and required approval verified |
 | P01 | Preview next round; all-section batch proposals; publish separately per section | Rounds / Event | A: stale inputs invalidate draft; one section cannot block unrelated result entry |
 | P02 | Explain pairing constraints, integrity validation and unsatisfied preferences | Pairing inspector / Issues | A: distinguish illegal state from allowed policy exception |
-| P03 | Manual swaps, color reversal, boards, forced pairings/byes, locks, replacement players | Pairing review / inspector | A basic edits; B locks: show impact before applying |
+| P03 | Manual swaps, color reversal, boards, forced pairings/byes, locks, replacement players | Pairing review / inspector | A: manual edits and locks show impact before applying |
 | P04 | Board and alphabetical pairings, team lists and complete RR schedule | Rounds → View / Reports | A individual; C team: all views reference same published revision |
 | P05 | Fast keyboard results, all-round matrix, text result import, clear selected results | Rounds | A editor; B batch import: preview conflicts and missing opponents |
 | P06 | Played win/draw/loss, forfeit, double forfeit, requested/allocated bye, unplayed game | Result cell → outcome | A: preserve result semantics separately from score |
@@ -149,3 +149,11 @@ and ambiguity; never fabricate colors/game outcomes. Offer aggregate entry only
 where the event/reporting policy can represent it correctly; otherwise require
 individual game results before exporting. Network registration staging must not be
 marketed as evidence that arbitrary simultaneous editing is safe.
+
+## Explicit TD flexibility priority
+
+The user requires player editing, byes, withdrawal/reinstatement, section transfers
+and combining quads into Swiss sections as core TD operations. These are first-release
+gates, including historical-impact handling. [TD operations](TD_OPERATIONS.md) owns
+the detailed interaction contract and supersedes any earlier implication that basic
+transfers or section combining can wait for specialist parity.

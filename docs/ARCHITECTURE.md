@@ -166,3 +166,15 @@ style and exhaustive sealed-result handling rather than magic strings/maps.
 Dependency choices, exact versions, license review, signing/notarization and release
 packaging remain implementation milestones. The planning repository intentionally
 does not pretend those choices have been built or tested.
+
+## TD operations and effective section transitions
+
+[TD_OPERATIONS.md](TD_OPERATIONS.md) is a core domain contract. Section moves and
+combination must not be implemented as overwriting one `sectionId` on historical
+entries. Preserve effective-round membership transitions, entry lineage and source
+section attribution; separate playing pool from prize eligibility and federation
+reporting groups. Review round/score/color/opponent/bye mapping before a post-play
+transition. A spelling/ID correction is distinct from replacing a game participant.
+All UI entry points share commands for EditEntry, SetParticipation, TransferEntries,
+CombineSections and CorrectResult (names illustrative). Commit mutation, audit and
+invalidations atomically; published revisions and played games remain traceable.

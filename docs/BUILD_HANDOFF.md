@@ -7,7 +7,7 @@ starting the application build. No production application has been scaffolded.
 ## Read first
 
 1. [Full capability map](FULL_FEATURE_MAP.md) — expanded scope and stable IDs.
-2. [TD experience](TD_EXPERIENCE.md) — current navigation, workflows and UI acceptance.
+2. [TD experience](TD_EXPERIENCE.md) and [first-class TD operations](TD_OPERATIONS.md) — current navigation, editable player inspector, byes, withdrawals, transfers and section combination.
 3. [Architecture](ARCHITECTURE.md) and [pairing](PAIRING.md).
 4. [US Chess report specification findings](../research/notes/US_CHESS_REPORTING.md)
    and [API findings](../research/notes/US_CHESS_API.md).
@@ -43,11 +43,11 @@ The original release scope is a first tranche of this larger product.
 |---|---|---|
 | 0. Evidence and UX | TD walkthrough of roster → quad preview → round → correction → print | Reconcile source gaps; observe novice/experienced TDs; record revisions |
 | 1. Event and safety | Create, edit, close, reopen, undo, recover a synthetic event | Transaction/crash/backup/migration checks; stable identity model |
-| 2. Registration | Import, resolve duplicate/invalid rows, check in and assign byes | Reimport diff; no data loss; ratings provider fakes and cache behavior |
-| 3. Quads and scoring | Make mixed quads/bottom Swiss, review/publish, enter/correct games | Pure domain invariants, seeded schedule fixtures, keyboard walkthrough |
+| 2. Registration | Import, edit player details, assign byes, withdraw/reinstate and transfer entries | Reimport diff; no data loss; ratings provider fakes and cache behavior |
+| 3. Quads and scoring | Make and combine quad/Swiss groups, review/publish, enter/correct games | Pure domain invariants, seeded schedule fixtures, keyboard walkthrough |
 | 4. Swiss and reporting | Run a complete US Chess event, print and export DBFs | TD-reviewed pairing cases, accepted DBF comparison, authorized portal test |
 | 5. Full club operation | Double games, prizes, team totals, recurring templates and extended print suite | Scoring/report consistency and documented edge cases |
-| 6. Specialist parity | Fixed-board teams, Scheveningen, ladder, merged schedules, side games, databases | Feature-by-feature documented and reference-app comparisons |
+| 6. Specialist parity | Fixed-board teams, Scheveningen, ladder, merged schedules, side games, databases | Feature-by-feature documented and reference-app comparisons; basic section combination/transfer must already work in earlier slices |
 | 7. International and integrations | Verified federation policies, native interchange, hosting and collaboration | Format/version compatibility matrix; OS and integration validation |
 | Separate experimental slice | Bughouse fixed teams then optional rotating matchmaking | Rules agreed; simulation/calibration; no effect on US Chess behavior |
 
@@ -111,3 +111,11 @@ Suggested first future-agent prompt:
 > concrete acceptance fixtures. Preserve US Chess-first delivery and full-parity
 > traceability. Do not silently approximate export formats or pairing rules. Build
 > only the slice explicitly authorized in this task, and report its tested scope.
+
+## Priority correction: TD flexibility is core
+
+Do not postpone basic section moves/combination to slice 6. Include direct editing
+from every player name, byes, withdrawal/reinstatement, individual/bulk transfers,
+and Quad 4 + Bottom Swiss combination in early slices. Historical changes require
+explicit transition records, impact review and preserved played games. Complete the
+acceptance cases in TD_OPERATIONS.md before calling the first TD release usable.

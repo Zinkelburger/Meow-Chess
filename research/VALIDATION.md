@@ -51,3 +51,11 @@ The in-conversation UI concept was visually inspected in the browser. Changing a
 sample result updated missing-result count and standings; section navigation,
 grouping preview and report view were exercised. It is a planning mockup, not a
 Flutter app, pairing implementation or usability study. No production code added.
+
+## TD flexibility specification refinement
+
+Promoted basic player transfers and section combination to first-release scope;
+added direct player editing, participation actions, effective-round transitions
+and seven P0 requirements (D01–D07). Checked all 55 local links in README and docs
+and `git diff --check`. Planning/documentation only: no executable app changes or
+new claims of tested tournament rules, printing or federation export compatibility.

@@ -9,7 +9,8 @@ AGPLv3 [LICENSE](LICENSE) is retained. Platform and release boundaries below
 are recommendations awaiting product decisions, not promises of shipped features.
 
 Start with the expanded [full feature map](docs/FULL_FEATURE_MAP.md),
-[TD experience specification](docs/TD_EXPERIENCE.md), and
+[TD experience specification](docs/TD_EXPERIENCE.md),
+[first-class TD operations](docs/TD_OPERATIONS.md), and
 [build-agent handoff](docs/BUILD_HANDOFF.md). The original
 [product plan](docs/PRODUCT_PLAN.md) defines the first delivery tranche.
 

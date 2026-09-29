@@ -68,6 +68,14 @@ on desktop; a section picker replaces them on narrow screens. Never shrink text 
 truncate all names to indistinguishable prefixes. Closing a view is different from
 deleting a section. Section deletion lists contents/played-game implications.
 
+## First-class tournament changes
+
+Read [TD operations](TD_OPERATIONS.md) for the authoritative editing/participation
+contract: double-click or Enter opens an editable player inspector with visible
+Byes, Move section and Withdraw/Reinstate. Section tabs expose Combine with.
+These are first-release operations available throughout the event, with concise
+impact review when published pairings or historical games are involved.
+
 ## Core interaction specifications
 
 ### 1. Set up an event
