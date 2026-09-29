@@ -54,12 +54,17 @@ label this milestone partially verified and keep release blocked.
 
 ## 2. Durable event lifecycle
 
-SQLite schema/migrations, commands, audit records, backups, revision checks, undo
-boundaries and event file/open flow. Implement error recovery before UI polish.
+SQLite schema/migrations, commands, complete versioned state history, checkpoints,
+backups, revision checks, persistent undo/redo and event file/open flow. Implement
+[history/recovery H01–H10](HISTORY_AND_RECOVERY.md) in the corresponding slices:
+preview, scoped reopen, preserved alternatives and safe return after new edits.
+Implement error recovery before UI polish.
 
 Exit: crash, disk-full, duplicate command, stale write and restore scenarios preserve
-all acknowledged results. One event can be copied/opened independently. No credentials
-travel with the event.
+all acknowledged results and retained alternatives. Every supported mutation type
+has reconstructable before/after state; a new edit after Undo cannot destroy prior
+work. One event, including its history, can be copied/opened independently. No
+credentials travel with the event.
 
 ## 3. Registration and identity
 

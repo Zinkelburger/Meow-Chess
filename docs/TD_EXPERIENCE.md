@@ -218,6 +218,17 @@ If reverting an unplayed round, show exactly which proposals/publications become
 superseded. Keep audit trail and prior exports. The history view shows who/when/why
 where available, and distinguishes correction from restoring an older event copy.
 
+### History and reopening rounds
+
+[History and recovery](HISTORY_AND_RECOVERY.md) defines the authoritative contract:
+a readable timeline, read-only Preview/Compare, automatic recovery points, and
+preserved alternative versions. Rounds exposes Reopen before pairing round X with
+explicit section/round scope and impact. Save the current version automatically
+before continuing; Return remains available after new edits and app restart.
+Keep actual games, current reviewed player changes and unaffected sections safe.
+Do not make a TD navigate a full action tree for an ordinary typo. Correct result
+and named Undo/Redo remain the fast paths; old versions are the recovery path.
+
 ### 8. Print what the room needs
 
 Rounds offers **Print pairings** with section, round and revision visible; Standings

@@ -104,3 +104,18 @@ snapshot hashes; whitespace validation. Source-file changes since capture: 0.
 No implementation or TD usability study was performed. Fable's uncommitted edits
 and the earlier usability branch still require integration; no main files were
 overwritten by this review.
+
+## History and non-destructive round reopening
+
+Reviewed current SwissSys Back to a Previous Round, Undo and Backups documentation
+and their three archived article texts; raw HTML hashes match the archive catalog.
+Specified persistent history, exact scoped round reopening, preserved alternative
+versions, dependency-aware return and selected-change recovery. Updated architecture
+from bounded undo snapshots to complete restorable revisions plus checkpoints;
+a readable audit log alone is explicitly insufficient.
+
+Passed: 25 Markdown files / 112 local links including fragments; ten H01–H10
+requirement/scenario mappings; whitespace check. No app code, POC or storage tests
+were added/run. The history/reconstruction, crash, branch-return and TD rehearsal
+scenarios are requirements for a future build, not verified application behavior.
+Fable's main-checkout edits remain untouched; integration is still pending.

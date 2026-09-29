@@ -18,6 +18,7 @@ Planning only: no application implementation is authorized by this document.
 | Combine Quad 4 with bottom Swiss | Quad 4 tab context menu → Combine with… | Choose Bottom Swiss and preview the resulting playing pool |
 | Change grouping before play | Quad builder / Manage sections | Move players between groups or combine entire groups without restarting setup |
 | Repair pairing/result | Rounds → select pairing → Edit / Correct | Manual opponent/color/board/outcome controls and dependency review |
+| Reopen before pairing round X | Rounds → Reopen; also History → recovery point | Preserve current version, review section/round scope; retain both alternatives; see HISTORY_AND_RECOVERY.md |
 
 Every context-menu action also has a visible button/menu entry. Right-click and
 double-click are accelerators, not the only way to find essential features.

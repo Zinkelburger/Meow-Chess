@@ -17,7 +17,7 @@ cannot be found or used safely during a live event has not passed acceptance.
 
 1. [Full capability map](FULL_FEATURE_MAP.md) — expanded scope and stable IDs.
 2. [TD experience](TD_EXPERIENCE.md) and [first-class TD operations](TD_OPERATIONS.md) — current navigation, editable player inspector, byes, withdrawals, transfers and section combination.
-3. [Architecture](ARCHITECTURE.md) and [pairing](PAIRING.md).
+3. [History and recovery](HISTORY_AND_RECOVERY.md), [architecture](ARCHITECTURE.md) and [pairing](PAIRING.md).
 4. [US Chess report specification findings](../research/notes/US_CHESS_REPORTING.md)
    and [API findings](../research/notes/US_CHESS_API.md).
 5. [SwissSys page checklist](../research/SWISSSYS_TOPIC_LEDGER.md) and
@@ -54,7 +54,7 @@ The original release scope is a first tranche of this larger product.
 | Slice | Result the TD can exercise | Gate |
 |---|---|---|
 | 0. Evidence and UX | TD walkthrough of roster → quad preview → round → correction → print | Reconcile source gaps; observe novice/experienced TDs; record revisions |
-| 1. Event and safety | Create, edit, close, reopen, undo, recover a synthetic event | Transaction/crash/backup/migration checks; stable identity model |
+| 1. Event and safety | Create, edit, undo/redo, browse history, continue from an old version and recover both alternatives after restart | H01–H10 as applicable; transaction/reconstruction/backup/migration checks; stable identity model |
 | 2. Registration | Add walk-ins/import, find across event, edit details, assign byes, withdraw/reinstate and transfer entries | Reimport diff; no data loss; ratings provider fakes and cache behavior |
 | 3. Quads and scoring | Make and combine quad/Swiss groups, review/approve, print, enter/correct games and resume after interruptions | Pure domain invariants, seeded schedule fixtures, keyboard walkthrough |
 | 4. Swiss and reporting | Run a complete US Chess event, print and export DBFs | TD-reviewed pairing cases, accepted DBF comparison, authorized portal test |
@@ -84,8 +84,10 @@ custom widget toolkit to get the first event running.
   Approve pairings, Print and Post online have distinct actions/statuses.
 - Separate tournament score, prize score, pairing adjustment and rated result.
   Avoid encoding “bye” as a missing opponent plus arbitrary numeric score.
-- Local SQLite transaction for command + audit + state; persist before claiming
-  success. Single-writer ownership initially. Backups must handle WAL safely.
+- Local SQLite transaction for command + state + complete restorable history +
+  audit/version references; persist before claiming success. Preserve alternative
+  heads and actual-game evidence; an audit description alone is insufficient.
+  Single-writer ownership initially. Backups handle WAL safely and include history.
 - One report projection from one revision, rendered to table/text/PDF/export.
   Federation adapters own encoding/spec versions, not widgets.
 - Network services are adapters with cache, rate limiting, cancellation and revision

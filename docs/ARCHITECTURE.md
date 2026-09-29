@@ -111,9 +111,20 @@ dependencies. Never erase played games merely to “go back one round.” When a
 earlier score changes, invalidate future proposals and explain consequences for
 already-posted rounds. Do not automatically rerun the whole tournament.
 
-Use relational state plus an audit log; **full event sourcing is not required**.
-If undo needs a previous snapshot, keep a bounded command snapshot. Avoid promising
-that an incomplete audit log can reconstruct every historical database version.
+Use relational state plus immutable restorable revisions, checkpoints and an audit
+log; **full business-event replay is not required**. The stronger contract in
+[History and recovery](HISTORY_AND_RECOVERY.md) supersedes bounded command snapshots
+as the recovery guarantee. Every retained committed revision must reconstruct from
+complete state material without rerunning engines or network calls. Fast Undo caches
+may be bounded, but a new edit or restart cannot delete recoverable former versions.
+
+Reopening a section is a scoped command against the current whole event, preserving
+unaffected sections and reviewed current registration data. Continuing from an old
+whole-event state retains both version heads. Only one version is live; preview and
+planning alternatives cannot silently replace it. Validate retained evidence of real
+games and external publications before promotion/return. Actual games cannot vanish
+from official reporting through a historical restore. All current-state/history/head
+changes commit atomically; backups and full event copies carry recovery history.
 
 ## Pairing and reports are computations over snapshots
 

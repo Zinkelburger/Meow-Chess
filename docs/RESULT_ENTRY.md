@@ -119,6 +119,11 @@ leaving that round exits the mode. Impact review appears only for actual depende
 not for every navigation key. Restoring an interrupted current-round cursor shows
 both names, section, round and perspective again before result shortcuts resume.
 
+[History and recovery](HISTORY_AND_RECOVERY.md) specifies persistent Undo/Redo and
+saved alternatives. A different edit after Undo cannot destroy the previous state.
+Use one command per outcome; no typing-speed heuristic groups 0 then 5 into a
+single guessed decimal mistake. Historical previews never accept result shortcuts.
+
 A win/loss key records a played result by default. Forfeits, double forfeits,
 requested/allocated byes, disputed and unfinished games use labelled outcomes in
 an adjacent menu with a keyboard-accessible command. `0` is not “absent,” “no result,”

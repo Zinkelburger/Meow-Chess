@@ -24,6 +24,9 @@ The [review of Fable’s tournament-day additions](docs/FABLE_REVIEW.md) records
 what to keep, corrections needed, and how the two proposals fit together. Those
 main-checkout edits are reviewed but not yet merged into this branch.
 
+The [history and recovery contract](docs/HISTORY_AND_RECOVERY.md) specifies safe
+“back up to round X,” persistent Undo/Redo, version comparison and saved alternatives.
+
 Supporting plans:
 
 | Document | Purpose |

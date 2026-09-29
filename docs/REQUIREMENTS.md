@@ -107,6 +107,24 @@ prototype or TD study has passed. R1–R10 refer to that document's rehearsal sc
 | UX13 | P0 | Canonical interaction contracts and observed rehearsals | R1–R10 completed in relevant supported flows, errors/assists recorded; serious data/targeting faults block release; accessible paths included |
 | UX14 | P0 | Local pairing repair without whole-round regeneration | Eligible-opponent picker, explicit swap/rearrangement preview, preserved unaffected/locked boards; started games protected; R4 |
 
+## History and recovery — preserved progress
+
+[History and recovery](HISTORY_AND_RECOVERY.md) strengthens the earlier audit/undo
+requirements. These are first-release requirements, not implemented behavior.
+
+| ID | Priority | Requirement | Acceptance scenario |
+|---|---|---|---|
+| H01 | P0 | Read-only timeline, historical preview and comparison | Browse past revisions without changing live state; Return restores workspace context |
+| H02 | P0 | Persistent named Undo/Redo with preserved former states | Undo then a different edit or restart never makes former committed work unrecoverable |
+| H03 | P0 | Scoped Reopen before pairing round X | Save pre-operation version; retain current reviewed player data, earlier games and unaffected sections |
+| H04 | P0 | Retain and return between continuations | Edit after reopening, restart, then recover both alternatives with clear live/planning status |
+| H05 | P0 | Dependency and actual-game checks when reopening/promoting | No real game lost from official state/reporting; transfers and external actions reconciled |
+| H06 | P0 | Recover selected supported changes | Preview/diff and domain commands preserve stable identity; no implicit general merge |
+| H07 | P0 | Atomic history/state changes and validated recovery | History-write failure cannot acknowledge mutation; bad checkpoints/migration preserve original |
+| H08 | P0 | Full history in event copies and backups | Second machine opens saved revision plus all retained version heads; copy age explicit |
+| H09 | P0 | Preserve external publication/submission facts | Restoring cannot erase submission status or resend automatically; stale output is actionable |
+| H10 | P0 | Complete, responsive history reconstruction | All mutation types and retained revisions verified in 500-entry stress fixture; no invented benchmark claim |
+
 ## Core invariants
 
 - Stable person, entry, section, round and game IDs. A row sort never changes them.
