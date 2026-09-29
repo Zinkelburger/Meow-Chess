@@ -1,0 +1,4442 @@
+{
+  "retrieved_at": "2026-09-29T00:55:50.756378+00:00",
+  "scope": [
+    "https://docs.chessroster.com/swisssys/",
+    "https://www.chessroster.com/swisssys"
+  ],
+  "navigation_count": 296,
+  "sitemap_count": 296,
+  "discovered_pages": 309,
+  "successful_pages": 296,
+  "failures": {
+    "https://www.chessroster.com/swisssys": "robots-disallowed",
+    "https://www.chessroster.com/swisssys/downloads": "robots-disallowed",
+    "https://www.chessroster.com/swisssys/download": "robots-disallowed",
+    "https://www.chessroster.com/swisssys/order": "robots-disallowed",
+    "https://docs.chessroster.com/swisssys/app-docs/getting-started/terms-of-use-swisssys-license-agreement/obfuscated/": 404,
+    "https://docs.chessroster.com/swisssys/app-docs/user-guide/license-and-purchasing/obfuscated/": 404,
+    "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/register-swisssys/obfuscated/": 404,
+    "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/technical-help-and-contact-information/obfuscated/": 404,
+    "https://docs.chessroster.com/swisssys/downloading-installing-activating/obfuscated/": 404,
+    "https://docs.chessroster.com/swisssys/downloading-installing-activating/cfc-activation/obfuscated/": 404,
+    "https://docs.chessroster.com/swisssys/downloading-installing-activating/standard-activation/obfuscated/": 404,
+    "https://docs.chessroster.com/swisssys/downloading-installing-activating/unlocking-code-activation/obfuscated/": 404,
+    "https://docs.chessroster.com/swisssys/transferring-license/obfuscated/": 404
+  },
+  "missing_sitemap_urls": [],
+  "missing_navigation_urls": [],
+  "article_assets": 1,
+  "external_links": 16,
+  "pages": [
+    {
+      "source_id": "SS-f349f951",
+      "title": "SwissSys Documentation",
+      "url": "https://docs.chessroster.com/swisssys/",
+      "archive_status": 200,
+      "sha256": "dc3ef1dd6b59d308983ece8751fcb7fc97ac4db43bbe2751fd11782374dbf5d6",
+      "local_text": "research/local/swisssys-site/f349f9516582ac1c.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f1943b5b",
+      "title": "SwissSys Usage",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/",
+      "archive_status": 200,
+      "sha256": "d41f9dfc6513481fbfbf2d13d7cd0830ad90d09b86addf733164e2d3234ccc2b",
+      "local_text": "research/local/swisssys-site/f1943b5bc83df309.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-354c9d31",
+      "title": "Administration",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/admin/",
+      "archive_status": 200,
+      "sha256": "71917a26e2f5b7f2bd4c29ef53b6d8d920f28c16055089db8b7fbf24fb40b38f",
+      "local_text": "research/local/swisssys-site/354c9d317c94f090.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1b046f02",
+      "title": "Database Step-by-step Instructions",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/admin/database-step-by-step-instructions/",
+      "archive_status": 200,
+      "sha256": "2cd47589193fb9e31ab4e9bd357c34c648cc9ee2cc50791d2d3a061753147ce3",
+      "local_text": "research/local/swisssys-site/1b046f02d32f04c8.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c8284609",
+      "title": "Edit Club List",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/admin/edit-club-list/",
+      "archive_status": 200,
+      "sha256": "586b4a0526d5431419e6489ddc42fa3158806b690cfba54412cce4e810058bf6",
+      "local_text": "research/local/swisssys-site/c828460903c31464.txt",
+      "candidate_feature_ids": [
+        "E08"
+      ],
+      "proposed_home": "Club directory",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-6d6bd03c",
+      "title": "Enabling Colorblind Pairings",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/admin/enabling-colorblind-pairings-from-the-pairings-set/",
+      "archive_status": 200,
+      "sha256": "66d183ed1a59ad8053a5465e49c2529d4755c0cf03cedf5a7360b37144e7c1d1",
+      "local_text": "research/local/swisssys-site/6d6bd03cdd5dd417.txt",
+      "candidate_feature_ids": [
+        "P01",
+        "P04"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b6da36ea",
+      "title": "Half-point Byes",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/admin/half-point-byes/",
+      "archive_status": 200,
+      "sha256": "b09fab0d6bdb9c404957c057df49e7e9963138bcdeed285b6dbd260be10549a9",
+      "local_text": "research/local/swisssys-site/b6da36eaf6fea612.txt",
+      "candidate_feature_ids": [
+        "R08",
+        "P06"
+      ],
+      "proposed_home": "Player inspector / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f9435f55",
+      "title": "SwissSys Logging System",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/admin/logging-system/",
+      "archive_status": 200,
+      "sha256": "b244bcdad7ede122a2fb97d15c6529e2c813e53815734b12b8047b346202110f",
+      "local_text": "research/local/swisssys-site/f9435f55337b730b.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-9031a9d6",
+      "title": "Read From Club and Write/Update Club",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/admin/read-from-clubwrite-update-club/",
+      "archive_status": 200,
+      "sha256": "a293bcab432b36671527c0c24c91c1974cd4f94733bdaa793aa0d3d43ea9e928",
+      "local_text": "research/local/swisssys-site/9031a9d6d31f3552.txt",
+      "candidate_feature_ids": [
+        "E08"
+      ],
+      "proposed_home": "Club directory",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c5f58938",
+      "title": "Reserved Board Numbers",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/admin/reserved-board-numbers/",
+      "archive_status": 200,
+      "sha256": "b98b7003f49de18163f9f60c6a3ee8af098cf85fce19a18c1c6f4b3f85deb2a3",
+      "local_text": "research/local/swisssys-site/c5f58938dd945f5a.txt",
+      "candidate_feature_ids": [
+        "E05"
+      ],
+      "proposed_home": "Event \u2192 Boards",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f8c1427e",
+      "title": "Swap Primary and Secondary Databases",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/admin/swap-primary-and-secondary-databases/",
+      "archive_status": 200,
+      "sha256": "a9d8a056d4962b47d139185aa94db787488902b9fb6a5ce5c2538f2173502a64",
+      "local_text": "research/local/swisssys-site/f8c1427ec112c1a6.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f1668090",
+      "title": "SwissSys Home Page",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/admin/swisssys-home-page/",
+      "archive_status": 200,
+      "sha256": "67cb7466215c19ecb977529042a8a2249b98523e71491910aeea01948f22c081",
+      "local_text": "research/local/swisssys-site/f16680906be095b8.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-3d3063e0",
+      "title": "Getting Started",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/",
+      "archive_status": 200,
+      "sha256": "a32614a0231bc93bd3d4d96606aaf5b914233ec38306d07ea6411c5766336076",
+      "local_text": "research/local/swisssys-site/3d3063e051bab326.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f67b9fd9",
+      "title": "ChessRoster Platform Integration",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/chessroster-integration/",
+      "archive_status": 200,
+      "sha256": "e8f9c116c0c48bf9b10c14a0b81f86b48afd28e69262119d41aa51cdc6bd7d95",
+      "local_text": "research/local/swisssys-site/f67b9fd949ddc5a0.txt",
+      "candidate_feature_ids": [
+        "O08"
+      ],
+      "proposed_home": "Event \u2192 Share",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-45060d8b",
+      "title": "Introduction",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/introduction/",
+      "archive_status": 200,
+      "sha256": "fb8079b5224c9524aee1ecf399b0b1128425b7b160cce7361e0943d56f9b8413",
+      "local_text": "research/local/swisssys-site/45060d8bdc601b3c.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-25f21fd2",
+      "title": "What Comes with the Installation",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/what-comes-with-the-installation/",
+      "archive_status": 200,
+      "sha256": "43ab0e6015fe2124a030e1492f8c88d0e0d9a20266bde0b9baff36d3db37a130",
+      "local_text": "research/local/swisssys-site/25f21fd24da81fe5.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-333475a5",
+      "title": "Prerequisites",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/first-assumptions/",
+      "archive_status": 200,
+      "sha256": "dbf87043adca55ed5a53ed71cb05350cf75763c937e7c211e0feb517c34672e5",
+      "local_text": "research/local/swisssys-site/333475a5181f37d9.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c531f6d0",
+      "title": "Getting Started",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/getting-started/",
+      "archive_status": 200,
+      "sha256": "09c9d1da2eca4781cd24fb0d24e751df8d0a765c941140e5d851b4dc7eb4f35a",
+      "local_text": "research/local/swisssys-site/c531f6d0dd03b3e5.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4bcac4c5",
+      "title": "Program Overview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/program-overview/",
+      "archive_status": 200,
+      "sha256": "729526d11ccc245f7a0f3efbbdf460b5a3f8ed511bbe3003c864481eb992749d",
+      "local_text": "research/local/swisssys-site/4bcac4c528ccda9c.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-443786ca",
+      "title": "Menus and the Screen",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/menus-and-the-screen/",
+      "archive_status": 200,
+      "sha256": "10f83b5c1e67d3eaccf19e8fc29b3b45945e458553879d8266d2bfbbd44bfc3d",
+      "local_text": "research/local/swisssys-site/443786cab6fe184c.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-53fd5245",
+      "title": "Running a Tournament",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/running-a-tournament/",
+      "archive_status": 200,
+      "sha256": "46e0a5ae34226de7759007ea975d3ee21ce068d83bd4b3342fc4df1d56a060db",
+      "local_text": "research/local/swisssys-site/53fd524503d3c4c9.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-cd1d7bb7",
+      "title": "Main Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/main-menu/",
+      "archive_status": 200,
+      "sha256": "920ec19a2dad3f86c92d114a1a07d841b7ae4a04cfffccd1da3ac7484481adfd",
+      "local_text": "research/local/swisssys-site/cd1d7bb704fe2fe9.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-fd102781",
+      "title": "Setup Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/setup-menu/",
+      "archive_status": 200,
+      "sha256": "91d6b0701e2f9c013dd5602a6a29d56a5d9a11e871483ccc5c72bd50cabbeb33",
+      "local_text": "research/local/swisssys-site/fd102781391283ff.txt",
+      "candidate_feature_ids": [
+        "E03",
+        "E04"
+      ],
+      "proposed_home": "Settings (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-5ba5335e",
+      "title": "Changing Game Results and Other Data",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/changing-game-results-and-other-data-overview/",
+      "archive_status": 200,
+      "sha256": "d60a0229c9d16c5387adf60e5f1ecfe4cbee3bacc37d306ea79f05b8edc699a3",
+      "local_text": "research/local/swisssys-site/5ba5335e3220f106.txt",
+      "candidate_feature_ids": [
+        "P05",
+        "P07"
+      ],
+      "proposed_home": "Rounds / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c0cfe9a2",
+      "title": "Contents",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/contents/",
+      "archive_status": 200,
+      "sha256": "52601bac1bc8eb50ac54c009880cdf519b98804bd7941f7da65a42a24b8ccf39",
+      "local_text": "research/local/swisssys-site/c0cfe9a281186103.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-0100edc5",
+      "title": "Create or Update a Custom Database Using SwissSys",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/create-or-update-a-custom-database-using-swisssys/",
+      "archive_status": 200,
+      "sha256": "41fc3e722753451bf49636f7327fc38618a33141785bda3b20d7d00e7f7b568e",
+      "local_text": "research/local/swisssys-site/0100edc5fe8bbd85.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1d7a5d5c",
+      "title": "Export View",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/export-view/",
+      "archive_status": 200,
+      "sha256": "c0d1fd35e504765230dd92d758139c3e074bb4b2a95097e86b25f2094f77f442",
+      "local_text": "research/local/swisssys-site/1d7a5d5cd3214339.txt",
+      "candidate_feature_ids": [
+        "O05"
+      ],
+      "proposed_home": "Reports \u2192 Export",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c64f6458",
+      "title": "Importing Players - Overview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/importing-players-overview/",
+      "archive_status": 200,
+      "sha256": "b01b78551c661dca5a8e5197278997c644b4d3a661fe0d0c424f5b5dc20be54a",
+      "local_text": "research/local/swisssys-site/c64f6458c1c02bf3.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R02"
+      ],
+      "proposed_home": "Players \u2192 Import",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-744d28db",
+      "title": "Multi-view Charts",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/multi-view-charts/",
+      "archive_status": 200,
+      "sha256": "d7f4364e001f8c712dc7fd2ddd743fad76842437b0ecb11457cf399c548b7429",
+      "local_text": "research/local/swisssys-site/744d28dbc8d4b6ce.txt",
+      "candidate_feature_ids": [
+        "U02"
+      ],
+      "proposed_home": "Preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-ce2a07d0",
+      "title": "Registering Players with the Network Database",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/registering-players-with-the-network-database/",
+      "archive_status": 200,
+      "sha256": "a0c78304c55063d26dba22319018027a5c1712a006b29fdb13d5a6f611bd804b",
+      "local_text": "research/local/swisssys-site/ce2a07d050abeada.txt",
+      "candidate_feature_ids": [
+        "R12"
+      ],
+      "proposed_home": "Registration staging",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-50bdc2be",
+      "title": "Secondary Database: Use and Examples",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/secondary-database-use-and-examples/",
+      "archive_status": 200,
+      "sha256": "18a11f77f517a855708169bfbd84892048a85b121e25ab71f171400ff5889b98",
+      "local_text": "research/local/swisssys-site/50bdc2be33e49bc4.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4a8ac67e",
+      "title": "Section Box",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/section-box/",
+      "archive_status": 200,
+      "sha256": "ccff38b6a918d6062574c9739eb3d48a8a21b6a02d207f077a8cc8401011a4a8",
+      "local_text": "research/local/swisssys-site/4a8ac67ea4730ac4.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-0922b733",
+      "title": "SwissSys Tutorial",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/swisssys-tutorial/",
+      "archive_status": 200,
+      "sha256": "384ec659400703d7bbee37ebea97270b9ec622fb2e6fd72e97fdf912ed0b1c02",
+      "local_text": "research/local/swisssys-site/0922b733eae5edf8.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f16dee9c",
+      "title": "Task Launcher",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/task-launcher/",
+      "archive_status": 200,
+      "sha256": "1e28c75b6cd964d6349fe444926e292660d675ca6d9dc7f34dcfbf33d60d6061",
+      "local_text": "research/local/swisssys-site/f16dee9c27e0209e.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-48799146",
+      "title": "Terms of Use: SwissSys License Agreement",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/terms-of-use-swisssys-license-agreement/",
+      "archive_status": 200,
+      "sha256": "c9376e0abe6be7a36ef5988d0ee0c24e58c85dd8d6e98d8b8c89c86c2394260b",
+      "local_text": "research/local/swisssys-site/48799146638d73d9.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-33705be9",
+      "title": "Tinker - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/tinker/",
+      "archive_status": 200,
+      "sha256": "e3996ada80146eee2a60b7e0e76a3439f06326f83da85c23c966fe668b12283c",
+      "local_text": "research/local/swisssys-site/33705be9aa0801f0.txt",
+      "candidate_feature_ids": [
+        "R10"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-38b4da73",
+      "title": "Upgrade Information",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/upgrade-information/",
+      "archive_status": 200,
+      "sha256": "a1f431ee620c559ead18a28c6cf63e504388a248c2ddac3c0a44ae60ecb7222b",
+      "local_text": "research/local/swisssys-site/38b4da739ceb794c.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-8ff0f6e6",
+      "title": "Use a Custom Database",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/use-a-database-created-by-commercial-database-soft/",
+      "archive_status": 200,
+      "sha256": "4bb4a162288b10e4cfbbe7d04ba3d1e05e0c627d73ee20580010cd238290f36a",
+      "local_text": "research/local/swisssys-site/8ff0f6e6bae145d9.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-597dbacc",
+      "title": "Tutorials",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/",
+      "archive_status": 200,
+      "sha256": "ac2d617989422871714038b257e4115e96e3ec79b746426218c30a13d8851200",
+      "local_text": "research/local/swisssys-site/597dbaccbd2964c4.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f4a7cb57",
+      "title": "Step 1 - Setting Up the Tournament",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-01-setting-up-the-tournament/",
+      "archive_status": 200,
+      "sha256": "317f83aac110801d71c7dbe2ed69174904ac32726f6227e40bd2ae8f178719b7",
+      "local_text": "research/local/swisssys-site/f4a7cb57fa58de03.txt",
+      "candidate_feature_ids": [
+        "E02",
+        "E03"
+      ],
+      "proposed_home": "Event / section settings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-776a6628",
+      "title": "Step 2 - Advance Registration",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-02-advance-registration/",
+      "archive_status": 200,
+      "sha256": "2d990c24e75788db81a84d41cc7cae2f5d2d8f33dd35ea646f219c3e2b99102c",
+      "local_text": "research/local/swisssys-site/776a66288158ae77.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-278b82b6",
+      "title": "Step 3 - On-site Registration and File Handling",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-03-on-site-registration-and-file-handling/",
+      "archive_status": 200,
+      "sha256": "c550defe295e6843d287919c3cc6a810ac1452ff87f73104a287cfe28c19765c",
+      "local_text": "research/local/swisssys-site/278b82b66d2223d5.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e688af75",
+      "title": "Step 4 - Inspect the Wall Chart",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-04-inspect-the-wall-chart/",
+      "archive_status": 200,
+      "sha256": "0eed0d8b7fa7e32d4ef6ce2e49470fc96c3c4b88fffb078e522bcec15a7c5063",
+      "local_text": "research/local/swisssys-site/e688af75a0dec823.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-73fbb290",
+      "title": "Step 5 - Some Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-05-some-options/",
+      "archive_status": 200,
+      "sha256": "c4d89050c7e9b81c4cd28c20c8be4e94a496c46b8a5f73cab13d2c7981d2d538",
+      "local_text": "research/local/swisssys-site/73fbb290924221df.txt",
+      "candidate_feature_ids": [
+        "E03",
+        "E04"
+      ],
+      "proposed_home": "Settings (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-5ae591f9",
+      "title": "Step 6 - Make Pairings",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-06-make-pairings/",
+      "archive_status": 200,
+      "sha256": "996faffd5df17c2c48647ce43c595e418f204397d4d4837fc496697070e38ca2",
+      "local_text": "research/local/swisssys-site/5ae591f9483eb576.txt",
+      "candidate_feature_ids": [
+        "P01"
+      ],
+      "proposed_home": "Rounds / Event",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-09eaca61",
+      "title": "Step 7 - Late Registration",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-07-late-registration/",
+      "archive_status": 200,
+      "sha256": "d362f77da7b666808322ef9f3597790cdf3f104a0e3100773dff0db2cf71d418",
+      "local_text": "research/local/swisssys-site/09eaca61cfc3b562.txt",
+      "candidate_feature_ids": [
+        "R08",
+        "P06"
+      ],
+      "proposed_home": "Player inspector / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e36bf7f8",
+      "title": "Step 8 - Working with the Pairings",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-08-working-with-the-pairings/",
+      "archive_status": 200,
+      "sha256": "f19a1d6e5f6f62d224a6a13357fa8857a497ad3efc167e2da983505f19b8ed8c",
+      "local_text": "research/local/swisssys-site/e36bf7f8dc0028fd.txt",
+      "candidate_feature_ids": [
+        "P01",
+        "P04"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-fc532d3d",
+      "title": "Step 9 - Withdrawing and Tinkering",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-09-withdrawing-and-tinkering/",
+      "archive_status": 200,
+      "sha256": "7b31fc79250c1f522f3d4d2bfd06b5a9a83a0dfd8326237f08151c57c46f5359",
+      "local_text": "research/local/swisssys-site/fc532d3d77cc7c15.txt",
+      "candidate_feature_ids": [
+        "R10"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d4504f4c",
+      "title": "Step 10 - Standings",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-10-standings/",
+      "archive_status": 200,
+      "sha256": "893a57c3ad59e64ab169157c3e707ffb430b6e4afc1abec20b9a602923e9d6fc",
+      "local_text": "research/local/swisssys-site/d4504f4c0e93c6fd.txt",
+      "candidate_feature_ids": [
+        "S01"
+      ],
+      "proposed_home": "Standings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-049777d6",
+      "title": "Step 11 - Correcting Results",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-11-correcting-results/",
+      "archive_status": 200,
+      "sha256": "6d1da75dff7a0247a586403c8632b051c7a5b4457c145a03226320d9c862dfd2",
+      "local_text": "research/local/swisssys-site/049777d6de10bcc3.txt",
+      "candidate_feature_ids": [
+        "P07"
+      ],
+      "proposed_home": "Rounds \u2192 History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1255bf1b",
+      "title": "Step 12 - Prizes",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-12-prizes/",
+      "archive_status": 200,
+      "sha256": "e7a4359cc65b5247b83ce0dcce806a1b3bf5aec44547f138e307d2598fac8e82",
+      "local_text": "research/local/swisssys-site/1255bf1bbbd0834e.txt",
+      "candidate_feature_ids": [
+        "S04",
+        "S06"
+      ],
+      "proposed_home": "Standings \u2192 Prizes",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-9c0e130f",
+      "title": "Step 13 - Wrapping Up",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-13-wrapping-up/",
+      "archive_status": 200,
+      "sha256": "fa04b8a33da7564b4fb525a0c37b24d14868bc87ec6142fe06655dadb843f2e3",
+      "local_text": "research/local/swisssys-site/9c0e130fa7c3235d.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O06"
+      ],
+      "proposed_home": "Reports / completion",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-5f233094",
+      "title": "Step 14 - Multi-section Tournaments",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-14-multi-section-tournaments/",
+      "archive_status": 200,
+      "sha256": "9b0bddb9bf7d737b9ce8c7d207d26e586ca5c6e16d964335a476c5c3cc0c2e18",
+      "local_text": "research/local/swisssys-site/5f233094ba9702c1.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-28cb5b42",
+      "title": "Step 15 - Running Team Tournaments",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-15-running-team-tournaments/",
+      "archive_status": 200,
+      "sha256": "88fd2bedae2ba888af43e1a5427b9d6e8a6ddc3df6e67e6277730eb08a5a0756",
+      "local_text": "research/local/swisssys-site/28cb5b428232efbf.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-3cbc77f5",
+      "title": "Step 16 - Setting Up a Database for Player Registration",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-16-setting-up-a-database-for-player-registration/",
+      "archive_status": 200,
+      "sha256": "a6e65819582589b37e1e45bddbec03e7a5484681510a8202a1b9e76f5017aea7",
+      "local_text": "research/local/swisssys-site/3cbc77f5e9dbfb99.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-2e7f0281",
+      "title": "Create Report for Uploading - Internet Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/create-report-for-uploading/",
+      "archive_status": 200,
+      "sha256": "4fdce1e0f96d716e268d7790b93b0fa5fc59d7e633359a94c79a8190f58086c6",
+      "local_text": "research/local/swisssys-site/2e7f028137ad3cf4.txt",
+      "candidate_feature_ids": [
+        "O08"
+      ],
+      "proposed_home": "Event \u2192 Share",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-22681fb8",
+      "title": "Set Up Your USCF, CFC, or FIDE Database",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/set-up-your-uscf-cfc-or-fide-database/",
+      "archive_status": 200,
+      "sha256": "fa750286982448ebfcd0d1a1d6745f1b4e2da2c7fdaf061ba6d09f2f8dcf9ab9",
+      "local_text": "research/local/swisssys-site/22681fb862c24f3c.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-76d0cdd6",
+      "title": "Tournament Setup and Tools - Setup Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/tournament-setup-and-tools/",
+      "archive_status": 200,
+      "sha256": "85b488c149791808dfa22e6972d89c9521c6b0d64de6eba96f9651acbc9ba498",
+      "local_text": "research/local/swisssys-site/76d0cdd6461f9917.txt",
+      "candidate_feature_ids": [
+        "E02",
+        "E03"
+      ],
+      "proposed_home": "Event / section settings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-600a545b",
+      "title": "User Guide",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/",
+      "archive_status": 200,
+      "sha256": "b1b13975fcc8098b37ffe70d0df6d062f3bd313fd4c7b8e9c03b56d240f10690",
+      "local_text": "research/local/swisssys-site/600a545b1911d307.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-5dba87d4",
+      "title": "Menus",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/",
+      "archive_status": 200,
+      "sha256": "e4d6195b4028a2bcf02d263a6f3c45e0c9e6e22bc7151ab73735d35834ca8383",
+      "local_text": "research/local/swisssys-site/5dba87d447d04cda.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-8856fe7e",
+      "title": "Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/",
+      "archive_status": 200,
+      "sha256": "6ab91b668e554cadfed56991a04c54a9e1e8fe50cf2c56e769e2a7678d9320d8",
+      "local_text": "research/local/swisssys-site/8856fe7e8153bdbb.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players (menu index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c8c72def",
+      "title": "Register - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/register/",
+      "archive_status": 200,
+      "sha256": "266e4298b51499922a1059577d4254ecfca5f4ab5dbe2ebb2efa70b1af7bd506",
+      "local_text": "research/local/swisssys-site/c8c72def69f91339.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-bc6b6476",
+      "title": "Withdrawals - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/withdrawals/",
+      "archive_status": 200,
+      "sha256": "a3fded8f0b9dcd2fe5b9b369e049bd82f5a8c8cc4f147cbce5c0b790d13a7ed8",
+      "local_text": "research/local/swisssys-site/bc6b6476c266456c.txt",
+      "candidate_feature_ids": [
+        "R08",
+        "P06"
+      ],
+      "proposed_home": "Player inspector / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-966338cb",
+      "title": "Bye/Inactive Players - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/byeinactive-players/",
+      "archive_status": 200,
+      "sha256": "0c17bf68981c12c53f36467a47f7e521bccdb72bf76be50dd0bb9514ed1d89bb",
+      "local_text": "research/local/swisssys-site/966338cb1f850d45.txt",
+      "candidate_feature_ids": [
+        "R08",
+        "P06"
+      ],
+      "proposed_home": "Player inspector / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e17ccb7b",
+      "title": "Move Player - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/move-player/",
+      "archive_status": 200,
+      "sha256": "47269d080860394bdbab4d0bbcc7821ec3a2404b76b83158a84dfe6b758551c4",
+      "local_text": "research/local/swisssys-site/e17ccb7b6fb3da26.txt",
+      "candidate_feature_ids": [
+        "R09"
+      ],
+      "proposed_home": "Players \u2192 Move",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-3ee0d81f",
+      "title": "Switch Ratings/IDs - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/switch-ratingsids/",
+      "archive_status": 200,
+      "sha256": "0f8148a8d22e54c7ba6ed4d8123f5c8cd7751b08366bb3f4fed41554e86722b8",
+      "local_text": "research/local/swisssys-site/3ee0d81f4740d712.txt",
+      "candidate_feature_ids": [
+        "R06",
+        "R07",
+        "S05"
+      ],
+      "proposed_home": "Ratings / Analysis",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-5083682a",
+      "title": "Switch State and Federation - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/switch-state-and-federation/",
+      "archive_status": 200,
+      "sha256": "52dc11810b1da7e9882c77a8fd53793c470a0bb4ec1d12bcc09c9a4b489a0d0b",
+      "local_text": "research/local/swisssys-site/5083682add4750b2.txt",
+      "candidate_feature_ids": [
+        "R04"
+      ],
+      "proposed_home": "Player inspector",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-76d3ea25",
+      "title": "Classes - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/classes/",
+      "archive_status": 200,
+      "sha256": "c29a58699a90d5c9e3241d2d1faa12df39b352f5be191b5b63c6c1dbb21f8578",
+      "local_text": "research/local/swisssys-site/76d3ea25d41498fa.txt",
+      "candidate_feature_ids": [
+        "R10"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-bd60b9b1",
+      "title": "Confirm Player Eligibility - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/confirm-player-eligibility/",
+      "archive_status": 200,
+      "sha256": "7eca98a457a60908c67df5f2cae647b7c8224ba10a9153246ca2792954359f6c",
+      "local_text": "research/local/swisssys-site/bd60b9b1c52de407.txt",
+      "candidate_feature_ids": [
+        "R05",
+        "O03"
+      ],
+      "proposed_home": "Players / Reports",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f4cefa7d",
+      "title": "Set Uniform Name Format - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/set-uniform-name-format/",
+      "archive_status": 200,
+      "sha256": "a8ebf0d45b2ece35b0aa2c9150a3f5235842dd0aa789c5d4a443345b1e28facc",
+      "local_text": "research/local/swisssys-site/f4cefa7d115d63f7.txt",
+      "candidate_feature_ids": [
+        "R10"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-350ba21a",
+      "title": "Unflag All - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/unflag-all/",
+      "archive_status": 200,
+      "sha256": "3df916fecc0f128fa310e5151a532a1989bb6af4b7fded9e1abad0f471089274",
+      "local_text": "research/local/swisssys-site/350ba21abc2a8990.txt",
+      "candidate_feature_ids": [
+        "R10"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-8c97dc84",
+      "title": "Adjust Pair Numbers Before Pairing - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/adjust-pair-numbers-before-pairing/",
+      "archive_status": 200,
+      "sha256": "428a803e3276a9d4b1db629a9d392c12278183642de489cd640a0211036d8001",
+      "local_text": "research/local/swisssys-site/8c97dc84669f8e20.txt",
+      "candidate_feature_ids": [
+        "R10"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f1a24fc3",
+      "title": "Resort All by Rating - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/resort-all-by-rating/",
+      "archive_status": 200,
+      "sha256": "3dad8b16711f9ea49987c29a398b29f920cb647257d52f2373e7e994cfcca1b7",
+      "local_text": "research/local/swisssys-site/f1a24fc3f60b8354.txt",
+      "candidate_feature_ids": [
+        "R10"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-a8b7e2b2",
+      "title": "Board History - Players Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/board-history/",
+      "archive_status": 200,
+      "sha256": "85f5aba6226317fa1fb9276ec0022de47b8729c7fbe94ccfd8d4e15a7a1a2518",
+      "local_text": "research/local/swisssys-site/a8b7e2b29edf81cf.txt",
+      "candidate_feature_ids": [
+        "P08"
+      ],
+      "proposed_home": "Player inspector",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e86c375c",
+      "title": "Setup Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/",
+      "archive_status": 200,
+      "sha256": "6635107c45b4f77686c03e9df33fd498cbc6c1b47ca202f877c10b380171b975",
+      "local_text": "research/local/swisssys-site/e86c375c61fede8e.txt",
+      "candidate_feature_ids": [
+        "E03",
+        "E04"
+      ],
+      "proposed_home": "Settings (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-203b748e",
+      "title": "Tournament at a Glance - Setup Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/tournament-at-a-glance/",
+      "archive_status": 200,
+      "sha256": "c9b81facf13333a2400503b55ae19a287e85fe1f29a7cc941efe36c897a450f4",
+      "local_text": "research/local/swisssys-site/203b748e5277396d.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-78802ee7",
+      "title": "Manage Board Numbers - Setup Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/manage-board-numbers/",
+      "archive_status": 200,
+      "sha256": "1b53f4a6dbc0729e651c873c4ff268b9091b2f0242c9a751d0f68cae4ee0f490",
+      "local_text": "research/local/swisssys-site/78802ee72a6e9804.txt",
+      "candidate_feature_ids": [
+        "E05"
+      ],
+      "proposed_home": "Event \u2192 Boards",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c0f0e311",
+      "title": "Rules for Pairing - Setup Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/rules-for-pairing/",
+      "archive_status": 200,
+      "sha256": "76361852b519652129bc65f7ef07323f86fabbf2393bb56f1e14eec4d82c1041",
+      "local_text": "research/local/swisssys-site/c0f0e31150178750.txt",
+      "candidate_feature_ids": [
+        "F01",
+        "F05"
+      ],
+      "proposed_home": "Section rules",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-dd5a30e4",
+      "title": "Tiebreaks - Setup Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/tiebreaks/",
+      "archive_status": 200,
+      "sha256": "c03763d9949a6ec61709f1c0331a789753a2d1e050da3ff6677754cc76b35101",
+      "local_text": "research/local/swisssys-site/dd5a30e4e8ce66e0.txt",
+      "candidate_feature_ids": [
+        "S02"
+      ],
+      "proposed_home": "Standings / section rules",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e409e6db",
+      "title": "Ladder Rules - Setup Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/ladder-rules/",
+      "archive_status": 200,
+      "sha256": "babfbbcb7fc4748b793ddb1dbb42ea5da32ce2805b8b556f34c1e0dc89331cfa",
+      "local_text": "research/local/swisssys-site/e409e6dbfdf94213.txt",
+      "candidate_feature_ids": [
+        "F06"
+      ],
+      "proposed_home": "Standings / format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e5620ab9",
+      "title": "Step-by-step Guide - Setup Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/step-by-step-guide/",
+      "archive_status": 200,
+      "sha256": "544d0f81b25744219af8e5342b81aaf2049dfd4929a4707465e216fb9ec1e674",
+      "local_text": "research/local/swisssys-site/e5620ab9ebcd73b7.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4740c7c0",
+      "title": "Edit Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/",
+      "archive_status": 200,
+      "sha256": "cdff985f5b6b70341e4d4cb5c6a88855fff93f7d068a4533fdd826f0e4ab8604",
+      "local_text": "research/local/swisssys-site/4740c7c016f29ca0.txt",
+      "candidate_feature_ids": [
+        "R10",
+        "P07",
+        "U03"
+      ],
+      "proposed_home": "Editing (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-188be75b",
+      "title": "Copy - Edit Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/copy/",
+      "archive_status": 200,
+      "sha256": "fa72ebaa52aecc8b4d01d30b740c30aab16e6af5d603e0c6924359d4ee62df7e",
+      "local_text": "research/local/swisssys-site/188be75b0fc54ebb.txt",
+      "candidate_feature_ids": [
+        "O05"
+      ],
+      "proposed_home": "Reports \u2192 Export",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-a4e976b5",
+      "title": "Copy All - Edit Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/copy-all/",
+      "archive_status": 200,
+      "sha256": "f5597eae35bbe997044d511534d2cfef64bca47c2823619514ed2bc77d9f5c80",
+      "local_text": "research/local/swisssys-site/a4e976b59b2a8079.txt",
+      "candidate_feature_ids": [
+        "O05"
+      ],
+      "proposed_home": "Reports \u2192 Export",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4d64f594",
+      "title": "Undo Last Command - Edit Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/undo-last-command/",
+      "archive_status": 200,
+      "sha256": "0013f68b3794186e162c643e63de2874ce1a8da60bf5c236765fe2c720c126d1",
+      "local_text": "research/local/swisssys-site/4d64f59442de364f.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-08c6d39d",
+      "title": "Clear Selected Results - Edit Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/clear-selected-results/",
+      "archive_status": 200,
+      "sha256": "38abbe00c4527a02a30c9a1c1df85892ab1372718f5ebedcc74bfd79319dc148",
+      "local_text": "research/local/swisssys-site/08c6d39d98a53629.txt",
+      "candidate_feature_ids": [
+        "P05",
+        "P06"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-a2607da2",
+      "title": "Withdraw Selected Players - Edit Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/withdraw-selected-players/",
+      "archive_status": 200,
+      "sha256": "348847cfbda05ad1c3db071b18d0615f5320a9f42e96b3d5b26ca790cc73ea96",
+      "local_text": "research/local/swisssys-site/a2607da2502178dd.txt",
+      "candidate_feature_ids": [
+        "R08",
+        "P06"
+      ],
+      "proposed_home": "Player inspector / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d99c735c",
+      "title": "Validate - Edit Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/validate/",
+      "archive_status": 200,
+      "sha256": "5c93534a0a742dfe9962753332bf5fe176f1a11be4a23dcdc4289907c3d3bac6",
+      "local_text": "research/local/swisssys-site/d99c735cc0fd554e.txt",
+      "candidate_feature_ids": [
+        "P02",
+        "R05"
+      ],
+      "proposed_home": "Validation (determine exact checks)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-ede84306",
+      "title": "Find Player - Edit Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/find-player/",
+      "archive_status": 200,
+      "sha256": "a64f37030b8dcc621a45576560e4dce0dc9a3e752110e1b450ff834397064760",
+      "local_text": "research/local/swisssys-site/ede84306486aa8fd.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b7ce70cb",
+      "title": "File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/",
+      "archive_status": 200,
+      "sha256": "295bcb7c3386e23d49997a59f52764b0133e4612adc3bd9c069823a700fac08e",
+      "local_text": "research/local/swisssys-site/b7ce70cb1ecd1ee6.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event menu (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1b8d5344",
+      "title": "Open - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/open/",
+      "archive_status": 200,
+      "sha256": "4861902f19e971d9b7b50b7d5429c9e7356b40a1d14c972b517ab3cf526b2038",
+      "local_text": "research/local/swisssys-site/1b8d534492c9e4f3.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-521673a5",
+      "title": "Reopen - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/reopen/",
+      "archive_status": 200,
+      "sha256": "e1eb0eb75c9123473e082f09758895dd0d84367bd0f158f7d10642d9cf7ee28c",
+      "local_text": "research/local/swisssys-site/521673a55d3b484f.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4925f99c",
+      "title": "Save - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/save/",
+      "archive_status": 200,
+      "sha256": "4d04122cc15744beead98791e6032cedcf072b56a669ef449b444d6cd317ae49",
+      "local_text": "research/local/swisssys-site/4925f99ce675e4d0.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1a1b34e6",
+      "title": "Save As - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/save-as/",
+      "archive_status": 200,
+      "sha256": "a713107428e23b21d8252ab6e0492ab842e090866039f084130fb784664dfd89",
+      "local_text": "research/local/swisssys-site/1a1b34e6bf3487f5.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e161f143",
+      "title": "Backups - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/backups/",
+      "archive_status": 200,
+      "sha256": "85e63b7f646dae4f58be4a7d9112d4cb013e76ae89cf4882cfa5bf68f21ba0d4",
+      "local_text": "research/local/swisssys-site/e161f1430f470d9e.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-9d9bf89b",
+      "title": "Club - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/club/",
+      "archive_status": 200,
+      "sha256": "da3fd68712ef2881080ef1a9321c1cb77edcd5fa1b04f46a1cb21f877c324121",
+      "local_text": "research/local/swisssys-site/9d9bf89b6750af33.txt",
+      "candidate_feature_ids": [
+        "E08"
+      ],
+      "proposed_home": "Club directory",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7f6412a6",
+      "title": "Print View - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/print-view/",
+      "archive_status": 200,
+      "sha256": "c9a0916d53afba75c098b52cc61d16e12bab85d9892a22ea23f1fe69a1e4de26",
+      "local_text": "research/local/swisssys-site/7f6412a667155c05.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-0597bf90",
+      "title": "Print Setup - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/print-setup/",
+      "archive_status": 200,
+      "sha256": "af9852f5b80c8be7dce7e8b8b0ed98b21fda26cacfb3f7100e2d89ea6882c046",
+      "local_text": "research/local/swisssys-site/0597bf9054c29894.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-2ca98662",
+      "title": "Page Setup - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/page-setup/",
+      "archive_status": 200,
+      "sha256": "ec5ba9a11a05ad3f9670d289bfcd83b72ee83c68655686ff83f0d9eb06ff1290",
+      "local_text": "research/local/swisssys-site/2ca9866267cad633.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-62780f77",
+      "title": "Print Preview - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/print-preview/",
+      "archive_status": 200,
+      "sha256": "5f767e2f84ccc4a14e07f28cb3291ac88f9201e498438da8cf6ee9531df5bd2f",
+      "local_text": "research/local/swisssys-site/62780f7754caaf7e.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7c5cee25",
+      "title": "Change Current Club - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/change-current-club/",
+      "archive_status": 200,
+      "sha256": "e9964eb5f843cdd7f57322b5fe06d56b5ad52c140158aa578d9547d8e5236960",
+      "local_text": "research/local/swisssys-site/7c5cee25b82e4a1b.txt",
+      "candidate_feature_ids": [
+        "E08"
+      ],
+      "proposed_home": "Club directory",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-ae1eaa5a",
+      "title": "Update From Club - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/update-from-club/",
+      "archive_status": 200,
+      "sha256": "83d177fcc7c1135461f2b14512425644de6e7c51339b7c8b841dc27d474aefa6",
+      "local_text": "research/local/swisssys-site/ae1eaa5a3fe43469.txt",
+      "candidate_feature_ids": [
+        "E08"
+      ],
+      "proposed_home": "Club directory",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7d707785",
+      "title": "Exit - File Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/exit/",
+      "archive_status": 200,
+      "sha256": "2b7c91f0a0051b115c7de393620ca134f27240bab4680c7b7da9e36771156671",
+      "local_text": "research/local/swisssys-site/7d707785342db9fc.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f3e431db",
+      "title": "Main Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/main-menu-index/",
+      "archive_status": 200,
+      "sha256": "f2e47a4f45837d40ed30e7e60745d96a7560bd98a10d08ecfeda9ce34cbaba0d",
+      "local_text": "research/local/swisssys-site/f3e431db29ef5424.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-0582a797",
+      "title": "Help Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/",
+      "archive_status": 200,
+      "sha256": "943a903749751ba25847e324882b4d5ba28443d3576fcf787fbf13a76e7b2c88",
+      "local_text": "research/local/swisssys-site/0582a7976fe8929b.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-13881b50",
+      "title": "Help - Help Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/help/",
+      "archive_status": 200,
+      "sha256": "d2f6422531896ee76aec7e17336e7b244d8c6fe35e33040818de2711d30456f3",
+      "local_text": "research/local/swisssys-site/13881b508ff76628.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d61883fe",
+      "title": "About - Help Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/about/",
+      "archive_status": 200,
+      "sha256": "86a15a21114099a702543b73ea70dfd1e9936049dab69ea09cb2cd446e9b8996",
+      "local_text": "research/local/swisssys-site/d61883fefcb95e9c.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-8e8460fd",
+      "title": "Logging Settings - Help Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/logging-settings/",
+      "archive_status": 200,
+      "sha256": "695a83b2d519855ee81e429669f86cfbe2c9945f363cc9d837f0c3ee77cc0802",
+      "local_text": "research/local/swisssys-site/8e8460fda9e484ec.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-360fe329",
+      "title": "Register SwissSys - Help Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/register-swisssys/",
+      "archive_status": 200,
+      "sha256": "4695ca8adb8f8c2d9ba199944ce7a3e00b7e90dd644b372edabe6c4bd7805c24",
+      "local_text": "research/local/swisssys-site/360fe329a973139d.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-bd4aa2bc",
+      "title": "Pairings Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/",
+      "archive_status": 200,
+      "sha256": "62737ade93a8e50f17349260aaa804762e73632c673015636338b2d24bf2919e",
+      "local_text": "research/local/swisssys-site/bd4aa2bcf8978d02.txt",
+      "candidate_feature_ids": [
+        "P01",
+        "P04"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-470b9cda",
+      "title": "Pair Next Round",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/pair-next-round/",
+      "archive_status": 200,
+      "sha256": "0c1460d33e9347ab69bbf5c6eac6583c952544abb6594c2672fdc1fc3f79b6e2",
+      "local_text": "research/local/swisssys-site/470b9cdabff1a668.txt",
+      "candidate_feature_ids": [
+        "P01"
+      ],
+      "proposed_home": "Rounds / Event",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7af7802f",
+      "title": "View Pairings / Enter Results",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/view-pairingsenter-results/",
+      "archive_status": 200,
+      "sha256": "751b695da3cb40c35023c8492c9126e05b36ced3ac2125dd6d87e481a735f94f",
+      "local_text": "research/local/swisssys-site/7af7802fda18ab87.txt",
+      "candidate_feature_ids": [
+        "P01",
+        "P04"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-79df53cd",
+      "title": "Entering Results",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/entering-results/",
+      "archive_status": 200,
+      "sha256": "45ea9c10c0e699be63e94bf56282a6725074f7ee01381a3d8210fd9c63dba5d0",
+      "local_text": "research/local/swisssys-site/79df53cdd7995852.txt",
+      "candidate_feature_ids": [
+        "P05",
+        "P06"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-38f459d8",
+      "title": "All Rounds Results Entry",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/all-rounds-results-entry/",
+      "archive_status": 200,
+      "sha256": "3a6a5c029630fc0de29d5138c004c7579f894bc323e22ba478c64755426b4d17",
+      "local_text": "research/local/swisssys-site/38f459d88d027d1c.txt",
+      "candidate_feature_ids": [
+        "P05",
+        "P06"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-49f5286e",
+      "title": "Pairing Logic",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/pairing-logic/",
+      "archive_status": 200,
+      "sha256": "1e0b8a58a895865c978c5665579333bfba73f4c4b4b72cea59814fe49b44f040",
+      "local_text": "research/local/swisssys-site/49f5286e71c20289.txt",
+      "candidate_feature_ids": [
+        "P02"
+      ],
+      "proposed_home": "Pairing review",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-10e2aca1",
+      "title": "Adjusting Pairings",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/adjusting-pairings/",
+      "archive_status": 200,
+      "sha256": "bf6f6768236c891cc20e8fab7ba7d627776325066234224e4f93a0cf69d5a0c0",
+      "local_text": "research/local/swisssys-site/10e2aca199f681fb.txt",
+      "candidate_feature_ids": [
+        "P03"
+      ],
+      "proposed_home": "Pairing review",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-0612b77f",
+      "title": "Back to a Previous Round",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/back-to-a-previous-round-do/",
+      "archive_status": 200,
+      "sha256": "ac1c716a77e93fa4b3e9ce07e8df1ec7fb7bc132c3754cd5a5ba0a907622cecb",
+      "local_text": "research/local/swisssys-site/0612b77fb17b21c6.txt",
+      "candidate_feature_ids": [
+        "P07"
+      ],
+      "proposed_home": "Rounds \u2192 History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-17b67181",
+      "title": "All Sections",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/all-sections/",
+      "archive_status": 200,
+      "sha256": "5a06aa79e403b0be5d21e603b2c077deb32c579c93a668f0ee1e1a02da062a4b",
+      "local_text": "research/local/swisssys-site/17b6718117e7bc60.txt",
+      "candidate_feature_ids": [
+        "P01"
+      ],
+      "proposed_home": "Rounds / Event",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b76af63c",
+      "title": "View Ladder",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/view-ladder/",
+      "archive_status": 200,
+      "sha256": "e606cb8e243383e180ddfc2f5064dd7beb7b7eb8cdc74ec1322c16e23ac97eda",
+      "local_text": "research/local/swisssys-site/b76af63cb8e9e724.txt",
+      "candidate_feature_ids": [
+        "F06"
+      ],
+      "proposed_home": "Standings / format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-df66b493",
+      "title": "Alphabetical Pairing List",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/alphabetical-pairing-list/",
+      "archive_status": 200,
+      "sha256": "447c8ccd112d828f93de5242fe363f28c547809d34c27cf5308cac070fb0827b",
+      "local_text": "research/local/swisssys-site/df66b4938d46e020.txt",
+      "candidate_feature_ids": [
+        "P01",
+        "P04"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-ee1f43fa",
+      "title": "Team Pairing List (Current Section)",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/team-pairing-list-current-section-only-pairings/",
+      "archive_status": 200,
+      "sha256": "ec740da59a1221ff3a41642ef2b338fa94ee00dad0928f82e9e18aedfb1e2d27",
+      "local_text": "research/local/swisssys-site/ee1f43fadc7ec2e1.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-93e72ce6",
+      "title": "Round Robin Pair Table",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/round-robin-pair-table/",
+      "archive_status": 200,
+      "sha256": "c9a0e37a48db140abae1dfd68c2438e0835f6be890b7ca698bff8661a8adb045",
+      "local_text": "research/local/swisssys-site/93e72ce6c6e276a6.txt",
+      "candidate_feature_ids": [
+        "F03"
+      ],
+      "proposed_home": "Rounds / format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-14b6ffa3",
+      "title": "Crenshaw/Berger Table",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/crenshawberger-table/",
+      "archive_status": 200,
+      "sha256": "ff8d0dd4be8cafcef99a90bb68a9f9f3064fb6c4db934cb38b055b5cf871a3dc",
+      "local_text": "research/local/swisssys-site/14b6ffa308a1cf78.txt",
+      "candidate_feature_ids": [
+        "F03"
+      ],
+      "proposed_home": "Rounds / format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-32becd47",
+      "title": "Import Results from Text File",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/import-results-from-file/",
+      "archive_status": 200,
+      "sha256": "a4b2dab42ec53d4b2c9ce56667c19280f7dd390b4a6debaa4db1a683ac7ddc05",
+      "local_text": "research/local/swisssys-site/32becd4758781b72.txt",
+      "candidate_feature_ids": [
+        "P05",
+        "P06"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-24ccfbaf",
+      "title": "Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/",
+      "archive_status": 200,
+      "sha256": "046f622737dc6931c9a2b029abcb72f8f3736bd9c554d0117c17a40447309bae",
+      "local_text": "research/local/swisssys-site/24ccfbafb715dcdc.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O06",
+        "O07"
+      ],
+      "proposed_home": "Reports (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b00c7961",
+      "title": "Board Signs for Top Players - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/board-signs-for-top-players/",
+      "archive_status": 200,
+      "sha256": "e4a260fd9943b2e25bde0a99d01e6ed4b69fe57baa4fe9732f40fc76918e5424",
+      "local_text": "research/local/swisssys-site/b00c79612f68776c.txt",
+      "candidate_feature_ids": [
+        "O03"
+      ],
+      "proposed_home": "Reports",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-749e3806",
+      "title": "Certificates - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/certificates/",
+      "archive_status": 200,
+      "sha256": "ca99b923d3d3dfa689606096e0030afd52c09dfb18222ff4c22ee11b60b883c2",
+      "local_text": "research/local/swisssys-site/749e38061c68b549.txt",
+      "candidate_feature_ids": [
+        "O03"
+      ],
+      "proposed_home": "Reports",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-02a987db",
+      "title": "Expired Memberships - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/expired-memberships/",
+      "archive_status": 200,
+      "sha256": "2b64b155ae13bf6959acc814c45047c6bb3d995de4591d41de1503faea41325b",
+      "local_text": "research/local/swisssys-site/02a987db2f482f64.txt",
+      "candidate_feature_ids": [
+        "R05",
+        "O03"
+      ],
+      "proposed_home": "Players / Reports",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-16799d9f",
+      "title": "FIDE Norms - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/fide-norms/",
+      "archive_status": 200,
+      "sha256": "cca2c0a23369a4c9c6f91ce21866d8200b407c987a589e3614c5e1afe97e62f5",
+      "local_text": "research/local/swisssys-site/16799d9fb93bb85c.txt",
+      "candidate_feature_ids": [
+        "O07"
+      ],
+      "proposed_home": "Reports \u2192 Rating submission",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e9b775e1",
+      "title": "Membership Forms - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/membership-forms/",
+      "archive_status": 200,
+      "sha256": "d2a31f037f5e2efc7c017457f852a145f87c055620b33a43d83ac79dc464d3ee",
+      "local_text": "research/local/swisssys-site/e9b775e1097d1add.txt",
+      "candidate_feature_ids": [
+        "R05",
+        "O03"
+      ],
+      "proposed_home": "Players / Reports",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-2bf6a880",
+      "title": "Player Messages - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/player-messages/",
+      "archive_status": 200,
+      "sha256": "fd3f9f74dbd3a01812ca32876754cc6ec6ce484f28e8337e0c62e5a518ac1810",
+      "local_text": "research/local/swisssys-site/2bf6a880e971ac5d.txt",
+      "candidate_feature_ids": [
+        "O09"
+      ],
+      "proposed_home": "Share / messages",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-27508c54",
+      "title": "Prizes - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/prizes/",
+      "archive_status": 200,
+      "sha256": "43c648757bb479e72db74fa97a00549798ed8823ceb9ae36363b507090691ad5",
+      "local_text": "research/local/swisssys-site/27508c54c3127ea0.txt",
+      "candidate_feature_ids": [
+        "S04",
+        "S06"
+      ],
+      "proposed_home": "Standings \u2192 Prizes",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-852fdaea",
+      "title": "Registration List - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/registration-list/",
+      "archive_status": 200,
+      "sha256": "9d3edb08135232faf1f3f55b8cc77958c66e91bd696bf0c3413c4468f40bacb8",
+      "local_text": "research/local/swisssys-site/852fdaea2a6824c6.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d7600519",
+      "title": "Round Robin Standings Chart - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/round-robin-standings-chart/",
+      "archive_status": 200,
+      "sha256": "e841991d6c6341e5ce906640b4c892d9f178429a485d1ee509c2b787b6ae3af2",
+      "local_text": "research/local/swisssys-site/d76005193db944cf.txt",
+      "candidate_feature_ids": [
+        "F03"
+      ],
+      "proposed_home": "Rounds / format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-bafd99e1",
+      "title": "Scratch Pad - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/scratch-pad/",
+      "archive_status": 200,
+      "sha256": "24fb6c33180787035b7303afc0092e74498fc0c118629743a54c43bf9019f80e",
+      "local_text": "research/local/swisssys-site/bafd99e1fef94b4a.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Event notes",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1ac83a0e",
+      "title": "Upsets - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/upsets/",
+      "archive_status": 200,
+      "sha256": "393f7ba29d8e0358c41a353707340f71e95c5b0042412576077780594c9b2223",
+      "local_text": "research/local/swisssys-site/1ac83a0e02e9c087.txt",
+      "candidate_feature_ids": [
+        "S05"
+      ],
+      "proposed_home": "Standings \u2192 Analysis",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-8401de63",
+      "title": "Win Stats by Color - Reports Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/win-stats-by-color/",
+      "archive_status": 200,
+      "sha256": "1be7b262fc2b1d27c56a28229e2cc64bbe3d16ea36d72bb02e9bdb8e7dceb736",
+      "local_text": "research/local/swisssys-site/8401de635ad52bfb.txt",
+      "candidate_feature_ids": [
+        "S05"
+      ],
+      "proposed_home": "Standings \u2192 Analysis",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-8d13d549",
+      "title": "Section Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/",
+      "archive_status": 200,
+      "sha256": "15a3d520d65d7f20c2414256cc19195687c949de0d7794eda11900ab83a03fed",
+      "local_text": "research/local/swisssys-site/8d13d549ed349541.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-5b9999da",
+      "title": "New - Section Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/new/",
+      "archive_status": 200,
+      "sha256": "5708f24a3694e1e4cc038ff362d2c084739c2a7c50b80833e95bdbf911a2cb6b",
+      "local_text": "research/local/swisssys-site/5b9999da849dcaf5.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-ec9eb581",
+      "title": "Current Section Settings - Section Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/current-section-settings/",
+      "archive_status": 200,
+      "sha256": "ee0e4c7e91031099f65234d4714f6ef728bd38f3cbc6c1361f398f60be56dd4c",
+      "local_text": "research/local/swisssys-site/ec9eb581cf6d315a.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-870c5c3b",
+      "title": "Clear Current Roster - Section Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/clear-current-roster/",
+      "archive_status": 200,
+      "sha256": "34a489f6d745f94a5d6b36a8b523855be732b2d733989e580944f03660719299",
+      "local_text": "research/local/swisssys-site/870c5c3b732b9b34.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4e24c20f",
+      "title": "Rename - Section Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/rename/",
+      "archive_status": 200,
+      "sha256": "2509b3779eef6c7ed171841bf378745ec975345fb146fa6a6a8c0c2231efb05d",
+      "local_text": "research/local/swisssys-site/4e24c20fe13d0fc2.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-bceaeada",
+      "title": "Import - Section Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/import/",
+      "archive_status": 200,
+      "sha256": "0135fda9992bfe1fc8373f3deab1a0d38369ef3a02f793e3a0092deee1ce6ecb",
+      "local_text": "research/local/swisssys-site/bceaeadaedb21452.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-6f4a590b",
+      "title": "Extract - Section Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/extract/",
+      "archive_status": 200,
+      "sha256": "7c06dba38713a682be9dc5006a71d593391e88ea159f7ebdcfdf7eea7b4aa72c",
+      "local_text": "research/local/swisssys-site/6f4a590b207c614a.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d75836e5",
+      "title": "Remove / Remove All - Section Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/removeremove-all/",
+      "archive_status": 200,
+      "sha256": "a1992283231cc2492253bc9f57513db155321c9e74fa7c57d12d36e95a87d2af",
+      "local_text": "research/local/swisssys-site/d75836e56ac73c8c.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-799f2662",
+      "title": "View Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/",
+      "archive_status": 200,
+      "sha256": "2e0172f0bbbec1512a280989a6faad0a3b80d087d4c539da87094b64104a2a5e",
+      "local_text": "research/local/swisssys-site/799f2662934decb5.txt",
+      "candidate_feature_ids": [
+        "U02",
+        "P04"
+      ],
+      "proposed_home": "View / preferences (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-679a80ba",
+      "title": "Pair Chart Appearance",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/pair-chart-appearance/",
+      "archive_status": 200,
+      "sha256": "132e96b86062f7c950a0a37acb02a887e18ff9f15dd59bd33a2ef18ab79eeb9b",
+      "local_text": "research/local/swisssys-site/679a80bad022f3aa.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-90ce7c54",
+      "title": "Pair Chart Submenu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/pair-chart-submenu/",
+      "archive_status": 200,
+      "sha256": "b65eaac26ccca8ff0d42993a08b592c6697eb7ac213db934ba3aa6404cfa4252",
+      "local_text": "research/local/swisssys-site/90ce7c5471f5afbb.txt",
+      "candidate_feature_ids": [
+        "P01",
+        "P04"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7096fe6a",
+      "title": "Pair Chart Toolbar",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/pair-chart-toolbar/",
+      "archive_status": 200,
+      "sha256": "162d1cdba19cbc98d786d37805736db23fd20e88c522157f7c82b6c3e576ab2c",
+      "local_text": "research/local/swisssys-site/7096fe6aad298a79.txt",
+      "candidate_feature_ids": [
+        "P01",
+        "P04"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-18123683",
+      "title": "Pairchart Frequently Asked Questions",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/pairchart-frequently-asked-questions/",
+      "archive_status": 200,
+      "sha256": "4b4e024539313372f0a5b7c93b33319ea6f8d0520a062d55cbeb3acee75c6676",
+      "local_text": "research/local/swisssys-site/18123683615e98da.txt",
+      "candidate_feature_ids": [
+        "U02",
+        "P04"
+      ],
+      "proposed_home": "View / preferences (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-678f6449",
+      "title": "Options Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/",
+      "archive_status": 200,
+      "sha256": "8f901ecdc259d06305db608a10d98a94a196d559e1f7c603bae1034c4c7f89ff",
+      "local_text": "research/local/swisssys-site/678f644946e07adc.txt",
+      "candidate_feature_ids": [
+        "U02",
+        "P04"
+      ],
+      "proposed_home": "View / preferences (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d50e437b",
+      "title": "Environment Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/",
+      "archive_status": 200,
+      "sha256": "662ab49334d15bceb59f833239c98d80cc76130dfa5c0a98a4b32dd43da2d7ec",
+      "local_text": "research/local/swisssys-site/d50e437b2b3e3c55.txt",
+      "candidate_feature_ids": [
+        "U02"
+      ],
+      "proposed_home": "Preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-ef003764",
+      "title": "Display Tab - Environment Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/display/",
+      "archive_status": 200,
+      "sha256": "7166cd916941696d7fef3b557c088d88158b28b4d17face28390474de7006c95",
+      "local_text": "research/local/swisssys-site/ef0037642622a9c5.txt",
+      "candidate_feature_ids": [
+        "U02"
+      ],
+      "proposed_home": "Preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d0b3f29f",
+      "title": "Registration & Editing Tab - Environment Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/registration-editing/",
+      "archive_status": 200,
+      "sha256": "2aef3f837ebcdff652681bb462ac05e83512111dec5e6b274e24c9d8b418dfd9",
+      "local_text": "research/local/swisssys-site/d0b3f29f18c0565a.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-931301eb",
+      "title": "Files & Databases Tab - Environment Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/files-databases/",
+      "archive_status": 200,
+      "sha256": "c28d097674f3ba683946db39ed022cb6b4568143487f3f4bcceeeada1a99a1e8",
+      "local_text": "research/local/swisssys-site/931301ebc7aaa161.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-8691b4e3",
+      "title": "Ratings Tab - Environment Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/ratings/",
+      "archive_status": 200,
+      "sha256": "84c82e439f1fe87cac0246c05f3eb4a8b0f01b163d3cf7a0fbaaf30833e7d993",
+      "local_text": "research/local/swisssys-site/8691b4e38767a53c.txt",
+      "candidate_feature_ids": [
+        "U02"
+      ],
+      "proposed_home": "Preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e9a93203",
+      "title": "Scholastic Rating Setup",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/scholastic-rating-setup/",
+      "archive_status": 200,
+      "sha256": "0113f43d14153e3bbd4f4a1732ea28a13b6e38bc8815b74d258728e843a0ec6f",
+      "local_text": "research/local/swisssys-site/e9a932031c12c69d.txt",
+      "candidate_feature_ids": [
+        "R06",
+        "R07"
+      ],
+      "proposed_home": "Ratings / section settings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b11254ab",
+      "title": "Internet Tab - Environment Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/sync/",
+      "archive_status": 200,
+      "sha256": "271770a26eeb2f6689319bb86a24e21f0dd29383d925681b21fc61ccce26bfa5",
+      "local_text": "research/local/swisssys-site/b11254ab4d254bc0.txt",
+      "candidate_feature_ids": [
+        "O08"
+      ],
+      "proposed_home": "Event \u2192 Share",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1bc6a952",
+      "title": "Get Profile / Save Profile - Options Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/get-profile-save-profile/",
+      "archive_status": 200,
+      "sha256": "440ec6f11ed06e887c9b20102ac3421f3f120677ea8c1604a0992479ff5524cd",
+      "local_text": "research/local/swisssys-site/1bc6a952984554e3.txt",
+      "candidate_feature_ids": [
+        "E01",
+        "U03"
+      ],
+      "proposed_home": "Event / History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e8a8328e",
+      "title": "Language - Options Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/language/",
+      "archive_status": 200,
+      "sha256": "5ffd2084db53ee5a09f277871a5bafd3246657363901c14f850b83cc8d7481d3",
+      "local_text": "research/local/swisssys-site/e8a8328eadc2c1bd.txt",
+      "candidate_feature_ids": [
+        "U02"
+      ],
+      "proposed_home": "Preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d1c2fada",
+      "title": "Auto-Sync Environment Option",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/auto-sync-environment-option/",
+      "archive_status": 200,
+      "sha256": "04ed356ebcf863a8cbf7bb60ec6a8648f47ecdb5ab6bdb572dce959fb95938d8",
+      "local_text": "research/local/swisssys-site/d1c2fadab988203b.txt",
+      "candidate_feature_ids": [
+        "O08"
+      ],
+      "proposed_home": "Event \u2192 Share",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e8dfc647",
+      "title": "Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/team-menu/",
+      "archive_status": 200,
+      "sha256": "d1c8a2a2e1114a2cc8937a59ca15771fabb59aa5df281670584e120219e78160",
+      "local_text": "research/local/swisssys-site/e8dfc647f7f14550.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-a338a312",
+      "title": "Master Pair List - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/team-menu/master-pair-list/",
+      "archive_status": 200,
+      "sha256": "4ec107cdbe13f2ab67fb65ef6b4394b637fb64d7bf12175495540f7325a27e19",
+      "local_text": "research/local/swisssys-site/a338a312fde48332.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-876c7d32",
+      "title": "Pair Teams by Game Points - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/team-menu/pair-teams-by-game-points/",
+      "archive_status": 200,
+      "sha256": "aa1f02d7dead6683f2b8ff4694d7e27890d2d5409ecc20c9fadd2a4e8803e55c",
+      "local_text": "research/local/swisssys-site/876c7d32a0a4a726.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b6816bb8",
+      "title": "Database Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/database-menu/",
+      "archive_status": 200,
+      "sha256": "92f8919ee7374e064e533b5d019484450e93a641f9aad4af27385cc37d387f11",
+      "local_text": "research/local/swisssys-site/b6816bb85abac66f.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-aaf370eb",
+      "title": "Database Setup",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/database-menu/database-setup/",
+      "archive_status": 200,
+      "sha256": "74b7ea2fd832fec12e5a3cee9355d2af9aad7b2ed01ba7349df84f977df93878",
+      "local_text": "research/local/swisssys-site/aaf370eb723341d6.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-5d2a51a1",
+      "title": "Load Players from Database",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/database-menu/load-players-from-database/",
+      "archive_status": 200,
+      "sha256": "d0a74ed820de1abab66f778beb570dc581ec3b64869ba1f0046bbba0a6354786",
+      "local_text": "research/local/swisssys-site/5d2a51a191590fca.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-fccb49de",
+      "title": "Swap Primary and Secondary Databases - Database Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/database-menu/swap-primary-and-secondary-databases/",
+      "archive_status": 200,
+      "sha256": "fbb6ff5738ca27d6a210cc1666b080480dfcce9689cd606f2fa4257ff73aaf79",
+      "local_text": "research/local/swisssys-site/fccb49de42a64426.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d9b7f9f2",
+      "title": "Update Club From Database - Database Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/database-menu/update-club-from-database/",
+      "archive_status": 200,
+      "sha256": "f39fa80b3a63277a2f3a42d5d752be2b41a532eeea8922ab89c5cdade68001ea",
+      "local_text": "research/local/swisssys-site/d9b7f9f2baf7ba91.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-dea9043b",
+      "title": "Utilities Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/",
+      "archive_status": 200,
+      "sha256": "0a545896ace90e47eab08dd2a5acdce6d51af91717c292852c0f52277cf91d11",
+      "local_text": "research/local/swisssys-site/dea9043b39bd723d.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-31524b9b",
+      "title": "Clipboard",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/clipboard/",
+      "archive_status": 200,
+      "sha256": "24a6abd7e5b27878a99a1697a796f2ca78bc77e07283532a4ee1c2546a3a8763",
+      "local_text": "research/local/swisssys-site/31524b9bde560994.txt",
+      "candidate_feature_ids": [
+        "O05"
+      ],
+      "proposed_home": "Reports \u2192 Export",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-9c09dd7b",
+      "title": "Club Lists",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/club-lists/",
+      "archive_status": 200,
+      "sha256": "d7b9c907ec95d22e4d2e7cace9a4e2806549b209aaab7427356b6b1c5c4e19ee",
+      "local_text": "research/local/swisssys-site/9c09dd7bbb0481bc.txt",
+      "candidate_feature_ids": [
+        "E08"
+      ],
+      "proposed_home": "Club directory",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-dffd6839",
+      "title": "Database Troubleshooting",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/database-troubleshooting/",
+      "archive_status": 200,
+      "sha256": "aca0571f937e6aa90626ba6d5b6fe7612cdf9cd426e4652b1dee90f76e025997",
+      "local_text": "research/local/swisssys-site/dffd68395ae859df.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1faa50b0",
+      "title": "Delimited Text Files (DTF)",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/delimited-text-files-dtf/",
+      "archive_status": 200,
+      "sha256": "6cf6600ac2500846429f150f19b85ab7a08fcfe841811fc4b022e99cd727f8d0",
+      "local_text": "research/local/swisssys-site/1faa50b07abe9489.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R02"
+      ],
+      "proposed_home": "Players \u2192 Import",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d8a5c9d3",
+      "title": "Drag and Drop",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/drag-and-drop/",
+      "archive_status": 200,
+      "sha256": "4accb0bdbf7d84411ddfe01039784ea0afd6051d476e856d0165d537aa933dbe",
+      "local_text": "research/local/swisssys-site/d8a5c9d35e220f27.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R02"
+      ],
+      "proposed_home": "Players \u2192 Import",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-42fc7573",
+      "title": "Dump to Label File",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/dump-to-label-file/",
+      "archive_status": 200,
+      "sha256": "32b082a18e84dfa80c07c222953507fccba1c607712cfac998ab4ede3eb1a331",
+      "local_text": "research/local/swisssys-site/42fc75731d7c2e67.txt",
+      "candidate_feature_ids": [
+        "O03"
+      ],
+      "proposed_home": "Reports",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-92715c76",
+      "title": "Edit Commands",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/edit-commands/",
+      "archive_status": 200,
+      "sha256": "9bd0793e37ca16d401747dd22bbe5840a6533361ee8e49c04c557cfd925d27ce",
+      "local_text": "research/local/swisssys-site/92715c762179d216.txt",
+      "candidate_feature_ids": [
+        "R10",
+        "P07",
+        "U03"
+      ],
+      "proposed_home": "Editing (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f243d73a",
+      "title": "Error Messages",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/error-messages/",
+      "archive_status": 200,
+      "sha256": "ba6fa4461c576f65c1e8072982b56c4769d04ccc6530d172cde7ac071e48f668",
+      "local_text": "research/local/swisssys-site/f243d73a6c491c34.txt",
+      "candidate_feature_ids": [
+        "U01",
+        "U03"
+      ],
+      "proposed_home": "Help / diagnostics",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-6dee2e0f",
+      "title": "Exports Formatting",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/exports-formatting/",
+      "archive_status": 200,
+      "sha256": "1e3220510bfad7eef37f8b02edc0d4f9f1bc13fd8270391c2780b60906131f62",
+      "local_text": "research/local/swisssys-site/6dee2e0f43a25f73.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-6d0c3dde",
+      "title": "Fees - Overview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/fees-overview/",
+      "archive_status": 200,
+      "sha256": "6e1e7503fcfcc7948980116bc2baa4e76285a754aff897077500c2a19723c8e2",
+      "local_text": "research/local/swisssys-site/6d0c3dde32eda1ab.txt",
+      "candidate_feature_ids": [
+        "R13"
+      ],
+      "proposed_home": "Players / Reports \u2192 Fees",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-264b95f1",
+      "title": "Link Settings with Section",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/link-settings-with-section/",
+      "archive_status": 200,
+      "sha256": "9311ae5a3079e4d359abbd26defe108689ed5f74fc0bd7a458819a7d577106de",
+      "local_text": "research/local/swisssys-site/264b95f1f42169cc.txt",
+      "candidate_feature_ids": [
+        "E04",
+        "U05"
+      ],
+      "proposed_home": "Templates / settings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-92ca8e61",
+      "title": "Player Roster",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/player-roster/",
+      "archive_status": 200,
+      "sha256": "b57001c1ef6be7ef3b239260c1d7c2da93b5bcca21771a884c2e59cf84becf66",
+      "local_text": "research/local/swisssys-site/92ca8e6183ff144b.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-dcdeceef",
+      "title": "Post-Event Rating Formulas",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/post-event-rating-formulas/",
+      "archive_status": 200,
+      "sha256": "a466f4a8902bce32dfdbffb4d3cb1ec594ef0b0d5d4e54f13493ae418b8ad331",
+      "local_text": "research/local/swisssys-site/dcdeceef73b0787e.txt",
+      "candidate_feature_ids": [
+        "R06",
+        "R07",
+        "S05"
+      ],
+      "proposed_home": "Ratings / Analysis",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-17bef37e",
+      "title": "Print and Other Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/print-and-other-options/",
+      "archive_status": 200,
+      "sha256": "d50561d7af279ffd0088757c3a04646cbce781fa76e842db76d5ce79e8b75203",
+      "local_text": "research/local/swisssys-site/17bef37e4a4420e9.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-726dca56",
+      "title": "Profile Files",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/profile-files/",
+      "archive_status": 200,
+      "sha256": "62ba7b8ea29154e958b43c0b08399ac9b6ed35c1fe03074a90eed4f4cb2e9539",
+      "local_text": "research/local/swisssys-site/726dca56bc59d293.txt",
+      "candidate_feature_ids": [
+        "E04",
+        "U05"
+      ],
+      "proposed_home": "Templates / settings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-0d9548be",
+      "title": "Quad Tournaments",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/quad-tournaments/",
+      "archive_status": 200,
+      "sha256": "ed1af5f7acab832bf4291a8b383ce5a4aa328297f62771e62e81e613d6512269",
+      "local_text": "research/local/swisssys-site/0d9548be843c0a53.txt",
+      "candidate_feature_ids": [
+        "F02",
+        "X01"
+      ],
+      "proposed_home": "Players \u2192 Make quads",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-794dd9af",
+      "title": "Ratings - Overview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/ratings-overview/",
+      "archive_status": 200,
+      "sha256": "82875a2351ee11b16481a0a300eb8878a1fd52b6f1b4db2af78cced0ce3fad64",
+      "local_text": "research/local/swisssys-site/794dd9af194c994f.txt",
+      "candidate_feature_ids": [
+        "R06",
+        "R07"
+      ],
+      "proposed_home": "Ratings / section settings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1e4a76aa",
+      "title": "Ratings Reports",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/ratings-reports/",
+      "archive_status": 200,
+      "sha256": "0bb7d2bd97871a4dc2b1b9cbe7ba4cb1ce2ceae4feb7b0da715ae2f269ad96eb",
+      "local_text": "research/local/swisssys-site/1e4a76aa0aa69b5b.txt",
+      "candidate_feature_ids": [
+        "O06",
+        "O07"
+      ],
+      "proposed_home": "Reports \u2192 Rating submission",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-37ae6982",
+      "title": "Registration Setup",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/registration-setup/",
+      "archive_status": 200,
+      "sha256": "04a3838bbd0107f768e6e0c71b9211ee2a48c8995b053dd95393f70f8bdafb7b",
+      "local_text": "research/local/swisssys-site/37ae698269c9be8b.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-48311a6e",
+      "title": "Registration Tools",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/registration-tools/",
+      "archive_status": 200,
+      "sha256": "6bc3a61b14d1e1a8189d03d8fdab763899e430c719a7dcccc301c3d8215db269",
+      "local_text": "research/local/swisssys-site/48311a6e42fc949b.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-311dc8bd",
+      "title": "Replacement Player List",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/replacement-player-list/",
+      "archive_status": 200,
+      "sha256": "5cedb7ceb41ae52b61a83499dc41f532f6a5609a337655dadc79673a7ab6aff4",
+      "local_text": "research/local/swisssys-site/311dc8bdfc4037b1.txt",
+      "candidate_feature_ids": [
+        "P03"
+      ],
+      "proposed_home": "Pairing review",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7514d9e5",
+      "title": "Section Panels",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/section-panels/",
+      "archive_status": 200,
+      "sha256": "b55afa77f143639c7bd49daefb2b52a00dc739b0af97c8203388bed8df6bb614",
+      "local_text": "research/local/swisssys-site/7514d9e528eae18f.txt",
+      "candidate_feature_ids": [
+        "E02"
+      ],
+      "proposed_home": "Event / sections",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d8b4b6ac",
+      "title": "The Ladder Dialog",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/the-ladder-dialog/",
+      "archive_status": 200,
+      "sha256": "56e220d51e13bfc0ebc10c8acd16dec593a1f8d28aed9c1ee90b4a41c215421a",
+      "local_text": "research/local/swisssys-site/d8b4b6ace9424486.txt",
+      "candidate_feature_ids": [
+        "F06"
+      ],
+      "proposed_home": "Standings / format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-84eadc9c",
+      "title": "Toolbar",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/toolbar/",
+      "archive_status": 200,
+      "sha256": "025b988aebcddd6b3ff7e9bb6217be761e97b14ff615f3c779f154bfb948a6a3",
+      "local_text": "research/local/swisssys-site/84eadc9c40185028.txt",
+      "candidate_feature_ids": [
+        "U02"
+      ],
+      "proposed_home": "Preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-0df16909",
+      "title": "Tournament Types",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/tournament-types/",
+      "archive_status": 200,
+      "sha256": "2eb03a43624138a2274c3e6eda2e634c57e9227fafafbd0a2ebb8a5cdfdaced9",
+      "local_text": "research/local/swisssys-site/0df16909fb80a376.txt",
+      "candidate_feature_ids": [
+        "F01",
+        "F02",
+        "F03",
+        "F07",
+        "F08",
+        "F09",
+        "F10"
+      ],
+      "proposed_home": "Section format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-19b3e84b",
+      "title": "Unrated Tournaments: Cautions",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/unrated-tournaments-cautions/",
+      "archive_status": 200,
+      "sha256": "89a989f9b034647b281b12623418a46742628dca187f310abfae8bd182d46bca",
+      "local_text": "research/local/swisssys-site/19b3e84b2a482ce4.txt",
+      "candidate_feature_ids": [
+        "F01",
+        "F02",
+        "F03",
+        "F07",
+        "F08",
+        "F09",
+        "F10"
+      ],
+      "proposed_home": "Section format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d452e7ff",
+      "title": "Internet Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/internet-menu/",
+      "archive_status": 200,
+      "sha256": "b927afa0d122fae531fdea8c48adcc8e839a2ac289ddde79e049a66a183d4c31",
+      "local_text": "research/local/swisssys-site/d452e7ff42460206.txt",
+      "candidate_feature_ids": [
+        "O08"
+      ],
+      "proposed_home": "Event \u2192 Share",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b2cc7504",
+      "title": "Online Tournament Assistant",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/internet-menu/online-tournament-assistant/",
+      "archive_status": 200,
+      "sha256": "384d287de28679bca5194f40e3b563e5e365e398d2b71d44d49542ab1e99f42b",
+      "local_text": "research/local/swisssys-site/b2cc750464b8644d.txt",
+      "candidate_feature_ids": [
+        "O08"
+      ],
+      "proposed_home": "Event \u2192 Share",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c8f836aa",
+      "title": "ChessRoster Integration Dialog",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/internet-menu/chessroster-dialog/",
+      "archive_status": 200,
+      "sha256": "63211fff0a82a68f1dcf8ed1035b67367c2232c9dc1c7c58e23ce2ac6d5d52ef",
+      "local_text": "research/local/swisssys-site/c8f836aaced342f0.txt",
+      "candidate_feature_ids": [
+        "O08"
+      ],
+      "proposed_home": "Event \u2192 Share",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e6be179f",
+      "title": "Pairings",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/",
+      "archive_status": 200,
+      "sha256": "58aa4fee85685b477d5d8153f6d3ee73937d4824e3cc44da2d02808f46b8721e",
+      "local_text": "research/local/swisssys-site/e6be179f5bf07b01.txt",
+      "candidate_feature_ids": [
+        "P01",
+        "P04"
+      ],
+      "proposed_home": "Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-6c1a9191",
+      "title": "Accelerated Pairings",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/accelerated-pairings/",
+      "archive_status": 200,
+      "sha256": "7fc1c11d9433c5bde72af6c2f249701b09d12c530800a0043d613423d14ec8e7",
+      "local_text": "research/local/swisssys-site/6c1a9191ab360281.txt",
+      "candidate_feature_ids": [
+        "F05"
+      ],
+      "proposed_home": "Section rules",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-dbb4c940",
+      "title": "bbpPairings Engine",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/bbppairings-engine/",
+      "archive_status": 200,
+      "sha256": "3562284f61c057c1f01d66349e3ea1137cc477980c77dd4f479d4292fd4dc570",
+      "local_text": "research/local/swisssys-site/dbb4c940f3a985a7.txt",
+      "candidate_feature_ids": [
+        "F11"
+      ],
+      "proposed_home": "Section policy",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-949ca407",
+      "title": "Check Pairing Integrity",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/check-pairing-integrity/",
+      "archive_status": 200,
+      "sha256": "a96aeda78d48315ae916bfa7db4ccb26b28d6b905b346c3edebfc32b7c6b61e3",
+      "local_text": "research/local/swisssys-site/949ca40796ab0287.txt",
+      "candidate_feature_ids": [
+        "P02"
+      ],
+      "proposed_home": "Pairing review",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-12bb022c",
+      "title": "Columns - Adjusting",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/columns-adjusting/",
+      "archive_status": 200,
+      "sha256": "efa983008cb6ff55c44a9218a8bb75645bc15d85e79cb73c6ec9de8eff06d387",
+      "local_text": "research/local/swisssys-site/12bb022cfd6999b9.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-13c6f559",
+      "title": "Create PGN Headers - Utilities Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/create-pgn-headers/",
+      "archive_status": 200,
+      "sha256": "57e007ac2902c6260419fbb1010814e6367227d97f7f438f511944b538159192",
+      "local_text": "research/local/swisssys-site/13c6f5596adfa165.txt",
+      "candidate_feature_ids": [
+        "O05"
+      ],
+      "proposed_home": "Reports \u2192 Export",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-efb49c78",
+      "title": "Double-Round Tournaments",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/double-blitz-style-tournaments/",
+      "archive_status": 200,
+      "sha256": "85bbcb63dae0b6c95307b7b08e84dd0d1e6de9cd4a84b8971c1a8fd205fee847",
+      "local_text": "research/local/swisssys-site/efb49c788e29e965.txt",
+      "candidate_feature_ids": [
+        "F04"
+      ],
+      "proposed_home": "Rounds / format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e8e0654f",
+      "title": "Board Conflict Dialog",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/board-conflict-dialog/",
+      "archive_status": 200,
+      "sha256": "164bab1a63ce6aa55d71ff6c8e5d810bd9f6efc71ecfd8faa68abd38a2c4ce7d",
+      "local_text": "research/local/swisssys-site/e8e0654f35dc2431.txt",
+      "candidate_feature_ids": [
+        "E05"
+      ],
+      "proposed_home": "Event \u2192 Boards",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-ad40ed15",
+      "title": "Expanded Team Names (Master List) - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/expanded-team-names-master-list/",
+      "archive_status": 200,
+      "sha256": "bd523845994bff2d517a05882289efbe5bb37e57a98cf09d8543e207f8ba8496",
+      "local_text": "research/local/swisssys-site/ad40ed15520bb656.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c80240b4",
+      "title": "Fide Default Mode Limitations",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/fide-default-mode-limitations/",
+      "archive_status": 200,
+      "sha256": "861cfbfbc950135217accfffd13c4ea89cdd993a57c720e02e4352ee0ac85517",
+      "local_text": "research/local/swisssys-site/c80240b49238dfc6.txt",
+      "candidate_feature_ids": [
+        "F11"
+      ],
+      "proposed_home": "Section policy",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-05f85be8",
+      "title": "Fixed-Roster Tournaments - Overview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/fixed-roster-tournaments-overview/",
+      "archive_status": 200,
+      "sha256": "81ce383a4912faa2707c1d09f32d372de1dfbf5cca0eac7416afa4629ae8a59c",
+      "local_text": "research/local/swisssys-site/05f85be8cf57ca20.txt",
+      "candidate_feature_ids": [
+        "F08"
+      ],
+      "proposed_home": "Teams / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-a7cd9e72",
+      "title": "Format Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/format-options/",
+      "archive_status": 200,
+      "sha256": "871f9953831d2607adfe983456c742fe99f4d7c82f6c3e85b6831f80a1ab0f29",
+      "local_text": "research/local/swisssys-site/a7cd9e7203f7679a.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7e4e7069",
+      "title": "Headers in Printouts",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/headers-in-printouts/",
+      "archive_status": 200,
+      "sha256": "f717e808e45faddd1136c9ca190adc1150a89b46a49e531f3227381378897922",
+      "local_text": "research/local/swisssys-site/7e4e706941d6ab5c.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7e9ca2a9",
+      "title": "Pair Chart Formatting",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/pair-chart-formatting/",
+      "archive_status": 200,
+      "sha256": "a430256951c34bdb42e7af4ae83110cc6d11effc226c74f9f6f23e02a9970ac4",
+      "local_text": "research/local/swisssys-site/7e9ca2a94ace4149.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-6182e8b5",
+      "title": "Pairings Setup Dialog",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/pairings-setup-dialog/",
+      "archive_status": 200,
+      "sha256": "08e2ece73e551f98160d4557a2899c7483d2e492c0603543a0e1e323aadd9538",
+      "local_text": "research/local/swisssys-site/6182e8b53d318242.txt",
+      "candidate_feature_ids": [
+        "P03"
+      ],
+      "proposed_home": "Pairing review",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-ee6d15eb",
+      "title": "Standings Formatting",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/standings-formatting/",
+      "archive_status": 200,
+      "sha256": "07c56c2862f539415563070ff12462f85b8096dbaef54c6a8cd3ac74c9f75b55",
+      "local_text": "research/local/swisssys-site/ee6d15ebdcf524b4.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4444a827",
+      "title": "Limitations of the Fide-only Version",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/limitations-of-the-fide-only-version/",
+      "archive_status": 200,
+      "sha256": "d386d610a9b6624596e7c40df9abe62728a781b967e34605dda8f28244efb44f",
+      "local_text": "research/local/swisssys-site/4444a8274f7bea46.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-aa94797c",
+      "title": "Merge - Utilities Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/merge/",
+      "archive_status": 200,
+      "sha256": "5f9b33ba757b0c26fa81a55edabf05a94c9891b0766b334541a7d423380788f8",
+      "local_text": "research/local/swisssys-site/aa94797ccb888ebd.txt",
+      "candidate_feature_ids": [
+        "E06",
+        "R09"
+      ],
+      "proposed_home": "Manage sections \u2192 Combine",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-5bafd76c",
+      "title": "PAB (Pairing-Allocated Bye)",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/pab-program-allocated-bye/",
+      "archive_status": 200,
+      "sha256": "be37a78b6ae891604f09a2f990bfe4d8e12beed37c73934f1a6c6b7b1e385e4f",
+      "local_text": "research/local/swisssys-site/5bafd76c2bb27d52.txt",
+      "candidate_feature_ids": [
+        "R08",
+        "P06"
+      ],
+      "proposed_home": "Player inspector / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-283f454f",
+      "title": "Side Game Sections",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/side-game-sections/",
+      "archive_status": 200,
+      "sha256": "3e517d8b8d4cc4ceb78cabc13513fdc2e51ecf02e062753f9b341d8eb89d56bb",
+      "local_text": "research/local/swisssys-site/283f454f4ef14590.txt",
+      "candidate_feature_ids": [
+        "E07"
+      ],
+      "proposed_home": "Sections / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-99f491ef",
+      "title": "Print Team Report Sheets",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/print-team-report-sheets/",
+      "archive_status": 200,
+      "sha256": "4e9f9a06599a45622d9db25159c9aa612197ed207c7974b2eebee67997f8df34",
+      "local_text": "research/local/swisssys-site/99f491eff96c202a.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d92223bf",
+      "title": "Results Editor",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/results-editor/",
+      "archive_status": 200,
+      "sha256": "a4b6d98448f3923d5107906348c5aba7befd16b3c47eba860c2024a3b38e240b",
+      "local_text": "research/local/swisssys-site/d92223bffae3eb61.txt",
+      "candidate_feature_ids": [
+        "P07"
+      ],
+      "proposed_home": "Rounds \u2192 History",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-acf0cdb7",
+      "title": "Send Emails - Utilities Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/send-emails/",
+      "archive_status": 200,
+      "sha256": "25261c2f2f91a437ed8909e64cd77b3e3926b1b30ff5579688ab8eb49f0fc087",
+      "local_text": "research/local/swisssys-site/acf0cdb7e33390f9.txt",
+      "candidate_feature_ids": [
+        "O09"
+      ],
+      "proposed_home": "Share / messages",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7fecfd90",
+      "title": "Team Results or Individual Results?",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/team-results-or-individual-results/",
+      "archive_status": 200,
+      "sha256": "0d96c18e448401f92edf607e7a04e72f0f13f80527a456481040b5141ef41e74",
+      "local_text": "research/local/swisssys-site/7fecfd90492b48f4.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4b39366c",
+      "title": "Vanilla Pairings",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/vanilla-pairings-pairings-setup/",
+      "archive_status": 200,
+      "sha256": "3c2d3e4e2029917e63450152a3c9f9e063c6c36cce83f379b7da08e16f5db058",
+      "local_text": "research/local/swisssys-site/4b39366cb66b3883.txt",
+      "candidate_feature_ids": [
+        "P03"
+      ],
+      "proposed_home": "Pairing review",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-dbe5e3b9",
+      "title": "Wall Chart Formatting",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/wall-chart-formatting/",
+      "archive_status": 200,
+      "sha256": "efce22264a8db6b0a9a2feca3e57af1965e58a43ecfb6cc2e15d872488117c50",
+      "local_text": "research/local/swisssys-site/dbe5e3b98e737678.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-cb37fbdb",
+      "title": "Registration",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/",
+      "archive_status": 200,
+      "sha256": "3eff0bc68e53d5b40831b335209d87b988de2be6c9fad380e66360378bc6ef7e",
+      "local_text": "research/local/swisssys-site/cb37fbdb4bdeb129.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-57469c8f",
+      "title": "Board Order and Active Team Members",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/board-order-and-active-team-members/",
+      "archive_status": 200,
+      "sha256": "b42834274be4ae2ec374e76f56782e2cdd5c756e2d445614b6bb75fd1c503db5",
+      "local_text": "research/local/swisssys-site/57469c8f0b210d17.txt",
+      "candidate_feature_ids": [
+        "F08"
+      ],
+      "proposed_home": "Teams / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f3f1c3d3",
+      "title": "Update Players from Database",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/update-players-from-database/",
+      "archive_status": 200,
+      "sha256": "f794f31a7ba7b3513c8c49944fa5883bc0f74537c57197a1cfd8ad15d95d743e",
+      "local_text": "research/local/swisssys-site/f3f1c3d349d90eee.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c4feaea0",
+      "title": "Update Players from USCF or FIDE Site",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/update-players-from-uscf-or-fide-site/",
+      "archive_status": 200,
+      "sha256": "9e3c79e730dcdd111a748999077113016fcc6289e4da5393c3e793965b33c777",
+      "local_text": "research/local/swisssys-site/c4feaea09bdda797.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-577d9460",
+      "title": "Database Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/database-menu/",
+      "archive_status": 200,
+      "sha256": "59daa9aad08915245147f41e7a7a6f5e1acca45265734931a89c5d0b4a5749c6",
+      "local_text": "research/local/swisssys-site/577d94607fcbe955.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-a5eb1cc3",
+      "title": "Database Overview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/database-overview/",
+      "archive_status": 200,
+      "sha256": "ef73e0781b4cbfa8f20f3e3e35091465ddd2b573803d50ca274d4823a4eda6c2",
+      "local_text": "research/local/swisssys-site/a5eb1cc39dbc7258.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-cd6fa61c",
+      "title": "Database Wizard",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/database-wizard/",
+      "archive_status": 200,
+      "sha256": "7564d3785eab705ae68438e6554235027c935df1611572156d5b8bde70873379",
+      "local_text": "research/local/swisssys-site/cd6fa61ce85b9380.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-9be768e2",
+      "title": "Downloading USCF Database",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/downloading-uscf-database/",
+      "archive_status": 200,
+      "sha256": "e24acf5009946519350cf05d007adfbffcf3f763855889cbcbaea125686dfae0",
+      "local_text": "research/local/swisssys-site/9be768e2b6e31a40.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-216a06f2",
+      "title": "Downloading CFC Database",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/downloading-cfc-database/",
+      "archive_status": 200,
+      "sha256": "85a64d32ad549b987232c207c8152078f50d12a6dde6b842cd1584493cf592bd",
+      "local_text": "research/local/swisssys-site/216a06f2a74065b4.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4578f926",
+      "title": "Downloading FIDE Database",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/downloading-fide-database/",
+      "archive_status": 200,
+      "sha256": "197b795b00677fffdc877e5407f08a449f87a2e29ae734722afa478bdb6785d0",
+      "local_text": "research/local/swisssys-site/4578f926e53b7dbe.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b54e34bd",
+      "title": "Legacy Database Formats",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/legacy-database-formats/",
+      "archive_status": 200,
+      "sha256": "401bc6f2e8bf98e5996dfa4417e077be6b2036656adaf84d6c295448ba73f102",
+      "local_text": "research/local/swisssys-site/b54e34bd0d68c311.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-11e29e56",
+      "title": "Estimated and Provisional Ratings",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/estimated-and-provisional-ratings/",
+      "archive_status": 200,
+      "sha256": "556d5bd603f0020077d915288e18c98203bc42801e85e5e272e6fe1d4d36ec03",
+      "local_text": "research/local/swisssys-site/11e29e5669ec967a.txt",
+      "candidate_feature_ids": [
+        "R06",
+        "R07",
+        "S05"
+      ],
+      "proposed_home": "Ratings / Analysis",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e8ed6c0e",
+      "title": "Online Player Search",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/online-player-search/",
+      "archive_status": 200,
+      "sha256": "9cc1ec06dbd26b902f187f6bf57eed5d70b4bd7283b4cb4f6e67c5b1d1e16c4c",
+      "local_text": "research/local/swisssys-site/e8ed6c0e2942cd52.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7b492b80",
+      "title": "FIDE Player List",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/fide-player-list/",
+      "archive_status": 200,
+      "sha256": "a1ae2c0eba4b2febbe417852a349070d5cd134a987d25327ff026f0d8cd23bfb",
+      "local_text": "research/local/swisssys-site/7b492b8063c502e7.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1d9ff402",
+      "title": "Make Joint USCF Database",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/make-joint-uscf-database/",
+      "archive_status": 200,
+      "sha256": "3076b9b161d53a0f436b826a985ab0da879e46f906e32ab539ec89279bc7021e",
+      "local_text": "research/local/swisssys-site/1d9ff40279680a78.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7f1af2cd",
+      "title": "Network Mode",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/network-mode/",
+      "archive_status": 200,
+      "sha256": "d76c20de6cc61307a8c7b572f99e32fb2a8bd8bd496f19a28fff919f1fd3fd2f",
+      "local_text": "research/local/swisssys-site/7f1af2cd29f6c44b.txt",
+      "candidate_feature_ids": [
+        "R12"
+      ],
+      "proposed_home": "Registration staging",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f223bfff",
+      "title": "Registration Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/registration-options/",
+      "archive_status": 200,
+      "sha256": "f2759f66be1c97756281754916e35b58823779b537cfc5a9df5b5635ecbbc4e7",
+      "local_text": "research/local/swisssys-site/f223bffffde9484f.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-618230c1",
+      "title": "Ratings Report for CFC",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/ratings-report-for-cfc/",
+      "archive_status": 200,
+      "sha256": "ea17e9bc56306a94c492303282c89ca7bd56da34215685993b11128ff4a8c5c2",
+      "local_text": "research/local/swisssys-site/618230c1899deb2d.txt",
+      "candidate_feature_ids": [
+        "O06",
+        "O07"
+      ],
+      "proposed_home": "Reports \u2192 Rating submission",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-53fa1587",
+      "title": "Reporting",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/",
+      "archive_status": 200,
+      "sha256": "721a90639e5e1e93c1767b44edb1a2f113b1dc519939e069d6acba3e44595e66",
+      "local_text": "research/local/swisssys-site/53fa15877f0a6868.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O06",
+        "O07"
+      ],
+      "proposed_home": "Reports (index)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4598a293",
+      "title": "Events Page - Internet Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/events-page/",
+      "archive_status": 200,
+      "sha256": "5f34755900135d637a58b9c57fb10a049d633050a025fcbc0dbe9841a3539a03",
+      "local_text": "research/local/swisssys-site/4598a293ae34395a.txt",
+      "candidate_feature_ids": [
+        "O08"
+      ],
+      "proposed_home": "Event \u2192 Share",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-4841565f",
+      "title": "Fonts - Options Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/fonts/",
+      "archive_status": 200,
+      "sha256": "5e4696225f2d254486ac9e888c06d2f33dff44dffb13d7badfb91a2d637dfecb",
+      "local_text": "research/local/swisssys-site/4841565f09d854b5.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-dd2a05ef",
+      "title": "Hosted Website",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/hosted-website/",
+      "archive_status": 200,
+      "sha256": "89ce87cdc138775fba53c0793843bb92e09c079f0ad0de97adbd8d8a5467ec13",
+      "local_text": "research/local/swisssys-site/dd2a05ef2091b939.txt",
+      "candidate_feature_ids": [
+        "O08"
+      ],
+      "proposed_home": "Event \u2192 Share",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-f9b4a607",
+      "title": "Jagged Columns",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/jagged-columns/",
+      "archive_status": 200,
+      "sha256": "0d8eda9002aee706d436157e20a3a47ffc399447558d5907b1cc24aca1a5d44e",
+      "local_text": "research/local/swisssys-site/f9b4a607ae8a36a5.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b2e1d39f",
+      "title": "Merge Very Small Teams - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/merge-very-small-teams/",
+      "archive_status": 200,
+      "sha256": "34cefdd2a31bfd356b6856ac03ccac0ddb3a4c19788821bdd8d89063ebcbbffd",
+      "local_text": "research/local/swisssys-site/b2e1d39fb9a2b2e6.txt",
+      "candidate_feature_ids": [
+        "F09",
+        "S03"
+      ],
+      "proposed_home": "Teams / Standings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b7b6312e",
+      "title": "Merged Tournaments",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/merged-tournaments/",
+      "archive_status": 200,
+      "sha256": "78b6458cc5831e0de92e578e9ced05f563fa22024bcf75cfdcb462cef9f60f0b",
+      "local_text": "research/local/swisssys-site/b7b6312e79c4ec0e.txt",
+      "candidate_feature_ids": [
+        "E06",
+        "R09"
+      ],
+      "proposed_home": "Manage sections \u2192 Combine",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e945bc3f",
+      "title": "My Events Page",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/my-events-page/",
+      "archive_status": 200,
+      "sha256": "0289121431c0fa445994a753d1a193e2cd98137469cdc168d4c05e0a95d04542",
+      "local_text": "research/local/swisssys-site/e945bc3f0d537e8f.txt",
+      "candidate_feature_ids": [
+        "O08"
+      ],
+      "proposed_home": "Event \u2192 Share",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-94594cc1",
+      "title": "Printing Overview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/printing-overview/",
+      "archive_status": 200,
+      "sha256": "c6ee60fb8eb070d619358e1f75d942dfadbd2b22937b8b841dfb75ddf1402134",
+      "local_text": "research/local/swisssys-site/94594cc192d8ff9b.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-96a85ad1",
+      "title": "Scoring Point",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/scoring-point/",
+      "archive_status": 200,
+      "sha256": "5dc4efbc5177ff3921e6c028ef5063d3add4afaed1981a01408c2df11912c97e",
+      "local_text": "research/local/swisssys-site/96a85ad11c808f34.txt",
+      "candidate_feature_ids": [
+        "S01"
+      ],
+      "proposed_home": "Standings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-2360c4dc",
+      "title": "USCF Database File",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/uscf-database-file/",
+      "archive_status": 200,
+      "sha256": "c7ee8017bb0b69682dde6289b520623184227c6f03393b78adbd2499901abe7a",
+      "local_text": "research/local/swisssys-site/2360c4dc87b28ce8.txt",
+      "candidate_feature_ids": [
+        "O06",
+        "O07"
+      ],
+      "proposed_home": "Reports \u2192 Rating submission",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d5268ffb",
+      "title": "Ratings Report for FIDE",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/ratings-report-for-fide/",
+      "archive_status": 200,
+      "sha256": "5762de1f68ae930e6492b44d7ccbeca732a934137adac0545b5165f33c57a47c",
+      "local_text": "research/local/swisssys-site/d5268ffbd70df38c.txt",
+      "candidate_feature_ids": [
+        "O06",
+        "O07"
+      ],
+      "proposed_home": "Reports \u2192 Rating submission",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-caf6159d",
+      "title": "Rating Report for DWZ",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/rating-report-for-dwz/",
+      "archive_status": 200,
+      "sha256": "d1cda52c883198b9fa84acbfb241461ce1d24a51fe20f2659bdc98b51be7c34a",
+      "local_text": "research/local/swisssys-site/caf6159d99d47032.txt",
+      "candidate_feature_ids": [
+        "O06",
+        "O07"
+      ],
+      "proposed_home": "Reports \u2192 Rating submission",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-615434fe",
+      "title": "Technical Help and Contact Information",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/technical-help-and-contact-information/",
+      "archive_status": 200,
+      "sha256": "e2c15eb98e34c3d10aa90f2e76827bbc29e96a6cc0375957495f900faf23e657",
+      "local_text": "research/local/swisssys-site/615434fedd726fc3.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-8e5d06e2",
+      "title": "Preview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/preview/",
+      "archive_status": 200,
+      "sha256": "9f615e30a6f31f02468455d35a3d1262f67a42d8b014075dcd7adf106af55198",
+      "local_text": "research/local/swisssys-site/8e5d06e2067f8a3c.txt",
+      "candidate_feature_ids": [
+        "O01",
+        "O02",
+        "U02"
+      ],
+      "proposed_home": "Reports / view preferences",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e8dc11a4",
+      "title": "Subtotals by Federation or Other Field - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/subtotals-by-federation-or-other-field/",
+      "archive_status": 200,
+      "sha256": "be2dff610720cabccf256986cc8ad0a2941f698201243742476b139a7773b1f7",
+      "local_text": "research/local/swisssys-site/e8dc11a426e32e8a.txt",
+      "candidate_feature_ids": [
+        "F09",
+        "S03"
+      ],
+      "proposed_home": "Teams / Standings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-030c3506",
+      "title": "Teams",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/",
+      "archive_status": 200,
+      "sha256": "1b3b14c80b37441001aee39324fa268cc38dca30ca4d35857578a9c8360e86b8",
+      "local_text": "research/local/swisssys-site/030c3506674b9800.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-19c7424e",
+      "title": "Byes - Overview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/byes-overview/",
+      "archive_status": 200,
+      "sha256": "60efe22ea00985dca1806b323c03461a37b745d11071ff55aabf3abf8e62bcbb",
+      "local_text": "research/local/swisssys-site/19c7424e54378441.txt",
+      "candidate_feature_ids": [
+        "R08",
+        "P06"
+      ],
+      "proposed_home": "Player inspector / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d6801603",
+      "title": "Game Wins - Fixed Roster Tournaments",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/game-wins-fixed-roster-tournaments/",
+      "archive_status": 200,
+      "sha256": "7e6cb5c894fcdb896e26c6172343724e55052eb6db145077bb25d098b3639918",
+      "local_text": "research/local/swisssys-site/d6801603b0a414f4.txt",
+      "candidate_feature_ids": [
+        "F08"
+      ],
+      "proposed_home": "Teams / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e38eaa48",
+      "title": "Synchronize Team and Individual Results - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/synchronize-team-and-individual-results-team-men/",
+      "archive_status": 200,
+      "sha256": "2fb3a6523cf286a4787919d5da1e2f52a087d654ea8631591219d537b2fc562e",
+      "local_text": "research/local/swisssys-site/e38eaa48a0d47831.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d911dc84",
+      "title": "Team Match Tournaments (Scheveningen System)",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/team-match-tournaments/",
+      "archive_status": 200,
+      "sha256": "ed88c5d64a2d1ff1267349cd70520a9879ec43b4d5aa6fd143a88d1620d59cff",
+      "local_text": "research/local/swisssys-site/d911dc84a0040564.txt",
+      "candidate_feature_ids": [
+        "F10"
+      ],
+      "proposed_home": "Teams / format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-eeca80a9",
+      "title": "Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/team-menu/",
+      "archive_status": 200,
+      "sha256": "5beef6b1d1a6094e6f84b8be2c802458b4c8472f18d9163a592d7b4703121979",
+      "local_text": "research/local/swisssys-site/eeca80a9a35932d5.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7101a6c9",
+      "title": "Team Roster Formatting",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/team-roster-formatting/",
+      "archive_status": 200,
+      "sha256": "4acb9012447d545f359f08025c4b2523fc131c4ccc0604963219c7ec4dc760b9",
+      "local_text": "research/local/swisssys-site/7101a6c95ece0f20.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-7271db9c",
+      "title": "Team Roster/Standings - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/team-rosterstandings/",
+      "archive_status": 200,
+      "sha256": "76bdb3af8e9c4a2adf468f3df4b2bd52faa049730d5de095f8c0ed88178612cb",
+      "local_text": "research/local/swisssys-site/7271db9c5e119fbe.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-0b1e1178",
+      "title": "Teamcodes Overview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/teamcodes-overview/",
+      "archive_status": 200,
+      "sha256": "2172d8337c520dd08b4e8bbc6717c7d2c14af8f9ca6a8648b6761cbee10465cc",
+      "local_text": "research/local/swisssys-site/0b1e1178e5a6860d.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-557b470e",
+      "title": "Use Master Team Name List - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/use-master-team-name-list/",
+      "archive_status": 200,
+      "sha256": "bc72f30fb7d9648c48e72ef60b2fbf7ec8da70f3ccbee5fb60248a08927808af",
+      "local_text": "research/local/swisssys-site/557b470e60d4073c.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-df70cdcf",
+      "title": "Use Rollins Score System - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/use-rollins-score-system/",
+      "archive_status": 200,
+      "sha256": "37cd26c6d5e08a5c3fc5450f7d95cff2eba266862ea7ee641ff49d484b0419a3",
+      "local_text": "research/local/swisssys-site/df70cdcf1384ae88.txt",
+      "candidate_feature_ids": [
+        "F09",
+        "S03"
+      ],
+      "proposed_home": "Teams / Standings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d5e7f0a7",
+      "title": "Withdraw an Entire Team - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/withdraw-an-entire-team/",
+      "archive_status": 200,
+      "sha256": "0796881b872523a81e65497c0b5901519825c8ae99f314473bdf5e27930dfa78",
+      "local_text": "research/local/swisssys-site/d5e7f0a741a7bf3c.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-34dfde13",
+      "title": "Tournaments",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/",
+      "archive_status": 200,
+      "sha256": "8d1e82979cbaefae2e9d9fe8976e7b5e067a5a01e20f65197f8fef5d1124658d",
+      "local_text": "research/local/swisssys-site/34dfde130371a5d9.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-51243d1a",
+      "title": "Lot Numbers - Round Robin Tournaments",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/lot-numbers-round-robin-tournaments/",
+      "archive_status": 200,
+      "sha256": "04b60b7bced89e68045e087e895f5bfdf698c47f6a724dea4873ddfc8d960e79",
+      "local_text": "research/local/swisssys-site/51243d1a44115c2e.txt",
+      "candidate_feature_ids": [
+        "F03"
+      ],
+      "proposed_home": "Rounds / format",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-e3f30c49",
+      "title": "Number on a Team or Subtotal Group - Team Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/number-on-a-team-or-subtotal-group/",
+      "archive_status": 200,
+      "sha256": "31321c608402c8cb95c0c1894618c293b8694623747584e56eda9c07057ad817",
+      "local_text": "research/local/swisssys-site/e3f30c4939e219e9.txt",
+      "candidate_feature_ids": [
+        "F09",
+        "S03"
+      ],
+      "proposed_home": "Teams / Standings",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-6805fdc8",
+      "title": "Ratings Report for USCF - Utilities Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/ratings-report-for-uscf/",
+      "archive_status": 200,
+      "sha256": "4a2c4c759a293f663094f358fcb9ccf5af7c43610aa5a3a3e9ae57b44ece244b",
+      "local_text": "research/local/swisssys-site/6805fdc89aef0b49.txt",
+      "candidate_feature_ids": [
+        "O06",
+        "O07"
+      ],
+      "proposed_home": "Reports \u2192 Rating submission",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-b8188cf5",
+      "title": "Team Tournaments - Overview",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/team-tournaments-overview/",
+      "archive_status": 200,
+      "sha256": "e57111aaa7d56c6ede5db7ad2eb4004bc8ccdc4149cd63eb1c76222e9a8eaf41",
+      "local_text": "research/local/swisssys-site/b8188cf5d6d3329e.txt",
+      "candidate_feature_ids": [
+        "F08",
+        "F09",
+        "F10",
+        "O04"
+      ],
+      "proposed_home": "Teams (classify exact model)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1254f86b",
+      "title": "Teams-only Fixed Roster Events",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/teams-only-fixed-roster-events/",
+      "archive_status": 200,
+      "sha256": "868e00355b0727c0811ea509952c0d79462b44728054e88ff8531475a5f83979",
+      "local_text": "research/local/swisssys-site/1254f86bfa091460.txt",
+      "candidate_feature_ids": [
+        "F08"
+      ],
+      "proposed_home": "Teams / Rounds",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d3d9a6cd",
+      "title": "Tiebreak Systems",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/tiebreak-systems/",
+      "archive_status": 200,
+      "sha256": "23e6a7dfc8a14b15a1f868532edbed6fb85f1c6e5508af8d4d872f651e674e76",
+      "local_text": "research/local/swisssys-site/d3d9a6cd6a533e3b.txt",
+      "candidate_feature_ids": [
+        "S02"
+      ],
+      "proposed_home": "Standings / section rules",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-985bb5ab",
+      "title": "TRF Files",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/trf-files/",
+      "archive_status": 200,
+      "sha256": "3c203b20d11c4ba6f62d9abeb62e1f2ae4444f4a2ad815df10e26c4789fe35f7",
+      "local_text": "research/local/swisssys-site/985bb5ab1b2d6f63.txt",
+      "candidate_feature_ids": [
+        "O06",
+        "O07"
+      ],
+      "proposed_home": "Reports \u2192 Rating submission",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-683da080",
+      "title": "Utilities Menu",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/utilities-menu/",
+      "archive_status": 200,
+      "sha256": "2f4b02ef5dd7d44d4254d167d458ebdb9d5ea17d066eb2a0db2b41d1df47d37e",
+      "local_text": "research/local/swisssys-site/683da080f9254b1e.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-1f9f0077",
+      "title": "License and Purchasing",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/license-and-purchasing/",
+      "archive_status": 200,
+      "sha256": "bea3bb62c234714bb724bcef3ec27fee08f0ce0b9a1f569388811f9f87da70d0",
+      "local_text": "research/local/swisssys-site/1f9f007731526935.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-0ec30b50",
+      "title": "Problem Summary - Pairing Logic Dialog",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/problem-summary/",
+      "archive_status": 200,
+      "sha256": "318e97f2256fcf200c33b66d5353a6e2576d1ec2c6378c7c3a50ebe4d030b3ec",
+      "local_text": "research/local/swisssys-site/0ec30b5032911b20.txt",
+      "candidate_feature_ids": [
+        "P02"
+      ],
+      "proposed_home": "Pairing review",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-d638e5d7",
+      "title": "Rating Range Restrictions",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/rating-range-restrictions/",
+      "archive_status": 200,
+      "sha256": "7dcf51575e5681761877379a4e451ca8eefde6ad982a1298286a3de20523157d",
+      "local_text": "research/local/swisssys-site/d638e5d7b6055e24.txt",
+      "candidate_feature_ids": [
+        "S04",
+        "S06"
+      ],
+      "proposed_home": "Standings \u2192 Prizes",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-5216e7a9",
+      "title": "Reference",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/reference/",
+      "archive_status": 200,
+      "sha256": "3b2a09ea96da84790d1c9524d06f859d8225a4e580bd444f53eba7a6a474a39f",
+      "local_text": "research/local/swisssys-site/5216e7a9bee60da2.txt",
+      "candidate_feature_ids": [
+        "U01"
+      ],
+      "proposed_home": "Orientation / index / tutorial (check linked feature topics)",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-07920514",
+      "title": "Club Options",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/reference/club-options/",
+      "archive_status": 200,
+      "sha256": "246ba75c6c93302fe72f5c491effe786edb420ecd08db50abb17a620ea407b6a",
+      "local_text": "research/local/swisssys-site/079205149bcb3dfe.txt",
+      "candidate_feature_ids": [
+        "E08"
+      ],
+      "proposed_home": "Club directory",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-73e8ce2d",
+      "title": "Index Database",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/reference/index-database/",
+      "archive_status": 200,
+      "sha256": "a52c6a64672e89e8bc6bf7cd496957aa4965846e259b2415e48eb5ccac79325b",
+      "local_text": "research/local/swisssys-site/73e8ce2dc086fa31.txt",
+      "candidate_feature_ids": [
+        "R03",
+        "R06",
+        "R11"
+      ],
+      "proposed_home": "Club / Data sources",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-363baf4b",
+      "title": "Pair Numbers",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/reference/pair-numbers/",
+      "archive_status": 200,
+      "sha256": "16cdaacd0bc83f713a030d9fcb1be98dccc33dadd4a68ef95ccb1295e870037d",
+      "local_text": "research/local/swisssys-site/363baf4b24e677a7.txt",
+      "candidate_feature_ids": [
+        "R10"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-729b1acb",
+      "title": "Prize Class Rating Ranges",
+      "url": "https://docs.chessroster.com/swisssys/app-docs/reference/prize-class-rating-ranges/",
+      "archive_status": 200,
+      "sha256": "ae239fcc687bb3b37617ad265164b40e19659d7f7d0e34c98552e3566da62939",
+      "local_text": "research/local/swisssys-site/729b1acb804694b0.txt",
+      "candidate_feature_ids": [
+        "S04",
+        "S06"
+      ],
+      "proposed_home": "Standings \u2192 Prizes",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-afdbbfa6",
+      "title": "Downloading, Installing & Activating",
+      "url": "https://docs.chessroster.com/swisssys/downloading-installing-activating/",
+      "archive_status": 200,
+      "sha256": "005fc577296189bb4faadec39434bbc2a45ad622bc98615f9be96efb2c976fde",
+      "local_text": "research/local/swisssys-site/afdbbfa6252b9944.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-af2a8bae",
+      "title": "Standard Activation",
+      "url": "https://docs.chessroster.com/swisssys/downloading-installing-activating/standard-activation/",
+      "archive_status": 200,
+      "sha256": "e8f50a5c4c5038e04598326900ecac8bf08f6415de5afa29101d529e1826d6f6",
+      "local_text": "research/local/swisssys-site/af2a8baebc5e3ceb.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-8607d781",
+      "title": "Unlocking Code Activation",
+      "url": "https://docs.chessroster.com/swisssys/downloading-installing-activating/unlocking-code-activation/",
+      "archive_status": 200,
+      "sha256": "24985f40c7ac1a921849da895e7223fe6db286ceeb1246e03151d6ed1c603c3d",
+      "local_text": "research/local/swisssys-site/8607d781ae84afd4.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-de962e43",
+      "title": "Chess Federation of Canada Registrations",
+      "url": "https://docs.chessroster.com/swisssys/downloading-installing-activating/cfc-activation/",
+      "archive_status": 200,
+      "sha256": "b21025f3008b00b13a0886ce9e793c8f1261a118581401c4fe354e4596df3280",
+      "local_text": "research/local/swisssys-site/de962e43fa4d0a41.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-788d7d5a",
+      "title": "Removing SwissSys Registration",
+      "url": "https://docs.chessroster.com/swisssys/downloading-installing-activating/remove-registration/",
+      "archive_status": 200,
+      "sha256": "4f9b1e2e05dfe4126eb07ccca375fff665187f8d1a4cb14e5feffe8fd4c092a2",
+      "local_text": "research/local/swisssys-site/788d7d5ac97ca573.txt",
+      "candidate_feature_ids": [
+        "R01",
+        "R04",
+        "R08"
+      ],
+      "proposed_home": "Players",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-a9b3cf91",
+      "title": "System Requirements",
+      "url": "https://docs.chessroster.com/swisssys/system-requirements/",
+      "archive_status": 200,
+      "sha256": "d30e4c872339bbe6237cb108a0c225e02806663cf4080ddbab083bc62816ace4",
+      "local_text": "research/local/swisssys-site/a9b3cf91db6bb5d0.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-c5bb96e3",
+      "title": "Version History",
+      "url": "https://docs.chessroster.com/swisssys/versions/",
+      "archive_status": 200,
+      "sha256": "e36039eb2e6f96222c36f931b67f39bd9af47ddc3c50763a590a3bfda67809db",
+      "local_text": "research/local/swisssys-site/c5bb96e32eddb325.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    },
+    {
+      "source_id": "SS-5435994b",
+      "title": "Transferring Your License",
+      "url": "https://docs.chessroster.com/swisssys/transferring-license/",
+      "archive_status": 200,
+      "sha256": "4d887f67a5571f11afa728492e7a8794c7fee66f4395787aa11f37c3a90dc94c",
+      "local_text": "research/local/swisssys-site/5435994b631b263f.txt",
+      "candidate_feature_ids": [
+        "U04"
+      ],
+      "proposed_home": "Help / installation",
+      "exhaustive_extraction": "pending",
+      "reference_app_test": "not run"
+    }
+  ]
+}

@@ -8,7 +8,16 @@ usable printing. Inspired by SwissSys workflows and Chess Auto Prep V2's UI.
 AGPLv3 [LICENSE](LICENSE) is retained. Platform and release boundaries below
 are recommendations awaiting product decisions, not promises of shipped features.
 
-Start with the [product plan](docs/PRODUCT_PLAN.md), then:
+Start with the expanded [full feature map](docs/FULL_FEATURE_MAP.md),
+[TD experience specification](docs/TD_EXPERIENCE.md), and
+[build-agent handoff](docs/BUILD_HANDOFF.md). The original
+[product plan](docs/PRODUCT_PLAN.md) defines the first delivery tranche.
+
+The [SwissSys archive coverage](research/SWISSSYS_ARCHIVE.md) and
+[page checklist](research/SWISSSYS_TOPIC_LEDGER.md) distinguish saved pages from
+reviewed requirements and tested parity.
+
+Supporting plans:
 
 | Document | Purpose |
 |---|---|

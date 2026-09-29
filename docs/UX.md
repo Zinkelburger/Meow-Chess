@@ -1,5 +1,10 @@
 # Event workspace and design system
 
+> Expanded scope: [full SwissSys feature map](FULL_FEATURE_MAP.md),
+> [current TD experience](TD_EXPERIENCE.md), and [build handoff](BUILD_HANDOFF.md).
+> The initial US Chess release below is a tranche of the larger product target.
+
+
 This is an interaction specification, not a built screen or tested mockup.
 
 ## Main workspace

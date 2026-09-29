@@ -33,3 +33,21 @@ rating calibration. These are named future acceptance gates, not passing checks.
 
 The only executable Dart artifact is the isolated planning POC. There is no
 `pubspec.yaml`, production `lib/`, platform scaffolding, database or pairing app.
+
+## Expanded scope and archive validation
+
+September 29, 2026 UTC: archived all 296 SwissSys navigation/sitemap pages; verified
+592 HTML/text hashes. Recursive discovery recorded 309 URLs: 296 HTTP 200, nine
+HTTP 404 obfuscated contact links, four product-site robots exclusions. No listed
+documentation URLs are missing. One article asset returned HTTP 200.
+
+Generated a 296-row page ledger and checked candidate references against 67 unique
+capability IDs. Candidate routing is research triage, not completed feature extraction.
+Both new research scripts passed Python syntax parsing; all 59 local Markdown links
+in the expanded top-level planning corpus resolve (the ignored reference cache lives
+in the main checkout). `git diff --check` passed.
+
+The in-conversation UI concept was visually inspected in the browser. Changing a
+sample result updated missing-result count and standings; section navigation,
+grouping preview and report view were exercised. It is a planning mockup, not a
+Flutter app, pairing implementation or usability study. No production code added.

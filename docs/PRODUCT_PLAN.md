@@ -1,5 +1,10 @@
 # Product plan
 
+> Expanded scope: [full SwissSys feature map](FULL_FEATURE_MAP.md),
+> [current TD experience](TD_EXPERIENCE.md), and [build handoff](BUILD_HANDOFF.md).
+> The initial US Chess release below is a tranche of the larger product target.
+
+
 Build a calm, dependable tool for the person running the tournament. The important
 moment is not creating an impressive dashboard: it is checking in the last player,
 making sensible sections, posting round one, correcting a result, and leaving with

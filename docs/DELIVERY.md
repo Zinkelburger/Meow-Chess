@@ -1,5 +1,10 @@
 # Delivery plan and research gates
 
+> Expanded scope: [full SwissSys feature map](FULL_FEATURE_MAP.md),
+> [current TD experience](TD_EXPERIENCE.md), and [build handoff](BUILD_HANDOFF.md).
+> The initial US Chess release below is a tranche of the larger product target.
+
+
 Planning completed for the accessible public evidence; application implementation
 has not begun. These are dependency-ordered milestones, not time estimates. Unanswered
 product preferences use the documented defaults rather than invented approval.
