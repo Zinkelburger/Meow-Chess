@@ -29,7 +29,7 @@ Every P0 must pass its acceptance scenario before that release is called complet
 | P02 | P0 | Pairing proposal, review, publish and manual overrides | Stale proposals fail; override records reason and re-runs integrity checks |
 | P03 | P0 | Double-round games | Six pairing rounds produce 12 games/player; both colors and results are preserved |
 | P04 | P0 | No unexplained fallback | Unsatisfiable constraints identify conflicts rather than inventing illegal pairings |
-| G01 | P0 | Keyboard result entry and unfinished games | Repeated key input is idempotent; missing result cannot masquerade as zero |
+| G01 | P0 | Large keyboard results grid with automatic advancement | W/L/D advances once; 1/0/0.5 Enter/Tab commits safely; held keys never fill multiple games; see RESULT_ENTRY.md |
 | G02 | P0 | Distinct played result, forfeit, bye, absence | Equal scores from a win and a bye remain different for rating and tie-breaks |
 | G03 | P0 | Revisioned corrections | Earlier result correction marks dependent standings/pairing proposals stale |
 | G04 | P0 | RR withdrawal semantics | Completed games remain in rating history even when excluded from prize standings |
@@ -69,6 +69,20 @@ UI access and safe historical behavior are both required, not optional polish.
 | D05 | P0 | Combine sections directly, including quads into Swiss | Quad 4 + bottom six becomes ten-player Swiss; other sections unchanged; pre-play undo exact |
 | D06 | P0 | Reviewed transitions after publication/play | Confirm whether games started; retain played games; same-progress merge has tested score/prize/reporting mapping |
 | D07 | P0 | Dependency-aware undo and actionable conflict resolution | No silent partial batch, historical deletion, fabricated game or approximation of unsupported export |
+
+## Duty-based workflow gaps
+
+Basis and scope are recorded in [TD duties](../research/notes/TD_DUTIES.md).
+The UI mechanisms below are proposals, not keystrokes mandated by US Chess.
+
+| ID | Priority | Requirement | Acceptance scenario |
+|---|---|---|---|
+| J01 | P0 | Separate unfinished/unreported/disputed result from temporary pairing treatment | TD can use supported next-round procedure without inventing a final draw or rating result |
+| J02 | P0 | Effective announced event conditions and changes | TD can see the published bye/prize/eligibility policy at the point of decision |
+| J03 | P0 | Lightweight private ruling/appeal record and handover | Game-linked decision, responsible TD and unresolved status survive restart; excluded from public reports |
+| J04 | P0 | House-player role and reviewed manual extra-game handling | Distinguish house player from ordinary entrant, membership exception and prize eligibility; preserve actual opponent |
+| J05 | P0 | Submission/correction follow-through | Export, portal submission and acceptance are different; correction identifies original event and changed records |
+| J06 | P0 | Results-entry usability rehearsal | Enter 20 outcomes with blanks/correction keyboard-only; stable perspective/focus; no wrong reciprocal result |
 
 ## Core invariants
 

@@ -6,6 +6,12 @@ starting the application build. No production application has been scaffolded.
 
 ## Read first
 
+Start with [actual TD duties and their evidence](../research/notes/TD_DUTIES.md).
+For every core workflow, trace duty → realistic scenario → interaction → acceptance
+test. A competitor menu item alone does not establish priority or usability.
+Read [Results entry](RESULT_ENTRY.md) before implementing any results table.
+
+
 1. [Full capability map](FULL_FEATURE_MAP.md) — expanded scope and stable IDs.
 2. [TD experience](TD_EXPERIENCE.md) and [first-class TD operations](TD_OPERATIONS.md) — current navigation, editable player inspector, byes, withdrawals, transfers and section combination.
 3. [Architecture](ARCHITECTURE.md) and [pairing](PAIRING.md).
@@ -78,7 +84,7 @@ custom widget toolkit to get the first event running.
 
 ## Verification matrix
 
-Test Swiss odd/even fields, unrated ties, odd score groups, repeat avoidance, colors,
+Test Swiss odd/even fields, unfinished/unreported games with separately recorded temporary pairing treatment, unrated ties, odd score groups, repeat avoidance, colors,
 multiple byes, late entries, withdrawals, no-show forfeits, correction after later
 round, and no legal automatic pairing. Quads: sizes 4–500, equal ratings, leftover
 5–7, fewer than four, entry arrival after partition and RR withdrawal rules.
@@ -119,3 +125,10 @@ from every player name, byes, withdrawal/reinstatement, individual/bulk transfer
 and Quad 4 + Bottom Swiss combination in early slices. Historical changes require
 explicit transition records, impact review and preserved played games. Complete the
 acceptance cases in TD_OPERATIONS.md before calling the first TD release usable.
+
+The earlier inline dropdown concept does not satisfy the user’s results-entry
+requirement. The first results slice must exercise W/L/D advance, decimal 0.5
+without premature commit, reciprocal result updates, stable focus and fast correction.
+Duty review also requires lightweight ruling/appeal handover, announced policy
+visibility, house-player handling and submission-correction tracking at the scope
+defined in the duty matrix. Do not replace those workflows with decorative dashboards.

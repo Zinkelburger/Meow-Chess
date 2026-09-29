@@ -1,0 +1,65 @@
+[
+  {
+    "id": "uscf-td-hub",
+    "url": "https://new.uschess.org/tournament-directors",
+    "status": 200,
+    "retrieved_at": "2026-09-29T01:21:17.018157+00:00",
+    "sha256": "2d920cf66c5e59b5fa58f0cbfbd2b66b82e0fbc38091375203e583b2a98b2389",
+    "raw": "research/local/td-duties/uscf-td-hub.html",
+    "text": "research/local/td-duties/uscf-td-hub.txt"
+  },
+  {
+    "id": "uscf-td-faq",
+    "url": "https://new.uschess.org/tournament-director-and-affiliate-frequently-asked-questions",
+    "status": 200,
+    "retrieved_at": "2026-09-29T01:21:17.351571+00:00",
+    "sha256": "9171917feb5c45c0d68b43151cacae4fb5328d8203dbec545b85da488e842e65",
+    "raw": "research/local/td-duties/uscf-td-faq.html",
+    "text": "research/local/td-duties/uscf-td-faq.txt"
+  },
+  {
+    "id": "uscf-scholastic-guide-2021",
+    "url": "https://new.uschess.org/sites/default/files/media/documents/11th-edition-guide-to-scholastic-chess-6-29-21.pdf",
+    "status": 200,
+    "retrieved_at": "2026-09-29T01:21:17.890211+00:00",
+    "sha256": "5bff356de1ec62b3776a7cd7370b5e7bef652ab44323e8ccc235e5e0c0d6777c",
+    "raw": "research/local/td-duties/uscf-scholastic-guide-2021.pdf",
+    "text": "research/local/td-duties/uscf-scholastic-guide-2021.txt"
+  },
+  {
+    "id": "uscf-accessibility-2020",
+    "url": "https://new.uschess.org/sites/default/files/wp-thumbnails/2020/04/Accessibility-Guidelines-April-2020.pdf",
+    "status": 200,
+    "retrieved_at": "2026-09-29T01:21:18.507371+00:00",
+    "sha256": "0fbd076d628b180bd1255c2b32a20e716ede89cd952610415d4beeddbf3d99e5",
+    "raw": "research/local/td-duties/uscf-accessibility-2020.pdf",
+    "text": "research/local/td-duties/uscf-accessibility-2020.txt"
+  },
+  {
+    "id": "uscf-house-player",
+    "url": "https://secure2.uschess.org/TD_Affil/houseplayer.php",
+    "status": 200,
+    "retrieved_at": "2026-09-29T01:21:18.957561+00:00",
+    "sha256": "a82a3bf52a2fcc32572fb2f75d875c62a9bfb9122a4eb9e3a1295f5f3efaede8",
+    "raw": "research/local/td-duties/uscf-house-player.html",
+    "text": "research/local/td-duties/uscf-house-player.txt"
+  },
+  {
+    "id": "uscf-td-certification-2026",
+    "url": "https://new.uschess.org/sites/default/files/media/documents/tournament-director-certification-2026-v2-pdf.pdf",
+    "status": 200,
+    "retrieved_at": "2026-09-29T01:21:19.140320+00:00",
+    "sha256": "c2255bcf6fffe7920705c8348213d563044003552a27e6e0a652e837089699a3",
+    "raw": "research/local/td-duties/uscf-td-certification-2026.pdf",
+    "text": "research/local/td-duties/uscf-td-certification-2026.txt"
+  },
+  {
+    "id": "uscf-safe-play-hub",
+    "url": "https://new.uschess.org/us-chess-safe-play-hub",
+    "status": 200,
+    "retrieved_at": "2026-09-29T01:21:19.307715+00:00",
+    "sha256": "d0067a8212aaa54dbf11ed3c14fcbbf5a879aa031ccadab668b19fd301dc40d8",
+    "raw": "research/local/td-duties/uscf-safe-play-hub.html",
+    "text": "research/local/td-duties/uscf-safe-play-hub.txt"
+  }
+]

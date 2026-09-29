@@ -79,3 +79,11 @@ See [archive coverage](SWISSSYS_ARCHIVE.md), [page checklist](SWISSSYS_TOPIC_LED
 and [machine-readable manifest](swisssys-coverage.json). All 296 listed documentation
 pages are saved under `research/local/swisssys-site/`. This supplements the original
 103-source curated library; it does not change the original library’s counts.
+
+## TD duties and usability evidence
+
+[TD duty map](notes/TD_DUTIES.md) connects official rules, practical guidance and
+user-requested workflows to acceptance cases. Seven additional official references
+are saved locally under `research/local/td-duties/`; their provenance is in
+[td-duty-sources.json](td-duty-sources.json). The 2026 rules/updates remain in the
+original curated source archive. No TD observation or user study has yet occurred.

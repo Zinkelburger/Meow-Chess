@@ -77,8 +77,8 @@ The screen names refer to [TD experience](TD_EXPERIENCE.md).
 | P02 | Explain pairing constraints, integrity validation and unsatisfied preferences | Pairing inspector / Issues | A: distinguish illegal state from allowed policy exception |
 | P03 | Manual swaps, color reversal, boards, forced pairings/byes, locks, replacement players | Pairing review / inspector | A: manual edits and locks show impact before applying |
 | P04 | Board and alphabetical pairings, team lists and complete RR schedule | Rounds → View / Reports | A individual; C team: all views reference same published revision |
-| P05 | Fast keyboard results, all-round matrix, text result import, clear selected results | Rounds | A editor; B batch import: preview conflicts and missing opponents |
-| P06 | Played win/draw/loss, forfeit, double forfeit, requested/allocated bye, unplayed game | Result cell → outcome | A: preserve result semantics separately from score |
+| P05 | Keyboard results grid: W/L/D auto-advance, decimal-safe 1/0/0.5, all-round matrix, text import, clear selected results | Rounds | A editor; B batch import: preview conflicts and missing opponents |
+| P06 | Played results, forfeits/byes, unplayed/disputed status and separate TD-approved temporary pairing treatment | Result cell → outcome | A: preserve result semantics separately from score |
 | P07 | Correct earlier results; withdraw; go back/replace round; preserve later games | Rounds → History | A: explicit impact review; no silent deletion/re-pairing |
 | P08 | Board history, opponents/colors and published revision history | Player / pairing inspector | A: old printed pairing can be traced to revision |
 | S01 | Standings and crosstable, ties, sorted views, round filters, custom columns | Standings | A: ties displayed honestly; sorting does not change official ranking |
@@ -157,3 +157,12 @@ and combining quads into Swiss sections as core TD operations. These are first-r
 gates, including historical-impact handling. [TD operations](TD_OPERATIONS.md) owns
 the detailed interaction contract and supersedes any earlier implication that basic
 transfers or section combining can wait for specialist parity.
+
+## Prioritize by the director’s work
+
+The [official-duty evidence map](../research/notes/TD_DUTIES.md) defines the basis
+for workflow priority. Read it alongside the competitor inventory. Rules establish
+applicable duties and constraints; our keystrokes/layout remain design proposals.
+[Results entry](RESULT_ENTRY.md) is the concrete first-release keyboard contract.
+Core gaps from duty review include unfinished-game handling, house-player context,
+private rulings/handover, announced conditions and submitted-report correction status.

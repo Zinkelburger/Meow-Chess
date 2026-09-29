@@ -178,3 +178,14 @@ transition. A spelling/ID correction is distinct from replacing a game participa
 All UI entry points share commands for EditEntry, SetParticipation, TransferEntries,
 CombineSections and CorrectResult (names illustrative). Commit mutation, audit and
 invalidations atomically; published revisions and played games remain traceable.
+
+## Unfinished games and TD decisions
+
+Do not require a final outcome merely to construct every next-round proposal.
+Represent a policy-authorized, TD-approved pairing assumption separately, with
+its reason, scope and input revision. It changes the relevant pairing projection
+only; it cannot create a rated game result or final prize outcome. Resolving the
+actual game recalculates affected projections and reviews dependent publications.
+Link private ruling/appeal records to stable game/entry IDs; keep clock actions
+and other non-score decisions separate from outcome commands. See
+[TD duties](../research/notes/TD_DUTIES.md) and [result entry](RESULT_ENTRY.md).

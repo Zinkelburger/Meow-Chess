@@ -150,22 +150,18 @@ revision and indicate that previous paper/web copies are stale.
 
 ### 6. Enter results at tournament speed
 
-Rows show board, white name/rating/score, outcome, black name/rating/score. Clicking
-an outcome opens compact win/draw/loss choices plus Other outcome for forfeits/byes.
-Keyboard 1 / = / 0 applies only with a focused game result cell; Enter advances to
-the next missing result. Names and board numbers remain visible during entry.
-No global single-key destructive shortcuts; announce player names/outcome to assistive
-technology. A result-entry footer can show keys, with a preference to hide it.
+The authoritative contract is [Results entry](RESULT_ENTRY.md). Use a large,
+keyboard-operated board table with a clearly labelled result perspective. W/L/D
+commits and advances immediately; numeric 1/0/0.5 commits with Enter/Tab so the
+first 0 of 0.5 cannot accidentally become a loss. Store both opponents atomically.
+Support arrows, skipping blanks, Undo, explicit correction, board-number jump and
+a player-by-round matrix. Stable row order and focus are essential.
 
-Save each confirmed result transaction immediately; offer Undo without a modal.
-Already-entered outcomes require an explicit correction action, not accidental
-cycling. `—` means unreported. `0–0` means a specific confirmed outcome, never an
-empty result. Double-game rounds expose Game 1 and Game 2, plus their match total;
-the total is not an editable substitute for individual ratable games.
-
-The missing-results filter is a toggle with count. Clearing the last missing result
-shows “All results entered” and enables Review next round. Do not publish a round
-because the last result was entered. User remains in control of timing.
+Ordinary outcomes require no popup. Byes/forfeits/unfinished/disputed outcomes have
+labelled actions. A TD-approved temporary pairing assumption can enable a supported
+next-round workflow while a game is unresolved; it must not become a final result.
+At the last cell, stay in the section and offer the next task without publishing
+anything automatically. A dropdown-only mockup is not the accepted final design.
 
 ### 7. Correct an earlier mistake
 

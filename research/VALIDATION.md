@@ -59,3 +59,17 @@ added direct player editing, participation actions, effective-round transitions
 and seven P0 requirements (D01–D07). Checked all 55 local links in README and docs
 and `git diff --check`. Planning/documentation only: no executable app changes or
 new claims of tested tournament rules, printing or federation export compatibility.
+
+## Official-duty evidence and result-entry contract
+
+Checked the current US Chess TD hub, 2026 rulebook/updates links, TD FAQ, house-player
+guidance, accessibility guidance, certification document and Safe Play hub. Read
+the scholastic guide’s directing/registration/results discussion and planning/supply
+checklists. Saved seven additional reference snapshots and extracted text; all
+seven raw hashes and nonempty text files verified. Checked 76 local links across
+README, docs, the duty note and research index; `git diff --check` passed.
+
+Added duty-to-workflow traceability and a concrete numeric/WLD results-grid contract.
+No app code or browser prototype was changed in this refinement. Keyboard behavior,
+TD rehearsal, interpretation of exceptional rules and federation export paths remain
+acceptance work for the future implementation; none is claimed tested here.
