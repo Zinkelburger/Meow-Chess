@@ -1,0 +1,1186 @@
+[
+  {
+    "title": "SwissSys Documentation",
+    "url": "https://docs.chessroster.com/swisssys/"
+  },
+  {
+    "title": "SwissSys Usage",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/"
+  },
+  {
+    "title": "Administration",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/"
+  },
+  {
+    "title": "Database Step-by-step Instructions",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/database-step-by-step-instructions/"
+  },
+  {
+    "title": "Edit Club List",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/edit-club-list/"
+  },
+  {
+    "title": "Enabling Colorblind Pairings",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/enabling-colorblind-pairings-from-the-pairings-set/"
+  },
+  {
+    "title": "Half-point Byes",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/half-point-byes/"
+  },
+  {
+    "title": "SwissSys Logging System",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/logging-system/"
+  },
+  {
+    "title": "Read From Club and Write/Update Club",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/read-from-clubwrite-update-club/"
+  },
+  {
+    "title": "Reserved Board Numbers",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/reserved-board-numbers/"
+  },
+  {
+    "title": "Swap Primary and Secondary Databases",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/swap-primary-and-secondary-databases/"
+  },
+  {
+    "title": "SwissSys Home Page",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/swisssys-home-page/"
+  },
+  {
+    "title": "Getting Started",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/"
+  },
+  {
+    "title": "ChessRoster Platform Integration",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/chessroster-integration/"
+  },
+  {
+    "title": "Introduction",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/introduction/"
+  },
+  {
+    "title": "What Comes with the Installation",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/what-comes-with-the-installation/"
+  },
+  {
+    "title": "Prerequisites",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/first-assumptions/"
+  },
+  {
+    "title": "Getting Started",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/getting-started/"
+  },
+  {
+    "title": "Program Overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/program-overview/"
+  },
+  {
+    "title": "Menus and the Screen",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/menus-and-the-screen/"
+  },
+  {
+    "title": "Running a Tournament",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/running-a-tournament/"
+  },
+  {
+    "title": "Main Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/main-menu/"
+  },
+  {
+    "title": "Setup Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/setup-menu/"
+  },
+  {
+    "title": "Changing Game Results and Other Data",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/changing-game-results-and-other-data-overview/"
+  },
+  {
+    "title": "Contents",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/contents/"
+  },
+  {
+    "title": "Create or Update a Custom Database Using SwissSys",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/create-or-update-a-custom-database-using-swisssys/"
+  },
+  {
+    "title": "Export View",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/export-view/"
+  },
+  {
+    "title": "Importing Players - Overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/importing-players-overview/"
+  },
+  {
+    "title": "Multi-view Charts",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/multi-view-charts/"
+  },
+  {
+    "title": "Registering Players with the Network Database",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/registering-players-with-the-network-database/"
+  },
+  {
+    "title": "Secondary Database: Use and Examples",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/secondary-database-use-and-examples/"
+  },
+  {
+    "title": "Section Box",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/section-box/"
+  },
+  {
+    "title": "SwissSys Tutorial",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/swisssys-tutorial/"
+  },
+  {
+    "title": "Task Launcher",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/task-launcher/"
+  },
+  {
+    "title": "Terms of Use: SwissSys License Agreement",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/terms-of-use-swisssys-license-agreement/"
+  },
+  {
+    "title": "Tinker - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/tinker/"
+  },
+  {
+    "title": "Upgrade Information",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/upgrade-information/"
+  },
+  {
+    "title": "Use a Custom Database",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/use-a-database-created-by-commercial-database-soft/"
+  },
+  {
+    "title": "Tutorials",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/"
+  },
+  {
+    "title": "Step 1 - Setting Up the Tournament",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-01-setting-up-the-tournament/"
+  },
+  {
+    "title": "Step 2 - Advance Registration",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-02-advance-registration/"
+  },
+  {
+    "title": "Step 3 - On-site Registration and File Handling",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-03-on-site-registration-and-file-handling/"
+  },
+  {
+    "title": "Step 4 - Inspect the Wall Chart",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-04-inspect-the-wall-chart/"
+  },
+  {
+    "title": "Step 5 - Some Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-05-some-options/"
+  },
+  {
+    "title": "Step 6 - Make Pairings",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-06-make-pairings/"
+  },
+  {
+    "title": "Step 7 - Late Registration",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-07-late-registration/"
+  },
+  {
+    "title": "Step 8 - Working with the Pairings",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-08-working-with-the-pairings/"
+  },
+  {
+    "title": "Step 9 - Withdrawing and Tinkering",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-09-withdrawing-and-tinkering/"
+  },
+  {
+    "title": "Step 10 - Standings",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-10-standings/"
+  },
+  {
+    "title": "Step 11 - Correcting Results",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-11-correcting-results/"
+  },
+  {
+    "title": "Step 12 - Prizes",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-12-prizes/"
+  },
+  {
+    "title": "Step 13 - Wrapping Up",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-13-wrapping-up/"
+  },
+  {
+    "title": "Step 14 - Multi-section Tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-14-multi-section-tournaments/"
+  },
+  {
+    "title": "Step 15 - Running Team Tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-15-running-team-tournaments/"
+  },
+  {
+    "title": "Step 16 - Setting Up a Database for Player Registration",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-16-setting-up-a-database-for-player-registration/"
+  },
+  {
+    "title": "Create Report for Uploading - Internet Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/create-report-for-uploading/"
+  },
+  {
+    "title": "Set Up Your USCF, CFC, or FIDE Database",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/set-up-your-uscf-cfc-or-fide-database/"
+  },
+  {
+    "title": "Tournament Setup and Tools - Setup Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/tournament-setup-and-tools/"
+  },
+  {
+    "title": "User Guide",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/"
+  },
+  {
+    "title": "Menus",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/"
+  },
+  {
+    "title": "Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/"
+  },
+  {
+    "title": "Register - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/register/"
+  },
+  {
+    "title": "Withdrawals - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/withdrawals/"
+  },
+  {
+    "title": "Bye/Inactive Players - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/byeinactive-players/"
+  },
+  {
+    "title": "Move Player - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/move-player/"
+  },
+  {
+    "title": "Switch Ratings/IDs - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/switch-ratingsids/"
+  },
+  {
+    "title": "Switch State and Federation - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/switch-state-and-federation/"
+  },
+  {
+    "title": "Classes - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/classes/"
+  },
+  {
+    "title": "Confirm Player Eligibility - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/confirm-player-eligibility/"
+  },
+  {
+    "title": "Set Uniform Name Format - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/set-uniform-name-format/"
+  },
+  {
+    "title": "Unflag All - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/unflag-all/"
+  },
+  {
+    "title": "Adjust Pair Numbers Before Pairing - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/adjust-pair-numbers-before-pairing/"
+  },
+  {
+    "title": "Resort All by Rating - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/resort-all-by-rating/"
+  },
+  {
+    "title": "Board History - Players Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/board-history/"
+  },
+  {
+    "title": "Setup Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/"
+  },
+  {
+    "title": "Tournament at a Glance - Setup Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/tournament-at-a-glance/"
+  },
+  {
+    "title": "Manage Board Numbers - Setup Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/manage-board-numbers/"
+  },
+  {
+    "title": "Rules for Pairing - Setup Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/rules-for-pairing/"
+  },
+  {
+    "title": "Tiebreaks - Setup Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/tiebreaks/"
+  },
+  {
+    "title": "Ladder Rules - Setup Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/ladder-rules/"
+  },
+  {
+    "title": "Step-by-step Guide - Setup Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/step-by-step-guide/"
+  },
+  {
+    "title": "Edit Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/"
+  },
+  {
+    "title": "Copy - Edit Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/copy/"
+  },
+  {
+    "title": "Copy All - Edit Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/copy-all/"
+  },
+  {
+    "title": "Undo Last Command - Edit Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/undo-last-command/"
+  },
+  {
+    "title": "Clear Selected Results - Edit Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/clear-selected-results/"
+  },
+  {
+    "title": "Withdraw Selected Players - Edit Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/withdraw-selected-players/"
+  },
+  {
+    "title": "Validate - Edit Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/validate/"
+  },
+  {
+    "title": "Find Player - Edit Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/edit-menu/find-player/"
+  },
+  {
+    "title": "File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/"
+  },
+  {
+    "title": "Open - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/open/"
+  },
+  {
+    "title": "Reopen - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/reopen/"
+  },
+  {
+    "title": "Save - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/save/"
+  },
+  {
+    "title": "Save As - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/save-as/"
+  },
+  {
+    "title": "Backups - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/backups/"
+  },
+  {
+    "title": "Club - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/club/"
+  },
+  {
+    "title": "Print View - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/print-view/"
+  },
+  {
+    "title": "Print Setup - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/print-setup/"
+  },
+  {
+    "title": "Page Setup - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/page-setup/"
+  },
+  {
+    "title": "Print Preview - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/print-preview/"
+  },
+  {
+    "title": "Change Current Club - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/change-current-club/"
+  },
+  {
+    "title": "Update From Club - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/update-from-club/"
+  },
+  {
+    "title": "Exit - File Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/exit/"
+  },
+  {
+    "title": "Main Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/main-menu-index/"
+  },
+  {
+    "title": "Help Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/"
+  },
+  {
+    "title": "Help - Help Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/help/"
+  },
+  {
+    "title": "About - Help Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/about/"
+  },
+  {
+    "title": "Logging Settings - Help Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/logging-settings/"
+  },
+  {
+    "title": "Register SwissSys - Help Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/help-menu/register-swisssys/"
+  },
+  {
+    "title": "Pairings Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/"
+  },
+  {
+    "title": "Pair Next Round",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/pair-next-round/"
+  },
+  {
+    "title": "View Pairings / Enter Results",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/view-pairingsenter-results/"
+  },
+  {
+    "title": "Entering Results",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/entering-results/"
+  },
+  {
+    "title": "All Rounds Results Entry",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/all-rounds-results-entry/"
+  },
+  {
+    "title": "Pairing Logic",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/pairing-logic/"
+  },
+  {
+    "title": "Adjusting Pairings",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/adjusting-pairings/"
+  },
+  {
+    "title": "Back to a Previous Round",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/back-to-a-previous-round-do/"
+  },
+  {
+    "title": "All Sections",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/all-sections/"
+  },
+  {
+    "title": "View Ladder",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/view-ladder/"
+  },
+  {
+    "title": "Alphabetical Pairing List",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/alphabetical-pairing-list/"
+  },
+  {
+    "title": "Team Pairing List (Current Section)",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/team-pairing-list-current-section-only-pairings/"
+  },
+  {
+    "title": "Round Robin Pair Table",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/round-robin-pair-table/"
+  },
+  {
+    "title": "Crenshaw/Berger Table",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/crenshawberger-table/"
+  },
+  {
+    "title": "Import Results from Text File",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/import-results-from-file/"
+  },
+  {
+    "title": "Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/"
+  },
+  {
+    "title": "Board Signs for Top Players - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/board-signs-for-top-players/"
+  },
+  {
+    "title": "Certificates - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/certificates/"
+  },
+  {
+    "title": "Expired Memberships - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/expired-memberships/"
+  },
+  {
+    "title": "FIDE Norms - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/fide-norms/"
+  },
+  {
+    "title": "Membership Forms - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/membership-forms/"
+  },
+  {
+    "title": "Player Messages - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/player-messages/"
+  },
+  {
+    "title": "Prizes - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/prizes/"
+  },
+  {
+    "title": "Registration List - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/registration-list/"
+  },
+  {
+    "title": "Round Robin Standings Chart - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/round-robin-standings-chart/"
+  },
+  {
+    "title": "Scratch Pad - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/scratch-pad/"
+  },
+  {
+    "title": "Upsets - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/upsets/"
+  },
+  {
+    "title": "Win Stats by Color - Reports Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/reports-menu/win-stats-by-color/"
+  },
+  {
+    "title": "Section Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/"
+  },
+  {
+    "title": "New - Section Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/new/"
+  },
+  {
+    "title": "Current Section Settings - Section Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/current-section-settings/"
+  },
+  {
+    "title": "Clear Current Roster - Section Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/clear-current-roster/"
+  },
+  {
+    "title": "Rename - Section Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/rename/"
+  },
+  {
+    "title": "Import - Section Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/import/"
+  },
+  {
+    "title": "Extract - Section Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/extract/"
+  },
+  {
+    "title": "Remove / Remove All - Section Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/section-menu/removeremove-all/"
+  },
+  {
+    "title": "View Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/"
+  },
+  {
+    "title": "Pair Chart Appearance",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/pair-chart-appearance/"
+  },
+  {
+    "title": "Pair Chart Submenu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/pair-chart-submenu/"
+  },
+  {
+    "title": "Pair Chart Toolbar",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/pair-chart-toolbar/"
+  },
+  {
+    "title": "Pairchart Frequently Asked Questions",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/pairchart-frequently-asked-questions/"
+  },
+  {
+    "title": "Options Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/"
+  },
+  {
+    "title": "Environment Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/"
+  },
+  {
+    "title": "Display Tab - Environment Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/display/"
+  },
+  {
+    "title": "Registration & Editing Tab - Environment Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/registration-editing/"
+  },
+  {
+    "title": "Files & Databases Tab - Environment Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/files-databases/"
+  },
+  {
+    "title": "Ratings Tab - Environment Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/ratings/"
+  },
+  {
+    "title": "Scholastic Rating Setup",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/scholastic-rating-setup/"
+  },
+  {
+    "title": "Internet Tab - Environment Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/environment-options/sync/"
+  },
+  {
+    "title": "Get Profile / Save Profile - Options Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/get-profile-save-profile/"
+  },
+  {
+    "title": "Language - Options Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/language/"
+  },
+  {
+    "title": "Auto-Sync Environment Option",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/options-menu/auto-sync-environment-option/"
+  },
+  {
+    "title": "Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/team-menu/"
+  },
+  {
+    "title": "Master Pair List - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/team-menu/master-pair-list/"
+  },
+  {
+    "title": "Pair Teams by Game Points - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/team-menu/pair-teams-by-game-points/"
+  },
+  {
+    "title": "Database Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/database-menu/"
+  },
+  {
+    "title": "Database Setup",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/database-menu/database-setup/"
+  },
+  {
+    "title": "Load Players from Database",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/database-menu/load-players-from-database/"
+  },
+  {
+    "title": "Swap Primary and Secondary Databases - Database Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/database-menu/swap-primary-and-secondary-databases/"
+  },
+  {
+    "title": "Update Club From Database - Database Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/database-menu/update-club-from-database/"
+  },
+  {
+    "title": "Utilities Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/"
+  },
+  {
+    "title": "Clipboard",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/clipboard/"
+  },
+  {
+    "title": "Club Lists",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/club-lists/"
+  },
+  {
+    "title": "Database Troubleshooting",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/database-troubleshooting/"
+  },
+  {
+    "title": "Delimited Text Files (DTF)",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/delimited-text-files-dtf/"
+  },
+  {
+    "title": "Drag and Drop",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/drag-and-drop/"
+  },
+  {
+    "title": "Dump to Label File",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/dump-to-label-file/"
+  },
+  {
+    "title": "Edit Commands",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/edit-commands/"
+  },
+  {
+    "title": "Error Messages",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/error-messages/"
+  },
+  {
+    "title": "Exports Formatting",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/exports-formatting/"
+  },
+  {
+    "title": "Fees - Overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/fees-overview/"
+  },
+  {
+    "title": "Link Settings with Section",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/link-settings-with-section/"
+  },
+  {
+    "title": "Player Roster",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/player-roster/"
+  },
+  {
+    "title": "Post-Event Rating Formulas",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/post-event-rating-formulas/"
+  },
+  {
+    "title": "Print and Other Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/print-and-other-options/"
+  },
+  {
+    "title": "Profile Files",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/profile-files/"
+  },
+  {
+    "title": "Quad Tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/quad-tournaments/"
+  },
+  {
+    "title": "Ratings - Overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/ratings-overview/"
+  },
+  {
+    "title": "Ratings Reports",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/ratings-reports/"
+  },
+  {
+    "title": "Registration Setup",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/registration-setup/"
+  },
+  {
+    "title": "Registration Tools",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/registration-tools/"
+  },
+  {
+    "title": "Replacement Player List",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/replacement-player-list/"
+  },
+  {
+    "title": "Section Panels",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/section-panels/"
+  },
+  {
+    "title": "The Ladder Dialog",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/the-ladder-dialog/"
+  },
+  {
+    "title": "Toolbar",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/toolbar/"
+  },
+  {
+    "title": "Tournament Types",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/tournament-types/"
+  },
+  {
+    "title": "Unrated Tournaments: Cautions",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/unrated-tournaments-cautions/"
+  },
+  {
+    "title": "Internet Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/internet-menu/"
+  },
+  {
+    "title": "Online Tournament Assistant",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/internet-menu/online-tournament-assistant/"
+  },
+  {
+    "title": "ChessRoster Integration Dialog",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/internet-menu/chessroster-dialog/"
+  },
+  {
+    "title": "Pairings",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/"
+  },
+  {
+    "title": "Accelerated Pairings",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/accelerated-pairings/"
+  },
+  {
+    "title": "bbpPairings Engine",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/bbppairings-engine/"
+  },
+  {
+    "title": "Check Pairing Integrity",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/check-pairing-integrity/"
+  },
+  {
+    "title": "Columns - Adjusting",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/columns-adjusting/"
+  },
+  {
+    "title": "Create PGN Headers - Utilities Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/create-pgn-headers/"
+  },
+  {
+    "title": "Double-Round Tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/double-blitz-style-tournaments/"
+  },
+  {
+    "title": "Board Conflict Dialog",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/board-conflict-dialog/"
+  },
+  {
+    "title": "Expanded Team Names (Master List) - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/expanded-team-names-master-list/"
+  },
+  {
+    "title": "Fide Default Mode Limitations",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/fide-default-mode-limitations/"
+  },
+  {
+    "title": "Fixed-Roster Tournaments - Overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/fixed-roster-tournaments-overview/"
+  },
+  {
+    "title": "Format Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/format-options/"
+  },
+  {
+    "title": "Headers in Printouts",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/headers-in-printouts/"
+  },
+  {
+    "title": "Pair Chart Formatting",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/pair-chart-formatting/"
+  },
+  {
+    "title": "Pairings Setup Dialog",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/pairings-setup-dialog/"
+  },
+  {
+    "title": "Standings Formatting",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/standings-formatting/"
+  },
+  {
+    "title": "Limitations of the Fide-only Version",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/limitations-of-the-fide-only-version/"
+  },
+  {
+    "title": "Merge - Utilities Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/merge/"
+  },
+  {
+    "title": "PAB (Pairing-Allocated Bye)",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/pab-program-allocated-bye/"
+  },
+  {
+    "title": "Side Game Sections",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/side-game-sections/"
+  },
+  {
+    "title": "Print Team Report Sheets",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/print-team-report-sheets/"
+  },
+  {
+    "title": "Results Editor",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/results-editor/"
+  },
+  {
+    "title": "Send Emails - Utilities Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/send-emails/"
+  },
+  {
+    "title": "Team Results or Individual Results?",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/team-results-or-individual-results/"
+  },
+  {
+    "title": "Vanilla Pairings",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/vanilla-pairings-pairings-setup/"
+  },
+  {
+    "title": "Wall Chart Formatting",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/wall-chart-formatting/"
+  },
+  {
+    "title": "Registration",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/"
+  },
+  {
+    "title": "Board Order and Active Team Members",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/board-order-and-active-team-members/"
+  },
+  {
+    "title": "Update Players from Database",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/update-players-from-database/"
+  },
+  {
+    "title": "Update Players from USCF or FIDE Site",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/update-players-from-uscf-or-fide-site/"
+  },
+  {
+    "title": "Database Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/database-menu/"
+  },
+  {
+    "title": "Database Overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/database-overview/"
+  },
+  {
+    "title": "Database Wizard",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/database-wizard/"
+  },
+  {
+    "title": "Downloading USCF Database",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/downloading-uscf-database/"
+  },
+  {
+    "title": "Downloading CFC Database",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/downloading-cfc-database/"
+  },
+  {
+    "title": "Downloading FIDE Database",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/downloading-fide-database/"
+  },
+  {
+    "title": "Legacy Database Formats",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/legacy-database-formats/"
+  },
+  {
+    "title": "Estimated and Provisional Ratings",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/estimated-and-provisional-ratings/"
+  },
+  {
+    "title": "Online Player Search",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/online-player-search/"
+  },
+  {
+    "title": "FIDE Player List",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/fide-player-list/"
+  },
+  {
+    "title": "Make Joint USCF Database",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/make-joint-uscf-database/"
+  },
+  {
+    "title": "Network Mode",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/network-mode/"
+  },
+  {
+    "title": "Registration Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/registration-options/"
+  },
+  {
+    "title": "Ratings Report for CFC",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/ratings-report-for-cfc/"
+  },
+  {
+    "title": "Reporting",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/"
+  },
+  {
+    "title": "Events Page - Internet Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/events-page/"
+  },
+  {
+    "title": "Fonts - Options Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/fonts/"
+  },
+  {
+    "title": "Hosted Website",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/hosted-website/"
+  },
+  {
+    "title": "Jagged Columns",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/jagged-columns/"
+  },
+  {
+    "title": "Merge Very Small Teams - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/merge-very-small-teams/"
+  },
+  {
+    "title": "Merged Tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/merged-tournaments/"
+  },
+  {
+    "title": "My Events Page",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/my-events-page/"
+  },
+  {
+    "title": "Printing Overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/printing-overview/"
+  },
+  {
+    "title": "Scoring Point",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/scoring-point/"
+  },
+  {
+    "title": "USCF Database File",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/uscf-database-file/"
+  },
+  {
+    "title": "Ratings Report for FIDE",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/ratings-report-for-fide/"
+  },
+  {
+    "title": "Rating Report for DWZ",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/rating-report-for-dwz/"
+  },
+  {
+    "title": "Technical Help and Contact Information",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/technical-help-and-contact-information/"
+  },
+  {
+    "title": "Preview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/preview/"
+  },
+  {
+    "title": "Subtotals by Federation or Other Field - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/subtotals-by-federation-or-other-field/"
+  },
+  {
+    "title": "Teams",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/"
+  },
+  {
+    "title": "Byes - Overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/byes-overview/"
+  },
+  {
+    "title": "Game Wins - Fixed Roster Tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/game-wins-fixed-roster-tournaments/"
+  },
+  {
+    "title": "Synchronize Team and Individual Results - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/synchronize-team-and-individual-results-team-men/"
+  },
+  {
+    "title": "Team Match Tournaments (Scheveningen System)",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/team-match-tournaments/"
+  },
+  {
+    "title": "Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/team-menu/"
+  },
+  {
+    "title": "Team Roster Formatting",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/team-roster-formatting/"
+  },
+  {
+    "title": "Team Roster/Standings - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/team-rosterstandings/"
+  },
+  {
+    "title": "Teamcodes Overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/teamcodes-overview/"
+  },
+  {
+    "title": "Use Master Team Name List - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/use-master-team-name-list/"
+  },
+  {
+    "title": "Use Rollins Score System - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/use-rollins-score-system/"
+  },
+  {
+    "title": "Withdraw an Entire Team - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/withdraw-an-entire-team/"
+  },
+  {
+    "title": "Tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/"
+  },
+  {
+    "title": "Lot Numbers - Round Robin Tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/lot-numbers-round-robin-tournaments/"
+  },
+  {
+    "title": "Number on a Team or Subtotal Group - Team Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/number-on-a-team-or-subtotal-group/"
+  },
+  {
+    "title": "Ratings Report for USCF - Utilities Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/ratings-report-for-uscf/"
+  },
+  {
+    "title": "Team Tournaments - Overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/team-tournaments-overview/"
+  },
+  {
+    "title": "Teams-only Fixed Roster Events",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/teams-only-fixed-roster-events/"
+  },
+  {
+    "title": "Tiebreak Systems",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/tiebreak-systems/"
+  },
+  {
+    "title": "TRF Files",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/trf-files/"
+  },
+  {
+    "title": "Utilities Menu",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/utilities-menu/"
+  },
+  {
+    "title": "License and Purchasing",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/license-and-purchasing/"
+  },
+  {
+    "title": "Problem Summary - Pairing Logic Dialog",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/problem-summary/"
+  },
+  {
+    "title": "Rating Range Restrictions",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/rating-range-restrictions/"
+  },
+  {
+    "title": "Reference",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/reference/"
+  },
+  {
+    "title": "Club Options",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/reference/club-options/"
+  },
+  {
+    "title": "Index Database",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/reference/index-database/"
+  },
+  {
+    "title": "Pair Numbers",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/reference/pair-numbers/"
+  },
+  {
+    "title": "Prize Class Rating Ranges",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/reference/prize-class-rating-ranges/"
+  },
+  {
+    "title": "Downloading, Installing & Activating",
+    "url": "https://docs.chessroster.com/swisssys/downloading-installing-activating/"
+  },
+  {
+    "title": "Standard Activation",
+    "url": "https://docs.chessroster.com/swisssys/downloading-installing-activating/standard-activation/"
+  },
+  {
+    "title": "Unlocking Code Activation",
+    "url": "https://docs.chessroster.com/swisssys/downloading-installing-activating/unlocking-code-activation/"
+  },
+  {
+    "title": "Chess Federation of Canada Registrations",
+    "url": "https://docs.chessroster.com/swisssys/downloading-installing-activating/cfc-activation/"
+  },
+  {
+    "title": "Removing SwissSys Registration",
+    "url": "https://docs.chessroster.com/swisssys/downloading-installing-activating/remove-registration/"
+  },
+  {
+    "title": "System Requirements",
+    "url": "https://docs.chessroster.com/swisssys/system-requirements/"
+  },
+  {
+    "title": "Version History",
+    "url": "https://docs.chessroster.com/swisssys/versions/"
+  },
+  {
+    "title": "Transferring Your License",
+    "url": "https://docs.chessroster.com/swisssys/transferring-license/"
+  }
+]

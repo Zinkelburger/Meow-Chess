@@ -1,0 +1,30 @@
+# Meow-Chess
+
+Planning for an offline-first, cross-platform Flutter tournament director's app.
+US Chess first; Swiss events, easy quads, reliable identity/rating checks, and
+usable printing. Inspired by SwissSys workflows and Chess Auto Prep V2's UI.
+
+**Research phase only. No application has been implemented.** The existing
+AGPLv3 [LICENSE](LICENSE) is retained. Platform and release boundaries below
+are recommendations awaiting product decisions, not promises of shipped features.
+
+Start with the [product plan](docs/PRODUCT_PLAN.md), then:
+
+| Document | Purpose |
+|---|---|
+| [Requirements and acceptance criteria](docs/REQUIREMENTS.md) | What the app must do and how we will know it works |
+| [Boylston event survey](research/notes/BOYLSTON.md) | Actual event formats, import evidence, scope implications |
+| [SwissSys / ChessRoster](research/notes/SWISSSYS.md) | Feature map, interoperability, and a practical quad setup guide |
+| [US Chess reporting](research/notes/US_CHESS_REPORTING.md) | The three DBF files, authoritative specification, unresolved contradictions |
+| [US Chess ratings API](research/notes/US_CHESS_API.md) | Public OpenAPI, live probes, identity review, latest-rating limitations |
+| [Pairing and bughouse](docs/PAIRING.md) | US Chess pairing, quads, team distinctions, experimental skill estimates |
+| [Architecture](docs/ARCHITECTURE.md) | Dart domain, SQLite transactions, commands, adapters, recovery |
+| [UX specification](docs/UX.md) | Reusable workspace, section tabs, results entry, printing |
+| [Delivery and validation](docs/DELIVERY.md) | Ordered milestones, release gates, research questions, POCs |
+| [Engineering reading / reuse](research/notes/ENGINEERING.md) | Books, patterns, library findings, licensing and future FIDE |
+| [Reference library](research/README.md) | Source catalog, local snapshots, provenance and research limits |
+
+Sources were checked September 28–29, 2026 (Eastern / UTC boundary). Statements
+labelled **observed**, **documented**, **proposed**, and **unverified** intentionally
+have different strength. No US Chess upload, payment, registration, email, or
+tournament modification was performed.

@@ -1,0 +1,4 @@
+# Private local reference cache; sources retain their own copyrights.
+research/local/
+*.pyc
+__pycache__/

@@ -1,0 +1,492 @@
+[
+  {
+    "id": "swisssys-half-point-byes",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/admin/half-point-byes/",
+    "title": "Half-point Byes"
+  },
+  {
+    "id": "swisssys-export-view",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/export-view/",
+    "title": "Export View"
+  },
+  {
+    "id": "swisssys-importing-players-overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/getting-started/importing-players-overview/",
+    "title": "Importing Players - Overview"
+  },
+  {
+    "id": "swisssys-step-15-running-team-tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/step-15-running-team-tournaments/",
+    "title": "Step 15 - Running Team Tournaments"
+  },
+  {
+    "id": "swisssys-create-report-for-uploading",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/create-report-for-uploading/",
+    "title": "Create Report for Uploading - Internet Menu"
+  },
+  {
+    "id": "swisssys-tournament-setup-and-tools",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/tutorials/tournament-setup-and-tools/",
+    "title": "Tournament Setup and Tools - Setup Menu"
+  },
+  {
+    "id": "swisssys-confirm-player-eligibility",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/players-menu/confirm-player-eligibility/",
+    "title": "Confirm Player Eligibility - Players Menu"
+  },
+  {
+    "id": "swisssys-tournament-at-a-glance",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/tournament-at-a-glance/",
+    "title": "Tournament at a Glance - Setup Menu"
+  },
+  {
+    "id": "swisssys-rules-for-pairing",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/setup-menu/rules-for-pairing/",
+    "title": "Rules for Pairing - Setup Menu"
+  },
+  {
+    "id": "swisssys-backups",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/file-menu/backups/",
+    "title": "Backups - File Menu"
+  },
+  {
+    "id": "swisssys-pairing-logic",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/pairing-logic/",
+    "title": "Pairing Logic"
+  },
+  {
+    "id": "swisssys-adjusting-pairings",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/adjusting-pairings/",
+    "title": "Adjusting Pairings"
+  },
+  {
+    "id": "swisssys-back-to-a-previous-round-do",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/back-to-a-previous-round-do/",
+    "title": "Back to a Previous Round"
+  },
+  {
+    "id": "swisssys-crenshawberger-table",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/pairings-menu/crenshawberger-table/",
+    "title": "Crenshaw/Berger Table"
+  },
+  {
+    "id": "swisssys-pairchart-frequently-asked-questions",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/view-menu/pairchart-frequently-asked-questions/",
+    "title": "Pairchart Frequently Asked Questions"
+  },
+  {
+    "id": "swisssys-delimited-text-files-dtf",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/delimited-text-files-dtf/",
+    "title": "Delimited Text Files (DTF)"
+  },
+  {
+    "id": "swisssys-exports-formatting",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/exports-formatting/",
+    "title": "Exports Formatting"
+  },
+  {
+    "id": "swisssys-quad-tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/quad-tournaments/",
+    "title": "Quad Tournaments"
+  },
+  {
+    "id": "swisssys-ratings-reports",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/ratings-reports/",
+    "title": "Ratings Reports"
+  },
+  {
+    "id": "swisssys-section-panels",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/section-panels/",
+    "title": "Section Panels"
+  },
+  {
+    "id": "swisssys-tournament-types",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/utilities-menu/tournament-types/",
+    "title": "Tournament Types"
+  },
+  {
+    "id": "swisssys-chessroster-dialog",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/menus/internet-menu/chessroster-dialog/",
+    "title": "ChessRoster Integration Dialog"
+  },
+  {
+    "id": "swisssys-fixed-roster-tournaments-overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/fixed-roster-tournaments-overview/",
+    "title": "Fixed-Roster Tournaments - Overview"
+  },
+  {
+    "id": "swisssys-wall-chart-formatting",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/pairings/wall-chart-formatting/",
+    "title": "Wall Chart Formatting"
+  },
+  {
+    "id": "swisssys-board-order-and-active-team-members",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/board-order-and-active-team-members/",
+    "title": "Board Order and Active Team Members"
+  },
+  {
+    "id": "swisssys-update-players-from-uscf-or-fide-site",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/registration/update-players-from-uscf-or-fide-site/",
+    "title": "Update Players from USCF or FIDE Site"
+  },
+  {
+    "id": "swisssys-printing-overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/reporting/printing-overview/",
+    "title": "Printing Overview"
+  },
+  {
+    "id": "swisssys-game-wins-fixed-roster-tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/teams/game-wins-fixed-roster-tournaments/",
+    "title": "Game Wins - Fixed Roster Tournaments"
+  },
+  {
+    "id": "swisssys-lot-numbers-round-robin-tournaments",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/lot-numbers-round-robin-tournaments/",
+    "title": "Lot Numbers - Round Robin Tournaments"
+  },
+  {
+    "id": "swisssys-ratings-report-for-uscf",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/ratings-report-for-uscf/",
+    "title": "Ratings Report for USCF - Utilities Menu"
+  },
+  {
+    "id": "swisssys-team-tournaments-overview",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/team-tournaments-overview/",
+    "title": "Team Tournaments - Overview"
+  },
+  {
+    "id": "swisssys-teams-only-fixed-roster-events",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/teams-only-fixed-roster-events/",
+    "title": "Teams-only Fixed Roster Events"
+  },
+  {
+    "id": "swisssys-tiebreak-systems",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/tiebreak-systems/",
+    "title": "Tiebreak Systems"
+  },
+  {
+    "id": "swisssys-trf-files",
+    "url": "https://docs.chessroster.com/swisssys/app-docs/user-guide/tournaments/trf-files/",
+    "title": "TRF Files"
+  },
+  {
+    "id": "uscf-faq",
+    "url": "https://new.uschess.org/tournament-director-and-affiliate-frequently-asked-questions",
+    "title": "uscf-faq"
+  },
+  {
+    "id": "uscf-api-forum",
+    "url": "https://forum.uschess.org/t/api-2-0-is-now-available/61581",
+    "title": "uscf-api-forum"
+  },
+  {
+    "id": "uscf-dbf-forum",
+    "url": "https://forum.uschess.org/t/up-to-date-dbf-file-format-reference/60661",
+    "title": "uscf-dbf-forum"
+  },
+  {
+    "id": "uscf-scraping-forum",
+    "url": "https://forum.uschess.org/t/leago-muir-screen-scrape-api-for-latest-rating/59524",
+    "title": "uscf-scraping-forum"
+  },
+  {
+    "id": "uscf-fileformat",
+    "url": "https://secure2.uschess.org/TD_Affil/fileformat.php",
+    "title": "uscf-fileformat"
+  },
+  {
+    "id": "uscf-swagger",
+    "url": "https://ratings-api.uschess.org/swagger/index.html",
+    "title": "uscf-swagger"
+  },
+  {
+    "id": "uscf-openapi-v1",
+    "url": "https://ratings-api.uschess.org/swagger/v1/swagger.json",
+    "title": "uscf-openapi-v1"
+  },
+  {
+    "id": "uscf-openapi-v2",
+    "url": "https://ratings-api.uschess.org/swagger/v2/swagger.json",
+    "title": "uscf-openapi-v2"
+  },
+  {
+    "id": "swisssys-index",
+    "url": "https://docs.chessroster.com/swisssys/",
+    "title": "swisssys-index"
+  },
+  {
+    "id": "chessroster-index",
+    "url": "https://docs.chessroster.com/",
+    "title": "chessroster-index"
+  },
+  {
+    "id": "boylston-example",
+    "url": "https://beta.boylstonchess.org/events/1562/big-money-swiss#entries",
+    "title": "boylston-example"
+  },
+  {
+    "id": "boylston-calendar",
+    "url": "https://boylstonchess.org/calendar/",
+    "title": "boylston-calendar"
+  },
+  {
+    "id": "boylston-april-calendar",
+    "url": "https://boylstonchess.org/calendar/april-2026",
+    "title": "boylston-april-calendar"
+  },
+  {
+    "id": "boylston-quads",
+    "url": "https://boylstonchess.org/events/1561/september-quads",
+    "title": "boylston-quads"
+  },
+  {
+    "id": "boylston-otb-swiss",
+    "url": "https://boylstonchess.org/events/1560/september-tuesday-night-swiss-otb",
+    "title": "boylston-otb-swiss"
+  },
+  {
+    "id": "boylston-online-swiss",
+    "url": "https://boylstonchess.org/events/1559/early-autumn-six-week-swiss-online",
+    "title": "boylston-online-swiss"
+  },
+  {
+    "id": "boylston-rated-blitz",
+    "url": "https://boylstonchess.org/events/1576/rated-friday-night-blitz",
+    "title": "boylston-rated-blitz"
+  },
+  {
+    "id": "boylston-unrated-blitz",
+    "url": "https://boylstonchess.org/events/1575/big-money-blitz-unrated",
+    "title": "boylston-unrated-blitz"
+  },
+  {
+    "id": "boylston-scholastics",
+    "url": "https://boylstonchess.org/events/1558/september-scholastics",
+    "title": "boylston-scholastics"
+  },
+  {
+    "id": "boylston-league",
+    "url": "https://boylstonchess.org/events/1545/boston-metropolitan-chess-league-team-signup",
+    "title": "boylston-league"
+  },
+  {
+    "id": "boylston-equinox",
+    "url": "https://boylstonchess.org/events/1566/fall-equinox-swiss",
+    "title": "boylston-equinox"
+  },
+  {
+    "id": "boylston-queens",
+    "url": "https://boylstonchess.org/events/1553/boston-queens-series-event-1-the-start",
+    "title": "boylston-queens"
+  },
+  {
+    "id": "flutter-architecture",
+    "url": "https://docs.flutter.dev/app-architecture/guide",
+    "title": "flutter-architecture"
+  },
+  {
+    "id": "flutter-platforms",
+    "url": "https://docs.flutter.dev/reference/supported-platforms",
+    "title": "flutter-platforms"
+  },
+  {
+    "id": "dart-effective",
+    "url": "https://dart.dev/effective-dart/design",
+    "title": "dart-effective"
+  },
+  {
+    "id": "sqlite-atomic",
+    "url": "https://sqlite.org/atomiccommit.html",
+    "title": "sqlite-atomic"
+  },
+  {
+    "id": "sqlite-backup",
+    "url": "https://sqlite.org/backup.html",
+    "title": "sqlite-backup"
+  },
+  {
+    "id": "drift-transactions",
+    "url": "https://drift.simonbinder.eu/dart_api/transactions/",
+    "title": "drift-transactions"
+  },
+  {
+    "id": "ddia-author",
+    "url": "https://dataintensive.net/",
+    "title": "ddia-author"
+  },
+  {
+    "id": "patterns-book",
+    "url": "https://gameprogrammingpatterns.com/contents.html",
+    "title": "patterns-book"
+  },
+  {
+    "id": "patterns-command",
+    "url": "https://gameprogrammingpatterns.com/command.html",
+    "title": "patterns-command"
+  },
+  {
+    "id": "patterns-state",
+    "url": "https://gameprogrammingpatterns.com/state.html",
+    "title": "patterns-state"
+  },
+  {
+    "id": "patterns-observer",
+    "url": "https://gameprogrammingpatterns.com/observer.html",
+    "title": "patterns-observer"
+  },
+  {
+    "id": "gpl-faq",
+    "url": "https://www.gnu.org/licenses/gpl-faq.html",
+    "title": "gpl-faq"
+  },
+  {
+    "id": "fide-2026-rules",
+    "url": "https://www.fide.com/fide-reminds-organizers-and-arbiters-of-updated-swiss-rules-effective-from-february-1-2026/",
+    "title": "fide-2026-rules"
+  },
+  {
+    "id": "fide-trf26",
+    "url": "https://tec.fide.com/trf-2026/",
+    "title": "fide-trf26"
+  },
+  {
+    "id": "fide-trf26-spec",
+    "url": "https://handbook.fide.com/files/handbook/TRF26.pdf",
+    "title": "fide-trf26-spec"
+  },
+  {
+    "id": "bughouse-trueskill",
+    "url": "https://www.microsoft.com/en-us/research/project/trueskill-ranking-system/",
+    "title": "bughouse-trueskill"
+  },
+  {
+    "id": "bughouse-openskill",
+    "url": "https://openskill.me/en/stable/manual.html",
+    "title": "bughouse-openskill"
+  },
+  {
+    "id": "uscf-rules-2026",
+    "url": "https://new.uschess.org/sites/default/files/media/documents/us-chess-rule-book-online-2026.pdf",
+    "title": "uscf-rules-2026"
+  },
+  {
+    "id": "uscf-rules-updates-2026",
+    "url": "https://new.uschess.org/sites/default/files/media/documents/summary-of-major-us-chess-rules-updates-in-the-seventh-edition-2026.pdf",
+    "title": "uscf-rules-updates-2026"
+  },
+  {
+    "id": "uscf-rating-guide",
+    "url": "https://new.uschess.org/sites/default/files/media/documents/us-chess-tournament-rating-guide-2025.pdf",
+    "title": "uscf-rating-guide"
+  },
+  {
+    "id": "uscf-rules-index",
+    "url": "https://new.uschess.org/news/7th-edition-rule-book-free-chapters-updated-2026",
+    "title": "uscf-rules-index"
+  },
+  {
+    "id": "boylston-rapid",
+    "url": "https://boylstonchess.org/events/1504/weekend-rapid",
+    "title": "boylston-rapid"
+  },
+  {
+    "id": "boylston-tornado",
+    "url": "https://boylstonchess.org/events/1505/tornado-147",
+    "title": "boylston-tornado"
+  },
+  {
+    "id": "bughouse-weng-lin",
+    "url": "https://jmlr.org/papers/v12/weng11a.html",
+    "title": "bughouse-weng-lin"
+  },
+  {
+    "id": "pairing-bbp",
+    "url": "https://github.com/BieremaBoyzProgramming/bbpPairings",
+    "title": "pairing-bbp"
+  },
+  {
+    "id": "pairing-tomachess",
+    "url": "https://github.com/Moritz72/ToMaChess",
+    "title": "pairing-tomachess"
+  },
+  {
+    "id": "pairing-gambit",
+    "url": "https://github.com/gambit-devs/gambit-pairing",
+    "title": "pairing-gambit"
+  },
+  {
+    "id": "patterns-gof-publisher",
+    "url": "https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480",
+    "title": "patterns-gof-publisher"
+  },
+  {
+    "id": "ddia-publisher-ch1",
+    "url": "https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/ch01.html",
+    "title": "ddia-publisher-ch1"
+  },
+  {
+    "id": "patterns-gof-ch1",
+    "url": "https://www.oreilly.com/library/view/design-patterns-elements/0201633612/ch01.html",
+    "title": "patterns-gof-ch1"
+  },
+  {
+    "id": "chessroster-director-download",
+    "title": "Download Registrations",
+    "url": "https://docs.chessroster.com/chessroster/director/download/"
+  },
+  {
+    "id": "chessroster-director-upload-reports",
+    "title": "Publishing Results to ChessRoster",
+    "url": "https://docs.chessroster.com/chessroster/director/upload-reports/"
+  },
+  {
+    "id": "chessroster-director-managing-pairings",
+    "title": "Managing Pairings",
+    "url": "https://docs.chessroster.com/chessroster/director/managing-pairings/"
+  },
+  {
+    "id": "chessroster-director-live-results",
+    "title": "Live Results",
+    "url": "https://docs.chessroster.com/chessroster/director/live-results/"
+  },
+  {
+    "id": "chessroster-organizer-creating-tournaments",
+    "title": "Creating Tournaments",
+    "url": "https://docs.chessroster.com/chessroster/organizer/creating-tournaments/"
+  },
+  {
+    "id": "chessroster-organizer-tournament-management-panel",
+    "title": "Tournament Management Panel",
+    "url": "https://docs.chessroster.com/chessroster/organizer/tournament-management-panel/"
+  },
+  {
+    "id": "chessroster-organizer-pairing-settings",
+    "title": "Pairing Settings",
+    "url": "https://docs.chessroster.com/chessroster/organizer/pairing-settings/"
+  },
+  {
+    "id": "chessroster-organizer-team-registration",
+    "title": "Team Registration",
+    "url": "https://docs.chessroster.com/chessroster/organizer/team-registration/"
+  },
+  {
+    "id": "chessroster-organizer-managing-participants",
+    "title": "Managing Participants",
+    "url": "https://docs.chessroster.com/chessroster/organizer/managing-participants/"
+  },
+  {
+    "id": "chessroster-organizer-sms-pairings-and-results",
+    "title": "SMS Pairings & Results",
+    "url": "https://docs.chessroster.com/chessroster/organizer/sms-pairings-and-results/"
+  },
+  {
+    "id": "chessroster-player-team-registration",
+    "title": "Team Registration",
+    "url": "https://docs.chessroster.com/chessroster/player/team-registration/"
+  },
+  {
+    "id": "chessroster-about-fide-pairing",
+    "title": "FIDE Pairing Engine",
+    "url": "https://docs.chessroster.com/chessroster/about/fide-pairing/"
+  }
+]

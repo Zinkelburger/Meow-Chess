@@ -1,0 +1,242 @@
+[
+  {
+    "title": "ChessRoster Documentation",
+    "url": "https://docs.chessroster.com/chessroster/"
+  },
+  {
+    "title": "Director Guide",
+    "url": "https://docs.chessroster.com/chessroster/director/"
+  },
+  {
+    "title": "Download Registrations",
+    "url": "https://docs.chessroster.com/chessroster/director/download/"
+  },
+  {
+    "title": "FIDE ID Requests",
+    "url": "https://docs.chessroster.com/chessroster/director/fide-id-requests/"
+  },
+  {
+    "title": "Publishing Results to ChessRoster",
+    "url": "https://docs.chessroster.com/chessroster/director/upload-reports/"
+  },
+  {
+    "title": "Managing Pairings",
+    "url": "https://docs.chessroster.com/chessroster/director/managing-pairings/"
+  },
+  {
+    "title": "Live Results",
+    "url": "https://docs.chessroster.com/chessroster/director/live-results/"
+  },
+  {
+    "title": "Getting Started",
+    "url": "https://docs.chessroster.com/chessroster/getting-started/"
+  },
+  {
+    "title": "Creating an Account",
+    "url": "https://docs.chessroster.com/chessroster/getting-started/creating-an-account/"
+  },
+  {
+    "title": "Navigating ChessRoster",
+    "url": "https://docs.chessroster.com/chessroster/getting-started/navigating-chessroster/"
+  },
+  {
+    "title": "Organizer Guide",
+    "url": "https://docs.chessroster.com/chessroster/organizer/"
+  },
+  {
+    "title": "Getting Started as an Organizer",
+    "url": "https://docs.chessroster.com/chessroster/organizer/getting-started/"
+  },
+  {
+    "title": "Managing Organizer & Staff Members",
+    "url": "https://docs.chessroster.com/chessroster/organizer/managing-organizer/"
+  },
+  {
+    "title": "PayPal Setup",
+    "url": "https://docs.chessroster.com/chessroster/organizer/paypal-setup/"
+  },
+  {
+    "title": "Creating Tournaments",
+    "url": "https://docs.chessroster.com/chessroster/organizer/creating-tournaments/"
+  },
+  {
+    "title": "Registration Tiers & Section Pricing",
+    "url": "https://docs.chessroster.com/chessroster/organizer/registration-tiers/"
+  },
+  {
+    "title": "Editing and Deleting Tournaments",
+    "url": "https://docs.chessroster.com/chessroster/organizer/editing-and-deleting-tournaments/"
+  },
+  {
+    "title": "AI-Assisted Descriptions and Images",
+    "url": "https://docs.chessroster.com/chessroster/organizer/ai-assisted-content/"
+  },
+  {
+    "title": "Custom Registration Questions",
+    "url": "https://docs.chessroster.com/chessroster/organizer/custom-registration-questions/"
+  },
+  {
+    "title": "Tournament Management Panel",
+    "url": "https://docs.chessroster.com/chessroster/organizer/tournament-management-panel/"
+  },
+  {
+    "title": "Pairing Settings",
+    "url": "https://docs.chessroster.com/chessroster/organizer/pairing-settings/"
+  },
+  {
+    "title": "Team Registration",
+    "url": "https://docs.chessroster.com/chessroster/organizer/team-registration/"
+  },
+  {
+    "title": "Managing Participants",
+    "url": "https://docs.chessroster.com/chessroster/organizer/managing-participants/"
+  },
+  {
+    "title": "Financial Reports",
+    "url": "https://docs.chessroster.com/chessroster/organizer/financial-reports/"
+  },
+  {
+    "title": "Embedding Tournament Reports",
+    "url": "https://docs.chessroster.com/chessroster/organizer/embedding-reports/"
+  },
+  {
+    "title": "Memberships",
+    "url": "https://docs.chessroster.com/chessroster/organizer/memberships/"
+  },
+  {
+    "title": "Tournament Bundles",
+    "url": "https://docs.chessroster.com/chessroster/organizer/tournament-bundles/"
+  },
+  {
+    "title": "Discount Codes",
+    "url": "https://docs.chessroster.com/chessroster/organizer/discount-codes/"
+  },
+  {
+    "title": "Tournament Notifications",
+    "url": "https://docs.chessroster.com/chessroster/organizer/notifications/"
+  },
+  {
+    "title": "SMS Pairings & Results",
+    "url": "https://docs.chessroster.com/chessroster/organizer/sms-pairings-and-results/"
+  },
+  {
+    "title": "Player's Guide",
+    "url": "https://docs.chessroster.com/chessroster/player/"
+  },
+  {
+    "title": "Your Player Profile",
+    "url": "https://docs.chessroster.com/chessroster/player/player-profile/"
+  },
+  {
+    "title": "Finding Tournaments",
+    "url": "https://docs.chessroster.com/chessroster/player/finding-tournaments/"
+  },
+  {
+    "title": "Registering for a Tournament",
+    "url": "https://docs.chessroster.com/chessroster/player/registering/"
+  },
+  {
+    "title": "Registering Multiple Players",
+    "url": "https://docs.chessroster.com/chessroster/player/registering-multiple-players/"
+  },
+  {
+    "title": "Team Registration",
+    "url": "https://docs.chessroster.com/chessroster/player/team-registration/"
+  },
+  {
+    "title": "Registering for a Bundle",
+    "url": "https://docs.chessroster.com/chessroster/player/bundle-registration/"
+  },
+  {
+    "title": "My Registrations",
+    "url": "https://docs.chessroster.com/chessroster/player/my-registrations/"
+  },
+  {
+    "title": "Add a Section Schedule to Your Calendar",
+    "url": "https://docs.chessroster.com/chessroster/player/calendar-subscription/"
+  },
+  {
+    "title": "Tournament Page Guide",
+    "url": "https://docs.chessroster.com/chessroster/player/tournament-page-guide/"
+  },
+  {
+    "title": "Reading Tournament Reports",
+    "url": "https://docs.chessroster.com/chessroster/player/reading-reports/"
+  },
+  {
+    "title": "Reporting Your Result by Text",
+    "url": "https://docs.chessroster.com/chessroster/player/report-result-by-text/"
+  },
+  {
+    "title": "Payment and Invoices",
+    "url": "https://docs.chessroster.com/chessroster/player/payment-and-invoices/"
+  },
+  {
+    "title": "Paying an Invoice",
+    "url": "https://docs.chessroster.com/chessroster/player/paying-an-invoice/"
+  },
+  {
+    "title": "Club Memberships",
+    "url": "https://docs.chessroster.com/chessroster/player/membership/"
+  },
+  {
+    "title": "SwissSys Integration",
+    "url": "https://docs.chessroster.com/chessroster/swisssys-integration/"
+  },
+  {
+    "title": "How ChessRoster and SwissSys Work Together",
+    "url": "https://docs.chessroster.com/chessroster/swisssys-integration/overview/"
+  },
+  {
+    "title": "Linking SwissSys to ChessRoster",
+    "url": "https://docs.chessroster.com/chessroster/swisssys-integration/linking-accounts/"
+  },
+  {
+    "title": "Uploading a SwissSys Event to ChessRoster",
+    "url": "https://docs.chessroster.com/chessroster/swisssys-integration/uploading-events/"
+  },
+  {
+    "title": "Ordering SwissSys",
+    "url": "https://docs.chessroster.com/chessroster/swisssys-integration/ordering-swisssys/"
+  },
+  {
+    "title": "About ChessRoster",
+    "url": "https://docs.chessroster.com/chessroster/about/"
+  },
+  {
+    "title": "Contact",
+    "url": "https://docs.chessroster.com/chessroster/about/contact/"
+  },
+  {
+    "title": "Team",
+    "url": "https://docs.chessroster.com/chessroster/about/team/"
+  },
+  {
+    "title": "FIDE Pairing Engine",
+    "url": "https://docs.chessroster.com/chessroster/about/fide-pairing/"
+  },
+  {
+    "title": "Policies & Legal",
+    "url": "https://docs.chessroster.com/chessroster/policies/"
+  },
+  {
+    "title": "Payment & Refund Policy",
+    "url": "https://docs.chessroster.com/chessroster/policies/payment-policy/"
+  },
+  {
+    "title": "Acceptable Use Policy",
+    "url": "https://docs.chessroster.com/chessroster/policies/acceptable-use/"
+  },
+  {
+    "title": "Privacy",
+    "url": "https://docs.chessroster.com/chessroster/policies/privacy/"
+  },
+  {
+    "title": "Terms of Service",
+    "url": "https://docs.chessroster.com/chessroster/policies/terms/"
+  },
+  {
+    "title": "Support",
+    "url": "https://docs.chessroster.com/chessroster/support/"
+  }
+]
