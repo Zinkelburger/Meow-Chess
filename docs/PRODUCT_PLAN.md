@@ -8,7 +8,9 @@
 Build a calm, dependable tool for the person running the tournament. The important
 moment is not creating an impressive dashboard: it is checking in the last player,
 making sensible sections, posting round one, correcting a result, and leaving with
-a report US Chess can accept.
+a report US Chess can accept. [A tournament day, in order](TD_DAY.md) puts those
+moments on the clock with targets; the usability gates K01–K23 in
+[Requirements](REQUIREMENTS.md) make them release criteria.
 
 ## Decisions proposed now
 
@@ -69,6 +71,10 @@ The [survey](../research/notes/BOYLSTON.md) makes that gap explicit.
 - Separate competition scores, prize standings, and ratable games.
 - Save durably before displaying “Saved.” Make recovery understandable.
 - Prefer a small complete workflow over a menu of unfinished features.
+- Put time on screen. The TD should never need a separate clock to answer “when?”
+- The default path is the batch path. Review is for warnings, not for every round.
+- Speak TD: post, wall sheet, pairing number, house player. Never “publish” as a verb.
+- Survive interruption. Nothing half-done is lost when the TD walks away.
 
 ## Main view
 

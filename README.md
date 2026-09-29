@@ -8,7 +8,8 @@ usable printing. Inspired by SwissSys workflows and Chess Auto Prep V2's UI.
 AGPLv3 [LICENSE](LICENSE) is retained. Platform and release boundaries below
 are recommendations awaiting product decisions, not promises of shipped features.
 
-Start with [the TD’s actual duties and supporting sources](research/notes/TD_DUTIES.md)
+Start with [the TD’s actual duties and supporting sources](research/notes/TD_DUTIES.md),
+[a tournament day, in order](docs/TD_DAY.md)
 and [the keyboard results-entry contract](docs/RESULT_ENTRY.md). Then read the expanded [full feature map](docs/FULL_FEATURE_MAP.md),
 [TD experience specification](docs/TD_EXPERIENCE.md),
 [first-class TD operations](docs/TD_OPERATIONS.md), and

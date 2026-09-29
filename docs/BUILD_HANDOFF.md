@@ -6,9 +6,9 @@ starting the application build. No production application has been scaffolded.
 
 ## Read first
 
-Start with [actual TD duties and their evidence](../research/notes/TD_DUTIES.md).
-For every core workflow, trace duty → realistic scenario → interaction → acceptance
-test. A competitor menu item alone does not establish priority or usability.
+Start with [actual TD duties and their evidence](../research/notes/TD_DUTIES.md)
+and [a tournament day, in order](TD_DAY.md). For every core workflow, trace duty →
+moment on the clock → interaction → acceptance test. A competitor menu item alone does not establish priority or usability.
 Read [Results entry](RESULT_ENTRY.md) before implementing any results table.
 
 
@@ -117,6 +117,15 @@ Suggested first future-agent prompt:
 > concrete acceptance fixtures. Preserve US Chess-first delivery and full-parity
 > traceability. Do not silently approximate export formats or pairing rules. Build
 > only the slice explicitly authorized in this task, and report its tested scope.
+
+## Priority correction: the tournament day is the spec
+
+Build the screens the timeline names: Check-in, Event preflight and end-of-day
+lists, Post all ready sections with Print packet, the round clock, the event-wide
+results grid and Lookup. Batch post is the default path; per-section review is
+the exception. Use TD vocabulary in every visible label (Post, not Publish). The
+K01–K22 gates in [Requirements](REQUIREMENTS.md) are release gates for the first
+usable TD release, alongside D01–D07 and J01–J06.
 
 ## Priority correction: TD flexibility is core
 
