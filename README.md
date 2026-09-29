@@ -20,6 +20,10 @@ The [SwissSys archive coverage](research/SWISSSYS_ARCHIVE.md) and
 [page checklist](research/SWISSSYS_TOPIC_LEDGER.md) distinguish saved pages from
 reviewed requirements and tested parity.
 
+The [review of Fable’s tournament-day additions](docs/FABLE_REVIEW.md) records
+what to keep, corrections needed, and how the two proposals fit together. Those
+main-checkout edits are reviewed but not yet merged into this branch.
+
 Supporting plans:
 
 | Document | Purpose |

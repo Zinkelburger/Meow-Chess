@@ -90,3 +90,17 @@ SHA-256 hashes match the private local cache. `git diff --check` passed.
 No application code or executable POC changed. Flutter tests, actual rapid typing,
 TD interviews/rehearsals, printer behavior and federation validation were not run;
 there is still no application scaffold. No new parity or release-readiness claim.
+
+## Review of Fable's additions
+
+Reviewed a captured nine-file snapshot of the uncommitted main-checkout planning
+changes. Preserved the source files; snapshots and SHA-256 metadata identify the
+review target. Recorded ten correctness/usability findings, reconciliation choices
+and three small further ideas in `docs/FABLE_REVIEW.md`. Rechecked the official
+US Chess rulebook and TD FAQ for clock, outcome, prize and membership distinctions.
+
+Passed: 24 Markdown files / 105 local links including fragments; all nine
+snapshot hashes; whitespace validation. Source-file changes since capture: 0.
+No implementation or TD usability study was performed. Fable's uncommitted edits
+and the earlier usability branch still require integration; no main files were
+overwritten by this review.
