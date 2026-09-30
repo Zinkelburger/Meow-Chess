@@ -70,3 +70,19 @@ with Unix selectors), an explicit commit handshake, and a nonzero termination
 status on either OS. It checks the last acknowledged revision, all 120 players,
 audit/history counts, SQLite integrity and foreign keys. It closes Python SQLite
 handles before cleanup, which is required on Windows.
+
+## Verification record — September 30, 2026
+
+[GitHub qualification run 36740268856](https://github.com/Zinkelburger/Meow-Chess/actions/runs/36740268856)
+passed on Ubuntu 22.04, Windows Server 2022 and Windows Server 2025. It includes
+analysis, lint, unit/widget tests, independent DBF validation and negative controls,
+actual writer termination/WAL recovery, and all three native desktop scenarios.
+The tested code is commit `55b77d6`; the subsequent native-test change only formats
+the same assertions. Local Linux also passed 129 unit/widget tests and three
+native scenarios. The Windows-only symlink skip is described above.
+
+The first Windows runs caught and prompted fixes for Python's default text
+encoding, uppercase `.EXE` launcher handling in Dart native hooks, and an E2E
+navigation target clipped by the smaller Windows viewport. These are fixed in
+the passing run. This run tests desktop debug builds; installer launch checks
+remain part of the release packaging workflow and were not executed by this run.
