@@ -374,6 +374,44 @@ class _WorkspaceState extends State<Workspace> {
                         'Close event',
                         widget.onClose,
                       ),
+                      const SizedBox(width: 12),
+                      _barIcon(
+                        Icons.chevron_left,
+                        c.canUndo
+                            ? 'Back: undo ${c.undoLabel} (Ctrl+Z)'
+                            : 'Nothing to undo',
+                        c.canUndo ? undo : null,
+                      ),
+                      _barIcon(
+                        Icons.chevron_right,
+                        c.canRedo
+                            ? 'Forward: redo ${c.redoLabel} (Ctrl+Shift+Z)'
+                            : 'Nothing to redo',
+                        c.canRedo ? redo : null,
+                      ),
+                      _barIcon(
+                        Icons.account_tree_outlined,
+                        historyOpen
+                            ? 'Hide history (Ctrl+H)'
+                            : 'History (Ctrl+H)',
+                        toggleHistory,
+                        selected: historyOpen,
+                      ),
+                      _barIcon(
+                        dark
+                            ? Icons.light_mode_outlined
+                            : Icons.dark_mode_outlined,
+                        dark ? 'Light mode' : 'Dark mode',
+                        widget.onTheme,
+                      ),
+                      SizedBox(
+                        height: 24,
+                        child: VerticalDivider(
+                          width: 17,
+                          color: colors.outlineVariant,
+                        ),
+                      ),
+                      _barIcon(Icons.close, 'Close event', widget.onClose),
                     ],
                   ),
                 ),
