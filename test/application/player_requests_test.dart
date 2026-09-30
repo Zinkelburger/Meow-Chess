@@ -85,4 +85,17 @@ void main() {
     expect(p.team, isEmpty);
     expect(p.avoid, isEmpty);
   });
+  test('quad detects a later-round restriction before posting round one', () async {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    final initial = await c.propose();
+    final current = initial.rounds.values.single.games;
+    final a = current.first.white, b = current.last.white;
+    c.avoidPair(a, b, true);
+    final next = await c.propose();
+    expect(next.rounds, isEmpty);
+    expect(next.issues.values.single, contains('round robin cannot skip'));
+    expect(c.event!.games, isEmpty);
+  });
+
 }
