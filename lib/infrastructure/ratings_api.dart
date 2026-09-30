@@ -1,5 +1,7 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+
 import '../domain/model.dart';
 
 class MemberObservation {
@@ -61,28 +63,45 @@ class RatingsApi {
         'An operator-provided US Chess API key is required.',
       );
     }
+    // Custom API-key headers are not stripped by Dart's cross-origin redirect
+    // handling. Refuse redirects so a provider response cannot forward the key.
+    final request =
+        http.Request(
+            'GET',
+            Uri.https('ratings-api.uschess.org', '/api/v2/members/$id'),
+          )
+          ..followRedirects = false
+          ..headers.addAll({'X-Api-Key': key, 'Accept': 'application/json'});
     final response = await client
-        .get(
-          Uri.https('ratings-api.uschess.org', '/api/v2/members/$id'),
-          headers: {'X-Api-Key': key, 'Accept': 'application/json'},
-        )
+        .send(request)
+        .then(http.Response.fromStream)
         .timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) {
       throw TournamentException(switch (response.statusCode) {
         401 ||
         403 => 'US Chess rejected this API key. Update it in Data sources.',
         404 => 'Member ID not found. No local record was changed.',
-        429 =>
-          'US Chess rate limit reached. Retry later; local operation remains available.',
+        429 => 'US Chess rate limit reached. Retry later; local operation remains available.',
         _ =>
           'US Chess lookup failed (HTTP ${response.statusCode}). No local record was changed.',
       });
     }
-    final decoded = jsonDecode(response.body);
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      // FormatException includes the response body; it may echo credentials.
+      throw const TournamentException('Invalid JSON in the US Chess response.');
+    }
     if (decoded is! Json) {
       throw const TournamentException('Unexpected US Chess response.');
     }
-    final result = MemberObservation.parse(decoded, DateTime.now());
+    final MemberObservation result;
+    try {
+      result = MemberObservation.parse(decoded, DateTime.now());
+    } on TypeError {
+      throw const TournamentException('Unexpected US Chess member fields.');
+    }
     if (result.id != id) {
       throw const TournamentException(
         'The provider returned a different identity. No local data was changed.',

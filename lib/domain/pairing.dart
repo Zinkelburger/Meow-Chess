@@ -4,7 +4,7 @@ import 'standings.dart';
 List<int> quadGroupSizes(int n) {
   if (n < 4) {
     throw const TournamentException(
-      'At least four checked-in players are needed. Add a house player or create a section manually.',
+      'At least four players are needed. Add a house player or create a section manually.',
     );
   }
   final remainder = n % 4;
@@ -19,7 +19,7 @@ List<Section> makeQuads(Event e, String Function() id) {
       'Rounds are already posted. Move or combine entries with an explicit transition instead.',
     );
   }
-  final pool = e.players.where((p) => p.checkedIn && !p.withdrawn).toList()
+  final pool = e.players.where((p) => !p.withdrawn).toList()
     ..sort((a, b) {
       final c = b.rating.compareTo(a.rating);
       return c != 0
@@ -46,6 +46,29 @@ List<Section> makeQuads(Event e, String Function() id) {
   }).toList();
 }
 
+/// A quad that no longer has exactly four players before its first round
+/// (after moves or late entries) pairs as a small Swiss instead.
+Format pairingFormat(Section section) =>
+    section.format == Format.quad &&
+        section.rounds.isEmpty &&
+        section.players.length != 4
+    ? Format.swiss
+    : section.format;
+
+/// Explicit player requests are independent of team membership.
+bool pairingRestricted(Event event, String a, String b) =>
+    event.player(a).avoid.contains(b) || event.player(b).avoid.contains(a);
+
+void checkPairingRequests(Event event, Iterable<Game> games) {
+  for (final game in games) {
+    if (pairingRestricted(event, game.white, game.black)) {
+      throw TournamentException(
+        '${event.player(game.white).name} and ${event.player(game.black).name} have a do-not-pair request. Move them to different sections or remove the request in player details.',
+      );
+    }
+  }
+}
+
 /// Bounded, deterministic score-group Swiss for pilot use. This is deliberately
 /// not advertised as a certified US Chess rules implementation.
 Round proposeRound(Event event, Section section, String Function() id) {
@@ -69,8 +92,8 @@ Round proposeRound(Event event, Section section, String Function() id) {
   final byes = <ByeAward>[];
   final available = section.players.where((pid) {
     final p = event.player(pid);
-    if (p.withdrawn || !p.checkedIn) {
-      byes.add(ByeAward(pid, 0, p.withdrawn ? 'Withdrawn' : 'Not checked in'));
+    if (p.withdrawn) {
+      byes.add(ByeAward(pid, 0, 'Withdrawn'));
       return false;
     }
     if (p.byes.containsKey(n)) {
@@ -80,14 +103,26 @@ Round proposeRound(Event event, Section section, String Function() id) {
     return true;
   }).toList();
   final pairs = <(String, String)>[];
-  if (section.format != Format.swiss) {
+  final format = pairingFormat(section);
+  if (format != Format.swiss) {
     final schedule = roundRobinSchedule(
       section.players,
-      quad: section.format == Format.quad,
+      quad: format == Format.quad,
       colorLot: colorLot,
     );
     if (n > schedule.length) {
       throw const TournamentException('The round-robin schedule is complete.');
+    }
+    // Catch an impossible fixed schedule before posting its first round,
+    // including a requested avoidance whose meeting would be in a later round.
+    for (final (offset, remaining) in schedule.skip(n - 1).indexed) {
+      for (final (a, b) in remaining) {
+        if (a != null && b != null && pairingRestricted(event, a, b)) {
+          throw TournamentException(
+            '${event.player(a).name} and ${event.player(b).name} have a do-not-pair request, but round ${n + offset} requires them to meet. A round robin cannot skip this meeting; move them to different sections or remove the request.',
+          );
+        }
+      }
     }
     for (final (a, b) in schedule[n - 1]) {
       if (a == null || b == null) {
@@ -100,8 +135,12 @@ Round proposeRound(Event event, Section section, String Function() id) {
       if (available.contains(a) && available.contains(b)) {
         pairs.add((a, b));
       } else if (available.contains(a) || available.contains(b)) {
-        throw const TournamentException(
-          'A scheduled round-robin opponent is absent. Reinstate them to record an explicit forfeit, or combine into Swiss.',
+        final absent = byes.firstWhere(
+          (bye) => bye.player == a || bye.player == b,
+        );
+        throw TournamentException(
+          'Round $n pairs ${event.player(a).name} with ${event.player(b).name}, but ${event.player(absent.player).name} is unavailable (${absent.reason.toLowerCase()}). '
+          'Make them available and record a forfeit if they do not play, or combine into Swiss.',
         );
       }
     }
@@ -121,15 +160,31 @@ Round proposeRound(Event event, Section section, String Function() id) {
         .map((b) => b.player)
         .toSet();
     final opponents = <String, Set<String>>{};
-    final colors = <String, int>{};
-    for (final g in event.games) {
-      if (g.outcome.played || g.pairingAssumption != null) {
-        opponents.putIfAbsent(g.white, () => {}).add(g.black);
-        opponents.putIfAbsent(g.black, () => {}).add(g.white);
-        colors[g.white] = (colors[g.white] ?? 0) + 1;
-        colors[g.black] = (colors[g.black] ?? 0) - 1;
+    // Balance is white minus black games; last is +1/-1 for the most recent color.
+    final colors = <String, int>{}, last = <String, (int, int)>{};
+    for (final s in event.sections) {
+      for (final r in s.rounds) {
+        for (final g in r.games) {
+          if (!g.outcome.played && g.pairingAssumption == null) continue;
+          opponents.putIfAbsent(g.white, () => {}).add(g.black);
+          opponents.putIfAbsent(g.black, () => {}).add(g.white);
+          colors[g.white] = (colors[g.white] ?? 0) + 1;
+          colors[g.black] = (colors[g.black] ?? 0) - 1;
+          for (final (pid, color) in [(g.white, 1), (g.black, -1)]) {
+            if ((last[pid]?.$1 ?? 0) <= r.number) last[pid] = (r.number, color);
+          }
+        }
       }
     }
+    // Equalize first, then alternate; round parity only breaks a complete tie.
+    bool firstTakesWhite(String a, String b) {
+      final balance = (colors[a] ?? 0).compareTo(colors[b] ?? 0);
+      if (balance != 0) return balance < 0;
+      final alternation = (last[a]?.$2 ?? 0).compareTo(last[b]?.$2 ?? 0);
+      if (alternation != 0) return alternation < 0;
+      return n.isOdd;
+    }
+
     var nodes = 0;
     List<(String, String)>? match(List<String> left) {
       if (left.isEmpty) return [];
@@ -141,7 +196,11 @@ Round proposeRound(Event event, Section section, String Function() id) {
       final a = left.first;
       final choices = left
           .skip(1)
-          .where((b) => !(opponents[a]?.contains(b) ?? false))
+          .where(
+            (b) =>
+                !(opponents[a]?.contains(b) ?? false) &&
+                !pairingRestricted(event, a, b),
+          )
           .toList();
       choices.sort((b, c) {
         final distanceB = (scores[a]! - scores[b]!).abs(),
@@ -155,9 +214,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
       for (final b in choices) {
         final rest = match(left.where((x) => x != a && x != b).toList());
         if (rest != null) {
-          final aWhite =
-              (colors[a] ?? 0) < (colors[b] ?? 0) ||
-              ((colors[a] ?? 0) == (colors[b] ?? 0) && n.isOdd);
+          final aWhite = firstTakesWhite(a, b);
           return [(aWhite ? a : b, aWhite ? b : a), ...rest];
         }
       }
@@ -187,7 +244,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
     }
     if (result == null) {
       throw const TournamentException(
-        'No non-repeat pairing without a repeated full-point bye. Review the field or enter a manual round with an exception reason.',
+        'No non-repeat pairing satisfies the opponent requests and bye limits. Review player requests or adjust the sections.',
       );
     }
     pairs.addAll(result);
@@ -218,12 +275,12 @@ Round proposeRound(Event event, Section section, String Function() id) {
     number: n,
     games: games,
     byes: byes,
-    note: section.format == Format.quad
+    note: format == Format.quad
         ? 'Recorded final-round color lot: $colorLot (derived from the randomly assigned section ID).'
         : '',
-    policy: section.format == Format.quad
+    policy: format == Format.quad
         ? 'quad-30G-seeded-v1'
-        : section.format == Format.swiss
+        : format == Format.swiss
         ? 'score-swiss-pilot-v1'
         : 'circle-rr-v1',
   );

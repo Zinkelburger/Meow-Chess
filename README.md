@@ -48,7 +48,7 @@ tournament modification was performed.
 With Flutter installed, run `flutter pub get`, then `flutter run -d linux`
 (or `-d windows` / `-d macos` on the corresponding host). On this workstation,
 use `scripts/ci.sh build` for a bounded Linux release build; the executable is
-`build/linux/x64/release/bundle/meow_chess`. Start with **Explore a practice event**
+`build/linux/x64/release/bundle/meow_chess`. Start with **Try a practice event**
 for 22 synthetic entrants in four quads and a six-player Swiss.
 
 Linux build prerequisites include GTK 3, CMake, Ninja, C++ tooling and libsecret
@@ -57,11 +57,42 @@ The workstation wrapper discovers the local dependency prefix if present.
 
 Events are `.meow` files; use the app’s Save independent copy or backup actions
 to transfer an open event safely. `MEOW_DATA_DIR` overrides the recent-event library
-location for isolated testing. A filename argument opens that event.
+location for isolated testing. A filename argument opens that event; in release
+builds a second launch hands its file to the window already open.
+
+## Install and release
+
+Pushing a `v*` tag (`git tag v0.2.0 && git push origin v0.2.0`) runs
+[release.yml](.github/workflows/release.yml): the CI gate, then a GitHub Release with
+a Windows setup `.exe` and portable zip, and Linux `.deb`, `.rpm`, `.flatpak` and
+portable zip. A tag with a dash (`v0.2.0-rc1`) is published as a pre-release. The
+Windows build alone can be tried from Actions → Windows build → Run workflow.
+
+Every package makes `.meow` files open in Meow Chess on double-click. The portable
+zips do it on first launch instead: the app asks "Set up Meow Chess on this
+computer?" and, on Linux, installs a menu entry, icon and the `.meow` file type under
+`~/.local/share`; on Windows, it registers `.meow` for the current user. Nothing needs
+administrator rights. Debug builds never ask. `MEOW_CHESS_DESKTOP_SETUP=1` sets up
+without asking and `=0` never asks, for scripted installs. The icon is
+[meow_chess_master.png](assets/icon/meow_chess_master.png); `tools/make_icons.sh` regenerates every
+platform size from it.
+
+The logo appears in the welcome screen and tournament toolbar. Window controls,
+movement and resizing use the operating system’s standard window decorations.
+
+For a local checkout on KDE/Wayland, build the app and run
+`python3 tools/install_linux_launcher.py`. This installs the menu entry and icon
+whose name matches the Wayland app ID, without changing default file handlers.
+Use `--bundle build/linux/x64/debug/bundle` to point the launcher at a debug build.
+Rerun after changing the logo or moving the checkout; reopen the app if Plasma
+still shows a cached icon. Packaged installations already include this entry.
 
 Run `scripts/ci.sh analyze`, `scripts/ci.sh lint`, `scripts/ci.sh test`, and
 `scripts/ci.sh integration` here. On another machine, configure `MEOW_JOB_RUNNER`
 or run the corresponding standard Flutter commands in your own resource limits.
+
+See [release qualification and the test matrix](docs/TESTING.md) for Linux/Windows
+commands, tested guarantees and remaining acceptance checks.
 
 No real tournament submissions, account changes or player communications are made
 by the app. US Chess validation packages remain explicitly unverified.

@@ -15,14 +15,22 @@ Linux runners. The tested scope and remaining gates below must accompany any dem
   before notifying UI; pairing runs in an isolate against an immutable revision.
 - `lib/infrastructure`: relational SQLite persistence, import parser, PDF/CSV/text
   renderers, strict 2C DBF encoder and injectable authenticated ratings adapter.
-- `lib/ui`: event library/workspace, registration/check-in, keyboard results,
-  standings, reports, identity review and reusable form/confirmation controls.
+- `lib/ui`: event library/workspace, player roster by section with standings
+  and read-only round results, Rounds page score boxes, reports, event side panel, identity review and reusable form/confirmation controls.
 
 Each event is a `.meow` SQLite database. Event metadata, entrants, membership,
 sections, rounds, games and byes have separate tables. One writer holds the file;
 foreign keys, FULL synchronous WAL transactions and revision checks protect saves.
-The audit remains in the file. Up to 100 prior command snapshots support undo;
-this is not an event-sourced architecture. Newer schemas are refused unchanged.
+The audit remains in the file and also logs every move through history. Each
+command also saves a compressed full snapshot as a node in a history tree
+(`node` table, schema version 2): Back/Forward (Ctrl+Z, Ctrl+Shift+Z/Ctrl+Y)
+walk the current line, and the History panel (Ctrl+H) draws the tree, describes
+each step and restores any node. Going back and then changing something starts a
+branch; the old line stays restorable. Moving still advances the revision, so
+proposals made against the left state stay stale. A move that removes a played
+round, clears a round start or reverts more than one result asks first; single
+result undo does not. Version 1 files start their graph at their current state.
+This is not an event-sourced architecture. Newer schemas are refused unchanged.
 
 Backups use SQLite `VACUUM INTO` followed by an integrity check. A secondary copy
 recovers its explicitly recorded revision, not later edits saved only on the first
@@ -33,18 +41,53 @@ API keys use the OS credential store and never enter event files or reports.
 ## Available workflows
 
 Create/open/reopen local events; synthetic practice events and independent practice
-copies; CSV/TSV paste preview with raw rows and rejected-row repair; check-in and
-walk-up editing; private notes, byes, withdrawal/reinstatement; deterministic quad
+copies; CSV/TSV file import or paste with preview and rejected-row repair;
+walk-up editing and checkbox moves between sections; private notes, byes, withdrawal/reinstatement; deterministic quad
 partition and individual Swiss/RR sections; score-Swiss proposals in a background
 isolate; batch posting with revision guards; separate actual round start with
-explicitly assumed finish estimates; manual unstarted pairing edits; 1/0/5 and W/L/D result entry with repeat suppression and
-advance after commit; forfeit shortcuts and optional withdrawal; historical
+explicitly assumed finish estimates; manual unstarted pairing edits; Swiss-Sys style per-player score boxes on the Rounds page (1/0/5, W/L/D aliases,
++/− forfeits; the opponent's box fills in) with repeat suppression and advance after commit; forfeit shortcuts and optional withdrawal; historical
 corrections with reasons; separate TD-authorized temporary pairing assumptions;
 undo/history; current rounds across sections; class-filtered standings, early RR
 withdrawal prize projection and crosstable; PDF packet preview/printing, CSV and
 strict ASCII export;
 independent backup/reopen; same-progress section combination with preserved history;
 exact-ID authenticated provider review with stale-response rejection.
+
+### Clearer tournament-day workspace
+
+Players and Rounds have a permanent section sidebar. Search names without needing
+spaces (`quad12`), or use the section's ordinal (`section2`). Ctrl+J focuses this
+search; Enter opens the first match. The sidebar shows player counts before play
+and current-round missing-result counts during play. Reports have their own
+**Include sections** selector for print, CSV and text output; the rating package
+always covers the entire event and is labelled accordingly.
+
+Players is a read-only crosstable with opponent references (`W37`, `D10`, `L5`),
+using stable event roster numbers shown in the # column, independent of sort and
+search. Byes use `B` plus their points; `F` suffixes mark forfeits. Edit requested
+byes in player details, where **None** removes a request. IDs and tiebreaks are
+optional under **View**, alongside the advanced standings filters. Imports and
+spreadsheet paste live in the menu beside **+ Add player**. Bulk actions only
+appear when players are selected.
+
+Rounds opens a single section by default. Its full-width table has larger names
+and score boxes, without ratings. Search by player or exact board number. The
+row menu provides mouse entry and **Still playing / clear result**, which returns
+both boxes to blank. Keyboard 1/0/5 entry and Delete continue to work. The player
+details header and close button stay visible while its contents scroll.
+
+Select partners and choose **Assign team** to record a shared mixed-doubles team
+name, or edit a player's team in their details. This records membership only;
+it does not implement team-match pairings, prize eligibility, or team scoring.
+Select two players and choose **Do not pair together** for sibling/other requests;
+player details also add and remove these requests. Swiss proposals respect them,
+and impossible requests report a conflict. Quads/round robins check the remaining schedule before posting and report a conflict
+when it requires that meeting, so the TD can separate the
+players or remove the request. Requests preserve posted games and are checked
+when posting new or replacing unstarted pairings. Teams and requests persist in
+player JSON and participate in undo, redo and backups; older records default to
+no team and no requests.
 
 A Swiss proposal is labelled `score-swiss-pilot-v1`. Its priorities are score
 proximity, upper/lower-half preference, non-repeat opponents, color balance and
@@ -72,7 +115,7 @@ cannot export rating packages, including after undo.
 - Full per-section workspace/draft restoration, all-round reciprocal player matrix,
   advanced accessibility and large-field performance qualification. Import has
   header inference, not a custom column-mapping editor. Class filters currently
-  apply to the standings screen, not printable prize-allocation reports.
+  apply to the Players page standings view, not printable prize-allocation reports.
 - Windows/macOS native build, printing, signing and recovery qualification; real
   printer testing on each OS and working-TD usability rehearsal.
 - Later tranches: team matches, bughouse, native SwissSys interchange, FIDE and hosted
@@ -95,6 +138,35 @@ failed backups, newer-schema refusal, CSV/TSV edge cases, privacy boundaries, DB
 bytes and API failures. Widget tests exercise instant result entry, held keys,
 missing-only traversal and typing in non-result fields.
 
+
+## Backend review — September 29, 2026
+
+A review of domain, application and storage code found and fixed these defects,
+each now covered by a test that fails without the fix:
+
+- Moving some players out of a started round robin recomputed its schedule from
+  the new roster and re-paired earlier opponents. Such partial moves are refused.
+- Import silently skipped a second member with the same name but a different ID.
+  A member ID is now identity; `importPlayers` returns the skipped count.
+- Marking a game unfinished or disputed discarded its TD pairing assumption.
+- Undoing “Start round” committed a revision that changed nothing; it is refused.
+  A practice copy can no longer undo into the original event's history, which
+  restored the original backup folder.
+- A failed command in a transaction SQLite had already rolled back reported
+  “no transaction is active” instead of its cause.
+- Backups are built and verified under a temporary name, synced, then renamed.
+- Event dates are validated by the domain, not only the settings dialog.
+- Repeated identical commands create no revision or audit row.
+- Locked and non-database files report plain messages, not SQLite codes.
+
+Swiss colors now equalize, then alternate. The pilot still chooses opponents
+before colors: a 64-player simulation had repeated three-same-color runs.
+
+Verified: analysis and lint clean, 70 unit/widget tests (41 before), both native
+Linux integration tests, and `scripts/verify_recovery.py`. New tests include
+seeded property simulations of 40 Swiss events with withdrawals, bye requests
+and forfeits; per-command close/reopen of a 22-player day; and injected
+automatic rollback.
 
 ## Verified on this workstation — September 28, 2026
 

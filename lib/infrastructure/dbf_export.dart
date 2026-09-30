@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+
 import 'package:path/path.dart' as p;
+
 import '../domain/model.dart';
 
 class DbfField {
@@ -255,14 +257,17 @@ Future<String> writeRatingPackage(
   String parent,
 ) async {
   final files = ratingPackage(e, metadata);
-  final name = 'meow-r${e.revision}-${DateTime.now().microsecondsSinceEpoch}';
-  final staging = Directory(p.join(parent, '.$name.partial'));
-  await staging.create(recursive: true);
+  // OS-created unique directories keep simultaneous exports from sharing
+  // staging files, even on clocks with coarse timestamp resolution.
+  final root = Directory(parent);
+  await root.create(recursive: true);
+  final staging = await root.createTemp('.meow-r${e.revision}.partial-');
+  final suffix = p.basename(staging.path).split('.partial-').last;
+  final name = 'meow-r${e.revision}-$suffix';
   try {
     for (final entry in files.entries) {
-      await File(
-        p.join(staging.path, entry.key),
-      ).writeAsBytes(entry.value, flush: true);
+      await File(p.join(staging.path, entry.key))
+          .writeAsBytes(entry.value, flush: true);
     }
     await File(p.join(staging.path, 'manifest.json')).writeAsString(
       const JsonEncoder.withIndent('  ').convert({

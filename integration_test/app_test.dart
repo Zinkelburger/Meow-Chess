@@ -1,3 +1,4 @@
+import 'scenarios/team_workflow.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:ui' as ui;
@@ -18,19 +19,19 @@ import 'package:pdf/widgets.dart' as pw;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  WidgetController.hitTestWarningShouldBeFatal = true;
+  registerTeamWorkflowTests();
   testWidgets(
     'event library creates practice data, closes, and reopens its independent file',
     (tester) async {
       final directory = Directory.systemTemp.createTempSync('meow-library-');
       await tester.pumpWidget(MeowApp(dataDirectory: directory));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Explore a practice event'));
+      await tester.tap(find.text('Try a practice event'));
       await tester.pumpAndSettle();
       expect(find.text('Practice copy'), findsOneWidget);
       expect(find.text('Saturday at the club'), findsWidgets);
-      await tester.tap(find.byTooltip('Event menu'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Close event'));
+      await tester.tap(find.byTooltip('Close event'));
       await tester.pumpAndSettle();
       expect(find.text('Recent events'), findsOneWidget);
       final recent =
@@ -61,13 +62,14 @@ void main() {
       var c = TournamentController(SqliteEventRepository(path));
       populatePractice(c);
       final screenshotKey = GlobalKey();
+      var dark = false;
       Future<void> mount() async {
         await tester.pumpWidget(
           RepaintBoundary(
             key: screenshotKey,
             child: MaterialApp(
               debugShowCheckedModeBanner: false,
-              theme: meowTheme(Brightness.dark),
+              theme: meowTheme(dark ? Brightness.dark : Brightness.light),
               home: Workspace(
                 controller: c,
                 path: path,
@@ -81,6 +83,10 @@ void main() {
       }
 
       Future<void> screenshot(String name) async {
+        // Dismiss the transient pairing notice before capturing the workspace.
+        tester
+            .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+            .removeCurrentSnackBar();
         await tester.pumpAndSettle();
         final boundary =
             screenshotKey.currentContext!.findRenderObject()!
@@ -95,37 +101,63 @@ void main() {
       }
 
       await mount();
-      await screenshot('event-overview');
-      await tester.tap(find.text('Post ready sections'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Post 5 ready sections'));
+      await screenshot('players');
+      await tester.tap(find.text('Pair next round'));
       await tester.pumpAndSettle();
       for (var round = 0; round < 3; round++) {
-        final games =
-            c.event!.sections.expand((s) => s.rounds.last.games).toList()
-              ..sort((a, b) => a.board.compareTo(b.board));
-        await tester.tap(find.byKey(ValueKey('game-${games.first.id}')));
-        await tester.pump();
-        for (var i = 0; i < games.length; i++) {
-          await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+        for (final section in c.event!.sections) {
+          final sectionTile = find.byKey(
+            ValueKey('section-chip-${section.id}'),
+          );
+          await tester.ensureVisible(sectionTile);
           await tester.pumpAndSettle();
+          await tester.tap(sectionTile);
+          await tester.pumpAndSettle();
+          final games = c.event!.sections
+              .firstWhere((s) => s.id == section.id)
+              .rounds
+              .last
+              .games;
+          await tester.tap(find.byKey(ValueKey('game-${games.first.id}')));
+          await tester.pump();
+          for (var i = 0; i < games.length; i++) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+            await tester.pumpAndSettle();
+          }
+          if (round == 0 && section.id == c.event!.sections.first.id) {
+            await screenshot('results-section');
+          }
         }
-        expect(c.event!.sections.every((s) => s.rounds.last.complete), true);
-        if (round == 0) {
-          await screenshot('results-grid');
-        }
+        expect(
+          c.event!.sections.every(
+            (s) => s.rounds.length == round + 1 && s.rounds.last.complete,
+          ),
+          true,
+        );
+        final allSections = find.byKey(const ValueKey('section-chip-all'));
+        await tester.ensureVisible(allSections);
+        await tester.pumpAndSettle();
+        await tester.tap(allSections);
+        await tester.pumpAndSettle();
+        if (round == 0) await screenshot('results-grid');
         if (round < 2) {
-          await tester.tap(find.text('Post next round'));
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Post 5 ready sections'));
+          await tester.tap(find.text('Pair next round'));
           await tester.pumpAndSettle();
         }
       }
       expect(c.event!.games.length, 33);
       expect(c.event!.games.every((g) => g.outcome == Outcome.draw), true);
-      await tester.tap(find.text('Standings').first);
+      await tester.tap(find.text('Players').first);
       await tester.pumpAndSettle();
       await screenshot('standings');
+      await tester.tap(find.text('Reports').first);
+      await tester.pumpAndSettle();
+      await screenshot('reports');
+      dark = true;
+      await mount();
+      await tester.tap(find.text('Rounds').first);
+      await tester.pumpAndSettle();
+      await screenshot('results-dark');
       final font = pw.Font.ttf(
         await rootBundle.load('assets/fonts/Inter-Regular.ttf'),
       );

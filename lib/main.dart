@@ -8,13 +8,17 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'application/tournament_controller.dart';
 import 'application/demo.dart';
+import 'infrastructure/native_file_requests.dart';
 import 'infrastructure/sqlite_event_repository.dart';
+import 'ui/brand.dart';
+import 'ui/desktop_window.dart';
 import 'ui/dialogs.dart';
 import 'ui/theme.dart';
 import 'ui/workspace.dart';
 
-Future<void> main(List<String> args) async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDesktopWindow();
   final configured = Platform.environment['MEOW_DATA_DIR'];
   final directory = configured == null
       ? await getApplicationSupportDirectory()
@@ -28,10 +32,9 @@ Future<void> main(List<String> args) async {
     }
   });
   runApp(
-    MeowApp(
-      dataDirectory: directory,
-      initialPath: args.isNotEmpty ? args.first : null,
-    ),
+    // A .meow named on the command line arrives through NativeFileRequests,
+    // along with any double-clicked while the app is running.
+    MeowApp(dataDirectory: directory),
   );
 }
 
@@ -46,8 +49,10 @@ class MeowApp extends StatefulWidget {
 class _MeowAppState extends State<MeowApp> {
   TournamentController? controller;
   String? path, error;
-  bool light = false;
+  bool light = true;
   List<String> recent = [];
+  final navigator = GlobalKey<NavigatorState>();
+  late final files = NativeFileRequests(open: openFromDesktop);
   File get library => File(p.join(widget.dataDirectory.path, 'library.json'));
   @override
   void initState() {
@@ -61,10 +66,20 @@ class _MeowAppState extends State<MeowApp> {
           'Recent-event list could not be read. Your event files are unaffected.';
     }
     if (widget.initialPath != null) open(widget.initialPath!);
+    files.start();
+  }
+
+  /// A .meow the desktop asked us to open. Dialogs belong to the event on
+  /// screen, so they are closed before switching to another one.
+  void openFromDesktop(String filename) {
+    if (filename == path) return;
+    navigator.currentState?.popUntil((route) => route.isFirst);
+    open(filename);
   }
 
   @override
   void dispose() {
+    files.dispose();
     controller?.dispose();
     super.dispose();
   }
@@ -103,13 +118,13 @@ class _MeowAppState extends State<MeowApp> {
   Future<void> create(BuildContext context) async {
     final fields = await editFields(
       context,
-      title: 'A new tournament',
-      saveLabel: 'Choose event file',
+      title: 'New tournament',
       fields: const [FieldSpec('name', 'Event name', required: true)],
-      values: const {'name': 'Saturday Quads'},
     );
     if (fields == null) return;
-    final location = await getSaveLocation(suggestedName: 'tournament.meow');
+    final location = await getSaveLocation(
+      suggestedName: '${_fileStem(fields['name']!)}.meow',
+    );
     if (location != null) {
       if (File(location.path).existsSync()) {
         if (context.mounted) {
@@ -150,9 +165,12 @@ class _MeowAppState extends State<MeowApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
+    navigatorKey: navigator,
     title: 'Meow-Chess',
     debugShowCheckedModeBanner: false,
     theme: meowTheme(Brightness.light),
+    // Switch light/dark instantly rather than cross-fading every colour.
+    themeAnimationStyle: AnimationStyle.noAnimation,
     darkTheme: meowTheme(Brightness.dark),
     themeMode: light ? ThemeMode.light : ThemeMode.dark,
     home: controller != null
@@ -175,39 +193,29 @@ class _MeowAppState extends State<MeowApp> {
                       children: [
                         Row(
                           children: [
-                            Icon(
-                              Icons.pets,
-                              size: 32,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 12),
-                            const Text(
-                              'meow chess',
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: -1,
-                              ),
+                            const MeowLogo(size: 88),
+                            const SizedBox(width: 20),
+                            Text(
+                              'Meow Chess',
+                              style: Theme.of(context).textTheme.headlineSmall,
                             ),
                             const Spacer(),
-                            IconButton(
-                              tooltip: 'Toggle light / dark',
+                            TextButton.icon(
                               onPressed: () => setState(() => light = !light),
-                              icon: const Icon(Icons.contrast),
+                              icon: Icon(
+                                light
+                                    ? Icons.dark_mode_outlined
+                                    : Icons.light_mode_outlined,
+                              ),
+                              label: Text(light ? 'Dark mode' : 'Light mode'),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 64),
-                        Text(
-                          'A calmer tournament day.',
-                          style: Theme.of(context).textTheme.displaySmall,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Check in the room. Post the round. Keep every result.\nYour event lives in a file you own, and works offline.',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
                         const SizedBox(height: 32),
+                        const Text(
+                          'Run Swiss and quad chess tournaments. Each event is saved as a .meow file on this computer and works without internet.',
+                        ),
+                        const SizedBox(height: 24),
                         Wrap(
                           spacing: 12,
                           runSpacing: 12,
@@ -220,12 +228,12 @@ class _MeowAppState extends State<MeowApp> {
                             OutlinedButton.icon(
                               onPressed: choose,
                               icon: const Icon(Icons.folder_open),
-                              label: const Text('Open event'),
+                              label: const Text('Open event file'),
                             ),
                             TextButton.icon(
                               onPressed: practice,
                               icon: const Icon(Icons.science_outlined),
-                              label: const Text('Explore a practice event'),
+                              label: const Text('Try a practice event'),
                             ),
                           ],
                         ),
@@ -265,7 +273,7 @@ class _MeowAppState extends State<MeowApp> {
                         ],
                         const SizedBox(height: 32),
                         const Text(
-                          'Development pilot · Swiss pairing and US Chess portal acceptance are not yet qualified.',
+                          'Test version: Swiss pairings and US Chess rating reports are not yet certified.',
                           style: TextStyle(fontSize: 12),
                         ),
                       ],
@@ -276,4 +284,14 @@ class _MeowAppState extends State<MeowApp> {
             ),
           ),
   );
+}
+
+/// Turns an event name like "Saturday Quads" into "saturday-quads".
+String _fileStem(String name) {
+  final stem = name
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  return stem.isEmpty ? 'tournament' : stem;
 }

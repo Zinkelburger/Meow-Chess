@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata: what GNOME Software / KDE Discover show for the
+     Flatpak and the .deb/.rpm, and how they learn the app opens .meow files. -->
+<component type="desktop-application">
+  <id>org.meowchess.meow_chess</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>Meow Chess</name>
+  <summary>Run Swiss and quad chess tournaments</summary>
+  <description>
+    <p>
+      An offline tournament director workspace. Register players, pair Swiss
+      and quad sections, enter results and print standings. Each event is
+      saved as a .meow file on your computer and works without internet.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.meowchess.meow_chess.desktop</launchable>
+  <provides>
+    <mediatype>application/x-meow-chess</mediatype>
+  </provides>
+  <categories>
+    <category>Game</category>
+    <category>BoardGame</category>
+  </categories>
+  <keywords>
+    <keyword>chess</keyword>
+    <keyword>tournament</keyword>
+    <keyword>swiss</keyword>
+    <keyword>pairings</keyword>
+  </keywords>
+  <url type="homepage">https://github.com/Zinkelburger/Meow-Chess</url>
+  <url type="bugtracker">https://github.com/Zinkelburger/Meow-Chess/issues</url>
+  <developer id="io.github.zinkelburger">
+    <name>Andrew Bernal</name>
+  </developer>
+  <content_rating type="oars-1.1" />
+</component>

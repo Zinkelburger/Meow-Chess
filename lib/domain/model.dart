@@ -53,13 +53,17 @@ class Player {
     this.checkedIn = false,
     this.withdrawn = false,
     this.club = '',
+    this.team = '',
+    Set<String> avoid = const {},
     this.notes = '',
     this.source = '',
     Map<int, int> byes = const {},
     this.personId,
     this.house = false,
-  }) : byes = Map.unmodifiable(byes);
-  final String id, name, memberId, club, notes, source;
+  }) : byes = Map.unmodifiable(byes),
+       avoid = Set.unmodifiable(avoid);
+  final String id, name, memberId, club, team, notes, source;
+  final Set<String> avoid;
   final String? personId;
   final int rating;
   final bool checkedIn, withdrawn, house;
@@ -71,6 +75,8 @@ class Player {
     bool? checkedIn,
     bool? withdrawn,
     String? club,
+    String? team,
+    Set<String>? avoid,
     String? notes,
     Map<int, int>? byes,
     bool? house,
@@ -83,6 +89,8 @@ class Player {
     checkedIn: checkedIn ?? this.checkedIn,
     withdrawn: withdrawn ?? this.withdrawn,
     club: club ?? this.club,
+    team: team ?? this.team,
+    avoid: avoid ?? this.avoid,
     notes: notes ?? this.notes,
     source: source,
     byes: byes ?? this.byes,
@@ -97,6 +105,8 @@ class Player {
     'checkedIn': checkedIn,
     'withdrawn': withdrawn,
     'club': club,
+    'team': team,
+    'avoid': avoid.toList()..sort(),
     'notes': notes,
     'source': source,
     'house': house,
@@ -111,6 +121,8 @@ class Player {
     checkedIn: j['checkedIn'],
     withdrawn: j['withdrawn'],
     club: j['club'],
+    team: j['team'] ?? '',
+    avoid: Set<String>.from(j['avoid'] ?? const []),
     notes: j['notes'],
     source: j['source'],
     house: j['house'] ?? false,
@@ -464,12 +476,21 @@ class TournamentException implements Exception {
   String toString() => message;
 }
 
+/// Official event dates are calendar dates, never instants: `2026-02-30` and
+/// `2026-9-1` are rejected rather than normalized.
+bool isEventDate(String date) {
+  if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date)) return false;
+  final parsed = DateTime.tryParse(date);
+  return parsed != null && parsed.toIso8601String().startsWith(date);
+}
+
 void validateEvent(Event e) {
   void require(bool ok, String message) {
     if (!ok) throw TournamentException(message);
   }
 
   require(e.name.trim().isNotEmpty, 'Give the event a name.');
+  require(isEventDate(e.date), 'Use a valid YYYY-MM-DD event date.');
   require(
     e.players.map((p) => p.id).toSet().length == e.players.length,
     'Duplicate entry identity.',
