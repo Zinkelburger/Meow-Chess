@@ -10,7 +10,8 @@ The existing
 AGPLv3 [LICENSE](LICENSE) is retained. The planning documents retain the full target; implementation status records the
 subset actually built and tested.
 
-Start with [the TD’s actual duties and supporting sources](research/notes/TD_DUTIES.md),
+Start with [the TD usability review and realistic rehearsal scenarios](docs/TD_USABILITY_REVIEW.md),
+[the TD’s actual duties and supporting sources](research/notes/TD_DUTIES.md),
 [a tournament day, in order](docs/TD_DAY.md)
 and [the keyboard results-entry contract](docs/RESULT_ENTRY.md). Then read the expanded [full feature map](docs/FULL_FEATURE_MAP.md),
 [TD experience specification](docs/TD_EXPERIENCE.md),
@@ -21,6 +22,13 @@ and [the keyboard results-entry contract](docs/RESULT_ENTRY.md). Then read the e
 The [SwissSys archive coverage](research/SWISSSYS_ARCHIVE.md) and
 [page checklist](research/SWISSSYS_TOPIC_LEDGER.md) distinguish saved pages from
 reviewed requirements and tested parity.
+
+The [review of Fable’s tournament-day additions](docs/FABLE_REVIEW.md) records
+what to keep, corrections needed, and how the two proposals fit together. Those
+main-checkout edits are reviewed but not yet merged into this branch.
+
+The [history and recovery contract](docs/HISTORY_AND_RECOVERY.md) specifies safe
+“back up to round X,” persistent Undo/Redo, version comparison and saved alternatives.
 
 Supporting plans:
 
@@ -33,7 +41,7 @@ Supporting plans:
 | [US Chess ratings API](research/notes/US_CHESS_API.md) | Public OpenAPI, live probes, identity review, latest-rating limitations |
 | [Pairing and bughouse](docs/PAIRING.md) | US Chess pairing, quads, team distinctions, experimental skill estimates |
 | [Architecture](docs/ARCHITECTURE.md) | Dart domain, SQLite transactions, commands, adapters, recovery |
-| [UX specification](docs/UX.md) | Reusable workspace, section tabs, results entry, printing |
+| [Design references and report layout](docs/UX.md) | V2 source provenance and print/ASCII details; current interaction contracts linked above |
 | [Delivery and validation](docs/DELIVERY.md) | Ordered milestones, release gates, research questions, POCs |
 | [Engineering reading / reuse](research/notes/ENGINEERING.md) | Books, patterns, library findings, licensing and future FIDE |
 | [Reference library](research/README.md) | Source catalog, local snapshots, provenance and research limits |

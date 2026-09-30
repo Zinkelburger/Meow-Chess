@@ -97,9 +97,11 @@ Each meaningful action is a typed application command: ImportRoster,
 ConfirmIdentity, ApplyRatingBatch, AssignSections, PublishPairings, RecordResult,
 CorrectResult, WithdrawEntry, FinalizeSection or CreateReportSnapshot.
 
-The handler loads the expected revision, validates invariants, writes all affected
-rows plus the audit record in one transaction, increments revision and then
-notifies views. UI acknowledgment follows commit. Double-clicks/retries need a
+The handler checks expected versions of relevant records/dependencies, validates
+invariants, writes affected rows plus the audit record in one transaction, increments
+the event audit revision and relevant versions, and then notifies views. Event-wide
+audit ordering is not a reason to reject unrelated work in a different section.
+UI acknowledgment follows commit. Double-clicks/retries need a
 command ID or idempotent state transition. SQLite locking alone does not prevent
 a late network response from overwriting a newer user edit; revision checks do.
 
@@ -115,12 +117,22 @@ earlier state can be reviewed and restored, and a restore never discards the
 state it leaves (that becomes a branch). Rolling back recorded play is allowed
 only after the TD confirms what it removes.
 
+The fuller target contract is specified in [History and recovery](HISTORY_AND_RECOVERY.md).
+It also calls for scoped section reopening, reconciliation of actual games and
+external publications, and reconstruction of every retained revision. See
+[implementation status](IMPLEMENTATION.md) for the currently delivered subset.
+
 ## Pairing and reports are computations over snapshots
 
 Pairing takes a section snapshot and returns a proposal or typed failure, not
 database mutations. It is deterministic given policy, input and random decisions.
 Expensive search runs in an isolate, supports cancellation and returns diagnostics.
-Review/publish checks the input revision again. Strategies: approved quad schedule,
+Review/approve checks the relevant input dependency versions again, including
+membership, scores, policy and shared board/participant constraints. A result in an
+unrelated quad must not invalidate this proposal; a shared-board conflict must.
+Keep the exact event snapshot revision for provenance. Internally the approval
+command may remain PublishPairings; the UI says Approve pairings, separately from
+Print and Post online. Strategies: approved quad schedule,
 US Chess Swiss, and later federation-specific engines. Share constraint primitives
 only where the rules really agree.
 
@@ -146,6 +158,13 @@ Keep automatic timestamped backups before migration, section repartition, rollba
 and final reporting. Verify restoring one. Report disk-full, permissions, database
 busy and corruption clearly. A “Save copy” feature produces an independently
 openable consistent event, not a hidden pointer to the original directory.
+
+Expose save state separately from backup age/failure. Recovery previews event date,
+revision, round progress and latest activity. Restore into a clearly named new copy
+by default; retain the original and identify the active file. A second read-only
+instance has an unmistakable banner and disabled mutation controls with a reason.
+Results input buffering, stable targets and pending-versus-durable acknowledgments
+must satisfy [RESULT_ENTRY.md](RESULT_ENTRY.md); UI focus is not a record identifier.
 
 Exports write into a fresh temporary sibling directory, validate there, then
 publish a complete new package. Retain an immutable manifest. If a platform cannot

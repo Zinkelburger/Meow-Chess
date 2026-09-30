@@ -73,3 +73,49 @@ Added duty-to-workflow traceability and a concrete numeric/WLD results-grid cont
 No app code or browser prototype was changed in this refinement. Keyboard behavior,
 TD rehearsal, interpretation of exceptional rules and federation export paths remain
 acceptance work for the future implementation; none is claimed tested here.
+
+## TD usability planning review
+
+September 29, 2026 UTC: reviewed registration, interruption/recovery, section
+progress, player changes, result entry, manual pairing repair, printing and handover
+against the documented TD duties. Added 14 cross-workflow acceptance contracts and
+ten rehearsal scenarios. Reconciled obsolete navigation and delivery guidance.
+These are review findings and proposed acceptance tests, not observed user results.
+
+Documentation checks: 23 Markdown files, 101 local links (including new
+heading fragments), 14 one-to-one finding/requirement IDs and ten scenario IDs
+verified. Two additional UX reference pages returned HTTP 200; their four raw/text
+SHA-256 hashes match the private local cache. `git diff --check` passed.
+
+No application code or executable POC changed. Flutter tests, actual rapid typing,
+TD interviews/rehearsals, printer behavior and federation validation were not run;
+there is still no application scaffold. No new parity or release-readiness claim.
+
+## Review of Fable's additions
+
+Reviewed a captured nine-file snapshot of the uncommitted main-checkout planning
+changes. Preserved the source files; snapshots and SHA-256 metadata identify the
+review target. Recorded ten correctness/usability findings, reconciliation choices
+and three small further ideas in `docs/FABLE_REVIEW.md`. Rechecked the official
+US Chess rulebook and TD FAQ for clock, outcome, prize and membership distinctions.
+
+Passed: 24 Markdown files / 105 local links including fragments; all nine
+snapshot hashes; whitespace validation. Source-file changes since capture: 0.
+No implementation or TD usability study was performed. Fable's uncommitted edits
+and the earlier usability branch still require integration; no main files were
+overwritten by this review.
+
+## History and non-destructive round reopening
+
+Reviewed current SwissSys Back to a Previous Round, Undo and Backups documentation
+and their three archived article texts; raw HTML hashes match the archive catalog.
+Specified persistent history, exact scoped round reopening, preserved alternative
+versions, dependency-aware return and selected-change recovery. Updated architecture
+from bounded undo snapshots to complete restorable revisions plus checkpoints;
+a readable audit log alone is explicitly insufficient.
+
+Passed: 25 Markdown files / 112 local links including fragments; ten H01–H10
+requirement/scenario mappings; whitespace check. No app code, POC or storage tests
+were added/run. The history/reconstruction, crash, branch-return and TD rehearsal
+scenarios are requirements for a future build, not verified application behavior.
+Fable's main-checkout edits remain untouched; integration is still pending.

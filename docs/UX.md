@@ -1,99 +1,26 @@
-# Event workspace and design system
+# Design references and report layout
 
-> Result entry now follows [RESULT_ENTRY.md](RESULT_ENTRY.md); its immediate
-> 1/0/5 and W/L/D entry contract supersedes earlier shortcut sketches here.
+Planning only. The earlier workspace sketch has been retired to avoid conflicting
+navigation and shortcut instructions. Use these authoritative contracts:
 
-> Expanded scope: [full SwissSys feature map](FULL_FEATURE_MAP.md),
-> [current TD experience](TD_EXPERIENCE.md), and [build handoff](BUILD_HANDOFF.md).
-> The initial US Chess release below is a tranche of the larger product target.
+| Concern | Current specification |
+|---|---|
+| Event workspace, section tabs, navigation and common workflows | [TD experience](TD_EXPERIENCE.md) |
+| Editable player, byes, withdraw/reinstate, transfers and combining sections | [TD operations](TD_OPERATIONS.md) |
+| Immediate 1/0/5 and W/L/D results, focus, correction and recovery | [Results entry](RESULT_ENTRY.md) |
+| Usability gaps, priorities and realistic rehearsal scripts | [TD usability review](TD_USABILITY_REVIEW.md) |
+| Release scope and required proofs | [Requirements](REQUIREMENTS.md) and [delivery](DELIVERY.md) |
 
+One Event tab plus section tabs; within a section use Players, Rounds, Standings,
+Reports, conditional Teams and Section settings. Crosstable is in Standings.
+Approve pairings, Print and Post online are distinct actions. Save/Cancel applies
+to player-detail forms; result shortcuts commit immediately and advance on durable
+success. The source and layout details below supplement those contracts.
 
-This is an interaction specification, not a built screen or tested mockup.
-
-## Main workspace
-
-```text
-Meow-Chess  /  September Quads        Saved 20:14   Offline   Print  Export
-Overview | Quad 1 | Quad 2 | Quad 3 | Quad 4 | Bottom Swiss 6 | + Section
-------------------------------------------------------------------------
-Players   Pairings & Results   Crosstable   Standings   Settings
-Round 2 of 3      1 result missing                 Review next round
-Find player or board...                           View options
-------------------------------------------------------------------------
-Board  White                  Result   Black              | Board details
-  1    A. Example (1810)       1-0      B. Example (1770)   | Rating sources
-  2    C. Example (1790)       --       D. Example (1750)   | Pairing reason
-                                                         | Result history
-------------------------------------------------------------------------
-4 checked in  /  4 entered     Current section: Quad 1     No blockers
-```
-
-One persistent top tab per section follows the user's requested SwissSys mental
-model. Overview is the event-wide control surface: check-in totals, unresolved
-identity issues, each section's current round and reporting status. It is not a
-second editable copy of all section data.
-
-Opening a new event leads to Players/registration. During play the selected
-section returns to Pairings & Results at the last round. Do not move the TD to a
-different tab when an API lookup completes. Each section retains scroll, filters,
-focused row and the open details panel. Section IDs survive renaming/reordering.
-
-Many quads require horizontal tab scrolling plus a searchable section switcher,
-keyboard previous/next section and status badges. Closing a view never deletes
-a section. Deleting/removing a section is a separate explicit operation.
-
-## A quad flow people can trust
-
-From Overview: **Create quads** → choose checked-in pool and rating policy → review
-ordered groups → adjust ties/unrated placements → inspect the bottom Swiss and
-bye implications → create sections → review round one.
-
-The preview says “22 players: 4 quads + 1 six-player Swiss, 3 rounds each.” A late
-arrival updates only a draft preview. Once applied, later changes show which
-players/sections would move and whether any pairings invalidate. Keep source
-registrations; do not duplicate entrants as independent people.
-
-## Import and identity review
-
-Use one reusable import review table: raw input, mapped field, normalized value,
-finding and proposed action. Recognize likely headers but keep mapping editable.
-Show a compact count of rows ready, needing review and excluded. Importing a public
-entries table does not automatically mark everyone present or paid.
-
-**Validate players** opens a cancellable batch. The review pane compares entered
-name/ID with the official record and separately offers name, membership and rating
-updates. Exact IDs with discrepant names receive attention; possible one-digit
-repairs remain proposals. Show published and latest ratings together, with source
-and date available on demand. Unverified latest data must remain visibly unverified.
-
-## Pair, enter, correct
-
-Pairing generation opens a proposal in place. Show score-group/color explanations,
-byes and unresolved restrictions. Publish is the strongest action. Re-pairing a
-posted round previews its impact and creates a new revision.
-
-Result cells follow [RESULT_ENTRY.md](RESULT_ENTRY.md): 1/0/5 and W/L/D
-save and advance immediately without Enter; 5 records a half-point draw.
-Support tab/arrow navigation; never apply result shortcuts while typing in search. Provide a labelled menu for byes/forfeits
-and other states. `--` means unreported, not zero. A double-round match expands to
-two leg results; aggregate entry must be unambiguous or require the individual
-results before rating export.
-
-A saved edit shows a short acknowledgment; errors stay at the row. For an older
-round, show correction consequences before applying. Display who/when/why in
-history without burying normal entry under repeated confirmations.
-
-## Reusable components worth building
-
-EventWorkspace, SectionTabStrip, SectionSwitcher, TournamentTable, ResultCell,
-PlayerIdentityCell, RatingBadge, ValidationSummary, ReviewDiff, DetailsPane,
-SaveStatus and ReportPreview. Reuse table selection, column sizing, keyboard
-navigation and empty/error/loading states across screens. Do not force every
-workflow into the same monolithic table widget if editing semantics differ.
-
-Keep app services out of widgets. Store state in view models/domain owners so
-rebuilding a tab does not reset an event. Persist user column preferences separately
-from competition settings.
+Reuse table selection, column sizing, navigation and empty/error states where their
+semantics agree. Do not force every workflow into one monolithic widget. View models
+own feature state so rebuilding tabs preserves the TD's place; user preferences
+remain separate from competition policies.
 
 ## Chess Auto Prep V2 references
 

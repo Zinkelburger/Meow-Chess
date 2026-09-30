@@ -1,0 +1,52 @@
+{
+  "captured_at": "2026-09-29T02:11:34.914966+00:00",
+  "base_commit": "396fc34d4062c4585d1f54b0e8c55af55e5ba70b",
+  "note": "Uncommitted main-checkout edits identified by the user as Fable edits. Review snapshot only; not merged or altered by this task.",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "38a2a6af7a9e67167e54e51958597099ad443f714a92c42d38f3ef65f8125716",
+      "local_snapshot": "research/local/fable-review-2026-09-29/README.md"
+    },
+    {
+      "path": "docs/BUILD_HANDOFF.md",
+      "sha256": "e9fedeac154b63e60115930f298611f54442be71eb706292171704d263b9246e",
+      "local_snapshot": "research/local/fable-review-2026-09-29/docs/BUILD_HANDOFF.md"
+    },
+    {
+      "path": "docs/DELIVERY.md",
+      "sha256": "9ac856ea03a0f0661caf75bbe92f756423fb85c0e8fbba7d6559f99f2ae84e3d",
+      "local_snapshot": "research/local/fable-review-2026-09-29/docs/DELIVERY.md"
+    },
+    {
+      "path": "docs/PRODUCT_PLAN.md",
+      "sha256": "acedbb81d1ad60cee4f4a7093aad524d557387dbc5dff7ca2b3161c2a8c998ae",
+      "local_snapshot": "research/local/fable-review-2026-09-29/docs/PRODUCT_PLAN.md"
+    },
+    {
+      "path": "docs/REQUIREMENTS.md",
+      "sha256": "37920f79d5383da7443762c97da4c66ae994861e42cb508589d02911356e83ed",
+      "local_snapshot": "research/local/fable-review-2026-09-29/docs/REQUIREMENTS.md"
+    },
+    {
+      "path": "docs/RESULT_ENTRY.md",
+      "sha256": "ddfd34717bd998a8e815567e04625acdb17dfd22c3edde21c64a8985beea7be9",
+      "local_snapshot": "research/local/fable-review-2026-09-29/docs/RESULT_ENTRY.md"
+    },
+    {
+      "path": "docs/TD_EXPERIENCE.md",
+      "sha256": "c9ce347777236433af1317d9e649c182cc38c351161cd5e234bacda68196faff",
+      "local_snapshot": "research/local/fable-review-2026-09-29/docs/TD_EXPERIENCE.md"
+    },
+    {
+      "path": "docs/TD_OPERATIONS.md",
+      "sha256": "fc04ff6de94c6779ccf2cd439b74bb8cc5361581de8fcebb305fc8bd3b1b8e10",
+      "local_snapshot": "research/local/fable-review-2026-09-29/docs/TD_OPERATIONS.md"
+    },
+    {
+      "path": "docs/TD_DAY.md",
+      "sha256": "66ea0edbbf533400cfdda111a2aa2a90526b9cfaeff7abba2daf55653c6f1769",
+      "local_snapshot": "research/local/fable-review-2026-09-29/docs/TD_DAY.md"
+    }
+  ]
+}

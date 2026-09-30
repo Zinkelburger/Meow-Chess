@@ -13,6 +13,10 @@ research topic, not a tested feature. The previous [research notes](../research/
 record deeper findings. A running licensed SwissSys installation and representative
 files are still needed for differential tests and undocumented behavior.
 
+[TD usability review](TD_USABILITY_REVIEW.md) adds cross-workflow acceptance criteria
+without changing this capability count. Read it alongside the map: menu/feature
+coverage alone does not show that a TD can complete the work.
+
 ## What “all features” means
 
 1. Cover the tournament outcomes SwissSys supports, with explicit acceptance cases.
@@ -80,7 +84,7 @@ The screen names refer to [TD experience](TD_EXPERIENCE.md).
 | CAP-P04 | Board and alphabetical pairings, team lists and complete RR schedule | Rounds → View / Reports | A individual; C team: all views reference same published revision |
 | CAP-P05 | Keyboard results grid: 1/0/5 and W/L/D immediate auto-advance, all-round matrix, text import, clear selected results | Rounds | A editor; B batch import: preview conflicts and missing opponents |
 | CAP-P06 | Played results, forfeits/byes, unplayed/disputed status and separate TD-approved temporary pairing treatment | Result cell → outcome | A: preserve result semantics separately from score |
-| CAP-P07 | Correct earlier results; withdraw; go back/replace round; preserve later games | Rounds → History | A: explicit impact review; no silent deletion/re-pairing |
+| CAP-P07 | Correct earlier results; withdraw; reopen before round; preserve later games and alternative versions | Rounds / History → Preview, Compare, Reopen | A: HISTORY_AND_RECOVERY.md; scoped impact review, return after new edits/restart, no silent deletion/re-pairing |
 | CAP-P08 | Board history, opponents/colors and published revision history | Player / pairing inspector | A: old printed pairing can be traced to revision |
 | CAP-S01 | Standings and crosstable, ties, sorted views, round filters, custom columns | Standings | A: ties displayed honestly; sorting does not change official ranking |
 | CAP-S02 | Configurable tiebreak order and calculation details, bye/unplayed treatment | Standings → Why this rank / rules | A selected US Chess systems; C complete documented catalog |
@@ -99,7 +103,7 @@ The screen names refer to [TD experience](TD_EXPERIENCE.md).
 | CAP-O09 | Email/player notices; optional service integration | Share / player messages | D: explicit recipient/content review, delivery status and consent handling |
 | CAP-U01 | Search commands/help, contextual guidance, onboarding sample event, scratchpad | Global search / Help / Event notes | A basics; B guided sample: core tasks never require documentation hunting |
 | CAP-U02 | Dark/light/system, density, column presets, localization, keyboard and accessible labels | App preferences | A dark/accessibility; B full preferences: large text does not hide actions |
-| CAP-U03 | Autosave, undo, named checkpoints, backup/restore, migration/recovery, logs | Save indicator / History / event menu | A: crash/reopen recovers committed edits; undo has explicit dependency rules |
+| CAP-U03 | Autosave, persistent undo/redo, named checkpoints, restorable history/alternatives, backup/restore, migration/recovery | Save indicator / History / event menu | A: all retained committed versions reconstruct; a new edit does not destroy former work; H01–H10 gates |
 | CAP-U04 | Cross-platform packaging, updates, offline help, version and redacted support bundle | App / Help | A Windows/macOS/Linux validation; no mandatory account |
 | CAP-U06 | Command-line pairing/automation, structured failures and forced-bye input | CLI / diagnostics | C: same domain validation as UI; file/version contract and noninteractive error behavior tested |
 | CAP-U05 | Rule/settings profiles, import/export settings, portable preferences | App preferences / event templates | B: local preferences never accidentally alter event rules |

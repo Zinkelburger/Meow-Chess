@@ -25,6 +25,19 @@ Exit: agreed supported-format matrix and a precise list of still-unverified
 integration claims. Owner: product lead + experienced TD; provider answers require
 US Chess. No messages were sent by this planning task.
 
+### Early TD usability track
+
+Rehearse [R1–R10](TD_USABILITY_REVIEW.md#rehearsal-before-committing-to-the-ui)
+using paper/wireframes or a bounded prototype, then test actual keyboard/focus/save
+behavior in the first working slice. Include interrupted entry, walk-ins without
+network access, exact selection scope, quick reprint and recovery. Record task
+errors and unassisted completion, not just visual preference. No such study has
+been conducted. These rehearsal specifications do not themselves establish validation.
+
+This track can progress independently of API access and accepted DBF fixtures.
+Those integration gates still block claims of release readiness. A prototype is
+throwaway evidence, never a passing production feature or federation test.
+
 ## 1. Pure Dart domain and early report feasibility
 
 Implement typed entrants/sections/games, score outcomes, basic RR/quad policy and
@@ -40,16 +53,22 @@ Keep unsupported formats unavailable and record precisely which validation is ab
 
 ## 2. Durable event lifecycle
 
-SQLite schema/migrations, commands, audit records, backups, revision checks, undo
-boundaries and event file/open flow. Implement error recovery before UI polish.
+SQLite schema/migrations, commands, complete versioned state history, checkpoints,
+backups, revision checks, persistent undo/redo and event file/open flow. Implement
+[history/recovery H01–H10](HISTORY_AND_RECOVERY.md) in the corresponding slices:
+preview, scoped reopen, preserved alternatives and safe return after new edits.
+Implement error recovery before UI polish.
 
 Exit: crash, disk-full, duplicate command, stale write and restore scenarios preserve
-all acknowledged results. One event can be copied/opened independently. No credentials
-travel with the event.
+all acknowledged results and retained alternatives. Every supported mutation type
+has reconstructable before/after state; a new edit after Undo cannot destroy prior
+work. One event, including its history, can be copied/opened independently. No
+credentials travel with the event.
 
 ## 3. Registration and identity
 
-CSV/TSV/paste preview, mapping, duplicate handling, check-in, exact-ID lookup, bounded
+Fast manual walk-in registration and event-wide finding/editing; CSV/TSV/paste
+preview, mapping, duplicate handling, explicit check-in policy, exact-ID lookup, bounded
 candidate search, membership findings, rating provenance and review/apply batch.
 Use synthetic responses while access is missing, then verify against authenticated
 production behavior. Latest-rating semantics are a named acceptance gate.
@@ -70,6 +89,9 @@ and an absent entrant, ID correction, preflight, batch post and packet print, a
 lookup, a late arrival, a forfeit with the withdraw offer, old-result correction,
 event-wide results entry, printer preview, restart, and continuing on a second
 laptop from the secondary backup. TD reviews usability and report content.
+Verify UX01–UX14 and R1–R10 in supported flows, including interrupted entry,
+quick reprint and printer failure. No wrong-game entry, silently excluded entrant
+or lost acknowledged result is acceptable.
 
 ## 5. US Chess Swiss and double-round blitz
 
@@ -137,7 +159,9 @@ Run: `dart run poc/quad_partition.dart`. Results are recorded in
 Potential later spikes, each with an explicit question: DBF codec against current
 accepted files; actual US Chess live-rating semantics; printer/PDF behavior on each
 desktop OS; cancellable worst-case Swiss search; and Bayesian bughouse simulation.
-Avoid building a throwaway UI until those risks have clear answers.
+Keep each spike bounded. Rehearse high-risk TD interactions early while these
+integration questions proceed independently; avoid broad UI construction before
+both workflow contracts and affected domain interfaces are understood.
 
 ## Remaining interview / evidence checklist
 
