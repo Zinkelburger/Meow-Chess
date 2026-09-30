@@ -80,6 +80,8 @@ void main() {
       }
 
       Future<void> screenshot(String name) async {
+        // Dismiss the transient pairing notice before capturing the workspace.
+        tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger)).removeCurrentSnackBar();
         await tester.pumpAndSettle();
         final boundary =
             screenshotKey.currentContext!.findRenderObject()!
@@ -101,7 +103,11 @@ void main() {
         for (final section in c.event!.sections) {
           await tester.tap(find.byKey(ValueKey('section-chip-${section.id}')));
           await tester.pumpAndSettle();
-          final games = c.event!.sections.firstWhere((s) => s.id == section.id).rounds.last.games;
+          final games = c.event!.sections
+              .firstWhere((s) => s.id == section.id)
+              .rounds
+              .last
+              .games;
           await tester.tap(find.byKey(ValueKey('game-${games.first.id}')));
           await tester.pump();
           for (var i = 0; i < games.length; i++) {

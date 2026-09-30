@@ -360,7 +360,8 @@ class Event {
     List<Json> transitions = const [],
     this.notes = '',
     this.submission = '',
-    this.policy = 'Requested byes: ½ point before the round is posted. Standings: points, then Buchholz, then Sonneborn–Berger.',
+    this.policy =
+        'Requested byes: ½ point before the round is posted. Standings: points, then Buchholz, then Sonneborn–Berger.',
   }) : players = List.unmodifiable(players),
        sections = List.unmodifiable(sections),
        transitions = List.unmodifiable(

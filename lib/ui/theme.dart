@@ -18,6 +18,9 @@ ThemeData meowTheme(Brightness brightness) {
     surfaceContainerLow: dark
         ? const Color(0xff2a2a28)
         : const Color(0xffebe9e2),
+    surfaceContainerHigh: dark
+        ? const Color(0xff343430)
+        : const Color(0xffe5e3dd),
     outlineVariant: dark ? const Color(0xff3d3c38) : const Color(0xffd9d6cc),
     outline: dark ? const Color(0xff6b6960) : const Color(0xffa9a597),
     inverseSurface: dark ? const Color(0xff0c0c0b) : const Color(0xff1d1d1b),
@@ -126,8 +129,11 @@ ThemeData meowTheme(Brightness brightness) {
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         animationDuration: instant,
-        backgroundColor: WidgetStateProperty.resolveWith((states) =>
-          states.contains(WidgetState.selected) ? colors.surfaceContainerHigh : colors.surface),
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colors.surfaceContainerHigh
+              : colors.surface,
+        ),
         foregroundColor: WidgetStatePropertyAll(colors.onSurface),
       ),
     ),

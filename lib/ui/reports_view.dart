@@ -99,7 +99,8 @@ class _ReportsViewState extends State<ReportsView> {
       context,
       title: 'US Chess rating report',
       saveLabel: 'Choose folder…',
-      description: 'These files have not yet been tested with the US Chess upload site. Check them before uploading.',
+      description:
+          'These files have not yet been tested with the US Chess upload site. Check them before uploading.',
       fields: const [
         FieldSpec('city', 'City', required: true),
         FieldSpec('state', 'State (2 letters)', required: true),
@@ -295,7 +296,8 @@ class _ReportsViewState extends State<ReportsView> {
             onPressed: () => editFields(
               context,
               title: 'Submission notes',
-              description: 'Keep track of when you uploaded the report, its reference number, and any corrections.',
+              description:
+                  'Keep track of when you uploaded the report, its reference number, and any corrections.',
               fields: const [FieldSpec('submission', 'Notes', lines: 5)],
               values: {'submission': e.submission},
               onSave: (v) => controller.change(
@@ -323,16 +325,26 @@ class _ReportsViewState extends State<ReportsView> {
       ),
       child: ExpansionTile(
         key: const PageStorageKey('rating-preflight-details'),
-        shape: const Border(), collapsedShape: const Border(),
-        leading: Icon(Icons.info_outline, color: colors.onSurfaceVariant, size: 20),
-        title: Text('${issues.length} ${issues.length == 1 ? 'item needs' : 'items need'} attention',
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: Icon(
+          Icons.info_outline,
+          color: colors.onSurfaceVariant,
+          size: 20,
+        ),
+        title: Text(
+          '${issues.length} ${issues.length == 1 ? 'item needs' : 'items need'} attention',
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
         subtitle: const Text('Review before creating the rating report.'),
         childrenPadding: const EdgeInsets.fromLTRB(56, 0, 20, 16),
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final issue in issues)
-            Padding(padding: const EdgeInsets.only(top: 6), child: Text('• $issue')),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('• $issue'),
+            ),
         ],
       ),
     );

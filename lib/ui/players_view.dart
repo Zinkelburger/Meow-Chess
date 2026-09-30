@@ -493,7 +493,9 @@ class _PlayersViewState extends State<PlayersView> {
                       ),
                     ],
                   );
-                  if (constraints.maxWidth / MediaQuery.textScalerOf(context).scale(1) < 1000) {
+                  if (constraints.maxWidth /
+                          MediaQuery.textScalerOf(context).scale(1) <
+                      1000) {
                     return Wrap(
                       spacing: 16,
                       runSpacing: 12,
@@ -1651,18 +1653,32 @@ class SidePanel extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
               child: Row(
                 children: [
-                  Expanded(child: Text(title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  IconButton(tooltip: 'Close (Esc)', icon: const Icon(Icons.close), onPressed: onClose),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close (Esc)',
+                    icon: const Icon(Icons.close),
+                    onPressed: onClose,
+                  ),
                 ],
               ),
             ),
             const Divider(),
-            Expanded(child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
-            )),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: children,
+                ),
+              ),
+            ),
           ],
         ),
       ),
