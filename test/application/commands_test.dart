@@ -41,6 +41,26 @@ Future<void> playRound(TournamentController c, {String? sectionId}) async {
 }
 
 void main() {
+  test(
+    'new round robin excludes withdrawn and already assigned players',
+    () async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      c.importPlayers([
+        Player(id: 'active1', name: 'Active One'),
+        Player(id: 'active2', name: 'Active Two'),
+        Player(id: 'absent', name: 'Absent', withdrawn: true),
+      ]);
+      c.addSection('New round robin', Format.roundRobin, 1);
+      final section = c.event!.sections.last;
+      expect(section.players, ['active1', 'active2']);
+      final draft = await c.propose(sectionId: section.id);
+      expect(draft.issues, isEmpty);
+      c.post(draft);
+      expect(c.event!.sections.last.rounds.single.games, hasLength(1));
+      expect(c.repository.load()!.sectionOf('absent'), isNull);
+    },
+  );
   group('import identity', () {
     test('a member ID is identity; a shared name alone is not', () {
       final c = blank();

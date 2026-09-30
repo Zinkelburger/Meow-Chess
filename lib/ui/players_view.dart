@@ -1105,12 +1105,15 @@ class PlayerPanel extends StatefulWidget {
     required this.controller,
     required this.onClose,
     this.player,
+    this.memberLookup = fetchMember,
     super.key,
   });
   final TournamentController controller;
 
   /// Null to add a new player.
   final Player? player;
+  final Future<MemberObservation?> Function(TournamentController, String)
+  memberLookup;
   final VoidCallback onClose;
   @override
   State<PlayerPanel> createState() => PlayerPanelState();
@@ -1134,6 +1137,32 @@ class PlayerPanelState extends State<PlayerPanel> {
   bool looking = false;
   MemberObservation? member;
   String? lookupError;
+  int _lookupGeneration = 0;
+  String _lastMemberIdText = '';
+
+  void invalidateLookup() {
+    _lookupGeneration++;
+    looking = false;
+    member = null;
+    lookupError = null;
+  }
+
+  void memberIdChanged() {
+    final value = text['memberId']!.text;
+    if (value == _lastMemberIdText) return;
+    _lastMemberIdText = value;
+    setState(invalidateLookup);
+  }
+
+  void applyMember(MemberObservation observation, void Function(Player) save) {
+    if (member != observation || widget.player == null) return;
+    final player = fresh;
+    if (player.memberId != observation.id ||
+        text['memberId']!.text.trim() != observation.id) {
+      return;
+    }
+    attempt(() => save(player));
+  }
 
   /// The last player added, confirmed under the add form.
   String? added;
@@ -1161,12 +1190,20 @@ class PlayerPanelState extends State<PlayerPanel> {
   void initState() {
     super.initState();
     load();
+    _lastMemberIdText = text['memberId']!.text;
+    text['memberId']!.addListener(memberIdChanged);
   }
 
   @override
   void didUpdateWidget(PlayerPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     final old = oldWidget;
+    if (old.controller != widget.controller ||
+        old.player?.id != widget.player?.id ||
+        (old.player?.memberId != widget.player?.memberId &&
+            widget.player?.memberId != text['memberId']!.text.trim())) {
+      invalidateLookup();
+    }
     if (old.player?.id != widget.player?.id) {
       moveTo = null;
       reason.clear();
@@ -1269,22 +1306,35 @@ class PlayerPanelState extends State<PlayerPanel> {
 
   Future<void> lookup() async {
     if (!commit()) return;
+    final controller = c;
+    final playerId = fresh.id, memberId = fresh.memberId;
+    final generation = ++_lookupGeneration;
+    bool current() =>
+        mounted &&
+        generation == _lookupGeneration &&
+        c == controller &&
+        widget.player?.id == playerId &&
+        text['memberId']!.text.trim() == memberId &&
+        c.event!.players.any((p) => p.id == playerId && p.memberId == memberId);
     setState(() {
       looking = true;
       member = null;
       lookupError = null;
     });
     try {
-      final found = await fetchMember(c, fresh.memberId);
-      if (!mounted) return;
+      final found = await widget.memberLookup(controller, memberId);
+      if (!current()) return;
       setState(() {
-        member = found;
+        member = found?.id == memberId ? found : null;
         if (found == null) lookupError = 'key';
+        if (found != null && found.id != memberId) {
+          lookupError = 'The returned member does not match the requested ID.';
+        }
       });
     } catch (e) {
-      if (mounted) setState(() => lookupError = '$e');
+      if (current()) setState(() => lookupError = '$e');
     } finally {
-      if (mounted) setState(() => looking = false);
+      if (current()) setState(() => looking = false);
     }
   }
 
@@ -1427,8 +1477,10 @@ class PlayerPanelState extends State<PlayerPanel> {
                   ActionChip(
                     chipAnimationStyle: noChipAnimation,
                     label: Text('Use name ${m.name}'),
-                    onPressed: () =>
-                        attempt(() => c.savePlayer(fresh.copy(name: m.name))),
+                    onPressed: () => applyMember(
+                      m,
+                      (player) => c.savePlayer(player.copy(name: m.name)),
+                    ),
                   ),
                 for (final r in m.ratings.entries)
                   if (r.value != null)
@@ -1441,8 +1493,10 @@ class PlayerPanelState extends State<PlayerPanel> {
                       tooltip: 'Use this rating for pairings',
                       onPressed: r.value == p.rating
                           ? null
-                          : () => attempt(
-                              () => c.savePlayer(fresh.copy(rating: r.value)),
+                          : () => applyMember(
+                              m,
+                              (player) =>
+                                  c.savePlayer(player.copy(rating: r.value)),
                             ),
                     ),
               ],
