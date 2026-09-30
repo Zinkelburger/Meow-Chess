@@ -106,7 +106,9 @@ void main() {
       await tester.pumpAndSettle();
       for (var round = 0; round < 3; round++) {
         for (final section in c.event!.sections) {
-          final sectionTile = find.byKey(ValueKey('section-chip-${section.id}'));
+          final sectionTile = find.byKey(
+            ValueKey('section-chip-${section.id}'),
+          );
           await tester.ensureVisible(sectionTile);
           await tester.pumpAndSettle();
           await tester.tap(sectionTile);
@@ -126,7 +128,12 @@ void main() {
             await screenshot('results-section');
           }
         }
-        expect(c.event!.sections.every((s) => s.rounds.length == round + 1 && s.rounds.last.complete), true);
+        expect(
+          c.event!.sections.every(
+            (s) => s.rounds.length == round + 1 && s.rounds.last.complete,
+          ),
+          true,
+        );
         final allSections = find.byKey(const ValueKey('section-chip-all'));
         await tester.ensureVisible(allSections);
         await tester.pumpAndSettle();
