@@ -81,7 +81,9 @@ void main() {
 
       Future<void> screenshot(String name) async {
         // Dismiss the transient pairing notice before capturing the workspace.
-        tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger)).removeCurrentSnackBar();
+        tester
+            .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+            .removeCurrentSnackBar();
         await tester.pumpAndSettle();
         final boundary =
             screenshotKey.currentContext!.findRenderObject()!
