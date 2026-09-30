@@ -182,7 +182,7 @@ class TournamentController extends ChangeNotifier {
   }) {
     final e = event!;
     final free = e.players
-        .where((p) => e.sectionOf(p.id) == null)
+        .where((p) => !p.withdrawn && e.sectionOf(p.id) == null)
         .map((p) => p.id)
         .toList();
     final nextBoard = e.sections.fold(1, (int max, Section s) {

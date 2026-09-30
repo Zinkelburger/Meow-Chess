@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../application/event_repository.dart';
 import '../domain/history.dart';
 import '../domain/model.dart';
+import 'publish_file.dart';
 
 /// One owned connection per event. Foreign keys and FULL synchronous commits
 /// protect acknowledged results; snapshots are produced by SQLite, never raw WAL copies.
@@ -406,8 +407,15 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
       } finally {
         handle.closeSync();
       }
-      if (File(destination).existsSync()) throw exists;
-      staging.renameSync(destination);
+      try {
+        publishFile(staging.path, destination);
+      } on FileSystemException {
+        if (FileSystemEntity.typeSync(destination, followLinks: false) !=
+            FileSystemEntityType.notFound) {
+          throw exists;
+        }
+        rethrow;
+      }
     } finally {
       if (staging.existsSync()) staging.deleteSync();
     }
