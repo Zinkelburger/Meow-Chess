@@ -23,6 +23,7 @@ on:
 jobs:
   build-windows:
     runs-on: windows-2022
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -105,6 +106,11 @@ jobs:
           $choice = (Get-ItemProperty 'HKCU:\Software\MeowChess').FileAssociationChoice
           if ($choice -ne 'yes') { throw "Installer did not record the association choice" }
           Write-Host ".meow opens with: $command"
+
+      - name: Launch the installed release and close its window
+        shell: pwsh
+        run: |
+          ./scripts/smoke_windows.ps1 -Executable (Join-Path $env:RUNNER_TEMP "Meow Chess installer test\meow_chess.exe")
 
       - uses: actions/upload-artifact@v4
         with:

@@ -81,5 +81,8 @@ Run `scripts/ci.sh analyze`, `scripts/ci.sh lint`, `scripts/ci.sh test`, and
 `scripts/ci.sh integration` here. On another machine, configure `MEOW_JOB_RUNNER`
 or run the corresponding standard Flutter commands in your own resource limits.
 
+See [release qualification and the test matrix](docs/TESTING.md) for Linux/Windows
+commands, tested guarantees and remaining acceptance checks.
+
 No real tournament submissions, account changes or player communications are made
 by the app. US Chess validation packages remain explicitly unverified.

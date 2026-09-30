@@ -14,12 +14,14 @@ if [[ -d "$local_deps" ]]; then
   export PKG_CONFIG_PATH="$local_deps${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 fi
 case "${1:-test}" in
-  analyze) exec "$runner" with -- flutter analyze lib test integration_test tools/recovery_fixture.dart ;;
+  analyze) exec "$runner" with -- flutter analyze lib test integration_test tools ;;
   lint) python3 scripts/lint.py ;;
   status) exec "$runner" status ;;
   test) shift || true; exec "$runner" with -- flutter test --concurrency=2 "$@" ;;
-  integration) exec "$runner" with --headless -- flutter test integration_test/app_test.dart -d linux ;;
+  integration) exec "$runner" with --headless -- flutter test integration_test -d linux ;;
+  recovery) exec "$runner" with -- python3 scripts/verify_recovery.py ;;
+  exports) exec "$runner" with -- python3 scripts/check_exports.py ;;
   build) exec "$runner" with -- flutter build linux --release ;;
   with) shift; exec "$runner" with "$@" ;;
-  *) echo 'Usage: scripts/ci.sh analyze|lint|test [paths]|integration|build|status|with -- COMMAND' >&2; exit 2 ;;
+  *) echo 'Usage: scripts/ci.sh analyze|lint|test [paths]|integration|recovery|exports|build|status|with -- COMMAND' >&2; exit 2 ;;
 esac
