@@ -108,7 +108,8 @@ class _WorkspaceState extends State<Workspace> {
 
   void jumpToSection() {
     if (view == TaskView.reports) go(TaskView.results);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Run after the destination page's initial result focus has settled.
+    WidgetsBinding.instance.endOfFrame.then((_) {
       if (!mounted) return;
       sectionFocus.requestFocus();
       sectionSearch.selection = TextSelection(baseOffset: 0, extentOffset: sectionSearch.text.length);
@@ -484,9 +485,11 @@ class _WorkspaceState extends State<Workspace> {
   Widget _sectionSidebar(BuildContext context) {
     final e = c.event!, colors = Theme.of(context).colorScheme;
     final q = sectionSearch.text.toLowerCase().replaceAll(' ', '');
+    String normalized(String name) => name.toLowerCase().replaceAll(' ', '');
+    bool exact((int, Section) entry) => normalized(entry.$2.name) == q || 'section${entry.$1 + 1}' == q;
     final matches = e.sections.indexed.where((entry) =>
-      entry.$2.name.toLowerCase().replaceAll(' ', '').contains(q) ||
-      'section${entry.$1 + 1}'.contains(q));
+      normalized(entry.$2.name).contains(q) || 'section${entry.$1 + 1}'.contains(q)).toList()
+      ..sort((a, b) => exact(a) == exact(b) ? a.$1.compareTo(b.$1) : exact(a) ? -1 : 1);
     return Container(
       key: const ValueKey('section-sidebar'),
       width: 208,
