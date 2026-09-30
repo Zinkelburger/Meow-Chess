@@ -1,3 +1,4 @@
+import 'scenarios/team_workflow.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:ui' as ui;
@@ -18,6 +19,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  registerTeamWorkflowTests();
   testWidgets(
     'event library creates practice data, closes, and reopens its independent file',
     (tester) async {
@@ -81,7 +83,9 @@ void main() {
 
       Future<void> screenshot(String name) async {
         // Dismiss the transient pairing notice before capturing the workspace.
-        tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger)).removeCurrentSnackBar();
+        tester
+            .state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger))
+            .removeCurrentSnackBar();
         await tester.pumpAndSettle();
         final boundary =
             screenshotKey.currentContext!.findRenderObject()!

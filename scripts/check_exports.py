@@ -8,3 +8,4 @@ import sys
 root = Path(__file__).resolve().parents[1]
 subprocess.run(['flutter', 'test', '--concurrency=2', 'test/infrastructure/rating_contract_test.dart'], cwd=root, env={**os.environ, 'MEOW_EXPORT_FIXTURES': '1'}, check=True)
 subprocess.run([sys.executable, 'scripts/verify_dbf.py', 'artifacts/dbf-contract'], cwd=root, check=True)
+subprocess.run([sys.executable, 'scripts/test_dbf_validator.py', 'artifacts/dbf-contract'], cwd=root, check=True)

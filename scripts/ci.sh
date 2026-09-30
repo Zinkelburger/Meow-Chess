@@ -20,7 +20,7 @@ case "${1:-test}" in
   test) shift || true; exec "$runner" with -- flutter test --concurrency=2 "$@" ;;
   integration) exec "$runner" with --headless -- flutter test integration_test -d linux ;;
   recovery) exec "$runner" with -- python3 scripts/verify_recovery.py ;;
-  exports) exec "$runner" with -- python3 scripts/check_exports.py ;;
+  exports) exec "$runner" with -- "${MEOW_PYTHON:-python3}" scripts/check_exports.py ;;
   build) exec "$runner" with -- flutter build linux --release ;;
   with) shift; exec "$runner" with "$@" ;;
   *) echo 'Usage: scripts/ci.sh analyze|lint|test [paths]|integration|recovery|exports|build|status|with -- COMMAND' >&2; exit 2 ;;

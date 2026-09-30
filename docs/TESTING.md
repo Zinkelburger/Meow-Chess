@@ -5,13 +5,15 @@ CI is the release gate, with independent jobs on Ubuntu 22.04, Windows Server
 unit/widget tests, independent DBF decoding, abrupt-termination recovery and the
 native Flutter desktop integration tests. A failed job blocks the release build.
 The workflow can also run manually from Actions → CI without publishing anything.
+Pushing a commit to the opt-in `windows-check` branch runs the same matrix without
+a release tag; this also works before the workflow reaches the default branch.
 The separate Windows build workflow checks packaging and installation, then
 launches the installed release and requires a native window and clean close.
 
 The pinned Flutter SDK and committed pubspec.lock are shared across the matrix.
 Tests use synthetic players, temporary event files and an isolated event library;
 no federation credentials, real tournament files or live submissions are needed.
-Screenshots, a PDF and DBF fixtures are retained as `test-evidence-<OS>` artifacts,
+JSON test reports, screenshots, a PDF and DBF fixtures are retained as `test-evidence-<OS>` artifacts,
 including on failure. Test artifacts are excluded from public release downloads.
 
 ## Run on this Linux workstation
@@ -22,9 +24,10 @@ scripts/ci.sh lint
 scripts/ci.sh test
 scripts/ci.sh integration
 scripts/ci.sh recovery
-# First install the independent reader in the Python environment used below:
-python3 -m pip install dbfread==2.0.7
-scripts/ci.sh exports
+# One-time independent reader setup (outside the repository):
+python3 -m venv "$HOME/.local/share/meow-test-tools"
+"$HOME/.local/share/meow-test-tools/bin/python" -m pip install dbfread==2.0.7
+MEOW_PYTHON="$HOME/.local/share/meow-test-tools/bin/python" scripts/ci.sh exports
 ```
 
 The wrapper uses the shared bounded runner. Integration runs on a private Xvfb
@@ -50,7 +53,7 @@ flutter test integration_test -d windows
 
 | Concern | Automated evidence | Remaining qualification |
 |---|---|---|
-| US Chess 2C exports | Independent dbfread schema/width/type/padding checks; every source result compared against exported values; two sections, 12 rounds, leading-zero IDs, leap-day date, wins/draws/losses/forfeits and full/half/zero byes; unsafe/unfinished/unsupported exports blocked | Current accepted files and authorized TD/provider draft validation. This is format regression coverage, not an acceptance certificate. |
+| US Chess 2C exports | Independent dbfread schema/width/type/padding checks; every source result compared against exported values; two sections, 12 rounds, leading-zero IDs, leap-day date, wins/draws/losses/forfeits and full/half/zero byes; unsafe/unfinished/unsupported exports blocked; negative controls reject corrupt schemas, IDs and even reciprocal-but-wrong results | Current accepted files and authorized TD/provider draft validation. This is format regression coverage, not an acceptance certificate. |
 | Swiss pairings | Seeded multi-round simulations, no duplicate assignment or played-opponent repeats, bye fairness, color handling, withdrawals, reproducibility, stale proposals and explicit impossible-constraint failure | Full US Chess priority/exception conformance remains a pilot limitation; experienced TD review is still required. |
 | Teams and sibling requests | UI assignment and do-not-pair action, legal alternative opponent, four-round persistence, backup, invalid/stale mutations rejected; team names alone do not change pairings | Team names are roster labels for mixed-doubles partners. Fixed-board team tournaments and team scoring are not implemented. |
 | Tournament day | Native app library create/close/reopen; roster paste, section creation, pairing, keyboard scoring, PDF, dark/light screenshots and independent backup | File-picker/print-driver UI, actual physical printers and OS double-click forwarding need separate native/manual qualification. |

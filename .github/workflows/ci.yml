@@ -3,7 +3,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, windows-check]
   pull_request:
   workflow_call:
   workflow_dispatch:
@@ -29,7 +29,6 @@ jobs:
     env:
       MEOW_EXPORT_FIXTURES: '1'
       MEOW_CHESS_DESKTOP_SETUP: '0'
-      MEOW_DATA_DIR: ${{ runner.temp }}/meow-test-library
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -52,18 +51,26 @@ jobs:
         run: python scripts/lint.py
       - name: Install independent DBF reader
         run: python -m pip install dbfread==2.0.7
+      - name: Prepare evidence directory
+        run: python -c "from pathlib import Path; Path('artifacts').mkdir(exist_ok=True)"
       - name: Unit and widget tests
-        run: flutter test --concurrency=2 --reporter expanded
+        run: flutter test --concurrency=2 --reporter expanded --file-reporter json:artifacts/unit-tests.json
       - name: Independently validate US Chess export fixtures
         run: python scripts/verify_dbf.py artifacts/dbf-contract
+      - name: DBF validator negative controls
+        run: python scripts/test_dbf_validator.py artifacts/dbf-contract
       - name: Abrupt process termination and SQLite recovery
         run: python scripts/verify_recovery.py
       - name: Linux desktop tournament day
         if: runner.os == 'Linux'
-        run: xvfb-run -a -s '-screen 0 1440x1000x24' flutter test integration_test -d linux --reporter expanded
+        env:
+          MEOW_DATA_DIR: ${{ runner.temp }}/meow-test-library
+        run: xvfb-run -a -s '-screen 0 1440x1000x24' flutter test integration_test -d linux --reporter expanded --file-reporter json:artifacts/desktop-tests.json
       - name: Windows desktop tournament day
         if: runner.os == 'Windows'
-        run: flutter test integration_test -d windows --reporter expanded
+        env:
+          MEOW_DATA_DIR: ${{ runner.temp }}/meow-test-library
+        run: flutter test integration_test -d windows --reporter expanded --file-reporter json:artifacts/desktop-tests.json
       - name: Test evidence
         if: always()
         uses: actions/upload-artifact@v4

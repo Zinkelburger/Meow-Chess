@@ -24,6 +24,8 @@ jobs:
   build-windows:
     runs-on: windows-2022
     timeout-minutes: 35
+    env:
+      MEOW_RELEASE_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,10 +35,17 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Validate artifact version
+        shell: pwsh
+        run: |
+          if ($env:MEOW_RELEASE_VERSION -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?$') {
+            throw 'Version must be a v-prefixed semantic version, such as v0.2.0 or v0.2.0-rc1'
+          }
+
       - name: Build Windows release
         shell: pwsh
         run: |
-          $version = "${{ inputs.version }}".TrimStart("v")
+          $version = $env:MEOW_RELEASE_VERSION.TrimStart("v")
           # Flutter's build name must be plain x.y.z; 1.2.0-rc1 builds as 1.2.0.
           $buildName = $version.Split("-")[0]
           flutter build windows --release --build-name=$buildName
@@ -61,7 +70,7 @@ jobs:
       - name: Zip bundle (portable)
         shell: pwsh
         run: |
-          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath meow-chess-${{ inputs.version }}-windows.zip
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "meow-chess-${env:MEOW_RELEASE_VERSION}-windows.zip"
 
       # Inno Setup ships on the hosted Windows image; the choco line is a
       # fallback for when an image update drops it.
@@ -73,10 +82,10 @@ jobs:
             choco install innosetup --no-progress -y
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
-          $version = "${{ inputs.version }}".TrimStart("v")
+          $version = $env:MEOW_RELEASE_VERSION.TrimStart("v")
           & $iscc "/DAppVersion=$version" packaging\windows\installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Move-Item "dist\meow-chess-$version-windows-setup.exe" "meow-chess-${{ inputs.version }}-windows-setup.exe"
+          Move-Item "dist\meow-chess-$version-windows-setup.exe" "meow-chess-${env:MEOW_RELEASE_VERSION}-windows-setup.exe"
 
       # Install the finished setup silently and check it put the app in place
       # and registered .meow for the user.
@@ -87,7 +96,7 @@ jobs:
           $log = Join-Path $env:RUNNER_TEMP "installer.log"
           # Start-Process -Wait: setup.exe is a GUI program, so the call
           # operator would return before it finished.
-          $proc = Start-Process -FilePath (Resolve-Path "meow-chess-${{ inputs.version }}-windows-setup.exe") -Wait -PassThru -ArgumentList @(
+          $proc = Start-Process -FilePath (Resolve-Path "meow-chess-${env:MEOW_RELEASE_VERSION}-windows-setup.exe") -Wait -PassThru -ArgumentList @(
             '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART',
             ('/DIR="{0}"' -f $installDir), ('/LOG="{0}"' -f $log)
           )
