@@ -17,7 +17,10 @@ void main() {
     final c = fixture();
     addTearDown(c.dispose);
     final a = c.event!.sections.first, b = c.event!.sections.last;
-    for (final text in [standingsCsv(c.event!, sectionId: a.id), crosstable(c.event!, sectionId: a.id)]) {
+    for (final text in [
+      standingsCsv(c.event!, sectionId: a.id),
+      crosstable(c.event!, sectionId: a.id),
+    ]) {
       expect(text, contains(a.name));
       expect(text, isNot(contains(b.name)));
       expect(text, isNot(contains(c.event!.player(b.players.first).name)));

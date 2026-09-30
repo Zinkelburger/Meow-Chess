@@ -244,7 +244,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
     }
     if (result == null) {
       throw const TournamentException(
-        'No pairing satisfies the opponent requests, repeat-game limits and bye limits. Review player requests or adjust the sections.',
+        'No non-repeat pairing satisfies the opponent requests and bye limits. Review player requests or adjust the sections.',
       );
     }
     pairs.addAll(result);

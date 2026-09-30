@@ -100,8 +100,14 @@ class _WorkspaceState extends State<Workspace> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final target = sectionKeys[id ?? 'all']?.currentContext;
       if (target != null && target.mounted) {
-        Scrollable.ensureVisible(target, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd);
-        Scrollable.ensureVisible(target, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart);
+        Scrollable.ensureVisible(
+          target,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        );
+        Scrollable.ensureVisible(
+          target,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+        );
       }
     });
   }
@@ -112,7 +118,10 @@ class _WorkspaceState extends State<Workspace> {
     WidgetsBinding.instance.endOfFrame.then((_) {
       if (!mounted) return;
       sectionFocus.requestFocus();
-      sectionSearch.selection = TextSelection(baseOffset: 0, extentOffset: sectionSearch.text.length);
+      sectionSearch.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: sectionSearch.text.length,
+      );
     });
   }
 
@@ -148,7 +157,8 @@ class _WorkspaceState extends State<Workspace> {
           (e) =>
               '${c.event!.sections.firstWhere((s) => s.id == e.key).name}: ${e.value}',
         ),
-        if (batch.rounds.values.any((r) => r.policy == 'score-swiss-pilot-v1')) 'Swiss pairings come from a test algorithm that is not yet certified. Look them over; open a section to use Edit pairings.',
+        if (batch.rounds.values.any((r) => r.policy == 'score-swiss-pilot-v1'))
+          'Swiss pairings come from a test algorithm that is not yet certified. Look them over; open a section to use Edit pairings.',
       ];
       // Pair straight away; anything worth checking is fixed afterwards
       // with Edit pairings or undone.
@@ -225,7 +235,8 @@ class _WorkspaceState extends State<Workspace> {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyJ, control: true): jumpToSection,
+        const SingleActivator(LogicalKeyboardKey.keyJ, control: true):
+            jumpToSection,
         const SingleActivator(LogicalKeyboardKey.keyL, control: true): lookup,
         const SingleActivator(LogicalKeyboardKey.keyP, control: true): () =>
             previewPacket(
@@ -249,233 +260,257 @@ class _WorkspaceState extends State<Workspace> {
         const SingleActivator(LogicalKeyboardKey.keyH, control: true):
             toggleHistory,
       },
-      child: Scaffold(
-        body: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Top bar: event name and pages on the left, tool icons pinned
-              // to the right.
-              Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainerLow,
-                  border: Border(
-                    bottom: BorderSide(color: colors.outlineVariant),
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          body: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Top bar: event name and pages on the left, tool icons pinned
+                // to the right.
+                Container(
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: colors.surfaceContainerLow,
+                    border: Border(
+                      bottom: BorderSide(color: colors.outlineVariant),
+                    ),
                   ),
-                ),
-                padding: const EdgeInsets.only(left: 16, right: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 260),
-                              child: Tooltip(
-                                message: 'Event details, backups and copies',
-                                child: TextButton.icon(
-                                  key: const ValueKey('event-details'),
-                                  onPressed: toggleEvent,
-                                  iconAlignment: IconAlignment.end,
-                                  icon: Icon(
-                                    Icons.edit_outlined,
-                                    size: 16,
-                                    color: colors.onSurfaceVariant,
-                                  ),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: colors.onSurface,
-                                    backgroundColor: eventOpen
-                                        ? colors.primary.withValues(alpha: 0.12)
-                                        : null,
-                                    minimumSize: const Size(0, 32),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
+                  padding: const EdgeInsets.only(left: 16, right: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 260,
+                                ),
+                                child: Tooltip(
+                                  message: 'Event details, backups and copies',
+                                  child: TextButton.icon(
+                                    key: const ValueKey('event-details'),
+                                    onPressed: toggleEvent,
+                                    iconAlignment: IconAlignment.end,
+                                    icon: Icon(
+                                      Icons.edit_outlined,
+                                      size: 16,
+                                      color: colors.onSurfaceVariant,
                                     ),
-                                  ),
-                                  label: Text(
-                                    e.name,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: colors.onSurface,
+                                      backgroundColor: eventOpen
+                                          ? colors.primary.withValues(
+                                              alpha: 0.12,
+                                            )
+                                          : null,
+                                      minimumSize: const Size(0, 32),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
+                                    ),
+                                    label: Text(
+                                      e.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 15,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            if (e.practice) ...[
-                              const SizedBox(width: 10),
-                              const StatusPill('Practice copy'),
+                              if (e.practice) ...[
+                                const SizedBox(width: 10),
+                                const StatusPill('Practice copy'),
+                              ],
+                              const SizedBox(width: 20),
+                              for (final (task, label) in [
+                                (TaskView.players, 'Players'),
+                                (TaskView.results, 'Rounds'),
+                                (TaskView.reports, 'Reports'),
+                              ])
+                                _tab(label, view == task, () => go(task)),
                             ],
-                            const SizedBox(width: 20),
-                            for (final (task, label) in [
-                              (TaskView.players, 'Players'),
-                              (TaskView.results, 'Rounds'),
-                              (TaskView.reports, 'Reports'),
-                            ])
-                              _tab(label, view == task, () => go(task)),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    _barIcon(
-                      Icons.chevron_left,
-                      c.canUndo
-                          ? 'Back: undo ${c.undoLabel} (Ctrl+Z)'
-                          : 'Nothing to undo',
-                      c.canUndo ? undo : null,
-                    ),
-                    _barIcon(
-                      Icons.chevron_right,
-                      c.canRedo
-                          ? 'Forward: redo ${c.redoLabel} (Ctrl+Shift+Z)'
-                          : 'Nothing to redo',
-                      c.canRedo ? redo : null,
-                    ),
-                    _barIcon(
-                      Icons.account_tree_outlined,
-                      historyOpen
-                          ? 'Hide history (Ctrl+H)'
-                          : 'History (Ctrl+H)',
-                      toggleHistory,
-                      selected: historyOpen,
-                    ),
-                    _barIcon(
-                      dark
-                          ? Icons.light_mode_outlined
-                          : Icons.dark_mode_outlined,
-                      dark ? 'Light mode' : 'Dark mode',
-                      widget.onTheme,
-                    ),
-                    SizedBox(
-                      height: 24,
-                      child: VerticalDivider(
-                        width: 17,
-                        color: colors.outlineVariant,
+                      const SizedBox(width: 12),
+                      _barIcon(
+                        Icons.chevron_left,
+                        c.canUndo
+                            ? 'Back: undo ${c.undoLabel} (Ctrl+Z)'
+                            : 'Nothing to undo',
+                        c.canUndo ? undo : null,
                       ),
-                    ),
-                    _barIcon(Icons.close, 'Close event', widget.onClose),
-                  ],
+                      _barIcon(
+                        Icons.chevron_right,
+                        c.canRedo
+                            ? 'Forward: redo ${c.redoLabel} (Ctrl+Shift+Z)'
+                            : 'Nothing to redo',
+                        c.canRedo ? redo : null,
+                      ),
+                      _barIcon(
+                        Icons.account_tree_outlined,
+                        historyOpen
+                            ? 'Hide history (Ctrl+H)'
+                            : 'History (Ctrl+H)',
+                        toggleHistory,
+                        selected: historyOpen,
+                      ),
+                      _barIcon(
+                        dark
+                            ? Icons.light_mode_outlined
+                            : Icons.dark_mode_outlined,
+                        dark ? 'Light mode' : 'Dark mode',
+                        widget.onTheme,
+                      ),
+                      SizedBox(
+                        height: 24,
+                        child: VerticalDivider(
+                          width: 17,
+                          color: colors.outlineVariant,
+                        ),
+                      ),
+                      _barIcon(Icons.close, 'Close event', widget.onClose),
+                    ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (view != TaskView.reports) _sectionSidebar(context),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (c.backupWarning != null)
-                            MaterialBanner(
-                              content: Text(c.backupWarning!),
-                              actions: [
-                                TextButton(
-                                  onPressed: c.secondaryBackup,
-                                  child: const Text('Retry'),
-                                ),
-                              ],
-                            ),
-                          if (view != TaskView.reports)
-                            Container(
-                              padding: const EdgeInsets.fromLTRB(
-                                24,
-                                12,
-                                24,
-                                12,
-                              ),
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: colors.outlineVariant,
-                                  ),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(child: Text(section?.name ?? 'All sections',
-                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                                    overflow: TextOverflow.ellipsis)),
-                                  if (view == TaskView.results && current != null && !current.complete) ...[
-                                    if (current.startedAt == null)
-                                      TextButton(
-                                        onPressed: () {
-                                          try { c.startRound(section!.id); }
-                                          catch (e) { showFailure(context, e); }
-                                        },
-                                        child: const Text('Start round'),
-                                      ),
-                                    if (!current.hasPlay)
-                                      TextButton(onPressed: editPairing, child: const Text('Edit pairings')),
-                                  ],
-                                  const SizedBox(width: 20),
-                                  Tooltip(
-                                    message: section == null
-                                        ? 'Pair the next round in all sections'
-                                        : 'Pair the next round in ${section.name}',
-                                    child: FilledButton.icon(
-                                      key: const ValueKey('pair-next-round'),
-                                      onPressed: pairing || e.sections.isEmpty
-                                          ? null
-                                          : pair,
-                                      icon: const Icon(
-                                        Icons.arrow_forward,
-                                        size: 18,
-                                      ),
-                                      iconAlignment: IconAlignment.end,
-                                      label: Text(
-                                        pairing
-                                            ? 'Pairing…'
-                                            : 'Pair next round',
-                                      ),
-                                    ),
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (view != TaskView.reports) _sectionSidebar(context),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (c.backupWarning != null)
+                              MaterialBanner(
+                                content: Text(c.backupWarning!),
+                                actions: [
+                                  TextButton(
+                                    onPressed: c.secondaryBackup,
+                                    child: const Text('Retry'),
                                   ),
                                 ],
                               ),
-                            ),
-                          Expanded(child: content),
-                        ],
-                      ),
-                    ),
-                    if (eventOpen)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: EventPanel(
-                          key: eventPanel,
-                          controller: c,
-                          onClose: toggleEvent,
+                            if (view != TaskView.reports)
+                              Container(
+                                padding: const EdgeInsets.fromLTRB(
+                                  24,
+                                  12,
+                                  24,
+                                  12,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: colors.outlineVariant,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        section?.name ?? 'All sections',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (view == TaskView.results &&
+                                        current != null &&
+                                        !current.complete) ...[
+                                      if (current.startedAt == null)
+                                        TextButton(
+                                          onPressed: () {
+                                            try {
+                                              c.startRound(section!.id);
+                                            } catch (e) {
+                                              showFailure(context, e);
+                                            }
+                                          },
+                                          child: const Text('Start round'),
+                                        ),
+                                      if (!current.hasPlay)
+                                        TextButton(
+                                          onPressed: editPairing,
+                                          child: const Text('Edit pairings'),
+                                        ),
+                                    ],
+                                    const SizedBox(width: 20),
+                                    Tooltip(
+                                      message: section == null
+                                          ? 'Pair the next round in all sections'
+                                          : 'Pair the next round in ${section.name}',
+                                      child: FilledButton.icon(
+                                        key: const ValueKey('pair-next-round'),
+                                        onPressed: pairing || e.sections.isEmpty
+                                            ? null
+                                            : pair,
+                                        icon: const Icon(
+                                          Icons.arrow_forward,
+                                          size: 18,
+                                        ),
+                                        iconAlignment: IconAlignment.end,
+                                        label: Text(
+                                          pairing
+                                              ? 'Pairing…'
+                                              : 'Pair next round',
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            Expanded(child: content),
+                          ],
                         ),
                       ),
-                    if (historyOpen)
-                      HistoryPanel(controller: c, onClose: toggleHistory),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: colors.outlineVariant)),
-                ),
-                child: DefaultTextStyle.merge(
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colors.onSurfaceVariant,
-                  ),
-                  child: Text(
-                    '${e.players.length} players · ${e.sections.length} sections · ${widget.path}',
-                    overflow: TextOverflow.ellipsis,
+                      if (eventOpen)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: EventPanel(
+                            key: eventPanel,
+                            controller: c,
+                            onClose: toggleEvent,
+                          ),
+                        ),
+                      if (historyOpen)
+                        HistoryPanel(controller: c, onClose: toggleHistory),
+                    ],
                   ),
                 ),
-              ),
-            ],
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: colors.outlineVariant),
+                    ),
+                  ),
+                  child: DefaultTextStyle.merge(
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.onSurfaceVariant,
+                    ),
+                    child: Text(
+                      '${e.players.length} players · ${e.sections.length} sections · ${widget.path}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -486,10 +521,23 @@ class _WorkspaceState extends State<Workspace> {
     final e = c.event!, colors = Theme.of(context).colorScheme;
     final q = sectionSearch.text.toLowerCase().replaceAll(' ', '');
     String normalized(String name) => name.toLowerCase().replaceAll(' ', '');
-    bool exact((int, Section) entry) => normalized(entry.$2.name) == q || 'section${entry.$1 + 1}' == q;
-    final matches = e.sections.indexed.where((entry) =>
-      normalized(entry.$2.name).contains(q) || 'section${entry.$1 + 1}'.contains(q)).toList()
-      ..sort((a, b) => exact(a) == exact(b) ? a.$1.compareTo(b.$1) : exact(a) ? -1 : 1);
+    bool exact((int, Section) entry) =>
+        normalized(entry.$2.name) == q || 'section${entry.$1 + 1}' == q;
+    final matches =
+        e.sections.indexed
+            .where(
+              (entry) =>
+                  normalized(entry.$2.name).contains(q) ||
+                  'section${entry.$1 + 1}'.contains(q),
+            )
+            .toList()
+          ..sort(
+            (a, b) => exact(a) == exact(b)
+                ? a.$1.compareTo(b.$1)
+                : exact(a)
+                ? -1
+                : 1,
+          );
     return Container(
       key: const ValueKey('section-sidebar'),
       width: 208,
@@ -502,22 +550,40 @@ class _WorkspaceState extends State<Workspace> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
-            child: Row(children: [
-              const Expanded(child: Text('Sections', style: TextStyle(fontWeight: FontWeight.w600))),
-              MenuAnchor(
-                builder: (context, menu, child) => IconButton(
-                  tooltip: 'Manage sections', icon: const Icon(Icons.more_horiz, size: 20),
-                  onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Sections',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
-                menuChildren: [
-                  MenuItemButton(leadingIcon: const Icon(Icons.add, size: 18), onPressed: addSections, child: const Text('New sections…')),
-                  if (e.sections.any((s) => s.id == sectionId)) ...[
-                    MenuItemButton(onPressed: sectionSettings, child: const Text('Section settings…')),
-                    MenuItemButton(onPressed: combine, child: const Text('Combine sections…')),
+                MenuAnchor(
+                  builder: (context, menu, child) => IconButton(
+                    tooltip: 'Manage sections',
+                    icon: const Icon(Icons.more_horiz, size: 20),
+                    onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+                  ),
+                  menuChildren: [
+                    MenuItemButton(
+                      leadingIcon: const Icon(Icons.add, size: 18),
+                      onPressed: addSections,
+                      child: const Text('New sections…'),
+                    ),
+                    if (e.sections.any((s) => s.id == sectionId)) ...[
+                      MenuItemButton(
+                        onPressed: sectionSettings,
+                        child: const Text('Section settings…'),
+                      ),
+                      MenuItemButton(
+                        onPressed: combine,
+                        child: const Text('Combine sections…'),
+                      ),
+                    ],
                   ],
-                ],
-              ),
-            ]),
+                ),
+              ],
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -525,15 +591,19 @@ class _WorkspaceState extends State<Workspace> {
               message: 'Jump to a section (Ctrl+J)',
               child: TextField(
                 key: const ValueKey('section-search'),
-                controller: sectionSearch, focusNode: sectionFocus,
+                controller: sectionSearch,
+                focusNode: sectionFocus,
                 decoration: InputDecoration(
                   hintText: 'Jump to section',
                   prefixIcon: const Icon(Icons.search, size: 18),
                   prefixIconConstraints: const BoxConstraints(minWidth: 32),
-                  suffixIcon: q.isEmpty ? null : IconButton(
-                    tooltip: 'Clear section search', icon: const Icon(Icons.close, size: 16),
-                    onPressed: () => setState(sectionSearch.clear),
-                  ),
+                  suffixIcon: q.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear section search',
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () => setState(sectionSearch.clear),
+                        ),
                 ),
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) {
@@ -546,21 +616,43 @@ class _WorkspaceState extends State<Workspace> {
               ),
             ),
           ),
-          Expanded(child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Column(children: [
-              if (q.isEmpty) _sectionLink('All sections', null, '${e.players.length} players'),
-              for (final (_, s) in matches)
-                _sectionLink(s.name, s.id, s.rounds.isEmpty
-                  ? '${s.players.length} players · Not paired'
-                  : 'Round ${s.rounds.length} · ${s.rounds.last.complete ? 'Complete' : '${s.rounds.last.games.where((g) => !g.outcome.resolved).length} missing'}'),
-              if (matches.isEmpty && q.isNotEmpty)
-                Padding(padding: const EdgeInsets.all(12), child: Text('No matching sections', style: TextStyle(color: colors.onSurfaceVariant))),
-            ]),
-          )),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Column(
+                children: [
+                  if (q.isEmpty)
+                    _sectionLink(
+                      'All sections',
+                      null,
+                      '${e.players.length} players',
+                    ),
+                  for (final (_, s) in matches)
+                    _sectionLink(
+                      s.name,
+                      s.id,
+                      s.rounds.isEmpty
+                          ? '${s.players.length} players · Not paired'
+                          : 'Round ${s.rounds.length} · ${s.rounds.last.complete ? 'Complete' : '${s.rounds.last.games.where((g) => !g.outcome.resolved).length} missing'}',
+                    ),
+                  if (matches.isEmpty && q.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'No matching sections',
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Text('Ctrl+J to jump', style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
+            child: Text(
+              'Ctrl+J to jump',
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            ),
           ),
         ],
       ),
@@ -569,23 +661,41 @@ class _WorkspaceState extends State<Workspace> {
 
   Widget _sectionLink(String label, String? id, String subtitle) {
     final colors = Theme.of(context).colorScheme;
-    final active = sectionId == id ||
+    final active =
+        sectionId == id ||
         (id == null && !c.event!.sections.any((s) => s.id == sectionId));
     return Padding(
       key: sectionKeys.putIfAbsent(id ?? 'all', GlobalKey.new),
       padding: const EdgeInsets.only(bottom: 4),
-      child: Semantics(selected: active, child: Material(
-        color: active ? colors.surfaceContainerHigh : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-        child: ListTile(
-          key: ValueKey('section-chip-${id ?? 'all'}'),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          title: Text(label, style: TextStyle(fontSize: 14, fontWeight: active ? FontWeight.w600 : FontWeight.w400)),
-          subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
-          onTap: () => pickSection(id),
+      child: Semantics(
+        selected: active,
+        child: Material(
+          color: active ? colors.surfaceContainerHigh : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          child: ListTile(
+            key: ValueKey('section-chip-${id ?? 'all'}'),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 2,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+            title: Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+            subtitle: Text(
+              subtitle,
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            ),
+            onTap: () => pickSection(id),
+          ),
         ),
-      )),
+      ),
     );
   }
 

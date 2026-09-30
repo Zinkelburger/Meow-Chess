@@ -593,7 +593,9 @@ class _ResultsViewState extends State<ResultsView> {
                       },
                     ),
                   );
-                  if (constraints.maxWidth / MediaQuery.textScalerOf(context).scale(1) < 900) {
+                  if (constraints.maxWidth /
+                          MediaQuery.textScalerOf(context).scale(1) <
+                      900) {
                     return Wrap(
                       spacing: 16,
                       runSpacing: 12,

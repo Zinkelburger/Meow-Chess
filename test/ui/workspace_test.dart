@@ -120,75 +120,121 @@ void main() {
     expect([a.format, b.format], [Format.quad, Format.quad]);
     expect(find.textContaining('selected'), findsNothing);
   });
-  testWidgets('Rounds opens one section; reports have their own scope and no pairing toolbar', (tester) async {
-    final c = fixture();
-    addTearDown(c.dispose);
-    c.post((await tester.runAsync(() => c.propose()))!);
-    await mount(tester, c);
-    await tester.tap(find.text('Rounds'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(ValueKey('game-${c.event!.sections.first.rounds.single.games.first.id}')), findsOneWidget);
-    expect(find.byKey(ValueKey('game-${c.event!.sections.last.rounds.single.games.first.id}')), findsNothing);
-    await tester.tap(find.text('Reports'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
-    expect(find.byKey(const ValueKey('section-chip-all')), findsNothing);
-    expect(find.text('Include sections'), findsOneWidget);
-    await tester.tap(find.text('All sections'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(c.event!.sections.last.name).last);
-    await tester.pumpAndSettle();
-    expect(find.text(c.event!.sections.last.name), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'Rounds opens one section; reports have their own scope and no pairing toolbar',
+    (tester) async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      c.post((await tester.runAsync(() => c.propose()))!);
+      await mount(tester, c);
+      await tester.tap(find.text('Rounds'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          ValueKey(
+            'game-${c.event!.sections.first.rounds.single.games.first.id}',
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          ValueKey(
+            'game-${c.event!.sections.last.rounds.single.games.first.id}',
+          ),
+        ),
+        findsNothing,
+      );
+      await tester.tap(find.text('Reports'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
+      expect(find.byKey(const ValueKey('section-chip-all')), findsNothing);
+      expect(find.text('Include sections'), findsOneWidget);
+      await tester.tap(find.text('All sections'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(c.event!.sections.last.name).last);
+      await tester.pumpAndSettle();
+      expect(find.text(c.event!.sections.last.name), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('Ctrl+J jumps by section name or number and survives a page change', (tester) async {
-    final c = fixture();
-    addTearDown(c.dispose);
-    for (var n = 3; n <= 24; n++) {
-      c.addSection('Quad $n', Format.quad, 3);
-    }
-    await mount(tester, c);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pumpAndSettle();
-    final search = find.byKey(const ValueKey('section-search'));
-    expect(tester.widget<TextField>(search).focusNode!.hasFocus, true);
-    await tester.enterText(search, 'quad24');
-    await tester.pumpAndSettle();
-    expect(find.byKey(ValueKey('section-chip-${c.event!.sections.last.id}')), findsOneWidget);
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    expect(c.repository.readPreference('view'), '${c.event!.sections.last.id}|players');
-    await tester.tap(find.text('Rounds').first);
-    await tester.pumpAndSettle();
-    expect(c.repository.readPreference('view'), '${c.event!.sections.last.id}|results');
-    await tester.enterText(search, 'section2');
-    await tester.pumpAndSettle();
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    expect(c.repository.readPreference('view'), '${c.event!.sections[1].id}|results');
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'Ctrl+J jumps by section name or number and survives a page change',
+    (tester) async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      for (var n = 3; n <= 24; n++) {
+        c.addSection('Quad $n', Format.quad, 3);
+      }
+      await mount(tester, c);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      final search = find.byKey(const ValueKey('section-search'));
+      expect(tester.widget<TextField>(search).focusNode!.hasFocus, true);
+      await tester.enterText(search, 'quad24');
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(ValueKey('section-chip-${c.event!.sections.last.id}')),
+        findsOneWidget,
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(
+        c.repository.readPreference('view'),
+        '${c.event!.sections.last.id}|players',
+      );
+      await tester.tap(find.text('Rounds').first);
+      await tester.pumpAndSettle();
+      expect(
+        c.repository.readPreference('view'),
+        '${c.event!.sections.last.id}|results',
+      );
+      await tester.enterText(search, 'section2');
+      await tester.pumpAndSettle();
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(
+        c.repository.readPreference('view'),
+        '${c.event!.sections[1].id}|results',
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
-  testWidgets('jump shortcut from Reports retains search focus over result autofocus', (tester) async {
-    final c = fixture();
-    addTearDown(c.dispose);
-    c.post((await tester.runAsync(() => c.propose()))!);
-    await mount(tester, c);
-    await tester.tap(find.text('Reports').first);
-    await tester.pumpAndSettle();
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pumpAndSettle();
-    expect(tester.widget<TextField>(find.byKey(const ValueKey('section-search'))).focusNode!.hasFocus, true);
-    await tester.enterText(find.byKey(const ValueKey('section-search')), 'quad2');
-    await tester.pumpAndSettle();
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    expect(c.repository.readPreference('view'), '${c.event!.sections.last.id}|results');
-  });
-
+  testWidgets(
+    'jump shortcut from Reports retains search focus over result autofocus',
+    (tester) async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      c.post((await tester.runAsync(() => c.propose()))!);
+      await mount(tester, c);
+      await tester.tap(find.text('Reports').first);
+      await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('section-search')))
+            .focusNode!
+            .hasFocus,
+        true,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('section-search')),
+        'quad2',
+      );
+      await tester.pumpAndSettle();
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(
+        c.repository.readPreference('view'),
+        '${c.event!.sections.last.id}|results',
+      );
+    },
+  );
 }

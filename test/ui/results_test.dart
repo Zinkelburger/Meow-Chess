@@ -411,49 +411,81 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     },
   );
-  testWidgets('mouse result menu clears both scores and search finds names or boards', (tester) async {
-    tester.view.physicalSize = const Size(1400, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final c = fixture();
-    addTearDown(c.dispose);
-    c.post((await tester.runAsync(() => c.propose()))!);
-    final g = c.event!.games.first;
-    c.recordResult(g.id, Outcome.whiteWin);
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(
-      listenable: c, builder: (_, _) => ResultsView(controller: c),
-    ))));
-    await tester.enterText(find.byKey(const ValueKey('board-search')), c.event!.player(g.white).name);
-    await tester.pumpAndSettle();
-    expect(find.byKey(ValueKey('game-${g.id}')), findsOneWidget);
-    expect(find.byTooltip('Enter or clear result (M)'), findsOneWidget);
-    await tester.tap(find.byTooltip('Enter or clear result (M)'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Still playing / clear result'));
-    await tester.pumpAndSettle();
-    expect(c.event!.games.first.outcome, Outcome.unreported);
-    for (final side in ['w', 'b']) {
-      expect(find.descendant(of: find.byKey(ValueKey('score-${g.id}-$side')), matching: find.text('')), findsOneWidget);
-    }
-    expect(scoreMark(Outcome.unfinished, white: true), '');
-    await tester.enterText(find.byKey(const ValueKey('board-search')), '${g.board}');
-    await tester.pumpAndSettle();
-    expect(find.byKey(ValueKey('game-${g.id}')), findsOneWidget);
-    await tester.pumpWidget(const SizedBox());
-  });
+  testWidgets(
+    'mouse result menu clears both scores and search finds names or boards',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final c = fixture();
+      addTearDown(c.dispose);
+      c.post((await tester.runAsync(() => c.propose()))!);
+      final g = c.event!.games.first;
+      c.recordResult(g.id, Outcome.whiteWin);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: c,
+              builder: (_, _) => ResultsView(controller: c),
+            ),
+          ),
+        ),
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('board-search')),
+        c.event!.player(g.white).name,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey('game-${g.id}')), findsOneWidget);
+      expect(find.byTooltip('Enter or clear result (M)'), findsOneWidget);
+      await tester.tap(find.byTooltip('Enter or clear result (M)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Still playing / clear result'));
+      await tester.pumpAndSettle();
+      expect(c.event!.games.first.outcome, Outcome.unreported);
+      for (final side in ['w', 'b']) {
+        expect(
+          find.descendant(
+            of: find.byKey(ValueKey('score-${g.id}-$side')),
+            matching: find.text(''),
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(scoreMark(Outcome.unfinished, white: true), '');
+      await tester.enterText(
+        find.byKey(const ValueKey('board-search')),
+        '${g.board}',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(ValueKey('game-${g.id}')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
-  testWidgets('two selected players can share a team and request not to meet', (tester) async {
+  testWidgets('two selected players can share a team and request not to meet', (
+    tester,
+  ) async {
     final c = fixture();
     addTearDown(c.dispose);
     await mountPlayers(tester, c);
     for (final id in ['p0', 'p1']) {
-      await tester.tap(find.descendant(of: find.byKey(ValueKey('player-$id')), matching: find.byType(PlainCheckbox)));
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(ValueKey('player-$id')),
+          matching: find.byType(PlainCheckbox),
+        ),
+      );
       await tester.pump();
     }
     await tester.tap(find.text('Assign team'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, 'Team name'), 'Mixed doubles A');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Team name'),
+      'Mixed doubles A',
+    );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(c.event!.player('p0').team, 'Mixed doubles A');
@@ -465,5 +497,4 @@ void main() {
     expect(c.event!.player('p1').avoid, {'p0'});
     await tester.pumpWidget(const SizedBox());
   });
-
 }
