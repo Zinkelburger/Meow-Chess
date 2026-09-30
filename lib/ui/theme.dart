@@ -211,7 +211,7 @@ class PlainCheckbox extends StatelessWidget {
                   border: on
                       ? null
                       : Border.all(
-                          color: enabled ? colors.outlineVariant : fill,
+                          color: enabled ? colors.outline : fill,
                           width: 1,
                         ),
                 ),

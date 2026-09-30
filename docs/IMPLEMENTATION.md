@@ -82,8 +82,8 @@ name, or edit a player's team in their details. This records membership only;
 it does not implement team-match pairings, prize eligibility, or team scoring.
 Select two players and choose **Do not pair together** for sibling/other requests;
 player details also add and remove these requests. Swiss proposals respect them,
-and impossible requests report a conflict. Quads/round robins report a conflict
-when their fixed schedule requires that meeting, so the TD can separate the
+and impossible requests report a conflict. Quads/round robins check the remaining schedule before posting and report a conflict
+when it requires that meeting, so the TD can separate the
 players or remove the request. Requests preserve posted games and are checked
 when posting new or replacing unstarted pairings. Teams and requests persist in
 player JSON and participate in undo, redo and backups; older records default to

@@ -113,6 +113,17 @@ Round proposeRound(Event event, Section section, String Function() id) {
     if (n > schedule.length) {
       throw const TournamentException('The round-robin schedule is complete.');
     }
+    // Catch an impossible fixed schedule before posting its first round,
+    // including a requested avoidance whose meeting would be in a later round.
+    for (final (offset, remaining) in schedule.skip(n - 1).indexed) {
+      for (final (a, b) in remaining) {
+        if (a != null && b != null && pairingRestricted(event, a, b)) {
+          throw TournamentException(
+            '${event.player(a).name} and ${event.player(b).name} have a do-not-pair request, but round ${n + offset} requires them to meet. A round robin cannot skip this meeting; move them to different sections or remove the request.',
+          );
+        }
+      }
+    }
     for (final (a, b) in schedule[n - 1]) {
       if (a == null || b == null) {
         final pid = a ?? b;
@@ -122,11 +133,6 @@ Round proposeRound(Event event, Section section, String Function() id) {
         continue;
       }
       if (available.contains(a) && available.contains(b)) {
-        if (pairingRestricted(event, a, b)) {
-          throw TournamentException(
-            '${event.player(a).name} and ${event.player(b).name} have a do-not-pair request. A round robin requires everyone to meet; move them to different sections or remove the request.',
-          );
-        }
         pairs.add((a, b));
       } else if (available.contains(a) || available.contains(b)) {
         final absent = byes.firstWhere(
