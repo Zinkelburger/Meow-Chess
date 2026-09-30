@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:path/path.dart' as p;
 import '../application/event_repository.dart';
+import '../domain/history.dart';
 import '../domain/model.dart';
 
 /// One owned connection per event. Foreign keys and FULL synchronous commits
@@ -16,7 +17,7 @@ class SqliteEventRepository implements EventRepository {
       _db.execute('PRAGMA busy_timeout = 1000');
       final version =
           _db.select('PRAGMA user_version').first.values.first as int;
-      if (version > 1) {
+      if (version > 2) {
         throw const TournamentException(
           'This event was created by a newer Meow-Chess version.',
         );
@@ -41,17 +42,58 @@ CREATE TABLE IF NOT EXISTS membership (section_id TEXT REFERENCES section(id), p
 CREATE TABLE IF NOT EXISTS round (section_id TEXT REFERENCES section(id), number INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(section_id,number));
 CREATE TABLE IF NOT EXISTS game (id TEXT PRIMARY KEY, section_id TEXT, round_number INTEGER, white_id TEXT REFERENCES player(id), black_id TEXT REFERENCES player(id), data TEXT NOT NULL, CHECK(white_id != black_id), FOREIGN KEY(section_id,round_number) REFERENCES round(section_id,number));
 CREATE TABLE IF NOT EXISTS bye (section_id TEXT, round_number INTEGER, player_id TEXT REFERENCES player(id), data TEXT NOT NULL, PRIMARY KEY(section_id,round_number,player_id), FOREIGN KEY(section_id,round_number) REFERENCES round(section_id,number));
-CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, revision INTEGER NOT NULL, action TEXT NOT NULL, timestamp TEXT NOT NULL, before_state TEXT, undone INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-PRAGMA user_version = 1;''',
+CREATE TABLE IF NOT EXISTS node (id INTEGER PRIMARY KEY, parent INTEGER REFERENCES node(id), action TEXT NOT NULL, timestamp TEXT NOT NULL, state BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, revision INTEGER NOT NULL, action TEXT NOT NULL, timestamp TEXT NOT NULL, node INTEGER REFERENCES node(id));
+CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL);''',
       );
+      if (version == 1) {
+        // Version 1 kept only the last 100 undo snapshots, which cannot be
+        // arranged into a graph; history starts from the state the file is in.
+        _db.execute(
+          'ALTER TABLE audit ADD COLUMN node INTEGER REFERENCES node(id)',
+        );
+        final current = load();
+        if (current != null) {
+          _db.execute(
+            'INSERT INTO audit(revision,action,timestamp,node) VALUES(?,?,?,?)',
+            [
+              current.revision,
+              'Start history graph',
+              _now(),
+              _addNode(null, 'Earlier changes', current),
+            ],
+          );
+        }
+        _db.execute('UPDATE audit SET before_state=NULL');
+      }
+      _db.execute('CREATE INDEX IF NOT EXISTS audit_node ON audit(node)');
+      _db.execute('PRAGMA user_version = 2');
       _db.execute('COMMIT');
-    } catch (_) {
+    } catch (error) {
       _db.close();
+      if (error is SqliteException) {
+        switch (error.resultCode) {
+          case 5 || 6: // SQLITE_BUSY, SQLITE_LOCKED
+            throw const TournamentException(
+              'This event is open in another window or program. Close it there first.',
+            );
+          case 26: // SQLITE_NOTADB
+            throw const TournamentException(
+              'This file is not a Meow-Chess event.',
+            );
+        }
+      }
       rethrow;
     }
   }
   final bool _created;
+
+  /// SQLite may already have rolled back (for example after a failed COMMIT on
+  /// a full disk); a second ROLLBACK would then mask the original error.
+  void _rollback() {
+    if (!_db.autocommit) _db.execute('ROLLBACK');
+  }
+
   final Database _db;
   @override
   Event? load() {
@@ -174,6 +216,40 @@ PRAGMA user_version = 1;''',
     }
   }
 
+  static String _now() => DateTime.now().toUtc().toIso8601String();
+
+  /// The node the stored event is at: the one named by the latest audit row.
+  int? _head() =>
+      _db
+              .select(
+                'SELECT node FROM audit WHERE node IS NOT NULL ORDER BY id DESC LIMIT 1',
+              )
+              .firstOrNull?['node']
+          as int?;
+
+  /// Full snapshots, compressed: a day of commands stays a few megabytes and
+  /// any node opens without replaying others.
+  int _addNode(int? parent, String action, Event state) {
+    _db.execute(
+      'INSERT INTO node(parent,action,timestamp,state) VALUES(?,?,?,?)',
+      [parent, action, _now(), zlib.encode(utf8.encode(state.encode()))],
+    );
+    return _db.lastInsertRowId;
+  }
+
+  static String _content(Event e) => e.copy(revision: 0).encode();
+
+  @override
+  Event snapshot(int node) {
+    final row = _db.select('SELECT state FROM node WHERE id=?', [
+      node,
+    ]).firstOrNull;
+    if (row == null) {
+      throw const TournamentException('That point in history is missing.');
+    }
+    return Event.decode(utf8.decode(zlib.decode(row['state'] as List<int>)));
+  }
+
   @override
   Event commit(
     Event next, {
@@ -199,102 +275,92 @@ PRAGMA user_version = 1;''',
         practice: (before?.practice ?? false) || next.practice,
       );
       _write(committed);
+      final head = _head();
+      // Redoing a step by hand returns to its node instead of branching a twin.
+      final content = _content(committed);
+      final twin = head == null
+          ? null
+          : _db
+                .select('SELECT id FROM node WHERE parent=? ORDER BY id', [
+                  head,
+                ])
+                .map((r) => r['id'] as int)
+                .where((id) => _content(snapshot(id)) == content)
+                .firstOrNull;
       _db.execute(
-        'INSERT INTO audit(revision,action,timestamp,before_state) VALUES(?,?,?,?)',
+        'INSERT INTO audit(revision,action,timestamp,node) VALUES(?,?,?,?)',
         [
           committed.revision,
           action,
-          DateTime.now().toUtc().toIso8601String(),
-          before?.encode(),
+          _now(),
+          twin ?? _addNode(head, action, committed),
         ],
-      );
-      // The audit remains permanent; only bounded undo snapshots are pruned.
-      _db.execute(
-        'UPDATE audit SET before_state=NULL WHERE id < (SELECT COALESCE(MAX(id),0)-100 FROM audit)',
       );
       _db.execute('COMMIT');
       return committed;
     } catch (_) {
-      _db.execute('ROLLBACK');
+      _rollback();
       rethrow;
     }
   }
 
   @override
-  String? get undoLabel =>
-      _db
-              .select(
-                "SELECT action FROM audit WHERE undone=0 AND before_state IS NOT NULL AND action NOT LIKE 'Undo %' ORDER BY id DESC LIMIT 1",
-              )
-              .firstOrNull?['action']
-          as String?;
-  @override
-  Event? undo() {
-    final row = _db
-        .select(
-          "SELECT * FROM audit WHERE undone=0 AND before_state IS NOT NULL AND action NOT LIKE 'Undo %' ORDER BY id DESC LIMIT 1",
-        )
-        .firstOrNull;
-    if (row == null) return null;
-    final before = Event.decode(row['before_state']);
-    final current = load()!;
-    // Undo of a posted round is only safe before play. Corrections remain separate.
-    final previousGames = before.games.map((g) => g.id).toSet();
-    if (current.sections
-        .expand((s) => s.rounds)
-        .any(
-          (r) => r.hasPlay && r.games.any((g) => !previousGames.contains(g.id)),
-        )) {
-      throw const TournamentException(
-        'This action would remove a started round. Correct the affected games instead.',
-      );
-    }
+  Event checkout(
+    int node, {
+    required int expectedRevision,
+    required String action,
+  }) {
     _db.execute('BEGIN IMMEDIATE');
     try {
-      final restored = before.copy(
+      final current = load();
+      if (current == null || current.revision != expectedRevision) {
+        throw const TournamentException(
+          'This event changed. Reload before applying this action.',
+        );
+      }
+      final target = snapshot(node);
+      if (target.id != current.id) {
+        throw const TournamentException(
+          'That point in history belongs to a different event.',
+        );
+      }
+      final restored = target.copy(
         revision: current.revision + 1,
-        practice: current.practice || before.practice,
-        sections: [
-          for (final section in before.sections)
-            section.copy(
-              rounds: [
-                for (final round in section.rounds)
-                  round.copy(
-                    startedAt: current.sections
-                        .where((s) => s.id == section.id)
-                        .firstOrNull
-                        ?.rounds
-                        .where((r) => r.number == round.number)
-                        .firstOrNull
-                        ?.startedAt,
-                  ),
-              ],
-            ),
-        ],
+        practice: current.practice || target.practice,
       );
       validateEvent(restored);
       _write(restored);
-      _db.execute('UPDATE audit SET undone=1 WHERE id=?', [row['id']]);
       _db.execute(
-        'INSERT INTO audit(revision,action,timestamp) VALUES(?,?,?)',
-        [
-          restored.revision,
-          'Undo ${row['action']}',
-          DateTime.now().toUtc().toIso8601String(),
-        ],
+        'INSERT INTO audit(revision,action,timestamp,node) VALUES(?,?,?,?)',
+        [restored.revision, action, _now(), node],
       );
       _db.execute('COMMIT');
       return restored;
     } catch (_) {
-      _db.execute('ROLLBACK');
+      _rollback();
       rethrow;
     }
   }
 
   @override
+  HistoryGraph historyGraph() => HistoryGraph([
+    for (final r in _db.select(
+      'SELECT id,parent,action,timestamp,(SELECT MAX(a.id) FROM audit a WHERE a.node=node.id) AS visit FROM node',
+    ))
+      HistoryNode(
+        id: r['id'],
+        parent: r['parent'],
+        action: r['action'],
+        timestamp: r['timestamp'],
+        lastVisit: r['visit'] ?? 0,
+      ),
+  ], _head());
+
+  /// The permanent log: every command and every move through history.
+  @override
   List<Json> history() => [
     for (final r in _db.select(
-      'SELECT revision,action,timestamp,undone FROM audit ORDER BY id DESC',
+      'SELECT revision,action,timestamp,node FROM audit ORDER BY id DESC',
     ))
       Map<String, dynamic>.from(r),
   ];
@@ -309,17 +375,23 @@ PRAGMA user_version = 1;''',
     'INSERT INTO preference VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
     [key, value],
   );
+
+  /// Publishes a verified, independently openable snapshot at [destination].
+  /// The copy is built and checked under a temporary sibling name, so a crash
+  /// never leaves a partial file under the requested name.
   @override
   void backup(String destination) {
-    if (File(destination).existsSync()) {
-      throw const TournamentException(
-        'Choose a new backup filename; existing copies are never overwritten.',
-      );
-    }
+    const exists = TournamentException(
+      'Choose a new backup filename; existing copies are never overwritten.',
+    );
+    if (File(destination).existsSync()) throw exists;
     Directory(p.dirname(destination)).createSync(recursive: true);
+    final staging = File(
+      '$destination.$pid-${DateTime.now().microsecondsSinceEpoch}.partial',
+    );
     try {
-      _db.execute('VACUUM INTO ?', [destination]);
-      final check = sqlite3.open(destination, mode: OpenMode.readOnly);
+      _db.execute('VACUUM INTO ?', [staging.path]);
+      final check = sqlite3.open(staging.path, mode: OpenMode.readOnly);
       try {
         if (check.select('PRAGMA integrity_check').first.values.first != 'ok') {
           throw const TournamentException('Backup verification failed.');
@@ -327,10 +399,17 @@ PRAGMA user_version = 1;''',
       } finally {
         check.close();
       }
-    } catch (_) {
-      final file = File(destination);
-      if (file.existsSync()) file.deleteSync();
-      rethrow;
+      // VACUUM INTO is consistent but not necessarily durable; sync first.
+      final handle = staging.openSync(mode: FileMode.append);
+      try {
+        handle.flushSync();
+      } finally {
+        handle.closeSync();
+      }
+      if (File(destination).existsSync()) throw exists;
+      staging.renameSync(destination);
+    } finally {
+      if (staging.existsSync()) staging.deleteSync();
     }
   }
 

@@ -1,0 +1,137 @@
+# Builds and publishes a GitHub Release when a version tag is pushed:
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# Linux: portable zip, .deb, .rpm and .flatpak. Windows: portable zip and a
+# setup .exe. Every package registers .meow files; the zips offer to on first
+# launch (linux/runner and windows/runner desktop_integration).
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  quality-gate:
+    uses: ./.github/workflows/ci.yml
+
+  build-linux:
+    needs: quality-gate
+    # The oldest supported runner sets the glibc floor for the binaries.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: true
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build clang pkg-config libgtk-3-dev \
+            libsecret-1-dev libjson-glib-dev rpm \
+            flatpak flatpak-builder
+
+      - name: Version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # Flutter's build name must be plain x.y.z; 1.2.0-rc1 builds as 1.2.0.
+          echo "build_name=${VERSION%%-*}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Linux release
+        run: flutter build linux --release --build-name=${{ steps.version.outputs.build_name }}
+
+      - name: Check the bundle carries what desktop setup needs
+        run: |
+          B=build/linux/x64/release/bundle
+          test -x $B/meow_chess
+          test -s $B/data/org.meowchess.meow_chess.xml
+          test -s $B/data/flutter_assets/assets/icon/meow_chess.png
+
+      - name: Zip bundle
+        run: |
+          cd build/linux/x64/release/bundle
+          zip -r "$GITHUB_WORKSPACE/meow-chess-${{ github.ref_name }}-linux.zip" .
+
+      - name: Build .deb
+        run: |
+          packaging/deb/build_deb.sh ${{ github.ref_name }} build/linux/x64/release/bundle dist
+          mv dist/meow-chess-${{ steps.version.outputs.version }}-linux-amd64.deb \
+             meow-chess-${{ github.ref_name }}-linux-amd64.deb
+
+      - name: Install the .deb and check the file type registers
+        run: |
+          sudo apt-get install -y ./meow-chess-${{ github.ref_name }}-linux-amd64.deb
+          # dpkg's shared-mime-info trigger rebuilt the MIME database, and the
+          # desktop entry claims the type (GLib reads that line directly).
+          grep -F 'application/x-meow-chess:*.meow' /usr/share/mime/globs2
+          grep -Fx 'MimeType=application/x-meow-chess;' \
+            /usr/share/applications/org.meowchess.meow_chess.desktop
+          test -x "$(readlink -f /usr/bin/meow_chess)"
+          sudo apt-get remove -y meow-chess
+
+      - name: Build .rpm
+        run: |
+          packaging/rpm/build_rpm.sh ${{ github.ref_name }} build/linux/x64/release/bundle dist
+          mv dist/meow-chess-${{ steps.version.outputs.version }}-linux-x86_64.rpm \
+             meow-chess-${{ github.ref_name }}-linux-x86_64.rpm
+
+      - name: Build Flatpak bundle
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=flatpak-repo flatpak-build \
+            packaging/flatpak/org.meowchess.meow_chess.yml
+          flatpak build-bundle flatpak-repo \
+            meow-chess-${{ github.ref_name }}-linux.flatpak org.meowchess.meow_chess
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: |
+            meow-chess-${{ github.ref_name }}-linux.zip
+            meow-chess-${{ github.ref_name }}-linux-amd64.deb
+            meow-chess-${{ github.ref_name }}-linux-x86_64.rpm
+            meow-chess-${{ github.ref_name }}-linux.flatpak
+
+  build-windows:
+    needs: quality-gate
+    uses: ./.github/workflows/windows-build.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  release:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish download checksums
+        run: |
+          cd artifacts
+          sha256sum meow-chess-* > SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          # Tags with a dash (v1.2.0-rc1) are marked as pre-releases.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            **Windows:** download `meow-chess-${{ github.ref_name }}-windows-setup.exe` and run it.
+            **Ubuntu / Debian:** the `.deb`. **Fedora / openSUSE:** the `.rpm`. **Any Linux:** the `.flatpak`.
+            The `.zip` files run without installing; the app offers to set itself up on first launch.

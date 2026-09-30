@@ -1,0 +1,114 @@
+# The Windows build: the app, the portable zip and the setup, which is
+# installed silently on the runner as a check. Called by release.yml with the
+# tag, and runnable by hand (Actions > Windows build > Run workflow) to try a
+# Windows build without releasing. Nothing here publishes.
+
+name: Windows build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The tag in the artifact names, e.g. v0.2.0
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: A name for the artifacts, e.g. v0.0.0-check
+        required: true
+        default: v0.0.0-check
+        type: string
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: true
+
+      - name: Build Windows release
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.version }}".TrimStart("v")
+          # Flutter's build name must be plain x.y.z; 1.2.0-rc1 builds as 1.2.0.
+          $buildName = $version.Split("-")[0]
+          flutter build windows --release --build-name=$buildName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # A clean Windows has no Visual C++ runtime; without these beside the
+      # exe the app cannot start (windows/CMakeLists.txt deploys them).
+      - name: Verify the VC++ runtime is bundled
+        shell: pwsh
+        run: |
+          $bundle = "build/windows/x64/runner/Release"
+          $missing = @()
+          foreach ($dll in @('meow_chess.exe','MSVCP140.dll','VCRUNTIME140.dll','VCRUNTIME140_1.dll')) {
+            if (-not (Test-Path (Join-Path $bundle $dll))) { $missing += $dll }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Host "Bundle is missing: $($missing -join ', ')"
+            Get-ChildItem $bundle | Select-Object -ExpandProperty Name
+            exit 1
+          }
+
+      - name: Zip bundle (portable)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath meow-chess-${{ inputs.version }}-windows.zip
+
+      # Inno Setup ships on the hosted Windows image; the choco line is a
+      # fallback for when an image update drops it.
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $version = "${{ inputs.version }}".TrimStart("v")
+          & $iscc "/DAppVersion=$version" packaging\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Move-Item "dist\meow-chess-$version-windows-setup.exe" "meow-chess-${{ inputs.version }}-windows-setup.exe"
+
+      # Install the finished setup silently and check it put the app in place
+      # and registered .meow for the user.
+      - name: Install the setup and check the .meow association
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $env:RUNNER_TEMP "Meow Chess installer test"
+          $log = Join-Path $env:RUNNER_TEMP "installer.log"
+          # Start-Process -Wait: setup.exe is a GUI program, so the call
+          # operator would return before it finished.
+          $proc = Start-Process -FilePath (Resolve-Path "meow-chess-${{ inputs.version }}-windows-setup.exe") -Wait -PassThru -ArgumentList @(
+            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART',
+            ('/DIR="{0}"' -f $installDir), ('/LOG="{0}"' -f $log)
+          )
+          if ($proc.ExitCode -ne 0) {
+            Write-Host "Installer exited with $($proc.ExitCode):"
+            if (Test-Path $log) { Get-Content $log -Tail 80 }
+            exit $proc.ExitCode
+          }
+          foreach ($f in @('meow_chess.exe','VCRUNTIME140.dll','data\flutter_assets\AssetManifest.bin')) {
+            if (-not (Test-Path (Join-Path $installDir $f))) { throw "Installed app is missing $f" }
+          }
+          $progId = (Get-ItemProperty 'HKCU:\Software\Classes\.meow').'(default)'
+          if ($progId -ne 'MeowChess.Tournament') { throw ".meow is registered to '$progId'" }
+          $command = (Get-ItemProperty 'HKCU:\Software\Classes\MeowChess.Tournament\shell\open\command').'(default)'
+          if ($command -notlike "*meow_chess.exe*%1*") { throw "Unexpected open command: $command" }
+          $choice = (Get-ItemProperty 'HKCU:\Software\MeowChess').FileAssociationChoice
+          if ($choice -ne 'yes') { throw "Installer did not record the association choice" }
+          Write-Host ".meow opens with: $command"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            meow-chess-${{ inputs.version }}-windows.zip
+            meow-chess-${{ inputs.version }}-windows-setup.exe

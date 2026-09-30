@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Meow Chess
+Comment=Run Swiss and quad chess tournaments
+Exec=meow_chess %f
+Icon=org.meowchess.meow_chess
+StartupWMClass=org.meowchess.meow_chess
+Categories=Game;BoardGame;
+Keywords=chess;tournament;swiss;quad;pairings;
+MimeType=application/x-meow-chess;

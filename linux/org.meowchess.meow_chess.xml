@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Teaches the desktop what a .meow file is. Installed by the packages into
+     /usr/share/mime/packages, and by the app's own first-run offer into
+     ~/.local/share/mime/packages. An event file is an SQLite database, so the
+     type is declared a kind of SQLite: content sniffing then agrees with the
+     extension instead of calling it a generic database. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-meow-chess">
+    <comment>Meow Chess tournament</comment>
+    <sub-class-of type="application/vnd.sqlite3"/>
+    <icon name="org.meowchess.meow_chess"/>
+    <glob pattern="*.meow"/>
+  </mime-type>
+</mime-info>

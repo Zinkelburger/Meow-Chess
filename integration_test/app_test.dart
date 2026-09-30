@@ -24,13 +24,11 @@ void main() {
       final directory = Directory.systemTemp.createTempSync('meow-library-');
       await tester.pumpWidget(MeowApp(dataDirectory: directory));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Explore a practice event'));
+      await tester.tap(find.text('Try a practice event'));
       await tester.pumpAndSettle();
       expect(find.text('Practice copy'), findsOneWidget);
       expect(find.text('Saturday at the club'), findsWidgets);
-      await tester.tap(find.byTooltip('Event menu'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Close event'));
+      await tester.tap(find.byTooltip('Close event'));
       await tester.pumpAndSettle();
       expect(find.text('Recent events'), findsOneWidget);
       final recent =
@@ -67,7 +65,7 @@ void main() {
             key: screenshotKey,
             child: MaterialApp(
               debugShowCheckedModeBanner: false,
-              theme: meowTheme(Brightness.dark),
+              theme: meowTheme(Brightness.light),
               home: Workspace(
                 controller: c,
                 path: path,
@@ -95,10 +93,8 @@ void main() {
       }
 
       await mount();
-      await screenshot('event-overview');
-      await tester.tap(find.text('Post ready sections'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Post 5 ready sections'));
+      await screenshot('players');
+      await tester.tap(find.text('Pair next round'));
       await tester.pumpAndSettle();
       for (var round = 0; round < 3; round++) {
         final games =
@@ -115,15 +111,13 @@ void main() {
           await screenshot('results-grid');
         }
         if (round < 2) {
-          await tester.tap(find.text('Post next round'));
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Post 5 ready sections'));
+          await tester.tap(find.text('Pair next round'));
           await tester.pumpAndSettle();
         }
       }
       expect(c.event!.games.length, 33);
       expect(c.event!.games.every((g) => g.outcome == Outcome.draw), true);
-      await tester.tap(find.text('Standings').first);
+      await tester.tap(find.text('Players').first);
       await tester.pumpAndSettle();
       await screenshot('standings');
       final font = pw.Font.ttf(

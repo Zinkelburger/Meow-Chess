@@ -110,8 +110,10 @@ earlier score changes, invalidate future proposals and explain consequences for
 already-posted rounds. Do not automatically rerun the whole tournament.
 
 Use relational state plus an audit log; **full event sourcing is not required**.
-If undo needs a previous snapshot, keep a bounded command snapshot. Avoid promising
-that an incomplete audit log can reconstruct every historical database version.
+Every command stores a compressed snapshot as a node in a history tree, so any
+earlier state can be reviewed and restored, and a restore never discards the
+state it leaves (that becomes a branch). Rolling back recorded play is allowed
+only after the TD confirms what it removes.
 
 ## Pairing and reports are computations over snapshots
 

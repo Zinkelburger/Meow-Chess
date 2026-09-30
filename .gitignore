@@ -12,3 +12,8 @@ build/
 *.meow-wal
 *.meow-shm
 artifacts/
+# Release packaging output (packaging/, .github/workflows/release.yml).
+dist/
+flatpak-build/
+flatpak-repo/
+.flatpak-builder/
