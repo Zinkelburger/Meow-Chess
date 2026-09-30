@@ -38,9 +38,14 @@ void main() {
     );
     await tester.pumpAndSettle();
     Future<void> doubleClick(Finder target) async {
-      await tester.tap(target);
-      await tester.pump(const Duration(milliseconds: 80));
-      await tester.tap(target);
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      final position = tester.getCenter(target);
+      await tester.tapAt(position, kind: ui.PointerDeviceKind.mouse);
+      // Native tests use real time. Rendering a frame between clicks can
+      // exceed the double-click deadline on a software-rendered CI host.
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await tester.tapAt(position, kind: ui.PointerDeviceKind.mouse);
       await tester.pumpAndSettle();
     }
 
