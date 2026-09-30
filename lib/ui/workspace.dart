@@ -4,16 +4,15 @@ import 'package:flutter/services.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import 'dialogs.dart';
-import 'overview.dart';
+import 'event_panel.dart';
+import 'history_panel.dart';
 import 'players_view.dart';
 import 'results_view.dart';
-import 'standings_view.dart';
 import 'reports_view.dart';
 import 'theme.dart';
-import 'identity_review.dart';
 import 'workspace_actions.dart';
 
-enum TaskView { overview, players, checkIn, results, standings, reports }
+enum TaskView { players, results, reports }
 
 class Workspace extends StatefulWidget {
   const Workspace({
@@ -32,8 +31,13 @@ class Workspace extends StatefulWidget {
 
 class _WorkspaceState extends State<Workspace> {
   String? sectionId;
-  TaskView view = TaskView.overview;
+  TaskView view = TaskView.players;
   bool pairing = false;
+  bool historyOpen = false;
+
+  /// Event details, backups and copies, docked at the right.
+  bool eventOpen = false;
+  final eventPanel = GlobalKey<EventPanelState>();
   Timer? clock;
   TournamentController get c => widget.controller;
   @override
@@ -47,9 +51,10 @@ class _WorkspaceState extends State<Workspace> {
         sectionId = fields[0].isEmpty ? null : fields[0];
         view =
             TaskView.values.where((v) => v.name == fields[1]).firstOrNull ??
-            TaskView.overview;
+            TaskView.players;
       }
     }
+    historyOpen = c.repository.readPreference('historyPanel') == 'open';
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -66,11 +71,20 @@ class _WorkspaceState extends State<Workspace> {
     if (mounted) setState(() {});
   }
 
-  void go(TaskView next, {String? section, bool retain = false}) {
+  void go(TaskView next) {
+    setState(() => view = next);
+    remember();
+  }
+
+  void pickSection(String? id, {TaskView? next}) {
     setState(() {
-      view = next;
-      if (!retain) sectionId = section;
+      sectionId = id;
+      if (next != null) view = next;
     });
+    remember();
+  }
+
+  void remember() {
     try {
       c.repository.writePreference('view', '${sectionId ?? ''}|${view.name}');
     } catch (e) {
@@ -78,61 +92,13 @@ class _WorkspaceState extends State<Workspace> {
     }
   }
 
-  Future<void> makeQuads() async {
-    try {
-      final revision = c.event!.revision, groups = c.quadPreview();
-      final yes = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Review the room'),
-          content: SizedBox(
-            width: 620,
-            height: 420,
-            child: ListView(
-              children: [
-                const Text(
-                  'Rating order; equal ratings use name, then stable ID. Unchecked and withdrawn players are excluded. Final-round quad colors are shown when posted and may be reversed before play.',
-                ),
-                const SizedBox(height: 16),
-                for (final s in groups)
-                  ListTile(
-                    title: Text(
-                      '${s.name} · ${s.players.length} players · ${s.format.name}',
-                    ),
-                    subtitle: Text(
-                      s.players
-                          .map(
-                            (id) =>
-                                '${c.event!.player(id).name} (${c.event!.player(id).rating})',
-                          )
-                          .join('\n'),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Create sections'),
-            ),
-          ],
-        ),
-      );
-      if (yes == true) {
-        c.applyQuads(groups, revision);
-        go(TaskView.overview);
-      }
-    } catch (e) {
-      if (mounted) showFailure(context, e);
+  Future<void> addSections() async {
+    if (await actions.addSections() && mounted) {
+      pickSection(null, next: TaskView.players);
     }
   }
 
-  Future<void> post() async {
+  Future<void> pair() async {
     if (pairing) return;
     setState(() => pairing = true);
     try {
@@ -141,7 +107,7 @@ class _WorkspaceState extends State<Workspace> {
       if (batch.rounds.isEmpty) {
         throw TournamentException(
           batch.issues.values.join('\n').isEmpty
-              ? 'Create a section with available players, or review finished sections.'
+              ? 'Nothing to pair. Create a section with players first.'
               : batch.issues.values.join('\n'),
         );
       }
@@ -151,61 +117,24 @@ class _WorkspaceState extends State<Workspace> {
               '${c.event!.sections.firstWhere((s) => s.id == e.key).name}: ${e.value}',
         ),
         if (batch.rounds.values.any((r) => r.policy == 'score-swiss-pilot-v1'))
-          'Swiss uses the displayed score-group pilot policy. It has not passed US Chess rule-conformance qualification. Review its pairings before use.',
+          'Swiss pairings come from a test algorithm that is not yet certified. Look them over; open a section to use Edit pairings.',
       ];
-      if (warnings.isNotEmpty) {
-        final yes = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Review ready pairings'),
-            content: SizedBox(
-              width: 650,
-              height: 430,
-              child: ListView(
-                children: [
-                  for (final warning in warnings)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(warning),
-                    ),
-                  for (final entry in batch.rounds.entries) ...[
-                    Text(
-                      c.event!.sections
-                          .firstWhere((s) => s.id == entry.key)
-                          .name,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    for (final bye in entry.value.byes)
-                      Text(
-                        '${c.event!.player(bye.player).name}: ${bye.reason}',
-                      ),
-                    for (final game in entry.value.games)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Text(
-                          '${game.board}. ${c.event!.player(game.white).name} — ${c.event!.player(game.black).name}',
-                        ),
-                      ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text('Post ${batch.rounds.length} ready sections'),
-              ),
-            ],
-          ),
-        );
-        if (yes != true) return;
-      }
+      // Pair straight away; anything worth checking is fixed afterwards
+      // with Edit pairings or undone.
       c.post(batch);
-      if (mounted) go(TaskView.results, retain: true);
+      if (!mounted) return;
+      go(TaskView.results);
+      if (warnings.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(warnings.join('\n')),
+            duration: const Duration(seconds: 12),
+            showCloseIcon: true,
+            action: SnackBarAction(label: 'Undo', onPressed: undo),
+          ),
+          snackBarAnimationStyle: AnimationStyle.noAnimation,
+        );
+      }
     } catch (e) {
       if (mounted) showFailure(context, e);
     } finally {
@@ -214,330 +143,332 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   WorkspaceActions get actions => WorkspaceActions(context, c);
-  Future<void> settings() => actions.settings();
-  Future<void> newSection() => actions.newSection();
   Future<void> sectionSettings() => actions.sectionSettings(sectionId!);
   Future<void> combine() => actions.combine(sectionId!);
   Future<void> lookup() => actions.lookup();
-  Future<void> history() => actions.history();
-  Future<void> saveCopy({bool practice = false}) =>
-      actions.saveCopy(practice: practice);
   Future<void> editPairing() => actions.editPairing(sectionId!);
 
-  void undo() {
+  void undo() =>
+      travel(context, c, c.graph.back, (a) => c.undo(acceptLosses: a));
+  void redo() =>
+      travel(context, c, c.graph.forward, (a) => c.redo(acceptLosses: a));
+
+  void toggleHistory() {
+    setState(() => historyOpen = !historyOpen);
     try {
-      c.undo();
+      c.repository.writePreference(
+        'historyPanel',
+        historyOpen ? 'open' : 'closed',
+      );
     } catch (e) {
       showFailure(context, e);
     }
   }
 
+  void toggleEvent() {
+    if (eventOpen && eventPanel.currentState?.commit() == false) return;
+    setState(() => eventOpen = !eventOpen);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final e = c.event!;
+    final e = c.event!, colors = Theme.of(context).colorScheme;
     final section = e.sections.where((s) => s.id == sectionId).firstOrNull;
     final current = section?.rounds.lastOrNull;
     final content = switch (view) {
-      TaskView.overview => EventOverview(
+      TaskView.players => PlayersView(
+        key: ValueKey('players-${section?.id}'),
         controller: c,
-        onPlayers: () => go(TaskView.players),
-        onCheckIn: () => go(TaskView.checkIn),
-        onQuads: makeQuads,
-        onPost: post,
-        onResults: () => go(TaskView.results),
-        onReports: () => go(TaskView.reports),
-        onSection: (s) => go(TaskView.results, section: s),
-        onSettings: settings,
-      ),
-      TaskView.players || TaskView.checkIn => PlayersView(
-        key: ValueKey('$sectionId-$view'),
-        controller: c,
-        sectionId: sectionId,
-        checkIn: view == TaskView.checkIn,
+        sectionId: section?.id,
+        onAddSections: e.sections.any((s) => s.rounds.isNotEmpty)
+            ? null
+            : addSections,
       ),
       TaskView.results => ResultsView(
-        key: ValueKey('results-$sectionId'),
+        key: ValueKey('results-${section?.id}'),
         controller: c,
-        sectionId: sectionId,
+        sectionId: section?.id,
       ),
-      TaskView.standings => StandingsView(
-        key: ValueKey('standings-$sectionId'),
-        controller: c,
-        sectionId: sectionId,
-      ),
-      TaskView.reports => ReportsView(controller: c, sectionId: sectionId),
+      TaskView.reports => ReportsView(controller: c, sectionId: section?.id),
     };
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyL, control: true): lookup,
-        const SingleActivator(LogicalKeyboardKey.keyI, control: true): () =>
-            go(TaskView.checkIn),
         const SingleActivator(LogicalKeyboardKey.keyP, control: true): () =>
-            previewPacket(context, e, sectionId: sectionId),
+            previewPacket(context, e, sectionId: section?.id),
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
-          if (FocusManager.instance.primaryFocus?.context
-                  ?.findAncestorWidgetOfExactType<EditableText>() ==
-              null) {
-            undo();
-          }
+          if (!editingText) undo();
         },
+        const SingleActivator(
+          LogicalKeyboardKey.keyZ,
+          control: true,
+          shift: true,
+        ): () {
+          if (!editingText) redo();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () {
+          if (!editingText) redo();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyH, control: true):
+            toggleHistory,
       },
       child: Scaffold(
         body: SafeArea(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
+              // Top bar: event name and pages on the left, tool icons pinned
+              // to the right.
+              Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerLow,
+                  border: Border(
+                    bottom: BorderSide(color: colors.outlineVariant),
+                  ),
+                ),
+                padding: const EdgeInsets.only(left: 16, right: 8),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.pets,
-                      color: Theme.of(context).colorScheme.primary,
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 260),
+                              child: Tooltip(
+                                message: 'Event details, backups and copies',
+                                child: TextButton.icon(
+                                  key: const ValueKey('event-details'),
+                                  onPressed: toggleEvent,
+                                  iconAlignment: IconAlignment.end,
+                                  icon: Icon(
+                                    Icons.edit_outlined,
+                                    size: 16,
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: colors.onSurface,
+                                    backgroundColor: eventOpen
+                                        ? colors.primary.withValues(alpha: 0.12)
+                                        : null,
+                                    minimumSize: const Size(0, 32),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                  ),
+                                  label: Text(
+                                    e.name,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (e.practice) ...[
+                              const SizedBox(width: 10),
+                              const StatusPill('Practice copy'),
+                            ],
+                            const SizedBox(width: 20),
+                            for (final (task, label) in [
+                              (TaskView.players, 'Players'),
+                              (TaskView.results, 'Rounds'),
+                              (TaskView.reports, 'Reports'),
+                            ])
+                              _tab(label, view == task, () => go(task)),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 12),
-                    const Text(
-                      'meow',
-                      style: TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -1,
+                    _barIcon(
+                      Icons.person_search_outlined,
+                      'Find player (Ctrl+L)',
+                      lookup,
+                    ),
+                    _barIcon(
+                      Icons.chevron_left,
+                      c.canUndo
+                          ? 'Back: undo ${c.undoLabel} (Ctrl+Z)'
+                          : 'Nothing to undo',
+                      c.canUndo ? undo : null,
+                    ),
+                    _barIcon(
+                      Icons.chevron_right,
+                      c.canRedo
+                          ? 'Forward: redo ${c.redoLabel} (Ctrl+Shift+Z)'
+                          : 'Nothing to redo',
+                      c.canRedo ? redo : null,
+                    ),
+                    _barIcon(
+                      Icons.account_tree_outlined,
+                      historyOpen
+                          ? 'Hide history (Ctrl+H)'
+                          : 'History (Ctrl+H)',
+                      toggleHistory,
+                      selected: historyOpen,
+                    ),
+                    _barIcon(
+                      dark
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                      dark ? 'Light mode' : 'Dark mode',
+                      widget.onTheme,
+                    ),
+                    SizedBox(
+                      height: 24,
+                      child: VerticalDivider(
+                        width: 17,
+                        color: colors.outlineVariant,
                       ),
                     ),
-                    const SizedBox(width: 18),
+                    _barIcon(Icons.close, 'Close event', widget.onClose),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     Expanded(
-                      child: Tooltip(
-                        message: widget.path,
-                        child: Text(e.name, overflow: TextOverflow.ellipsis),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (c.backupWarning != null)
+                            MaterialBanner(
+                              content: Text(c.backupWarning!),
+                              actions: [
+                                TextButton(
+                                  onPressed: c.secondaryBackup,
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: colors.outlineVariant,
+                                ),
+                              ),
+                            ),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                FilledButton(
+                                  onPressed: pairing || e.sections.isEmpty
+                                      ? null
+                                      : pair,
+                                  child: Text(
+                                    pairing
+                                        ? 'Pairing…'
+                                        : section == null
+                                        ? 'Pair next round'
+                                        : 'Pair next round · ${section.name}',
+                                  ),
+                                ),
+                                if (e.sections.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  _sectionChip('All sections', null),
+                                  for (final s in e.sections)
+                                    _sectionChip(
+                                      '${s.name} (${s.players.length})',
+                                      s.id,
+                                    ),
+                                  if (section != null) ...[
+                                    TextButton(
+                                      onPressed: sectionSettings,
+                                      child: Text('${section.name} settings…'),
+                                    ),
+                                    TextButton(
+                                      onPressed: combine,
+                                      child: const Text('Combine…'),
+                                    ),
+                                  ],
+                                  TextButton(
+                                    onPressed: addSections,
+                                    child: const Text('New sections…'),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (view == TaskView.results &&
+                              current != null &&
+                              (current.startedAt == null || !current.hasPlay))
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  if (current.startedAt == null)
+                                    OutlinedButton(
+                                      onPressed: () {
+                                        try {
+                                          c.startRound(section!.id);
+                                        } catch (e) {
+                                          showFailure(context, e);
+                                        }
+                                      },
+                                      child: const Text('Start round'),
+                                    ),
+                                  if (!current.hasPlay)
+                                    OutlinedButton(
+                                      onPressed: editPairing,
+                                      child: const Text('Edit pairings'),
+                                    ),
+                                  if (current.startedAt != null)
+                                    Text(
+                                      'Round started at ${DateTime.parse(current.startedAt!).toLocal().toString().substring(11, 16)}',
+                                    ),
+                                ],
+                              ),
+                            ),
+                          Expanded(child: content),
+                        ],
                       ),
                     ),
-                    StatusPill(
-                      e.practice ? 'Practice copy' : 'Saved · r${e.revision}',
-                      good: true,
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: 'Player lookup (Ctrl+L)',
-                      onPressed: lookup,
-                      icon: const Icon(Icons.search),
-                    ),
-                    IconButton(
-                      tooltip: c.undoLabel == null
-                          ? 'Nothing to undo'
-                          : 'Undo ${c.undoLabel} (Ctrl+Z)',
-                      onPressed: c.undoLabel == null ? null : undo,
-                      icon: const Icon(Icons.undo),
-                    ),
-                    PopupMenuButton<String>(
-                      tooltip: 'Event menu',
-                      onSelected: (v) {
-                        switch (v) {
-                          case 'settings':
-                            settings();
-                          case 'api':
-                            configureApi(context);
-                          case 'history':
-                            history();
-                          case 'copy':
-                            saveCopy();
-                          case 'practice':
-                            saveCopy(practice: true);
-                          case 'backup':
-                            c.secondaryBackup();
-                          case 'theme':
-                            widget.onTheme();
-                          case 'close':
-                            widget.onClose();
-                        }
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(
-                          value: 'settings',
-                          child: Text('Event settings'),
+                    if (eventOpen)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: EventPanel(
+                          key: eventPanel,
+                          controller: c,
+                          onClose: toggleEvent,
                         ),
-                        PopupMenuItem(
-                          value: 'api',
-                          child: Text('US Chess data source'),
-                        ),
-                        PopupMenuItem(value: 'history', child: Text('History')),
-                        PopupMenuItem(
-                          value: 'copy',
-                          child: Text('Save independent copy'),
-                        ),
-                        PopupMenuItem(
-                          value: 'practice',
-                          child: Text('Make practice copy'),
-                        ),
-                        PopupMenuItem(
-                          value: 'backup',
-                          child: Text('Back up now'),
-                        ),
-                        PopupMenuItem(
-                          value: 'theme',
-                          child: Text('Toggle light / dark'),
-                        ),
-                        PopupMenuItem(
-                          value: 'close',
-                          child: Text('Close event'),
-                        ),
-                      ],
-                    ),
+                      ),
+                    if (historyOpen)
+                      HistoryPanel(controller: c, onClose: toggleHistory),
                   ],
                 ),
               ),
-              if (c.backupWarning != null)
-                MaterialBanner(
-                  content: Text(c.backupWarning!),
-                  actions: [
-                    TextButton(
-                      onPressed: c.secondaryBackup,
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              Container(
-                alignment: Alignment.centerLeft,
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                    ),
-                  ),
-                ),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        _tab(
-                          'Event',
-                          sectionId == null,
-                          () => go(TaskView.overview),
-                        ),
-                        for (final s in e.sections.where(
-                          (s) => s.players.isNotEmpty,
-                        ))
-                          _tab(
-                            s.name,
-                            sectionId == s.id,
-                            () => go(
-                              s.rounds.isEmpty
-                                  ? TaskView.players
-                                  : TaskView.results,
-                              section: s.id,
-                            ),
-                          ),
-                        IconButton(
-                          tooltip: 'Create section',
-                          onPressed: newSection,
-                          icon: const Icon(Icons.add),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (view != TaskView.overview)
-                Container(
-                  width: double.infinity,
-                  alignment: Alignment.centerLeft,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 8,
-                  ),
-                  color: Theme.of(context).colorScheme.surfaceContainerLow,
-                  child: Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      for (final (task, label) in [
-                        (TaskView.players, 'Players'),
-                        (TaskView.checkIn, 'Check-in'),
-                        (TaskView.results, 'Rounds'),
-                        (TaskView.standings, 'Standings'),
-                        (TaskView.reports, 'Reports'),
-                      ])
-                        TextButton(
-                          onPressed: () => go(task, retain: true),
-                          child: Text(
-                            label,
-                            style: TextStyle(
-                              fontWeight: view == task
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                              color: view == task
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      if (section != null) ...[
-                        TextButton(
-                          onPressed: sectionSettings,
-                          child: const Text('Section settings'),
-                        ),
-                        TextButton(
-                          onPressed: combine,
-                          child: const Text('Combine with…'),
-                        ),
-                        if (current != null && !current.hasPlay)
-                          TextButton(
-                            onPressed: editPairing,
-                            child: const Text('Edit pairings'),
-                          ),
-                        if (current != null && current.startedAt == null)
-                          TextButton(
-                            onPressed: () {
-                              try {
-                                c.startRound(section.id);
-                              } catch (e) {
-                                showFailure(context, e);
-                              }
-                            },
-                            child: const Text('Start round'),
-                          ),
-                        if (current?.startedAt != null)
-                          Text(
-                            'Started ${DateTime.parse(current!.startedAt!).toLocal().toString().substring(11, 16)}',
-                          ),
-                      ],
-                      FilledButton.tonal(
-                        onPressed: pairing ? null : post,
-                        child: Text(pairing ? 'Pairing…' : 'Post next round'),
-                      ),
-                    ],
-                  ),
-                ),
-              Expanded(child: content),
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
-                  vertical: 8,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                    ),
-                  ),
+                  border: Border(top: BorderSide(color: colors.outlineVariant)),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.cloud_off_outlined, size: 14),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Local event · works offline',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${e.players.length} entries · ${e.sections.where((s) => s.players.isNotEmpty).length} sections',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ],
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colors.onSurfaceVariant,
+                  ),
+                  child: Text(
+                    '${e.players.length} players · ${e.sections.length} sections · ${widget.path}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],
@@ -547,19 +478,60 @@ class _WorkspaceState extends State<Workspace> {
     );
   }
 
-  Widget _tab(String text, bool selected, VoidCallback action) => Padding(
-    padding: const EdgeInsets.only(right: 6, top: 4, bottom: 4),
-    child: TextButton(
-      style: TextButton.styleFrom(
-        backgroundColor: selected
-            ? Theme.of(context).colorScheme.primaryContainer
-            : null,
-        foregroundColor: selected
-            ? Theme.of(context).colorScheme.onPrimaryContainer
-            : null,
-      ),
-      onPressed: action,
-      child: Text(text),
-    ),
+  Widget _sectionChip(String label, String? id) => ChoiceChip(
+    chipAnimationStyle: noChipAnimation,
+    key: ValueKey('section-chip-${id ?? 'all'}'),
+    label: Text(label),
+    showCheckmark: false,
+    selected:
+        sectionId == id ||
+        (id == null && !c.event!.sections.any((s) => s.id == sectionId)),
+    onSelected: (_) => pickSection(id),
   );
+
+  Widget _tab(String text, bool selected, VoidCallback action) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(right: 2),
+      child: TextButton(
+        onPressed: action,
+        style: TextButton.styleFrom(
+          backgroundColor: selected ? colors.onSurface : null,
+          foregroundColor: selected ? colors.surface : colors.onSurface,
+          minimumSize: const Size(0, 32),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        child: Text(text),
+      ),
+    );
+  }
+
+  /// Ctrl+Z inside a text field belongs to the field, not event history.
+  bool get editingText =>
+      FocusManager.instance.primaryFocus?.context
+          ?.findAncestorWidgetOfExactType<EditableText>() !=
+      null;
+
+  Widget _barIcon(
+    IconData icon,
+    String tooltip,
+    VoidCallback? action, {
+    bool selected = false,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return IconButton(
+      icon: Icon(icon, size: 20),
+      tooltip: tooltip,
+      onPressed: action,
+      isSelected: selected,
+      style: selected
+          ? IconButton.styleFrom(
+              backgroundColor: colors.primary.withValues(alpha: 0.12),
+            )
+          : null,
+      color: selected ? colors.primary : colors.onSurfaceVariant,
+      disabledColor: colors.onSurface.withValues(alpha: 0.35),
+      visualDensity: VisualDensity.compact,
+    );
+  }
 }

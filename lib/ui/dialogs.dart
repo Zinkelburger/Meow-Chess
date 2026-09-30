@@ -1,6 +1,18 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+/// Opens a dialog with no enter/exit animation so it appears immediately.
+Future<T?> openDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+}) => showDialog<T>(
+  context: context,
+  builder: builder,
+  barrierDismissible: barrierDismissible,
+  animationStyle: AnimationStyle.noAnimation,
+);
+
 class FieldSpec {
   const FieldSpec(
     this.key,
@@ -9,11 +21,15 @@ class FieldSpec {
     this.hint,
     this.required = false,
     this.secret = false,
+    this.options,
   });
   final String key, label;
   final int lines;
   final String? hint;
   final bool required, secret;
+
+  /// Stored value → displayed label. When set, the field is a drop-down.
+  final Map<String, String>? options;
 }
 
 Future<Map<String, String>?> editFields(
@@ -26,7 +42,7 @@ Future<Map<String, String>?> editFields(
   Map<String, String> secondaryActions = const {},
   void Function(Map<String, String>)? onDraft,
   FutureOr<void> Function(Map<String, String>)? onSave,
-}) => showDialog<Map<String, String>>(
+}) => openDialog<Map<String, String>>(
   context: context,
   builder: (_) => _FieldsDialog(
     title: title,
@@ -65,7 +81,11 @@ class _FieldsDialog extends StatefulWidget {
 class _FieldsDialogState extends State<_FieldsDialog> {
   late final controllers = {
     for (final f in widget.fields)
-      f.key: TextEditingController(text: widget.values[f.key] ?? ''),
+      f.key: TextEditingController(
+        text: f.options == null || f.options!.containsKey(widget.values[f.key])
+            ? widget.values[f.key] ?? ''
+            : f.options!.keys.first,
+      ),
   };
   final form = GlobalKey<FormState>();
   String? error;
@@ -117,34 +137,52 @@ class _FieldsDialogState extends State<_FieldsDialog> {
               for (final (i, f) in widget.fields.indexed)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 14),
-                  child: TextFormField(
-                    key: ValueKey('field-${f.key}'),
-                    controller: controllers[f.key],
-                    autofocus: i == 0,
-                    maxLines: f.lines,
-                    obscureText: f.secret,
-                    decoration: InputDecoration(
-                      labelText: f.label,
-                      hintText: f.hint,
-                    ),
-                    validator: (v) => f.required && (v?.trim().isEmpty ?? true)
-                        ? 'Required'
-                        : null,
-                    onChanged: (_) {
-                      try {
-                        widget.onDraft?.call(values());
-                      } catch (e) {
-                        if (mounted) {
-                          setState(
-                            () => error = 'Draft could not be saved: $e',
-                          );
-                        }
-                      }
-                    },
-                    onFieldSubmitted: (_) {
-                      if (i == widget.fields.length - 1) save();
-                    },
-                  ),
+                  child: f.options != null
+                      ? DropdownButtonFormField<String>(
+                          key: ValueKey('field-${f.key}'),
+                          initialValue:
+                              f.options!.containsKey(controllers[f.key]!.text)
+                              ? controllers[f.key]!.text
+                              : f.options!.keys.first,
+                          decoration: InputDecoration(labelText: f.label),
+                          items: [
+                            for (final o in f.options!.entries)
+                              DropdownMenuItem(
+                                value: o.key,
+                                child: Text(o.value),
+                              ),
+                          ],
+                          onChanged: (v) => controllers[f.key]!.text = v!,
+                        )
+                      : TextFormField(
+                          key: ValueKey('field-${f.key}'),
+                          controller: controllers[f.key],
+                          autofocus: i == 0,
+                          maxLines: f.lines,
+                          obscureText: f.secret,
+                          decoration: InputDecoration(
+                            labelText: f.label,
+                            hintText: f.hint,
+                          ),
+                          validator: (v) =>
+                              f.required && (v?.trim().isEmpty ?? true)
+                              ? 'Required'
+                              : null,
+                          onChanged: (_) {
+                            try {
+                              widget.onDraft?.call(values());
+                            } catch (e) {
+                              if (mounted) {
+                                setState(
+                                  () => error = 'Draft could not be saved: $e',
+                                );
+                              }
+                            }
+                          },
+                          onFieldSubmitted: (_) {
+                            if (i == widget.fields.length - 1) save();
+                          },
+                        ),
                 ),
               if (error != null)
                 Text(
@@ -180,7 +218,7 @@ Future<bool> confirm(
   String message, {
   String action = 'Continue',
 }) async =>
-    await showDialog<bool>(
+    await openDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
@@ -209,5 +247,6 @@ void showFailure(BuildContext context, Object error) {
       duration: const Duration(seconds: 8),
       showCloseIcon: true,
     ),
+    snackBarAnimationStyle: AnimationStyle.noAnimation,
   );
 }

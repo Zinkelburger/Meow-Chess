@@ -87,6 +87,21 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     COMPONENT Runtime)
 endif()
 
+# Ship the Visual C++ runtime beside the executable. meow_chess.exe and the
+# plugin DLLs import MSVCP140.dll and VCRUNTIME140(_1).dll, which a clean
+# Windows install does not have, and Flutter's template does not copy them:
+# without this the app fails to start with "VCRUNTIME140.dll was not found".
+# App-local deployment fixes the portable zip and the installer alike, needs
+# no elevation, and cannot conflict with a system-wide copy. SKIP fills the
+# variable without CMake's own install rule, so the files land beside the exe.
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+include(InstallRequiredSystemLibraries)
+if(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+  install(FILES ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS}
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()
+
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"

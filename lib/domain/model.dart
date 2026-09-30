@@ -464,12 +464,21 @@ class TournamentException implements Exception {
   String toString() => message;
 }
 
+/// Official event dates are calendar dates, never instants: `2026-02-30` and
+/// `2026-9-1` are rejected rather than normalized.
+bool isEventDate(String date) {
+  if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(date)) return false;
+  final parsed = DateTime.tryParse(date);
+  return parsed != null && parsed.toIso8601String().startsWith(date);
+}
+
 void validateEvent(Event e) {
   void require(bool ok, String message) {
     if (!ok) throw TournamentException(message);
   }
 
   require(e.name.trim().isNotEmpty, 'Give the event a name.');
+  require(isEventDate(e.date), 'Use a valid YYYY-MM-DD event date.');
   require(
     e.players.map((p) => p.id).toSet().length == e.players.length,
     'Duplicate entry identity.',

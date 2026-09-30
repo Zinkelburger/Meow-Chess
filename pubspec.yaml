@@ -8,6 +8,7 @@ dependencies:
   flutter:
     sdk: flutter
   sqlite3: ^3.6.0
+  ffi: ^2.2.0
   path: ^1.9.1
   path_provider: ^2.1.6
   file_selector: ^1.0.4
@@ -26,6 +27,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/icon/meow_chess.png
     - assets/fonts/Inter-Regular.ttf
     - assets/fonts/LICENSE-Inter.txt
     - assets/fonts/LICENSE-SourceCodePro.txt

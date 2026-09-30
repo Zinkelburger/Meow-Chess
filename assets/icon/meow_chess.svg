@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect x="16" y="16" width="480" height="480" rx="104" fill="#1f4e8c"/>
+  <!-- Cat head: two ears and a round face. -->
+  <path d="M120 150 L150 60 L215 118 Q256 108 297 118 L362 60 L392 150
+           Q420 200 420 262 Q420 390 256 410 Q92 390 92 262 Q92 200 120 150 Z"
+        fill="#f4f3ef"/>
+  <path d="M140 136 L156 92 L190 124 Z" fill="#e8a0a8"/>
+  <path d="M372 136 L356 92 L322 124 Z" fill="#e8a0a8"/>
+  <!-- Eyes. -->
+  <ellipse cx="196" cy="252" rx="22" ry="30" fill="#1d1d1b"/>
+  <ellipse cx="316" cy="252" rx="22" ry="30" fill="#1d1d1b"/>
+  <circle cx="204" cy="240" r="7" fill="#f4f3ef"/>
+  <circle cx="324" cy="240" r="7" fill="#f4f3ef"/>
+  <!-- Nose and mouth. -->
+  <path d="M242 304 L270 304 L256 320 Z" fill="#e8a0a8"/>
+  <path d="M256 320 Q256 342 232 342 M256 320 Q256 342 280 342"
+        fill="none" stroke="#1d1d1b" stroke-width="7" stroke-linecap="round"/>
+  <!-- Whiskers. -->
+  <g stroke="#1d1d1b" stroke-width="6" stroke-linecap="round">
+    <line x1="120" y1="300" x2="190" y2="310"/>
+    <line x1="116" y1="332" x2="190" y2="326"/>
+    <line x1="392" y1="300" x2="322" y2="310"/>
+    <line x1="396" y1="332" x2="322" y2="326"/>
+  </g>
+  <!-- A small checkerboard crown on the forehead: this cat plays chess. -->
+  <g transform="translate(220 150)">
+    <rect width="72" height="48" fill="#1d1d1b"/>
+    <rect x="0" y="0" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="24" y="0" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="48" y="0" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="12" y="12" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="36" y="12" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="60" y="12" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="0" y="24" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="24" y="24" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="48" y="24" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="12" y="36" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="36" y="36" width="12" height="12" fill="#f4f3ef"/>
+    <rect x="60" y="36" width="12" height="12" fill="#f4f3ef"/>
+  </g>
+</svg>

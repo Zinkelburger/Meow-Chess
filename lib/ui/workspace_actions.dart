@@ -1,6 +1,5 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../infrastructure/sqlite_event_repository.dart';
@@ -16,18 +15,15 @@ class WorkspaceActions {
     await editFields(
       context,
       title: 'Event settings',
-      description:
-          'Changes are recorded in history. Played games and posted pairings are retained. Tie-break computation in this pilot remains points, played-opponent Buchholz, then Sonneborn–Berger.',
       fields: const [
         FieldSpec('name', 'Event name', required: true),
-        FieldSpec('date', 'Event date · YYYY-MM-DD', required: true),
-        FieldSpec('time', 'Time control'),
-        FieldSpec('venue', 'Venue / city'),
-        FieldSpec('td', 'Chief TD ID'),
+        FieldSpec('date', 'Date (YYYY-MM-DD)', required: true),
+        FieldSpec('time', 'Time control', hint: 'G/60;d5'),
+        FieldSpec('venue', 'Venue or city'),
+        FieldSpec('td', 'Chief TD US Chess ID'),
         FieldSpec('affiliate', 'Affiliate ID'),
-        FieldSpec('backup', 'Secondary backup folder'),
         FieldSpec('policy', 'Announced conditions', lines: 3),
-        FieldSpec('notes', 'Private TD notes / rulings / handover', lines: 4),
+        FieldSpec('notes', 'Private TD notes', lines: 4),
       ],
       values: {
         'name': e.name,
@@ -36,7 +32,6 @@ class WorkspaceActions {
         'venue': e.venue,
         'td': e.tdId,
         'affiliate': e.affiliateId,
-        'backup': e.backupFolder,
         'policy': e.policy,
         'notes': e.notes,
       },
@@ -45,11 +40,6 @@ class WorkspaceActions {
         if (date == null ||
             date.toIso8601String().substring(0, 10) != v['date']) {
           throw const TournamentException('Use a valid YYYY-MM-DD date.');
-        }
-        if (v['backup']!.isNotEmpty && !p.isAbsolute(v['backup']!)) {
-          throw const TournamentException(
-            'Use an absolute backup folder path.',
-          );
         }
         c.change(
           'Edit event settings',
@@ -60,7 +50,6 @@ class WorkspaceActions {
             venue: v['venue'],
             tdId: v['td'],
             affiliateId: v['affiliate'],
-            backupFolder: v['backup'],
             policy: v['policy'],
             notes: v['notes'],
           ),
@@ -69,42 +58,184 @@ class WorkspaceActions {
     );
   }
 
-  Future<void> newSection() async {
-    await editFields(
-      context,
-      title: 'Create a section',
-      description:
-          'Currently unassigned players enter this section. Formats: swiss, quad, roundRobin. Swiss uses a pilot pairing policy pending rule qualification.',
-      fields: const [
-        FieldSpec('name', 'Section name', required: true),
-        FieldSpec('format', 'Format', required: true),
-        FieldSpec('rounds', 'Planned rounds', required: true),
-        FieldSpec('double', 'Double games · yes / no'),
-      ],
-      values: const {
-        'name': 'Open',
-        'format': 'swiss',
-        'rounds': '3',
-        'double': 'no',
-      },
-      onSave: (v) {
-        final format = Format.values
-                .where((f) => f.name == v['format'])
-                .firstOrNull,
-            rounds = int.tryParse(v['rounds']!);
-        if (format == null || rounds == null || rounds < 1 || rounds > 32) {
-          throw const TournamentException(
-            'Choose a listed format and 1–32 rounds.',
-          );
-        }
-        c.addSection(
-          v['name']!,
-          format,
-          rounds,
-          doubleGames: v['double']!.toLowerCase() == 'yes',
+  Future<void> chooseBackupFolder() async {
+    try {
+      final folder = await getDirectoryPath(
+        confirmButtonText: 'Back up here',
+        initialDirectory: c.event!.backupFolder.isEmpty
+            ? null
+            : c.event!.backupFolder,
+      );
+      if (folder == null) return;
+      c.change('Set backup folder', c.event!.copy(backupFolder: folder));
+      c.secondaryBackup();
+    } catch (e) {
+      if (context.mounted) showFailure(context, e);
+    }
+  }
+
+  void clearBackupFolder() {
+    try {
+      c.change('Stop folder backups', c.event!.copy(backupFolder: ''));
+    } catch (e) {
+      showFailure(context, e);
+    }
+  }
+
+  /// Chooses a tournament type and creates its sections. Returns true when
+  /// sections changed.
+  Future<bool> addSections() async {
+    final e = c.event!;
+    final free = e.players
+        .where((p) => e.sectionOf(p.id) == null && !p.withdrawn)
+        .length;
+    final type = await openDialog<Format>(
+      context: context,
+      builder: (context) {
+        Widget option(Format f, IconData icon, String title, String body) =>
+            Card(
+              child: ListTile(
+                key: ValueKey('type-${f.name}'),
+                leading: Icon(icon),
+                title: Text(title),
+                subtitle: Text(body),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pop(context, f),
+              ),
+            );
+        return SimpleDialog(
+          title: const Text('Create sections'),
+          contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          children: [
+            SizedBox(
+              width: 520,
+              child: Column(
+                children: [
+                  option(
+                    Format.quad,
+                    Icons.grid_view,
+                    'Quads',
+                    'Split all players by rating into groups of four. Leftovers play a small Swiss.',
+                  ),
+                  option(
+                    Format.swiss,
+                    Icons.shuffle,
+                    'Swiss',
+                    'One section. Players meet opponents with the same score each round.',
+                  ),
+                  option(
+                    Format.roundRobin,
+                    Icons.sync_alt,
+                    'Round robin',
+                    'One section. Everyone plays everyone.',
+                  ),
+                ],
+              ),
+            ),
+          ],
         );
       },
     );
+    if (type == null || !context.mounted) return false;
+    if (type == Format.quad) return makeQuads();
+    final robin = type == Format.roundRobin;
+    final result = await editFields(
+      context,
+      title: robin ? 'New round robin' : 'New Swiss section',
+      description: free == 0
+          ? 'Every player is already in a section. The new section starts empty; move players into it from the Players page.'
+          : 'The $free ${free == 1 ? 'player' : 'players'} not yet in a section will be added.',
+      fields: [
+        const FieldSpec('name', 'Section name', required: true),
+        const FieldSpec('rounds', 'Number of rounds', required: true),
+        if (robin)
+          const FieldSpec(
+            'double',
+            'Games per pairing',
+            options: {'no': 'One game', 'yes': 'Two games (double round)'},
+          ),
+      ],
+      values: {
+        'name': robin ? 'Round robin' : 'Open',
+        'rounds': robin
+            ? '${free < 2
+                  ? 1
+                  : free.isEven
+                  ? free - 1
+                  : free}'
+            : '4',
+        'double': 'no',
+      },
+      onSave: (v) {
+        final rounds = int.tryParse(v['rounds']!);
+        if (rounds == null || rounds < 1 || rounds > 32) {
+          throw const TournamentException(
+            'Number of rounds must be between 1 and 32.',
+          );
+        }
+        c.addSection(
+          v['name']!.trim(),
+          type,
+          rounds,
+          doubleGames: v['double'] == 'yes',
+        );
+      },
+    );
+    return result != null;
+  }
+
+  Future<bool> makeQuads() async {
+    try {
+      final revision = c.event!.revision, groups = c.quadPreview();
+      final replacing = c.event!.sections.any((s) => s.players.isNotEmpty);
+      final yes = await openDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Make quads'),
+          content: SizedBox(
+            width: 620,
+            height: 420,
+            child: ListView(
+              children: [
+                Text(
+                  'Players are grouped by rating, highest first. Withdrawn players are left out.'
+                  '${replacing ? ' This replaces the current sections.' : ''}',
+                ),
+                const SizedBox(height: 16),
+                for (final s in groups)
+                  ListTile(
+                    title: Text('${s.name} · ${s.players.length} players'),
+                    subtitle: Text(
+                      s.players
+                          .map(
+                            (id) =>
+                                '${c.event!.player(id).name} (${c.event!.player(id).rating})',
+                          )
+                          .join('\n'),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text('Create ${groups.length} sections'),
+            ),
+          ],
+        ),
+      );
+      if (yes != true) return false;
+      c.applyQuads(groups, revision);
+      return true;
+    } catch (e) {
+      if (context.mounted) showFailure(context, e);
+      return false;
+    }
   }
 
   Future<void> sectionSettings(String sectionId) async {
@@ -112,12 +243,11 @@ class WorkspaceActions {
     await editFields(
       context,
       title: '${s.name} settings',
-      description:
-          'Board ranges apply to future rounds. Existing posted games keep their boards.',
+      description: 'A new first board number applies from the next round.',
       fields: const [
         FieldSpec('name', 'Name', required: true),
-        FieldSpec('rounds', 'Planned rounds', required: true),
-        FieldSpec('board', 'First board', required: true),
+        FieldSpec('rounds', 'Number of rounds', required: true),
+        FieldSpec('board', 'First board number', required: true),
       ],
       values: {
         'name': s.name,
@@ -134,7 +264,7 @@ class WorkspaceActions {
             board == null ||
             board < 1) {
           throw const TournamentException(
-            'Invalid round count or board number.',
+            'Check the number of rounds and the board number.',
           );
         }
         c.change(
@@ -159,10 +289,10 @@ class WorkspaceActions {
 
   Future<void> combine(String sectionId) async {
     final source = c.event!.sections.firstWhere((s) => s.id == sectionId);
-    final target = await showDialog<String>(
+    final target = await openDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: Text('Combine ${source.name} with…'),
+        title: Text('Combine ${source.name} into…'),
         children: [
           for (final s in c.event!.sections.where((s) => s.id != source.id))
             SimpleDialogOption(
@@ -175,10 +305,10 @@ class WorkspaceActions {
     if (target != null && context.mounted) {
       await editFields(
         context,
-        title: 'Review combination',
+        title: 'Combine sections',
         description:
-            'Move ${source.players.length} players into the destination Swiss pool. All played games, points, opponent history and original attribution remain. Both sections must be between rounds with equal progress. Review prize policy separately; post-play reporting mapping is unverified.',
-        fields: const [FieldSpec('reason', 'Reason / prize policy decision')],
+            'Moves all ${source.players.length} players into the other section, which will use Swiss pairings. Games and points already played are kept. Both sections must have played the same number of rounds.',
+        fields: const [FieldSpec('reason', 'Reason (optional)')],
         onSave: (v) =>
             c.movePlayers(source.players, target, reason: v['reason']!),
       );
@@ -186,37 +316,12 @@ class WorkspaceActions {
   }
 
   Future<void> lookup() async {
-    await showDialog<void>(
+    await openDialog<void>(
       context: context,
       builder: (context) => _Lookup(event: c.event!),
     );
   }
 
-  Future<void> history() async => showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Event history'),
-      content: SizedBox(
-        width: 660,
-        height: 460,
-        child: ListView(
-          children: [
-            for (final h in c.repository.history())
-              ListTile(
-                title: Text(h['action']),
-                subtitle: Text('Revision ${h['revision']} · ${h['timestamp']}'),
-              ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
-        ),
-      ],
-    ),
-  );
   Future<void> saveCopy({bool practice = false}) async {
     try {
       final location = await getSaveLocation(
@@ -233,7 +338,7 @@ class WorkspaceActions {
       if (context.mounted) {
         showFailure(
           context,
-          'Independent ${practice ? 'practice ' : ''}copy saved: ${location.path}',
+          '${practice ? 'Practice copy' : 'Copy'} saved to ${location.path}',
         );
       }
     } catch (e) {
@@ -252,22 +357,18 @@ class WorkspaceActions {
     if (r.hasPlay) {
       showFailure(
         context,
-        'This round has started. Its participants must be preserved.',
+        'Pairings can’t be edited after a game in the round has a result.',
       );
       return;
     }
     await editFields(
       context,
-      title: 'Replace posted pairings',
+      title: 'Edit pairings',
       description:
-          'Confirm no affected game has started. Enter one line per game: board, White entry number, Black entry number. Entry numbers below are section pairing numbers. All existing participants must remain.\n${s.players.indexed.map((v) => '${v.$1 + 1}: ${c.event!.player(v.$2).name}').join('\n')}',
+          'One line per game: board, White player number, Black player number. Every player must still be paired.\n\n${s.players.indexed.map((v) => '${v.$1 + 1}. ${c.event!.player(v.$2).name}').join('\n')}',
       fields: const [
         FieldSpec('games', 'Pairings', lines: 6, required: true),
-        FieldSpec(
-          'reason',
-          'Confirm games not started; reason',
-          required: true,
-        ),
+        FieldSpec('reason', 'Reason', required: true),
       ],
       values: {
         'games': r.games
@@ -295,7 +396,7 @@ class WorkspaceActions {
               parts[2]! < 1 ||
               parts[2]! > s.players.length) {
             throw const TournamentException(
-              'Use board, White number, Black number on each line.',
+              'Each line needs: board, White number, Black number.',
             );
           }
           games.add(
@@ -335,7 +436,7 @@ class _LookupState extends State<_Lookup> {
         )
         .toList();
     return AlertDialog(
-      title: const Text('Player lookup · read only'),
+      title: const Text('Find player'),
       content: SizedBox(
         width: 680,
         height: 460,
@@ -345,7 +446,7 @@ class _LookupState extends State<_Lookup> {
               autofocus: true,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: 'Name, ID or section pairing number',
+                hintText: 'Name, US Chess ID or player number',
               ),
               onChanged: (v) => setState(() => query = v),
             ),
@@ -368,7 +469,7 @@ class _LookupState extends State<_Lookup> {
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
                           subtitle: Text(
-                            '${s?.name ?? 'Unassigned'} · ${g == null ? 'No current game' : 'Board ${g.board} · ${g.white == p.id ? 'White' : 'Black'} vs ${e.player(g.white == p.id ? g.black : g.white).name}'}\nByes: ${p.byes.entries.map((b) => 'R${b.key}: ${scoreText(b.value)}').join(', ')}',
+                            '${s?.name ?? 'No section'} · ${g == null ? 'No current game' : 'Board ${g.board} · ${g.white == p.id ? 'White' : 'Black'} vs ${e.player(g.white == p.id ? g.black : g.white).name}'}${p.byes.isEmpty ? '' : '\nByes: ${p.byes.entries.map((b) => 'Round ${b.key} (${scoreText(b.value)})').join(', ')}'}',
                           ),
                         );
                       },

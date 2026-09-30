@@ -1,0 +1,62 @@
+# Flatpak manifest. Packages the already-built Flutter release bundle from
+# build/linux/x64/release/bundle, so run `flutter build linux --release` first:
+#
+#   flatpak-builder --user --force-clean --repo=flatpak-repo flatpak-build \
+#       packaging/flatpak/org.meowchess.meow_chess.yml
+#   flatpak build-bundle flatpak-repo meow-chess.flatpak org.meowchess.meow_chess
+#
+# Flatpak exports the desktop entry, icon and MIME package itself (they are
+# named after the app-id), so .meow files open here once it is installed.
+app-id: org.meowchess.meow_chess
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: meow_chess
+# Older flatpak-builder (Ubuntu 22.04's, which release CI uses for its glibc
+# floor) cannot run the 24.08 runtime's appstream compose step. Skipping it
+# costs a sideloaded bundle nothing: the metainfo, desktop entry, icon and
+# MIME type are still installed and exported.
+appstream-compose: false
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  # Rating lookups.
+  - --share=network
+  # Event files live wherever the director keeps them, and each one needs its
+  # SQLite -wal/-shm companions beside it, which document portals don't give.
+  # Also what lets a double-clicked .meow under $HOME arrive as a plain path.
+  - --filesystem=home
+  # Removable drives, for events carried between machines on a USB stick.
+  - --filesystem=/media
+  - --filesystem=/run/media
+  # Saved credentials (flutter_secure_storage uses the Secret Service).
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: meow-chess
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/meow-chess /app/bin
+      - cp -r bundle/* /app/meow-chess/
+      - ln -s /app/meow-chess/meow_chess /app/bin/meow_chess
+      - install -Dm644 org.meowchess.meow_chess.desktop
+        /app/share/applications/org.meowchess.meow_chess.desktop
+      - install -Dm644 org.meowchess.meow_chess.xml
+        /app/share/mime/packages/org.meowchess.meow_chess.xml
+      - install -Dm644 meow_chess.png
+        /app/share/icons/hicolor/256x256/apps/org.meowchess.meow_chess.png
+      - install -Dm644 org.meowchess.meow_chess.metainfo.xml
+        /app/share/metainfo/org.meowchess.meow_chess.metainfo.xml
+    sources:
+      - type: dir
+        path: ../../build/linux/x64/release/bundle
+        dest: bundle
+      - type: file
+        path: ../../linux/org.meowchess.meow_chess.desktop
+      - type: file
+        path: ../../linux/org.meowchess.meow_chess.xml
+      - type: file
+        path: ../../assets/icon/meow_chess.png
+      - type: file
+        path: org.meowchess.meow_chess.metainfo.xml

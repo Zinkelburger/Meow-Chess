@@ -34,7 +34,7 @@ Future<void> previewPacket(
       font: font,
     );
     if (!context.mounted) return;
-    await showDialog<void>(
+    await openDialog<void>(
       context: context,
       builder: (context) => Dialog(
         child: SizedBox(
@@ -46,9 +46,7 @@ Future<void> previewPacket(
                 padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: Text('${event.name} · revision ${event.revision}'),
-                    ),
+                    Expanded(child: Text(event.name)),
                     IconButton(
                       tooltip: 'Close preview',
                       onPressed: () => Navigator.pop(context),
@@ -84,21 +82,25 @@ class ReportsView extends StatelessWidget {
     final event = controller.event!;
     final values = await editFields(
       context,
-      title: 'US Chess package · unverified',
-      saveLabel: 'Create validation package',
+      title: 'US Chess rating report',
+      saveLabel: 'Choose folder…',
       description:
-          'The encoder follows the archived 2C schema. Portal acceptance has NOT been verified. Use this package only with a qualified TD’s validation workflow. R/D/Q must be chosen under current federation rules; no automatic time-control classification is claimed.',
+          'These files have not yet been tested with the US Chess upload site. Check them before uploading.',
       fields: const [
         FieldSpec('city', 'City', required: true),
-        FieldSpec('state', 'State · two letters', required: true),
-        FieldSpec('zip', 'ZIP', required: true),
-        FieldSpec('system', 'Rating system · R / D / Q', required: true),
+        FieldSpec('state', 'State (2 letters)', required: true),
+        FieldSpec('zip', 'ZIP code', required: true),
+        FieldSpec(
+          'system',
+          'Rating system',
+          options: {'R': 'Regular', 'D': 'Dual', 'Q': 'Quick'},
+        ),
       ],
       values: {'city': event.venue, 'state': '', 'zip': '', 'system': 'R'},
     );
     if (values == null || !context.mounted) return;
     try {
-      final folder = await getDirectoryPath(confirmButtonText: 'Save package');
+      final folder = await getDirectoryPath(confirmButtonText: 'Save here');
       if (folder == null) return;
       final path = await writeRatingPackage(
         event,
@@ -118,10 +120,7 @@ class ReportsView extends StatelessWidget {
         );
       }
       if (context.mounted) {
-        showFailure(
-          context,
-          'Validation package saved: $path. Submission and acceptance are separate steps.',
-        );
+        showFailure(context, 'Rating report saved to $path');
       }
     } catch (e) {
       if (context.mounted) showFailure(context, e);
@@ -134,59 +133,35 @@ class ReportsView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Text(
-          'Paper for the room. A record for later.',
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Every report uses one saved event revision. Current revision: ${e.revision}.',
-        ),
-        const SizedBox(height: 24),
+        Text('Print', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
         Wrap(
-          spacing: 16,
-          runSpacing: 16,
+          spacing: 8,
+          runSpacing: 8,
           children: [
             for (final (kind, label, icon) in [
               (ReportKind.packet, 'Round packet', Icons.print_outlined),
-              (ReportKind.pairings, 'Pairing sheets', Icons.grid_view),
+              (ReportKind.pairings, 'Pairings', Icons.grid_view),
               (ReportKind.standings, 'Standings', Icons.leaderboard_outlined),
               (ReportKind.crosstable, 'Crosstable', Icons.table_chart_outlined),
             ])
-              SizedBox(
-                width: 240,
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(icon, size: 28),
-                        const SizedBox(height: 20),
-                        Text(
-                          label,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 12),
-                        TextButton(
-                          onPressed: e.sections.isEmpty
-                              ? null
-                              : () => previewPacket(
-                                  context,
-                                  e,
-                                  sectionId: sectionId,
-                                  kind: kind,
-                                ),
-                          child: const Text('Preview & print'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              OutlinedButton.icon(
+                onPressed: e.sections.isEmpty
+                    ? null
+                    : () => previewPacket(
+                        context,
+                        e,
+                        sectionId: sectionId,
+                        kind: kind,
+                      ),
+                icon: Icon(icon),
+                label: Text(label),
               ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 28),
+        Text('Export', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -202,7 +177,7 @@ class ReportsView extends StatelessWidget {
                   if (context.mounted) showFailure(context, error);
                 }
               },
-              child: const Text('Export CSV'),
+              child: const Text('Standings (CSV)'),
             ),
             OutlinedButton(
               onPressed: () async {
@@ -217,76 +192,103 @@ class ReportsView extends StatelessWidget {
                   if (context.mounted) showFailure(context, error);
                 }
               },
-              child: const Text('Export ASCII crosstable'),
+              child: const Text('Crosstable (text)'),
             ),
           ],
         ),
-        const SizedBox(height: 32),
-        const Divider(),
-        const SizedBox(height: 20),
+        const SizedBox(height: 28),
         Text(
-          'Rating report preflight',
+          'US Chess rating report',
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         const Text(
-          'External validation is pending. This pilot does not claim accepted US Chess reporting, certified Swiss pairing, or verified latest ratings.',
+          'Not yet tested with the US Chess upload site. Check the files before uploading.',
         ),
-        const SizedBox(height: 12),
-        for (final issue in issues)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.error_outline),
-            title: Text(issue),
-          ),
+        const SizedBox(height: 8),
+        if (issues.isNotEmpty) _warnings(context, issues),
         if (issues.isEmpty)
           const ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.fact_check_outlined),
-            title: Text(
-              'Local preflight passed. Provider acceptance remains unverified.',
-            ),
+            title: Text('No problems found.'),
           ),
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
             onPressed: issues.isEmpty ? () => exportRating(context) : null,
             icon: const Icon(Icons.folder_outlined),
-            label: const Text('Create 2C validation package'),
+            label: const Text('Create rating report files'),
           ),
         ),
         const SizedBox(height: 24),
         Text(
-          'Submission record',
+          'Submission notes',
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
-        Text(
-          e.submission.isEmpty
-              ? 'No submission or acceptance recorded.'
-              : e.submission,
-        ),
+        Text(e.submission.isEmpty ? 'Nothing recorded yet.' : e.submission),
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton(
             onPressed: () => editFields(
               context,
-              title: 'Submission and corrections',
+              title: 'Submission notes',
               description:
-                  'Record the portal reference, submitted revision, acceptance status and any corrections. Exporting alone does not submit a tournament.',
-              fields: const [
-                FieldSpec('submission', 'Private submission history', lines: 5),
-              ],
+                  'Keep track of when you uploaded the report, its reference number, and any corrections.',
+              fields: const [FieldSpec('submission', 'Notes', lines: 5)],
               values: {'submission': e.submission},
               onSave: (v) => controller.change(
                 'Update submission record',
                 controller.event!.copy(submission: v['submission']),
               ),
             ),
-            child: const Text('Update record'),
+            child: const Text('Edit notes'),
           ),
         ),
       ],
+    );
+  }
+
+  /// Problems that block the rating report, boxed so they read as warnings
+  /// rather than as part of the page.
+  Widget _warnings(BuildContext context, List<String> issues) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      key: const ValueKey('rating-warnings'),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer.withValues(alpha: 0.35),
+        border: Border.all(color: colors.error),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 6,
+        children: [
+          Row(
+            spacing: 8,
+            children: [
+              Icon(Icons.warning_amber_rounded, color: colors.error, size: 20),
+              Text(
+                issues.length == 1
+                    ? 'Fix this before creating the report'
+                    : 'Fix these ${issues.length} problems before creating the report',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: colors.error,
+                ),
+              ),
+            ],
+          ),
+          for (final issue in issues)
+            Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: Text('• $issue'),
+            ),
+        ],
+      ),
     );
   }
 }

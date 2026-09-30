@@ -1,3 +1,4 @@
+import '../domain/history.dart';
 import '../domain/model.dart';
 
 abstract interface class EventRepository {
@@ -7,8 +8,16 @@ abstract interface class EventRepository {
     required int expectedRevision,
     required String action,
   });
-  Event? undo();
-  String? get undoLabel;
+
+  /// Moves the event to the saved state of history [node]. The revision still
+  /// advances, so proposals made against the previous state stay stale.
+  Event checkout(
+    int node, {
+    required int expectedRevision,
+    required String action,
+  });
+  HistoryGraph historyGraph();
+  Event snapshot(int node);
   List<Json> history();
   String? readPreference(String key);
   void writePreference(String key, String value);
