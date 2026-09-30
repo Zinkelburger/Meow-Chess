@@ -32,7 +32,7 @@ Future<void> main(List<String> args) async {
       expectedRevision: revision - 1,
       action: 'Synthetic commit $revision',
     );
-    stdout.writeln('ACK ${event.revision}');
+    stdout.writeln('ACK ${event.revision} $pid');
     await stdout.flush();
     // The harness kills us while waiting here: never close/checkpoint first.
     if (!await commands.moveNext() || commands.current != 'NEXT') break;

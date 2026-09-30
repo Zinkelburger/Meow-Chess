@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import queue
 import shutil
+import signal
 import sqlite3
 import subprocess
 import tempfile
@@ -20,6 +21,10 @@ def dart_executable():
     path = Path(candidate)
     if os.name == 'nt' and path.suffix.lower() in ('.bat', '.cmd'):
         path = path.parent / 'cache/dart-sdk/bin/dart.exe'
+    # shutil.which uses PATHEXT casing (often .EXE). Dart's native hooks
+    # detect the suffix case-sensitively and otherwise append a second .exe.
+    if os.name == 'nt' and path.suffix.lower() == '.exe':
+        path = path.with_suffix('.exe')
     if not path.is_file():
         raise RuntimeError(f'Dart executable missing: {path}')
     return str(path)
@@ -56,10 +61,15 @@ def verify():
                     if line is None:
                         break
                     if line.startswith('ACK '):
-                        acknowledged = int(line.split()[1])
+                        _, revision_text, writer_text = line.split()
+                        acknowledged = int(revision_text)
+                        writer_pid = int(writer_text)
+                        assert writer_pid > 0
                         if acknowledged == 5:
                             assert Path(f'{event}-wal').stat().st_size > 0
-                            process.kill()
+                            # Kill the helper identified through our own pipe,
+                            # even if this SDK launches it beneath a CLI parent.
+                            os.kill(writer_pid, signal.SIGTERM if os.name == 'nt' else signal.SIGKILL)
                             break
                         process.stdin.write('NEXT\n')
                         process.stdin.flush()
@@ -74,6 +84,7 @@ def verify():
             assert acknowledged == 5, f'Writer did not acknowledge five commits: {errors.read()}'
             # TerminateProcess on Windows returns a positive exit code.
             assert process.returncode != 0, 'Expected abrupt termination, not graceful closure'
+        assert Path(f'{event}-wal').stat().st_size > 0, 'Writer must not close/checkpoint cleanly'
         connection = sqlite3.connect(event)
         try:
             assert connection.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
