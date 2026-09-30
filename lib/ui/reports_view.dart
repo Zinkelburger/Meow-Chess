@@ -310,43 +310,29 @@ class _ReportsViewState extends State<ReportsView> {
     );
   }
 
-  /// Problems that block the rating report, boxed so they read as warnings
-  /// rather than as part of the page.
+  /// Keep preflight details available without overwhelming the print controls.
   Widget _warnings(BuildContext context, List<String> issues) {
     final colors = Theme.of(context).colorScheme;
     return Container(
       key: const ValueKey('rating-warnings'),
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: colors.errorContainer.withValues(alpha: 0.35),
-        border: Border.all(color: colors.error),
+        color: colors.surfaceContainerLow,
+        border: Border.all(color: colors.outlineVariant),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 6,
+      child: ExpansionTile(
+        key: const PageStorageKey('rating-preflight-details'),
+        shape: const Border(), collapsedShape: const Border(),
+        leading: Icon(Icons.info_outline, color: colors.onSurfaceVariant, size: 20),
+        title: Text('${issues.length} ${issues.length == 1 ? 'item needs' : 'items need'} attention',
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        subtitle: const Text('Review before creating the rating report.'),
+        childrenPadding: const EdgeInsets.fromLTRB(56, 0, 20, 16),
+        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            spacing: 8,
-            children: [
-              Icon(Icons.warning_amber_rounded, color: colors.error, size: 20),
-              Text(
-                issues.length == 1
-                    ? 'Fix this before creating the report'
-                    : 'Fix these ${issues.length} problems before creating the report',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: colors.error,
-                ),
-              ),
-            ],
-          ),
           for (final issue in issues)
-            Padding(
-              padding: const EdgeInsets.only(left: 28),
-              child: Text('• $issue'),
-            ),
+            Padding(padding: const EdgeInsets.only(top: 6), child: Text('• $issue')),
         ],
       ),
     );
