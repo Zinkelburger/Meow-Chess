@@ -193,6 +193,11 @@ List<String> describeChanges(Event before, Event after) {
         p.checkedIn ? 'checked in' : 'check-in cleared',
       if (o.withdrawn != p.withdrawn) p.withdrawn ? 'withdrawn' : 'reinstated',
       if (o.club != p.club) 'club ${_short(o.club)} → ${_short(p.club)}',
+      if (o.team != p.team) 'team ${_short(o.team)} → ${_short(p.team)}',
+      for (final id in p.avoid.difference(o.avoid))
+        'do not pair with ${_name(before, after, id)}',
+      for (final id in o.avoid.difference(p.avoid))
+        'may pair with ${_name(before, after, id)} again',
       if (o.notes != p.notes) 'notes ${_short(p.notes)}',
       if (o.house != p.house)
         p.house ? 'marked house player' : 'no longer house player',

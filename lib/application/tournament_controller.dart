@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:isolate';
+
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
+
 import '../domain/history.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
@@ -68,6 +70,48 @@ class TournamentController extends ChangeNotifier {
         players: exists
             ? e.players.map((p) => p.id == player.id ? player : p).toList()
             : [...e.players, player],
+      ),
+    );
+  }
+
+  /// Team membership is a roster label; it does not imply a pairing restriction.
+  void assignTeam(Iterable<String> ids, String team) {
+    final e = event!, selected = ids.toSet();
+    for (final id in selected) {
+      e.player(id);
+    }
+    change(
+      'Assign team to ${selected.length} players',
+      e.copy(
+        players: [
+          for (final p in e.players)
+            selected.contains(p.id) ? p.copy(team: team.trim()) : p,
+        ],
+      ),
+    );
+  }
+
+  void avoidPair(String a, String b, bool avoid) {
+    final e = event!;
+    if (a == b) {
+      throw const TournamentException('Choose two different players.');
+    }
+    e.player(a);
+    e.player(b);
+    change(
+      '${avoid ? 'Add' : 'Remove'} do-not-pair request',
+      e.copy(
+        players: [
+          for (final p in e.players)
+            if (p.id == a || p.id == b)
+              p.copy(
+                avoid: avoid
+                    ? {...p.avoid, p.id == a ? b : a}
+                    : p.avoid.difference({p.id == a ? b : a}),
+              )
+            else
+              p,
+        ],
       ),
     );
   }
@@ -224,6 +268,9 @@ class TournamentController extends ChangeNotifier {
         }
         busy[g.board] = s.name;
       }
+    }
+    for (final r in batch.rounds.values) {
+      checkPairingRequests(e, r.games);
     }
     change(
       'Post ${batch.rounds.length} section${batch.rounds.length == 1 ? '' : 's'}',
@@ -486,6 +533,7 @@ class TournamentController extends ChangeNotifier {
         'Replacement must preserve the participants.',
       );
     }
+    checkPairingRequests(e, games);
     change(
       'Replace round $number pairings',
       e.copy(

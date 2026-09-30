@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import 'dialogs.dart';
@@ -37,6 +39,9 @@ class _WorkspaceState extends State<Workspace> {
 
   /// Event details, backups and copies, docked at the right.
   bool eventOpen = false;
+  final sectionSearch = TextEditingController();
+  final sectionFocus = FocusNode(debugLabel: 'section-search');
+  final sectionKeys = <String, GlobalKey>{};
   final eventPanel = GlobalKey<EventPanelState>();
   Timer? clock;
   TournamentController get c => widget.controller;
@@ -63,6 +68,8 @@ class _WorkspaceState extends State<Workspace> {
   @override
   void dispose() {
     clock?.cancel();
+    sectionSearch.dispose();
+    sectionFocus.dispose();
     c.removeListener(refresh);
     super.dispose();
   }
@@ -72,7 +79,15 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   void go(TaskView next) {
-    setState(() => view = next);
+    setState(() {
+      view = next;
+      if (next == TaskView.results && sectionId == null) {
+        sectionId = c.event!.sections
+            .where((s) => s.rounds.isNotEmpty)
+            .firstOrNull
+            ?.id;
+      }
+    });
     remember();
   }
 
@@ -82,6 +97,22 @@ class _WorkspaceState extends State<Workspace> {
       if (next != null) view = next;
     });
     remember();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = sectionKeys[id ?? 'all']?.currentContext;
+      if (target != null && target.mounted) {
+        Scrollable.ensureVisible(target, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd);
+        Scrollable.ensureVisible(target, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart);
+      }
+    });
+  }
+
+  void jumpToSection() {
+    if (view == TaskView.reports) go(TaskView.results);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      sectionFocus.requestFocus();
+      sectionSearch.selection = TextSelection(baseOffset: 0, extentOffset: sectionSearch.text.length);
+    });
   }
 
   void remember() {
@@ -116,8 +147,7 @@ class _WorkspaceState extends State<Workspace> {
           (e) =>
               '${c.event!.sections.firstWhere((s) => s.id == e.key).name}: ${e.value}',
         ),
-        if (batch.rounds.values.any((r) => r.policy == 'score-swiss-pilot-v1'))
-          'Swiss pairings come from a test algorithm that is not yet certified. Look them over; open a section to use Edit pairings.',
+        if (batch.rounds.values.any((r) => r.policy == 'score-swiss-pilot-v1')) 'Swiss pairings come from a test algorithm that is not yet certified. Look them over; open a section to use Edit pairings.',
       ];
       // Pair straight away; anything worth checking is fixed afterwards
       // with Edit pairings or undone.
@@ -189,14 +219,19 @@ class _WorkspaceState extends State<Workspace> {
         controller: c,
         sectionId: section?.id,
       ),
-      TaskView.reports => ReportsView(controller: c, sectionId: section?.id),
+      TaskView.reports => ReportsView(controller: c),
     };
     final dark = Theme.of(context).brightness == Brightness.dark;
     return CallbackShortcuts(
       bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyJ, control: true): jumpToSection,
         const SingleActivator(LogicalKeyboardKey.keyL, control: true): lookup,
         const SingleActivator(LogicalKeyboardKey.keyP, control: true): () =>
-            previewPacket(context, e, sectionId: section?.id),
+            previewPacket(
+              context,
+              e,
+              sectionId: view == TaskView.reports ? null : section?.id,
+            ),
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
           if (!editingText) undo();
         },
@@ -287,11 +322,6 @@ class _WorkspaceState extends State<Workspace> {
                     ),
                     const SizedBox(width: 12),
                     _barIcon(
-                      Icons.person_search_outlined,
-                      'Find player (Ctrl+L)',
-                      lookup,
-                    ),
-                    _barIcon(
                       Icons.chevron_left,
                       c.canUndo
                           ? 'Back: undo ${c.undoLabel} (Ctrl+Z)'
@@ -335,6 +365,7 @@ class _WorkspaceState extends State<Workspace> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (view != TaskView.reports) _sectionSidebar(context),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -349,88 +380,60 @@ class _WorkspaceState extends State<Workspace> {
                                 ),
                               ],
                             ),
-                          Container(
-                            padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: colors.outlineVariant,
+                          if (view != TaskView.reports)
+                            Container(
+                              padding: const EdgeInsets.fromLTRB(
+                                24,
+                                12,
+                                24,
+                                12,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: colors.outlineVariant,
+                                  ),
                                 ),
                               ),
-                            ),
-                            child: Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                FilledButton(
-                                  onPressed: pairing || e.sections.isEmpty
-                                      ? null
-                                      : pair,
-                                  child: Text(
-                                    pairing
-                                        ? 'Pairing…'
-                                        : section == null
-                                        ? 'Pair next round'
-                                        : 'Pair next round · ${section.name}',
-                                  ),
-                                ),
-                                if (e.sections.isNotEmpty) ...[
-                                  const SizedBox(width: 8),
-                                  _sectionChip('All sections', null),
-                                  for (final s in e.sections)
-                                    _sectionChip(
-                                      '${s.name} (${s.players.length})',
-                                      s.id,
-                                    ),
-                                  if (section != null) ...[
-                                    TextButton(
-                                      onPressed: sectionSettings,
-                                      child: Text('${section.name} settings…'),
-                                    ),
-                                    TextButton(
-                                      onPressed: combine,
-                                      child: const Text('Combine…'),
-                                    ),
-                                  ],
-                                  TextButton(
-                                    onPressed: addSections,
-                                    child: const Text('New sections…'),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          if (view == TaskView.results &&
-                              current != null &&
-                              (current.startedAt == null || !current.hasPlay))
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                crossAxisAlignment: WrapCrossAlignment.center,
+                              child: Row(
                                 children: [
-                                  if (current.startedAt == null)
-                                    OutlinedButton(
-                                      onPressed: () {
-                                        try {
-                                          c.startRound(section!.id);
-                                        } catch (e) {
-                                          showFailure(context, e);
-                                        }
-                                      },
-                                      child: const Text('Start round'),
+                                  Expanded(child: Text(section?.name ?? 'All sections',
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                    overflow: TextOverflow.ellipsis)),
+                                  if (view == TaskView.results && current != null && !current.complete) ...[
+                                    if (current.startedAt == null)
+                                      TextButton(
+                                        onPressed: () {
+                                          try { c.startRound(section!.id); }
+                                          catch (e) { showFailure(context, e); }
+                                        },
+                                        child: const Text('Start round'),
+                                      ),
+                                    if (!current.hasPlay)
+                                      TextButton(onPressed: editPairing, child: const Text('Edit pairings')),
+                                  ],
+                                  const SizedBox(width: 20),
+                                  Tooltip(
+                                    message: section == null
+                                        ? 'Pair the next round in all sections'
+                                        : 'Pair the next round in ${section.name}',
+                                    child: FilledButton.icon(
+                                      key: const ValueKey('pair-next-round'),
+                                      onPressed: pairing || e.sections.isEmpty
+                                          ? null
+                                          : pair,
+                                      icon: const Icon(
+                                        Icons.arrow_forward,
+                                        size: 18,
+                                      ),
+                                      iconAlignment: IconAlignment.end,
+                                      label: Text(
+                                        pairing
+                                            ? 'Pairing…'
+                                            : 'Pair next round',
+                                      ),
                                     ),
-                                  if (!current.hasPlay)
-                                    OutlinedButton(
-                                      onPressed: editPairing,
-                                      child: const Text('Edit pairings'),
-                                    ),
-                                  if (current.startedAt != null)
-                                    Text(
-                                      'Round started at ${DateTime.parse(current.startedAt!).toLocal().toString().substring(11, 16)}',
-                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -478,16 +481,110 @@ class _WorkspaceState extends State<Workspace> {
     );
   }
 
-  Widget _sectionChip(String label, String? id) => ChoiceChip(
-    chipAnimationStyle: noChipAnimation,
-    key: ValueKey('section-chip-${id ?? 'all'}'),
-    label: Text(label),
-    showCheckmark: false,
-    selected:
-        sectionId == id ||
-        (id == null && !c.event!.sections.any((s) => s.id == sectionId)),
-    onSelected: (_) => pickSection(id),
-  );
+  Widget _sectionSidebar(BuildContext context) {
+    final e = c.event!, colors = Theme.of(context).colorScheme;
+    final q = sectionSearch.text.toLowerCase().replaceAll(' ', '');
+    final matches = e.sections.indexed.where((entry) =>
+      entry.$2.name.toLowerCase().replaceAll(' ', '').contains(q) ||
+      'section${entry.$1 + 1}'.contains(q));
+    return Container(
+      key: const ValueKey('section-sidebar'),
+      width: 208,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        border: Border(right: BorderSide(color: colors.outlineVariant)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+            child: Row(children: [
+              const Expanded(child: Text('Sections', style: TextStyle(fontWeight: FontWeight.w600))),
+              MenuAnchor(
+                builder: (context, menu, child) => IconButton(
+                  tooltip: 'Manage sections', icon: const Icon(Icons.more_horiz, size: 20),
+                  onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+                ),
+                menuChildren: [
+                  MenuItemButton(leadingIcon: const Icon(Icons.add, size: 18), onPressed: addSections, child: const Text('New sections…')),
+                  if (e.sections.any((s) => s.id == sectionId)) ...[
+                    MenuItemButton(onPressed: sectionSettings, child: const Text('Section settings…')),
+                    MenuItemButton(onPressed: combine, child: const Text('Combine sections…')),
+                  ],
+                ],
+              ),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Tooltip(
+              message: 'Jump to a section (Ctrl+J)',
+              child: TextField(
+                key: const ValueKey('section-search'),
+                controller: sectionSearch, focusNode: sectionFocus,
+                decoration: InputDecoration(
+                  hintText: 'Jump to section',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 32),
+                  suffixIcon: q.isEmpty ? null : IconButton(
+                    tooltip: 'Clear section search', icon: const Icon(Icons.close, size: 16),
+                    onPressed: () => setState(sectionSearch.clear),
+                  ),
+                ),
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) {
+                  if (matches.isNotEmpty) {
+                    pickSection(matches.first.$2.id);
+                    sectionFocus.unfocus();
+                    setState(sectionSearch.clear);
+                  }
+                },
+              ),
+            ),
+          ),
+          Expanded(child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(children: [
+              if (q.isEmpty) _sectionLink('All sections', null, '${e.players.length} players'),
+              for (final (_, s) in matches)
+                _sectionLink(s.name, s.id, s.rounds.isEmpty
+                  ? '${s.players.length} players · Not paired'
+                  : 'Round ${s.rounds.length} · ${s.rounds.last.complete ? 'Complete' : '${s.rounds.last.games.where((g) => !g.outcome.resolved).length} missing'}'),
+              if (matches.isEmpty && q.isNotEmpty)
+                Padding(padding: const EdgeInsets.all(12), child: Text('No matching sections', style: TextStyle(color: colors.onSurfaceVariant))),
+            ]),
+          )),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text('Ctrl+J to jump', style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionLink(String label, String? id, String subtitle) {
+    final colors = Theme.of(context).colorScheme;
+    final active = sectionId == id ||
+        (id == null && !c.event!.sections.any((s) => s.id == sectionId));
+    return Padding(
+      key: sectionKeys.putIfAbsent(id ?? 'all', GlobalKey.new),
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Semantics(selected: active, child: Material(
+        color: active ? colors.surfaceContainerHigh : Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        child: ListTile(
+          key: ValueKey('section-chip-${id ?? 'all'}'),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          title: Text(label, style: TextStyle(fontSize: 14, fontWeight: active ? FontWeight.w600 : FontWeight.w400)),
+          subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant)),
+          onTap: () => pickSection(id),
+        ),
+      )),
+    );
+  }
 
   Widget _tab(String text, bool selected, VoidCallback action) {
     final colors = Theme.of(context).colorScheme;

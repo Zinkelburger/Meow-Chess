@@ -59,13 +59,14 @@ void main() {
       var c = TournamentController(SqliteEventRepository(path));
       populatePractice(c);
       final screenshotKey = GlobalKey();
+      var dark = false;
       Future<void> mount() async {
         await tester.pumpWidget(
           RepaintBoundary(
             key: screenshotKey,
             child: MaterialApp(
               debugShowCheckedModeBanner: false,
-              theme: meowTheme(Brightness.light),
+              theme: meowTheme(dark ? Brightness.dark : Brightness.light),
               home: Workspace(
                 controller: c,
                 path: path,
@@ -97,19 +98,24 @@ void main() {
       await tester.tap(find.text('Pair next round'));
       await tester.pumpAndSettle();
       for (var round = 0; round < 3; round++) {
-        final games =
-            c.event!.sections.expand((s) => s.rounds.last.games).toList()
-              ..sort((a, b) => a.board.compareTo(b.board));
-        await tester.tap(find.byKey(ValueKey('game-${games.first.id}')));
-        await tester.pump();
-        for (var i = 0; i < games.length; i++) {
-          await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+        for (final section in c.event!.sections) {
+          await tester.tap(find.byKey(ValueKey('section-chip-${section.id}')));
           await tester.pumpAndSettle();
+          final games = c.event!.sections.firstWhere((s) => s.id == section.id).rounds.last.games;
+          await tester.tap(find.byKey(ValueKey('game-${games.first.id}')));
+          await tester.pump();
+          for (var i = 0; i < games.length; i++) {
+            await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+            await tester.pumpAndSettle();
+          }
+          if (round == 0 && section.id == c.event!.sections.first.id) {
+            await screenshot('results-section');
+          }
         }
         expect(c.event!.sections.every((s) => s.rounds.last.complete), true);
-        if (round == 0) {
-          await screenshot('results-grid');
-        }
+        await tester.tap(find.byKey(const ValueKey('section-chip-all')));
+        await tester.pumpAndSettle();
+        if (round == 0) await screenshot('results-grid');
         if (round < 2) {
           await tester.tap(find.text('Pair next round'));
           await tester.pumpAndSettle();
@@ -120,6 +126,14 @@ void main() {
       await tester.tap(find.text('Players').first);
       await tester.pumpAndSettle();
       await screenshot('standings');
+      await tester.tap(find.text('Reports').first);
+      await tester.pumpAndSettle();
+      await screenshot('reports');
+      dark = true;
+      await mount();
+      await tester.tap(find.text('Rounds').first);
+      await tester.pumpAndSettle();
+      await screenshot('results-dark');
       final font = pw.Font.ttf(
         await rootBundle.load('assets/fonts/Inter-Regular.ttf'),
       );

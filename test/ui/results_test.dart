@@ -42,8 +42,10 @@ void main() {
       find.text('Added New One. Enter the next player, or close.'),
       findsOneWidget,
     );
-    await tester.tap(find.text('Paste…'));
-    await tester.pump();
+    await tester.tap(find.byTooltip('Import players'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Paste from spreadsheet'));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('paste-roster')),
       'Pasted Person,,1500',
@@ -214,42 +216,30 @@ void main() {
     );
   }
 
-  testWidgets('clicking a round box changes nothing; typing sets the bye', (
-    tester,
-  ) async {
-    final c = fixture();
-    addTearDown(c.dispose);
-    await mountPlayers(tester, c);
-    final cell = find.byKey(const ValueKey('round-p0-2'));
-    final seen = <int?>[];
-    for (final key in [
-      null,
-      LogicalKeyboardKey.digit5,
-      LogicalKeyboardKey.keyL,
-      LogicalKeyboardKey.digit1,
-      LogicalKeyboardKey.delete,
-    ]) {
-      await tester.tap(cell);
-      await tester.pump();
-      if (key != null) await tester.sendKeyEvent(key);
-      await tester.pump();
-      seen.add(c.event!.player('p0').byes[2]);
-    }
-    expect(seen, [null, 1, 0, 2, null]);
-    // Typing moves down, like a spreadsheet.
-    await tester.tap(cell);
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
-    await tester.pump();
-    final next = c.event!.sections.first.players[1];
-    expect(c.event!.player('p0').byes[2], 1);
-    expect(c.event!.player(next).byes[2], 1);
-    await tester.pumpWidget(const SizedBox());
-    await tester.pump(const Duration(milliseconds: 500));
-  });
   testWidgets(
-    'players page shows 1/0 results with the opponent on hover, read-only',
+    'round cells are read-only; byes can be cleared in player details',
+    (tester) async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      await mountPlayers(tester, c);
+      await tester.tap(find.byKey(const ValueKey('round-p0-2')));
+      await tester.pumpAndSettle();
+      // A row opens player details; the grid itself cannot accept scores.
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+      expect(c.event!.player('p0').byes, isEmpty);
+      final bye = find.byKey(const ValueKey('panel-bye-2'));
+      await tester.ensureVisible(bye);
+      await tester.tap(find.descendant(of: bye, matching: find.text('½')));
+      await tester.pump();
+      expect(c.event!.player('p0').byes[2], 1);
+      await tester.tap(find.descendant(of: bye, matching: find.text('None')));
+      await tester.pump();
+      expect(c.event!.player('p0').byes[2], isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'players page shows W/L plus stable opponent numbers, read-only',
     (tester) async {
       final c = fixture();
       addTearDown(c.dispose);
@@ -260,11 +250,21 @@ void main() {
       final winner = find.byKey(ValueKey('round-${g.black}-1'));
       final loser = find.byKey(ValueKey('round-${g.white}-1'));
       expect(
-        find.descendant(of: winner, matching: find.text('1')),
+        find.descendant(
+          of: winner,
+          matching: find.text(
+            'W${c.event!.players.indexWhere((p) => p.id == g.white) + 1}',
+          ),
+        ),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: loser, matching: find.text('0')),
+        find.descendant(
+          of: loser,
+          matching: find.text(
+            'L${c.event!.players.indexWhere((p) => p.id == g.black) + 1}',
+          ),
+        ),
         findsOneWidget,
       );
       expect(find.text('W'), findsNothing);
@@ -336,6 +336,7 @@ void main() {
     await tester.pump();
     expect(c.event!.player(b).rating, 0);
     expect(find.text('UNR'), findsWidgets);
+    await tester.ensureVisible(find.byKey(const ValueKey('panel-bye-2')));
     await tester.tap(
       find.descendant(
         of: find.byKey(const ValueKey('panel-bye-2')),
@@ -410,4 +411,59 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     },
   );
+  testWidgets('mouse result menu clears both scores and search finds names or boards', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = fixture();
+    addTearDown(c.dispose);
+    c.post((await tester.runAsync(() => c.propose()))!);
+    final g = c.event!.games.first;
+    c.recordResult(g.id, Outcome.whiteWin);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(
+      listenable: c, builder: (_, _) => ResultsView(controller: c),
+    ))));
+    await tester.enterText(find.byKey(const ValueKey('board-search')), c.event!.player(g.white).name);
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('game-${g.id}')), findsOneWidget);
+    expect(find.byTooltip('Enter or clear result (M)'), findsOneWidget);
+    await tester.tap(find.byTooltip('Enter or clear result (M)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Still playing / clear result'));
+    await tester.pumpAndSettle();
+    expect(c.event!.games.first.outcome, Outcome.unreported);
+    for (final side in ['w', 'b']) {
+      expect(find.descendant(of: find.byKey(ValueKey('score-${g.id}-$side')), matching: find.text('')), findsOneWidget);
+    }
+    expect(scoreMark(Outcome.unfinished, white: true), '');
+    await tester.enterText(find.byKey(const ValueKey('board-search')), '${g.board}');
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('game-${g.id}')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('two selected players can share a team and request not to meet', (tester) async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    await mountPlayers(tester, c);
+    for (final id in ['p0', 'p1']) {
+      await tester.tap(find.descendant(of: find.byKey(ValueKey('player-$id')), matching: find.byType(PlainCheckbox)));
+      await tester.pump();
+    }
+    await tester.tap(find.text('Assign team'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Team name'), 'Mixed doubles A');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(c.event!.player('p0').team, 'Mixed doubles A');
+    expect(c.event!.player('p1').team, 'Mixed doubles A');
+    await tester.ensureVisible(find.text('Do not pair together'));
+    await tester.tap(find.text('Do not pair together'));
+    await tester.pumpAndSettle();
+    expect(c.event!.player('p0').avoid, {'p1'});
+    expect(c.event!.player('p1').avoid, {'p0'});
+    await tester.pumpWidget(const SizedBox());
+  });
+
 }

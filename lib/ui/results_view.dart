@@ -1,6 +1,8 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import 'dialogs.dart';
@@ -18,7 +20,7 @@ class BoardRow {
 String scoreMark(Outcome o, {required bool white}) => switch (o) {
   Outcome.unreported => '',
   Outcome.draw => '½',
-  Outcome.unfinished => '…',
+  Outcome.unfinished => '',
   Outcome.disputed => '?',
   Outcome.doubleForfeit => '0F',
   _ =>
@@ -136,8 +138,20 @@ class _ResultsViewState extends State<ResultsView> {
     return result;
   }
 
-  List<BoardRow> visibleRows() =>
-      rows().where((r) => !missingOnly || !r.game.outcome.resolved).toList();
+  List<BoardRow> visibleRows() {
+    final q = jump.text.trim().toLowerCase();
+    final e = widget.controller.event!;
+    return rows()
+        .where(
+          (r) =>
+              (!missingOnly || !r.game.outcome.resolved) &&
+              (q.isEmpty ||
+                  '${r.game.board}' == q ||
+                  e.player(r.game.white).name.toLowerCase().contains(q) ||
+                  e.player(r.game.black).name.toLowerCase().contains(q)),
+        )
+        .toList();
+  }
 
   void remember() {
     try {
@@ -188,7 +202,7 @@ class _ResultsViewState extends State<ResultsView> {
 
   /// After a result: the next board still missing one, same side.
   void advance(String gameId, bool white) {
-    final all = rows();
+    final all = visibleRows();
     final i = all.indexWhere((r) => r.game.id == gameId);
     final next = all
         .skip(i + 1)
@@ -412,13 +426,19 @@ class _ResultsViewState extends State<ResultsView> {
 
   @override
   Widget build(BuildContext context) {
-    final e = widget.controller.event!,
-        colors = Theme.of(context).colorScheme,
-        all = rows(),
-        visible = visibleRows();
+    final e = widget.controller.event!, colors = Theme.of(context).colorScheme;
     final roundNumbers =
-        e.sections.expand((s) => s.rounds).map((r) => r.number).toSet().toList()
+        e.sections
+            .where((s) => widget.sectionId == null || s.id == widget.sectionId)
+            .expand((s) => s.rounds)
+            .map((r) => r.number)
+            .toSet()
+            .toList()
           ..sort();
+    if (selectedRound != null && !roundNumbers.contains(selectedRound)) {
+      selectedRound = null;
+    }
+    final all = rows(), visible = visibleRows();
     final shownRound = selectedRound ?? roundNumbers.lastOrNull;
     final byes = <String>[];
     for (final s in e.sections.where(
@@ -492,70 +512,96 @@ class _ResultsViewState extends State<ResultsView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (roundNumbers.isNotEmpty)
-                Wrap(
-                  spacing: 4,
-                  children: [
-                    for (final n in roundNumbers)
-                      n == shownRound
-                          ? FilledButton(
-                              key: ValueKey('round-$n'),
-                              onPressed: () {},
-                              child: Text('Round $n'),
-                            )
-                          : OutlinedButton(
-                              key: ValueKey('round-$n'),
-                              onPressed: () {
-                                setState(() {
-                                  selectedRound = n == roundNumbers.last
-                                      ? null
-                                      : n;
-                                  pending = null;
-                                  forfeit = false;
-                                });
-                                remember();
-                                WidgetsBinding.instance.addPostFrameCallback(
-                                  (_) => focusFirst(),
-                                );
-                              },
-                              child: Text('Round $n'),
-                            ),
-                  ],
-                ),
-              const SizedBox(width: 8),
-              FilterChip(
-                chipAnimationStyle: noChipAnimation,
-                label: const Text('Missing only'),
-                selected: missingOnly,
-                onSelected: (v) {
-                  setState(() => missingOnly = v);
-                  remember();
-                },
-              ),
-              SizedBox(
-                width: 130,
-                child: TextField(
-                  controller: jump,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(hintText: 'Go to board'),
-                  onSubmitted: (v) {
-                    final row = visible
-                        .where((r) => r.game.board == int.tryParse(v))
-                        .firstOrNull;
-                    jump.clear();
-                    if (row != null) focusBox(row.game.id, true);
-                  },
-                ),
-              ),
+              Text('Rounds', style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 4),
               Text(
-                '${all.where((r) => r.game.outcome.resolved).length} of ${all.length} results in',
+                'Choose a section in the sidebar, then enter its results.',
                 style: TextStyle(color: colors.onSurfaceVariant),
+              ),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final controls = Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      if (roundNumbers.isNotEmpty)
+                        DropdownButton<int>(
+                          key: const ValueKey('round-selector'),
+                          value: shownRound,
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            for (final n in roundNumbers)
+                              DropdownMenuItem(
+                                value: n,
+                                child: Text('Round $n'),
+                              ),
+                          ],
+                          onChanged: (n) {
+                            setState(() {
+                              selectedRound = n == roundNumbers.last ? null : n;
+                              pending = null;
+                              forfeit = false;
+                            });
+                            remember();
+                            WidgetsBinding.instance.addPostFrameCallback(
+                              (_) => focusFirst(),
+                            );
+                          },
+                        ),
+                      Text(
+                        '${all.where((r) => r.game.outcome.resolved).length} of ${all.length} results in',
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
+                      FilterChip(
+                        chipAnimationStyle: noChipAnimation,
+                        label: const Text('Missing only'),
+                        selected: missingOnly,
+                        onSelected: (v) {
+                          setState(() => missingOnly = v);
+                          remember();
+                        },
+                      ),
+                    ],
+                  );
+                  final search = SizedBox(
+                    width: 260,
+                    child: TextField(
+                      key: const ValueKey('board-search'),
+                      controller: jump,
+                      decoration: InputDecoration(
+                        hintText: 'Find player or board',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        suffixIcon: jump.text.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear search',
+                                icon: const Icon(Icons.close, size: 18),
+                                onPressed: () => setState(jump.clear),
+                              ),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                      onSubmitted: (_) {
+                        if (visible.isNotEmpty) {
+                          focusBox(visible.first.game.id, true);
+                        }
+                      },
+                    ),
+                  );
+                  if (constraints.maxWidth / MediaQuery.textScalerOf(context).scale(1) < 900) {
+                    return Wrap(
+                      spacing: 16,
+                      runSpacing: 12,
+                      children: [search, controls],
+                    );
+                  }
+                  return Row(children: [search, const Spacer(), controls]);
+                },
               ),
             ],
           ),
@@ -567,7 +613,7 @@ class _ResultsViewState extends State<ResultsView> {
           child: Text(
             forfeit
                 ? 'Forfeit: press 1 if this player won, 0 if they lost. Escape cancels.'
-                : 'Click a player\'s box and type  1 won · 0 lost · 5 draw — the opponent\'s box fills in.   + / − forfeit win / loss · X double forfeit · Delete clears · ↑↓ move',
+                : 'Click a result box: 1 win · 0 loss · 5 draw · Delete to clear. The other score fills automatically.',
             style: TextStyle(
               fontSize: 13,
               color: forfeit
@@ -582,7 +628,7 @@ class _ResultsViewState extends State<ResultsView> {
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             decoration: BoxDecoration(
               color: colors.surfaceContainerLow,
-              border: Border.all(color: colors.outline),
+              border: Border.all(color: colors.outlineVariant),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Wrap(
@@ -617,40 +663,56 @@ class _ResultsViewState extends State<ResultsView> {
             ),
           ),
         Expanded(
-          child: all.isEmpty
+          child: roundNumbers.isEmpty
               ? const EmptyState(
                   icon: Icons.grid_view_outlined,
                   title: 'No rounds yet',
                   body: 'Click “Pair next round” to pair the first round.',
                 )
-              : Align(
-                  alignment: Alignment.topLeft,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 860),
-                    // Every board is built, so the cursor can move to any
-                    // of them.
-                    child: SingleChildScrollView(
-                      controller: scroll,
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: items,
+              : visible.isEmpty && byes.isEmpty
+              ? EmptyState(
+                  icon: missingOnly && jump.text.isEmpty
+                      ? Icons.check_circle_outline
+                      : Icons.search_off,
+                  title: missingOnly && jump.text.isEmpty
+                      ? 'All results entered'
+                      : 'No matching boards',
+                  body: missingOnly && jump.text.isEmpty
+                      ? 'Choose another section in the sidebar, or turn off Missing only to review.'
+                      : 'Try another name or board number, or turn off Missing only.',
+                )
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SizedBox(
+                        width: constraints.maxWidth < 720
+                            ? 720
+                            : constraints.maxWidth,
+                        child: SingleChildScrollView(
+                          controller: scroll,
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: items,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
         ),
       ],
     );
   }
 
-  static const _board = 44.0, _box = 48.0, _more = 36.0;
+  static const _board = 72.0, _box = 64.0, _more = 44.0;
 
   Widget _columns(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
       color: colors.surfaceContainerLow,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: DefaultTextStyle.merge(
         style: TextStyle(
           fontSize: 12,
@@ -660,10 +722,10 @@ class _ResultsViewState extends State<ResultsView> {
         ),
         child: const Row(
           children: [
-            SizedBox(width: _board, child: Text('BD')),
+            SizedBox(width: _board, child: Text('BOARD')),
             SizedBox(
               width: _box,
-              child: Text('RES', textAlign: TextAlign.center),
+              child: Text('SCORE', textAlign: TextAlign.center),
             ),
             SizedBox(width: 10),
             Expanded(child: Text('WHITE')),
@@ -672,7 +734,7 @@ class _ResultsViewState extends State<ResultsView> {
             SizedBox(width: 10),
             SizedBox(
               width: _box,
-              child: Text('RES', textAlign: TextAlign.center),
+              child: Text('SCORE', textAlign: TextAlign.center),
             ),
             SizedBox(width: _more),
           ],
@@ -685,36 +747,15 @@ class _ResultsViewState extends State<ResultsView> {
     final e = widget.controller.event!, colors = Theme.of(context).colorScheme;
     final g = row.game;
     final white = e.player(g.white), black = e.player(g.black);
-    Widget name(Player p, {required bool right}) => Text.rich(
-      TextSpan(
-        children: [
-          if (right)
-            TextSpan(
-              text: '${ratingLabel(p)}  ',
-              style: TextStyle(
-                fontSize: 12,
-                fontFamily: 'SourceCodePro',
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          TextSpan(
-            text: p.name,
-            style: const TextStyle(fontWeight: FontWeight.w500),
-          ),
-          if (!right)
-            TextSpan(
-              text: '  ${ratingLabel(p)}',
-              style: TextStyle(
-                fontSize: 12,
-                fontFamily: 'SourceCodePro',
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-        ],
+    Widget name(Player p, {required bool right}) => Tooltip(
+      message: p.name,
+      child: Text(
+        p.name,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+        textAlign: right ? TextAlign.right : TextAlign.left,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
-      textAlign: right ? TextAlign.right : TextAlign.left,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
     );
     final menu = menus.putIfAbsent(g.id, MenuController.new);
     return GestureDetector(
@@ -722,7 +763,7 @@ class _ResultsViewState extends State<ResultsView> {
       behavior: HitTestBehavior.opaque,
       onTap: () => focusBox(g.id, true),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           border: Border(
             top: BorderSide(
@@ -759,12 +800,21 @@ class _ResultsViewState extends State<ResultsView> {
                   style: const MenuStyle(visualDensity: VisualDensity.compact),
                   menuChildren: [
                     for (final (outcome, label) in [
+                      (Outcome.whiteWin, 'White wins · 1–0'),
+                      (Outcome.draw, 'Draw · ½–½'),
+                      (Outcome.blackWin, 'Black wins · 0–1'),
+                    ])
+                      MenuItemButton(
+                        onPressed: () => enter(row, outcome, white: true),
+                        child: Text(label),
+                      ),
+                    const Divider(),
+                    for (final (outcome, label) in [
                       (Outcome.whiteForfeit, 'White wins by forfeit'),
                       (Outcome.blackForfeit, 'Black wins by forfeit'),
                       (Outcome.doubleForfeit, 'Double forfeit'),
-                      (Outcome.unfinished, 'Still playing'),
+                      (Outcome.unreported, 'Still playing / clear result'),
                       (Outcome.disputed, 'Disputed'),
-                      (Outcome.unreported, 'Clear result'),
                     ])
                       MenuItemButton(
                         onPressed: () => enter(row, outcome, white: true),
@@ -779,7 +829,7 @@ class _ResultsViewState extends State<ResultsView> {
                   // Tab goes box to box, never to this button.
                   child: ExcludeFocus(
                     child: IconButton(
-                      tooltip: 'Forfeits and other results (M)',
+                      tooltip: 'Enter or clear result (M)',
                       icon: const Icon(Icons.more_horiz, size: 18),
                       visualDensity: VisualDensity.compact,
                       onPressed: () => menu.isOpen ? menu.close() : menu.open(),
@@ -794,12 +844,10 @@ class _ResultsViewState extends State<ResultsView> {
     );
   }
 
-  static String ratingLabel(Player p) => p.rating == 0 ? 'unr.' : '${p.rating}';
-
   Widget _scoreBox(BuildContext context, BoardRow row, {required bool white}) {
     final colors = Theme.of(context).colorScheme, g = row.game;
     final node = box(g.id, white), mark = scoreMark(g.outcome, white: white);
-    final odd = !g.outcome.resolved && g.outcome != Outcome.unreported;
+    final odd = g.outcome == Outcome.disputed;
     return Focus(
       focusNode: node,
       onKeyEvent: (_, event) => onKey(row, white, event),
@@ -816,19 +864,20 @@ class _ResultsViewState extends State<ResultsView> {
             onTap: () => focusBox(g.id, white),
             child: Container(
               width: _box,
-              height: 30,
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.symmetric(vertical: 6),
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: colors.surface,
                 border: node.hasFocus
                     ? Border.all(color: colors.primary, width: 2)
-                    : Border.all(color: colors.outline),
+                    : Border.all(color: colors.outlineVariant),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 mark,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 20,
                   fontWeight: FontWeight.w600,
                   color: odd ? colors.error : colors.onSurface,
                 ),

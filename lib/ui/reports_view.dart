@@ -1,9 +1,11 @@
 import 'dart:convert';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../infrastructure/reports.dart';
@@ -74,18 +76,30 @@ Future<void> previewPacket(
   }
 }
 
-class ReportsView extends StatelessWidget {
+class ReportsView extends StatefulWidget {
   const ReportsView({required this.controller, this.sectionId, super.key});
   final TournamentController controller;
   final String? sectionId;
+  @override
+  State<ReportsView> createState() => _ReportsViewState();
+}
+
+class _ReportsViewState extends State<ReportsView> {
+  String? scope;
+  TournamentController get controller => widget.controller;
+  @override
+  void initState() {
+    super.initState();
+    scope = widget.sectionId;
+  }
+
   Future<void> exportRating(BuildContext context) async {
     final event = controller.event!;
     final values = await editFields(
       context,
       title: 'US Chess rating report',
       saveLabel: 'Choose folder…',
-      description:
-          'These files have not yet been tested with the US Chess upload site. Check them before uploading.',
+      description: 'These files have not yet been tested with the US Chess upload site. Check them before uploading.',
       fields: const [
         FieldSpec('city', 'City', required: true),
         FieldSpec('state', 'State (2 letters)', required: true),
@@ -130,10 +144,48 @@ class ReportsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final e = controller.event!, issues = ratingPreflight(e);
+    if (scope != null && !e.sections.any((s) => s.id == scope)) scope = null;
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Text('Print', style: Theme.of(context).textTheme.titleLarge),
+        Text('Reports', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 6),
+        const Text('Print handouts or export tournament results.'),
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              'Print & export',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            SizedBox(
+              width: 260,
+              child: DropdownButtonFormField<String>(
+                key: ValueKey(
+                  'report-scope-${e.sections.map((s) => s.id).join('-')}',
+                ),
+                initialValue: e.sections.any((s) => s.id == scope)
+                    ? scope!
+                    : '',
+                decoration: const InputDecoration(
+                  labelText: 'Include sections',
+                ),
+                items: [
+                  const DropdownMenuItem(
+                    value: '',
+                    child: Text('All sections'),
+                  ),
+                  for (final s in e.sections)
+                    DropdownMenuItem(value: s.id, child: Text(s.name)),
+                ],
+                onChanged: (id) => setState(() => scope = id == '' ? null : id),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
@@ -151,7 +203,7 @@ class ReportsView extends StatelessWidget {
                     : () => previewPacket(
                         context,
                         e,
-                        sectionId: sectionId,
+                        sectionId: scope,
                         kind: kind,
                       ),
                 icon: Icon(icon),
@@ -160,8 +212,7 @@ class ReportsView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 28),
-        Text('Export', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
+
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -171,7 +222,9 @@ class ReportsView extends StatelessWidget {
                 try {
                   await saveArtifact(
                     'standings-r${e.revision}.csv',
-                    Uint8List.fromList(utf8.encode(standingsCsv(e))),
+                    Uint8List.fromList(
+                      utf8.encode(standingsCsv(e, sectionId: scope)),
+                    ),
                   );
                 } catch (error) {
                   if (context.mounted) showFailure(context, error);
@@ -185,7 +238,11 @@ class ReportsView extends StatelessWidget {
                   await saveArtifact(
                     'crosstable-r${e.revision}.txt',
                     Uint8List.fromList(
-                      crosstable(e, asciiOnly: true).codeUnits,
+                      crosstable(
+                        e,
+                        asciiOnly: true,
+                        sectionId: scope,
+                      ).codeUnits,
                     ),
                   );
                 } catch (error) {
@@ -200,6 +257,10 @@ class ReportsView extends StatelessWidget {
         Text(
           'US Chess rating report',
           style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Includes the entire event, regardless of the section filter above.',
         ),
         const SizedBox(height: 8),
         const Text(
@@ -234,8 +295,7 @@ class ReportsView extends StatelessWidget {
             onPressed: () => editFields(
               context,
               title: 'Submission notes',
-              description:
-                  'Keep track of when you uploaded the report, its reference number, and any corrections.',
+              description: 'Keep track of when you uploaded the report, its reference number, and any corrections.',
               fields: const [FieldSpec('submission', 'Notes', lines: 5)],
               values: {'submission': e.submission},
               onSave: (v) => controller.change(

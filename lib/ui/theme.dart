@@ -71,7 +71,11 @@ ThemeData meowTheme(Brightness brightness) {
       actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
     ),
     inputDecorationTheme: InputDecorationTheme(
-      border: const OutlineInputBorder(),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: BorderSide(color: colors.outlineVariant),
+      ),
       isDense: true,
       filled: true,
       fillColor: colors.surfaceContainerLowest,
@@ -119,10 +123,17 @@ ThemeData meowTheme(Brightness brightness) {
     iconButtonTheme: const IconButtonThemeData(
       style: ButtonStyle(animationDuration: instant),
     ),
-    segmentedButtonTheme: const SegmentedButtonThemeData(
-      style: ButtonStyle(animationDuration: instant),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        animationDuration: instant,
+        backgroundColor: WidgetStateProperty.resolveWith((states) =>
+          states.contains(WidgetState.selected) ? colors.surfaceContainerHigh : colors.surface),
+        foregroundColor: WidgetStatePropertyAll(colors.onSurface),
+      ),
     ),
     chipTheme: ChipThemeData(
+      selectedColor: colors.surfaceContainerHigh,
+      backgroundColor: colors.surface,
       // A checkmark would widen the chip when picked and shove its neighbours.
       showCheckmark: false,
       shape: shape,
@@ -200,8 +211,8 @@ class PlainCheckbox extends StatelessWidget {
                   border: on
                       ? null
                       : Border.all(
-                          color: enabled ? colors.onSurfaceVariant : fill,
-                          width: 2,
+                          color: enabled ? colors.outlineVariant : fill,
+                          width: 1,
                         ),
                 ),
                 child: on
