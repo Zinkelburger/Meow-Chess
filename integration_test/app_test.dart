@@ -19,6 +19,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  WidgetController.hitTestWarningShouldBeFatal = true;
   registerTeamWorkflowTests();
   testWidgets(
     'event library creates practice data, closes, and reopens its independent file',
@@ -105,7 +106,10 @@ void main() {
       await tester.pumpAndSettle();
       for (var round = 0; round < 3; round++) {
         for (final section in c.event!.sections) {
-          await tester.tap(find.byKey(ValueKey('section-chip-${section.id}')));
+          final sectionTile = find.byKey(ValueKey('section-chip-${section.id}'));
+          await tester.ensureVisible(sectionTile);
+          await tester.pumpAndSettle();
+          await tester.tap(sectionTile);
           await tester.pumpAndSettle();
           final games = c.event!.sections
               .firstWhere((s) => s.id == section.id)
@@ -122,8 +126,11 @@ void main() {
             await screenshot('results-section');
           }
         }
-        expect(c.event!.sections.every((s) => s.rounds.last.complete), true);
-        await tester.tap(find.byKey(const ValueKey('section-chip-all')));
+        expect(c.event!.sections.every((s) => s.rounds.length == round + 1 && s.rounds.last.complete), true);
+        final allSections = find.byKey(const ValueKey('section-chip-all'));
+        await tester.ensureVisible(allSections);
+        await tester.pumpAndSettle();
+        await tester.tap(allSections);
         await tester.pumpAndSettle();
         if (round == 0) await screenshot('results-grid');
         if (round < 2) {
