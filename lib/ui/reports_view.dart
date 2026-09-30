@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -8,6 +9,7 @@ import 'package:printing/printing.dart';
 
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
+import '../domain/us_chess.dart';
 import '../infrastructure/reports.dart';
 import '../infrastructure/dbf_export.dart';
 import 'dialogs.dart';
@@ -95,38 +97,10 @@ class _ReportsViewState extends State<ReportsView> {
 
   Future<void> exportRating(BuildContext context) async {
     final event = controller.event!;
-    final values = await editFields(
-      context,
-      title: 'US Chess rating report',
-      saveLabel: 'Choose folder…',
-      description:
-          'These files have not yet been tested with the US Chess upload site. Check them before uploading.',
-      fields: const [
-        FieldSpec('city', 'City', required: true),
-        FieldSpec('state', 'State (2 letters)', required: true),
-        FieldSpec('zip', 'ZIP code', required: true),
-        FieldSpec(
-          'system',
-          'Rating system',
-          options: {'R': 'Regular', 'D': 'Dual', 'Q': 'Quick'},
-        ),
-      ],
-      values: {'city': event.venue, 'state': '', 'zip': '', 'system': 'R'},
-    );
-    if (values == null || !context.mounted) return;
     try {
       final folder = await getDirectoryPath(confirmButtonText: 'Save here');
       if (folder == null) return;
-      final path = await writeRatingPackage(
-        event,
-        ReportMetadata(
-          city: values['city']!,
-          state: values['state']!.toUpperCase(),
-          zip: values['zip']!,
-          ratingSystem: values['system']!.toUpperCase(),
-        ),
-        folder,
-      );
+      final path = await writeRatingPackage(event, folder);
       if (controller.event?.id == event.id) {
         controller.secondaryBackup();
         controller.repository.writePreference(
@@ -142,9 +116,34 @@ class _ReportsViewState extends State<ReportsView> {
     }
   }
 
+  /// Players in reported sections who have no state yet.
+  List<Player> _stateless(Event e) => [
+    for (final s in reportedSections(e))
+      for (final id in s.players)
+        if (e.player(id).state.isEmpty) e.player(id),
+  ];
+
+  void _fillStates(Event e) {
+    final ids = _stateless(e).map((p) => p.id).toSet();
+    try {
+      controller.change(
+        'Set state ${e.state} for ${ids.length} players',
+        e.copy(
+          players: [
+            for (final p in e.players)
+              ids.contains(p.id) ? p.copy(state: e.state) : p,
+          ],
+        ),
+      );
+    } catch (error) {
+      showFailure(context, error);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final e = controller.event!, issues = ratingPreflight(e);
+    final stateless = _stateless(e);
     if (scope != null && !e.sections.any((s) => s.id == scope)) scope = null;
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -267,13 +266,31 @@ class _ReportsViewState extends State<ReportsView> {
         const Text(
           'Not yet tested with the US Chess upload site. Check the files before uploading.',
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
+        ReportDetails(controller: controller),
+        const SizedBox(height: 12),
+        _summary(context, e),
+        const SizedBox(height: 12),
         if (issues.isNotEmpty) _warnings(context, issues),
         if (issues.isEmpty)
           const ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.fact_check_outlined),
             title: Text('No problems found.'),
+          ),
+        if (stateless.isNotEmpty && usStates.contains(e.state))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const ValueKey('fill-states'),
+                onPressed: () => _fillStates(e),
+                child: Text(
+                  'Use ${e.state} for ${stateless.length} ${stateless.length == 1 ? 'player' : 'players'} without a state',
+                ),
+              ),
+            ),
           ),
         Align(
           alignment: Alignment.centerLeft,
@@ -307,6 +324,35 @@ class _ReportsViewState extends State<ReportsView> {
             ),
             child: const Text('Edit notes'),
           ),
+        ),
+      ],
+    );
+  }
+
+  /// What the report will say about time control and dates, so the TD can
+  /// confirm the rating system before creating files.
+  Widget _summary(BuildContext context, Event e) {
+    final muted = TextStyle(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    String rating;
+    try {
+      final tc = TimeControl.parse(e.timeControl);
+      rating =
+          '${tc.reportText}: ${tc.category?.label ?? 'not ratable'} (${tc.totalMinutes} minutes with delay or increment, rule 5C)';
+    } on TournamentException {
+      rating = '${e.timeControl}: not recognized';
+    }
+    return Column(
+      key: const ValueKey('rating-summary'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Time control $rating', style: muted),
+        Text(
+          e.endDate.isEmpty || e.endDate == e.date
+              ? 'Played on ${e.date}'
+              : 'Played ${e.date} to ${e.endDate}',
+          style: muted,
         ),
       ],
     );
@@ -347,6 +393,162 @@ class _ReportsViewState extends State<ReportsView> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Where the event was held and its type, saved with the event. Edits save on
+/// Enter or Save, like the event panel.
+class ReportDetails extends StatefulWidget {
+  const ReportDetails({required this.controller, super.key});
+  final TournamentController controller;
+  @override
+  State<ReportDetails> createState() => ReportDetailsState();
+}
+
+class ReportDetailsState extends State<ReportDetails> {
+  static const _fields = [
+    ('city', 'City', 200.0),
+    ('state', 'State', 90.0),
+    ('zip', 'ZIP code', 130.0),
+  ];
+  final text = {for (final f in _fields) f.$1: TextEditingController()};
+  String? error;
+  Map<String, String> shown = const {};
+  TournamentController get c => widget.controller;
+  Map<String, String> get values => text.map((k, v) => MapEntry(k, v.text));
+  bool get dirty => !mapEquals(values, stored);
+  Map<String, String> get stored {
+    final e = c.event!;
+    return {'city': e.city, 'state': e.state, 'zip': e.zip};
+  }
+
+  void load() {
+    shown = stored;
+    for (final e in text.entries) {
+      e.value.text = shown[e.key]!;
+    }
+    error = null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  @override
+  void didUpdateWidget(ReportDetails oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (mapEquals(values, shown) && !mapEquals(shown, stored)) load();
+  }
+
+  @override
+  void dispose() {
+    for (final t in text.values) {
+      t.dispose();
+    }
+    super.dispose();
+  }
+
+  bool commit() {
+    if (!dirty) return true;
+    final v = values;
+    try {
+      c.change(
+        'Edit report details',
+        c.event!.copy(
+          city: v['city']!.trim(),
+          state: v['state']!.trim().toUpperCase(),
+          zip: v['zip']!.trim(),
+        ),
+      );
+      setState(load);
+      return true;
+    } catch (e) {
+      setState(() => error = '$e');
+      return false;
+    }
+  }
+
+  void setLevel(String? level) {
+    if (level == null || !commit()) return;
+    try {
+      c.change('Edit event type', c.event!.copy(level: level));
+    } catch (e) {
+      setState(() => error = '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final e = c.event!, colors = Theme.of(context).colorScheme;
+    return Column(
+      key: const ValueKey('report-details'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Report details', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final (key, label, width) in _fields)
+              SizedBox(
+                width: width,
+                child: TextField(
+                  key: ValueKey('report-$key'),
+                  controller: text[key],
+                  textCapitalization: key == 'state'
+                      ? TextCapitalization.characters
+                      : TextCapitalization.words,
+                  decoration: InputDecoration(labelText: label),
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) => commit(),
+                ),
+              ),
+            SizedBox(
+              width: 300,
+              child: DropdownButtonFormField<String>(
+                key: ValueKey('report-level-${e.level}'),
+                initialValue: sectionLevels.containsKey(e.level)
+                    ? e.level
+                    : null,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Event type'),
+                items: [
+                  for (final MapEntry(:key, :value) in sectionLevels.entries)
+                    DropdownMenuItem(
+                      value: key,
+                      child: Text(value, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: setLevel,
+              ),
+            ),
+          ],
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(error!, style: TextStyle(color: colors.error)),
+          ),
+        if (dirty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                FilledButton(onPressed: commit, child: const Text('Save')),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => setState(load),
+                  child: const Text('Revert'),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

@@ -31,6 +31,7 @@ List<ImportRow> parseRoster(String source) {
   final idIndex = column(['id', 'uscf', 'uscfid', 'uschessid', 'memberid']);
   final ratingIndex = column(['rating', 'rtg', 'uscf rating', 'pairingrating']);
   final clubIndex = column(['club', 'team']);
+  final stateIndex = hasHeader ? column(['state', 'st']) : -1;
   final result = <ImportRow>[];
   for (final (offset, row) in rows.skip(hasHeader ? 1 : 0).indexed) {
     if (row.every((v) => v.toString().trim().isEmpty)) continue;
@@ -59,12 +60,15 @@ List<ImportRow> parseRoster(String source) {
             rawRating.toLowerCase() == 'unr'
         ? 0
         : int.tryParse(rawRating);
+    final state = value(stateIndex).toUpperCase();
     final error = name.isEmpty
         ? 'Missing name'
         : member.isNotEmpty && !RegExp(r'^\d{8}$').hasMatch(member)
         ? 'US Chess ID must be eight digits'
         : rating == null || rating < 0 || rating > 4000
         ? 'Rating must be 0–4000; assign provisional values explicitly'
+        : state.isNotEmpty && !RegExp(r'^[A-Z]{2}$').hasMatch(state)
+        ? 'State must be two letters'
         : null;
     final raw = Csv().encode([row]);
     result.add(
@@ -79,6 +83,7 @@ List<ImportRow> parseRoster(String source) {
                 memberId: member,
                 rating: rating!,
                 club: value(clubIndex),
+                state: state,
                 source: raw,
               ),
         error,

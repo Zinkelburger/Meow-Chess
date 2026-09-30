@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
+import '../domain/us_chess.dart';
 import 'identity_review.dart';
 import 'players_view.dart' show SidePanel;
 import 'workspace_actions.dart';
@@ -23,6 +24,7 @@ class EventPanelState extends State<EventPanel> {
   static const _fields = [
     ('name', 'Event name', 1),
     ('date', 'Date (YYYY-MM-DD)', 1),
+    ('endDate', 'Last day, if more than one (YYYY-MM-DD)', 1),
     ('time', 'Time control', 1),
     ('venue', 'Venue or city', 1),
     ('td', 'Chief TD US Chess ID', 1),
@@ -41,6 +43,7 @@ class EventPanelState extends State<EventPanel> {
     return {
       'name': e.name,
       'date': e.date,
+      'endDate': e.endDate,
       'time': e.timeControl,
       'venue': e.venue,
       'td': e.tdId,
@@ -90,26 +93,49 @@ class EventPanelState extends State<EventPanel> {
       if (v['name']!.trim().isEmpty) {
         throw const TournamentException('Enter the event name.');
       }
-      final date = DateTime.tryParse(v['date']!);
-      if (date == null ||
-          date.toIso8601String().substring(0, 10) != v['date']) {
+      if (!isEventDate(v['date']!)) {
         throw const TournamentException('Use a valid YYYY-MM-DD date.');
+      }
+      final end = v['endDate']!.trim();
+      if (end.isNotEmpty &&
+          (!isEventDate(end) || end.compareTo(v['date']!) < 0)) {
+        throw const TournamentException(
+          'The last day must be a YYYY-MM-DD date on or after the first.',
+        );
+      }
+      // Only fields being changed are checked, so an older event with an
+      // unusual value can still be edited.
+      final td = v['td']!.trim(),
+          affiliate = v['affiliate']!.trim().toUpperCase();
+      if (td != c.event!.tdId && td.isNotEmpty && !isMemberId(td)) {
+        throw const TournamentException(
+          'The chief TD\'s US Chess ID has eight digits.',
+        );
+      }
+      if (affiliate != c.event!.affiliateId &&
+          affiliate.isNotEmpty &&
+          !isAffiliateId(affiliate)) {
+        throw const TournamentException(
+          'Affiliate IDs are the letter A and seven digits, like A6012345.',
+        );
       }
       c.change(
         'Edit event details',
         c.event!.copy(
           name: v['name']!.trim(),
           date: v['date'],
+          endDate: end,
           timeControl: v['time'],
           venue: v['venue'],
-          tdId: v['td'],
-          affiliateId: v['affiliate'],
+          tdId: td,
+          affiliateId: affiliate,
           policy: v['policy'],
           notes: v['notes'],
         ),
       );
-      setState(() => shown = stored);
-      if (error != null) setState(() => error = null);
+      // Reload so normalized values (such as a capitalized affiliate ID)
+      // show as saved.
+      setState(load);
       return true;
     } catch (e) {
       setState(() => error = '$e');
@@ -142,7 +168,11 @@ class EventPanelState extends State<EventPanel> {
               maxLines: lines,
               decoration: InputDecoration(
                 labelText: label,
-                hintText: key == 'time' ? 'G/60;d5' : null,
+                hintText: switch (key) {
+                  'time' => 'G/60 d/5',
+                  'affiliate' => 'A6012345',
+                  _ => null,
+                },
               ),
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => commit(),

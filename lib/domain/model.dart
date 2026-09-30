@@ -60,9 +60,18 @@ class Player {
     Map<int, int> byes = const {},
     this.personId,
     this.house = false,
+    this.state = '',
+    this.reportName = '',
   }) : byes = Map.unmodifiable(byes),
        avoid = Set.unmodifiable(avoid);
   final String id, name, memberId, club, team, notes, source;
+
+  /// Two-letter state for the rating report; empty when unknown.
+  final String state;
+
+  /// The name as US Chess should receive it (`LAST, FIRST`); empty to derive
+  /// it from [name].
+  final String reportName;
   final Set<String> avoid;
   final String? personId;
   final int rating;
@@ -80,6 +89,8 @@ class Player {
     String? notes,
     Map<int, int>? byes,
     bool? house,
+    String? state,
+    String? reportName,
   }) => Player(
     id: id,
     personId: personId,
@@ -95,6 +106,8 @@ class Player {
     source: source,
     byes: byes ?? this.byes,
     house: house ?? this.house,
+    state: state ?? this.state,
+    reportName: reportName ?? this.reportName,
   );
   Json toJson() => {
     'id': id,
@@ -111,6 +124,8 @@ class Player {
     'source': source,
     'house': house,
     'byes': byes.map((k, v) => MapEntry('$k', v)),
+    'state': state,
+    'reportName': reportName,
   };
   factory Player.fromJson(Json j) => Player(
     id: j['id'],
@@ -127,6 +142,8 @@ class Player {
     source: j['source'],
     house: j['house'] ?? false,
     byes: (j['byes'] as Map).map((k, v) => MapEntry(int.parse(k), v as int)),
+    state: j['state'] ?? '',
+    reportName: j['reportName'] ?? '',
   );
 }
 
@@ -360,6 +377,11 @@ class Event {
     List<Json> transitions = const [],
     this.notes = '',
     this.submission = '',
+    this.endDate = '',
+    this.city = '',
+    this.state = '',
+    this.zip = '',
+    this.level = 'N',
     this.policy =
         'Requested byes: ½ point before the round is posted. Standings: points, then Buchholz, then Sonneborn–Berger.',
   }) : players = List.unmodifiable(players),
@@ -378,6 +400,13 @@ class Event {
       notes,
       submission,
       policy;
+
+  /// Last day of a multi-day event; empty for a one-day event.
+  final String endDate;
+
+  /// Rating report location and 2C section type (`S_SCH_LVL`).
+  final String city, state, zip, level;
+  String get lastDate => endDate.isEmpty ? date : endDate;
   final int revision;
   final int? lastBackupRevision;
   final bool practice;
@@ -406,6 +435,11 @@ class Event {
     String? notes,
     String? submission,
     String? policy,
+    String? endDate,
+    String? city,
+    String? state,
+    String? zip,
+    String? level,
   }) => Event(
     id: id,
     name: name ?? this.name,
@@ -426,6 +460,11 @@ class Event {
     notes: notes ?? this.notes,
     submission: submission ?? this.submission,
     policy: policy ?? this.policy,
+    endDate: endDate ?? this.endDate,
+    city: city ?? this.city,
+    state: state ?? this.state,
+    zip: zip ?? this.zip,
+    level: level ?? this.level,
   );
   Json toJson() => {
     'id': id,
@@ -445,6 +484,11 @@ class Event {
     'notes': notes,
     'submission': submission,
     'policy': policy,
+    'endDate': endDate,
+    'city': city,
+    'state': state,
+    'zip': zip,
+    'level': level,
   };
   factory Event.fromJson(Json j) => Event(
     id: j['id'],
@@ -464,6 +508,11 @@ class Event {
     notes: j['notes'] ?? '',
     submission: j['submission'] ?? '',
     policy: j['policy'] ?? '',
+    endDate: j['endDate'] ?? '',
+    city: j['city'] ?? '',
+    state: j['state'] ?? '',
+    zip: j['zip'] ?? '',
+    level: j['level'] ?? 'N',
   );
   String encode() => jsonEncode(toJson());
   factory Event.decode(String source) => Event.fromJson(jsonDecode(source));
@@ -492,6 +541,11 @@ void validateEvent(Event e) {
   require(e.name.trim().isNotEmpty, 'Give the event a name.');
   require(isEventDate(e.date), 'Use a valid YYYY-MM-DD event date.');
   require(
+    e.endDate.isEmpty ||
+        (isEventDate(e.endDate) && e.endDate.compareTo(e.date) >= 0),
+    'The end date must be a valid YYYY-MM-DD date on or after the start date.',
+  );
+  require(
     e.players.map((p) => p.id).toSet().length == e.players.length,
     'Duplicate entry identity.',
   );
@@ -511,6 +565,10 @@ void validateEvent(Event e) {
     require(
       p.memberId.isEmpty || RegExp(r'^\d{8}$').hasMatch(p.memberId),
       'US Chess IDs must contain eight digits.',
+    );
+    require(
+      p.state.isEmpty || RegExp(r'^[A-Z]{2}$').hasMatch(p.state),
+      'A player\'s state must be two capital letters.',
     );
     require(
       p.byes.entries.every((b) => b.key > 0 && b.value >= 0 && b.value <= 2),

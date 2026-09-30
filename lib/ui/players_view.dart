@@ -7,6 +7,7 @@ import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import '../domain/standings.dart';
+import '../domain/us_chess.dart';
 import '../infrastructure/roster_import.dart';
 import 'dialogs.dart';
 import 'theme.dart';
@@ -1098,6 +1099,8 @@ class PlayerPanelState extends State<PlayerPanel> {
     ('name', 'Full name', 1),
     ('memberId', 'US Chess ID', 1),
     ('rating', 'Rating', 1),
+    ('state', 'State (2 letters)', 1),
+    ('reportName', 'Name on rating report', 1),
     ('team', 'Team / mixed-doubles name', 1),
     ('notes', 'Private notes', 3),
   ];
@@ -1150,6 +1153,8 @@ class PlayerPanelState extends State<PlayerPanel> {
     'name': p?.name ?? '',
     'memberId': p?.memberId ?? '',
     'rating': p == null ? '' : ratingText(p.rating),
+    'state': p?.state ?? '',
+    'reportName': p?.reportName ?? '',
     'team': p?.team ?? '',
     'notes': p?.notes ?? '',
   };
@@ -1227,15 +1232,25 @@ class PlayerPanelState extends State<PlayerPanel> {
       if (rating == null) {
         throw const TournamentException('Enter a rating number, or UNR.');
       }
+      final state = v['state']!.trim().toUpperCase();
+      if (state.isNotEmpty && !isStateCode(state)) {
+        throw const TournamentException(
+          'Enter the state as two letters, like MA.',
+        );
+      }
       c.savePlayer(
         (adding ? Player(id: c.newId(), name: '') : fresh).copy(
           name: v['name']!.trim(),
           memberId: v['memberId']!.trim(),
           rating: rating,
+          state: state,
+          reportName: v['reportName']!.trim(),
           team: v['team']!.trim(),
           notes: v['notes']!,
         ),
       );
+      // Show the saved capitals rather than leaving the panel looking unsaved.
+      if (!adding) text['state']!.text = state;
     });
     // The add form clears for the next player.
     if (ok && adding) {
@@ -1327,9 +1342,17 @@ class PlayerPanelState extends State<PlayerPanel> {
             controller: text[key],
             autofocus: widget.player == null && i == 0,
             maxLines: lines,
+            textCapitalization: key == 'state'
+                ? TextCapitalization.characters
+                : TextCapitalization.none,
             decoration: InputDecoration(
               labelText: label,
-              hintText: key == 'rating' ? 'UNR' : null,
+              hintText: switch (key) {
+                'rating' => 'UNR',
+                // What the report sends when this is left empty.
+                'reportName' => reportName(text['name']!.text) ?? '',
+                _ => null,
+              },
             ),
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) => commit(),
@@ -1450,6 +1473,26 @@ class PlayerPanelState extends State<PlayerPanel> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                if (m.state case final st?
+                    when isStateCode(st) && st != p.state)
+                  ActionChip(
+                    chipAnimationStyle: noChipAnimation,
+                    label: Text('Use state $st'),
+                    onPressed: () => applyMember(
+                      m,
+                      (player) => c.savePlayer(player.copy(state: st)),
+                    ),
+                  ),
+                if (m.reportName case final rn? when rn != playerReportName(p))
+                  ActionChip(
+                    chipAnimationStyle: noChipAnimation,
+                    label: Text('Report as $rn'),
+                    tooltip: 'Use the US Chess spelling on the rating report',
+                    onPressed: () => applyMember(
+                      m,
+                      (player) => c.savePlayer(player.copy(reportName: rn)),
+                    ),
+                  ),
                 if (m.name.isNotEmpty && m.name != p.name)
                   ActionChip(
                     chipAnimationStyle: noChipAnimation,

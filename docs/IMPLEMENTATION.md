@@ -96,10 +96,23 @@ Never promote the pilot to that claim without the rule-linked fixtures in DELIVE
 
 The DBF writer follows the archived 2C field layout and 2025 character-field
 correction. Packages are explicitly **unverified validation packages**, not accepted
-rating reports. Only completed, same-round-count, single-game R/D/Q sections without
+rating reports. Only completed, same-round-count, single-game sections without
 post-play transitions are enabled. All three files publish as a new directory with
 a manifest; unsupported encodings fail rather than fabricate data. Practice events
 cannot export rating packages, including after undo.
+
+The rating system is derived from the event time control under rule 5C (total
+= every control's minutes + delay/increment seconds; Regular > 65, Dual 30–65,
+Quick 11–29, Blitz 5–10), not chosen by hand. 2C has no Blitz code, so Blitz is
+blocked. `S_TIMECTL` is written as `Game/60 d/5` or `40/90, SD/30 inc/30`.
+Names go out as `LAST, FIRST` in capitals with accents folded to ASCII; a
+per-player "Name on rating report" overrides the derivation, and a US Chess
+lookup can fill it and the player's state. City, state, ZIP and event type
+(`S_SCH_LVL`) are saved with the event on the Reports page; multi-day events
+have a last day. Affiliate IDs must be `A` + seven digits. `H_OTHER_TD` is 254
+wide rather than 2C's 255, the dBase III character-field limit; it is always
+empty. The preflight in `dbf_export.dart` lists every problem before any file
+is written; see `research/notes/US_CHESS_REPORTING.md` for sources.
 
 ## Still required before the planned first release
 

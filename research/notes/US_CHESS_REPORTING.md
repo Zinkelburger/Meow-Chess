@@ -114,3 +114,25 @@ binary equality is not required when timestamps/metadata legitimately differ.
 
 Arrange an authorized test/draft validation with US Chess or a TD. Do not submit
 a fictional event as a real rated tournament. This phase performed no uploads.
+
+## Implementation decisions — September 30, 2026
+
+Each rule below is enforced by `ratingPreflight` before any file is written and
+re-checked by `scripts/verify_dbf.py`.
+
+| Field / topic | Decision | Source |
+|---|---|---|
+| `S_R_SYSTEM` | Derived, never chosen: total = sum of control minutes + delay/increment seconds; > 65 `R`, 30–65 `D`, 11–29 `Q`; first control ≥ 5 min. Blitz (5–10, first control ≥ 3) has no 2C code and is blocked. | Rules 5C and its TD TIP table (`uscf-rules-2026.txt`) |
+| `S_TIMECTL` | `Game/nnn` for sudden death, `40/90, SD/30` for stages, then the rulebook's `d/5` or `inc/30`. | 2C field text; rule 5B2 notation |
+| `H_AFF_ID` | `A` + seven digits (e.g. A6051416); the previous eight-digit check refused every real affiliate. | Affiliate IDs in saved US Chess pages |
+| `D_MEM_ID`, `H_CTD_ID` | Eight digits; `00000000` refused because 2C defines it as "unavailable" and such events are not ratable. A member ID may repeat only for the same person in different sections. | 2C `D_MEM_ID` |
+| `D_NAME` | `LAST, FIRST` in capitals, the 2C preferred form; accents folded; particles (de, van, St.) and suffixes (Jr., III) handled; a per-player override and the US Chess lookup cover the rest. Nothing is truncated. | 2C `D_NAME` |
+| `D_STATE` | Required, because 2C only marks `D_MEM_ID` blank as allowed. Filled from lookup, roster import or the player panel; the TD can explicitly apply the event state to the rest. | 2C preamble "all fields are required" |
+| `H_END_DATE`, `S_*_DATE` | Event has an optional last day; dates must be ordered and not after today. | 2C date fields |
+| `H_CITY`/`H_STATE`/`H_ZIPCODE` | Saved with the event; state must be a USPS code; `H_COUNTRY` is `USA`. | 2C `H_COUNTRY` note |
+| `S_SCH_LVL` | Event-level N/S/P/J. | 2C `S_SCH_LVL` |
+| `H_OTHER_TD` | Width **254**, not 2C's 255: dBase III character fields hold at most 254 bytes, so some readers refuse 255. The field is optional and always empty. Revisit if MUIR rejects it. | TD decision |
+| Text fields | ASCII after folding; `" \ | ` ~ ^ < > { } [ ] *` refused; widths checked before encoding. | Defensive |
+
+Still open: current accepted SwissSys/WinTD files for comparison, MUIR draft
+validation, Grand Prix, FIDE, Blitz, double games and mixed round counts.

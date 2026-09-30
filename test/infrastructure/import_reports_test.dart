@@ -27,6 +27,15 @@ void main() {
     }
   });
 
+  test('roster state column is imported for the rating report', () {
+    final rows = parseRoster(
+      'Name,ID,Rating,State\nAda Lee,12345678,1500,ma\nBo Chen,12345679,1400,\nCy Diaz,12345680,1300,Mass',
+    );
+    expect(rows[0].player!.state, 'MA');
+    expect(rows[1].player!.state, '');
+    expect(rows[2].player, isNull);
+    expect(rows[2].error, contains('State'));
+  });
   test(
     'quoted CSV, BOM, leading-zero IDs and rejected rows preserve originals',
     () {
@@ -133,7 +142,14 @@ void main() {
       addTearDown(c.dispose);
       c.change(
         'Metadata',
-        c.event!.copy(tdId: '12345678', affiliateId: '87654321'),
+        c.event!.copy(
+          tdId: '12345678',
+          affiliateId: 'A6012345',
+          city: 'Boston',
+          state: 'MA',
+          zip: '02116',
+          players: [for (final p in c.event!.players) p.copy(state: 'MA')],
+        ),
       );
       for (var i = 0; i < 3; i++) {
         c.post(await c.propose());
@@ -141,15 +157,7 @@ void main() {
           c.recordResult(g.id, i == 0 ? Outcome.whiteForfeit : Outcome.draw);
         }
       }
-      final files = ratingPackage(
-        c.event!,
-        const ReportMetadata(
-          city: 'Boston',
-          state: 'MA',
-          zip: '02116',
-          ratingSystem: 'R',
-        ),
-      );
+      final files = ratingPackage(c.event!);
       if (Platform.environment['MEOW_EXPORT_FIXTURES'] == '1') {
         final folder = Directory('artifacts/dbf')..createSync(recursive: true);
         for (final entry in files.entries) {
@@ -169,7 +177,7 @@ void main() {
       c.change('Practice', c.event!.copy(practice: true));
       expect(
         ratingPreflight(c.event!),
-        contains('Practice copies cannot produce rating packages.'),
+        contains('Practice copies cannot produce rating reports.'),
       );
     },
   );
@@ -195,6 +203,7 @@ void main() {
     final member = await api.member('00123456', 'secret');
     expect(member.ratings['R'], isNull);
     expect(member.state, 'MA');
+    expect(member.reportName, 'LEE, MORGAN');
     expect(member.ratings['FUTURE'], 1800);
     final mismatch = RatingsApi(
       MockClient((_) async => http.Response('{"id":"99999999"}', 200)),

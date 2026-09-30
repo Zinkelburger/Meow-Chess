@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 
 import '../domain/model.dart';
+import '../domain/us_chess.dart';
 
 class DbfField {
   const DbfField(this.name, this.width, {this.type = 'C'});
@@ -22,6 +23,9 @@ Uint8List encodeDbf(
       record = 1 + fields.fold<int>(0, (n, f) => n + f.width);
   if (header > 65535 || record > 65535) {
     throw const TournamentException('DBF field limits exceeded.');
+  }
+  if (date.year < 1900 || date.year > 2155) {
+    throw const TournamentException('DBF dates must fall in 1900–2155.');
   }
   final bytes = Uint8List(header + records.length * record + 1);
   final view = ByteData.sublistView(bytes);
@@ -65,56 +69,216 @@ Uint8List encodeDbf(
   return bytes;
 }
 
-class ReportMetadata {
-  const ReportMetadata({
-    required this.city,
-    required this.state,
-    required this.zip,
-    required this.ratingSystem,
-  });
-  final String city, state, zip, ratingSystem;
+/// Sent as `H_PROGRAM` (at most ten characters). A test keeps it equal to the
+/// version in pubspec.yaml.
+const appVersion = '1.0.0';
+
+/// Sections that appear in the report: every section with entrants.
+List<Section> reportedSections(Event e) =>
+    e.sections.where((s) => s.players.isNotEmpty).toList();
+
+String _list(Iterable<String> names) {
+  final all = names.toList();
+  return all.length <= 6
+      ? all.join(', ')
+      : '${all.take(5).join(', ')} and ${all.length - 5} more';
 }
 
-List<String> ratingPreflight(Event e) {
-  final sections = e.sections.where((s) => s.players.isNotEmpty).toList();
-  return [
-    if (e.practice) 'Practice copies cannot produce rating packages.',
-    if (sections.isEmpty) 'Create sections first.',
-    if (sections.any((s) => s.players.isNotEmpty && !s.finished))
-      'Complete all scheduled rounds and results.',
-    if (!RegExp(r'^\d{8}$').hasMatch(e.tdId))
-      'Enter the chief TD’s eight-digit ID in event settings.',
-    if (!RegExp(r'^\d{8}$').hasMatch(e.affiliateId))
-      'Enter the affiliate’s eight-digit ID in event settings.',
-    for (final player in e.players.where(
-      (p) => e.sectionOf(p.id) != null && p.memberId.isEmpty,
-    ))
-      '${player.name}: US Chess ID missing.',
-    if (sections.any((s) => s.doubleGames))
-      'Double-game report mapping awaits accepted reference fixtures.',
-    if (e.transitions.any((t) => (t['effectiveRound'] as int) > 1))
-      'Post-play transfers require an externally validated reporting mapping.',
-    if (sections.map((s) => s.rounds.length).toSet().length > 1)
-      'Mixed round-count encoding awaits accepted reference fixtures.',
-    if (sections.length > 99 ||
-        sections.any((s) => s.rounds.length > 32 || s.players.length > 9999))
-      'Event exceeds the supported 2C field limits.',
-  ];
+/// Why [value] cannot go in a [width]-character text field, or null.
+String? _textProblem(String value, int width) {
+  final text = reportText(value);
+  if (text == null) return 'uses characters with no plain-letter spelling';
+  if (text.isEmpty) return 'is empty';
+  final bad = unsafeCharacter(text);
+  if (bad != null) return 'contains $bad, which the report leaves out';
+  if (text.length > width) {
+    return 'is ${text.length} characters; US Chess allows $width';
+  }
+  return null;
 }
 
-Map<String, Uint8List> ratingPackage(Event e, ReportMetadata metadata) {
-  final issues = ratingPreflight(e);
-  if (issues.isNotEmpty) throw TournamentException(issues.join('\n'));
-  if (!['R', 'D', 'Q'].contains(metadata.ratingSystem) ||
-      metadata.city.trim().isEmpty ||
-      !RegExp(r'^[A-Z]{2}$').hasMatch(metadata.state) ||
-      !RegExp(r'^\d{5}(-\d{4})?$').hasMatch(metadata.zip)) {
-    throw const TournamentException(
-      'Provide city, two-letter state, ZIP and a reviewed R/D/Q rating category. Blitz and online mappings are unavailable.',
+String _day(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+/// Everything that would make the rating report wrong, unreadable, or likely
+/// to be refused. Each entry says what to change. Empty means the files can be
+/// created. Field rules follow the 2C format (research/local/uscf-fileformat.txt)
+/// and rating categories follow rule 5C (research/local/uscf-rules-2026.txt).
+List<String> ratingPreflight(Event e, {DateTime? today}) {
+  final issues = <String>[];
+  void check(String? problem, String message) {
+    if (problem != null) issues.add(message.replaceFirst('{}', problem));
+  }
+
+  final sections = reportedSections(e);
+  if (e.practice) issues.add('Practice copies cannot produce rating reports.');
+  if (sections.isEmpty) issues.add('Create sections and add players first.');
+  if (sections.any((s) => !s.finished)) {
+    issues.add('Complete all scheduled rounds and results.');
+  }
+
+  // Event details.
+  check(_textProblem(e.name, 35), 'Event name {}. Change it in Event details.');
+  if (!isMemberId(e.tdId)) {
+    issues.add(
+      'Enter the chief TD\'s eight-digit US Chess ID in Event details.',
     );
   }
-  final date = DateTime.parse(e.date), dateCode = e.date.replaceAll('-', '');
-  final sections = e.sections.where((s) => s.players.isNotEmpty).toList();
+  if (!isAffiliateId(e.affiliateId)) {
+    issues.add(
+      'Enter the affiliate ID in Event details: the letter A and seven digits, like A6012345.',
+    );
+  }
+  final now = _day(today ?? DateTime.now());
+  if (!isEventDate(e.date) ||
+      (e.endDate.isNotEmpty &&
+          (!isEventDate(e.endDate) || e.endDate.compareTo(e.date) < 0))) {
+    issues.add(
+      'Check the event dates in Event details: the last day cannot come before the first.',
+    );
+  } else if (e.lastDate.compareTo(now) > 0) {
+    issues.add(
+      'The event ends after today (${e.lastDate}). Check the dates in Event details.',
+    );
+  } else if (e.date.compareTo('2000-01-01') < 0) {
+    issues.add('Check the event date in Event details (${e.date}).');
+  }
+  try {
+    final tc = TimeControl.parse(e.timeControl);
+    final category = tc.category;
+    if (category == null) {
+      issues.add(
+        'Time control ${e.timeControl} is not ratable: rule 5C needs at least five minutes in total, and five in the first control above G/10.',
+      );
+    } else if (category.code == null) {
+      issues.add(
+        'Blitz events cannot be reported in this file format yet. Report them on the US Chess website.',
+      );
+    }
+    check(
+      tc.reportText.length > 40 ? 'is too long for the report' : null,
+      'Time control {}. Simplify it in Event details.',
+    );
+  } on TournamentException catch (error) {
+    issues.add('${error.message} Change it in Event details.');
+  }
+
+  // Report details.
+  check(_textProblem(e.city, 21), 'City {}. Enter it under Report details.');
+  if (!usStates.contains(e.state)) {
+    issues.add(
+      'Enter the two-letter state where the event was held under Report details.',
+    );
+  }
+  if (!isZipCode(e.zip)) {
+    issues.add(
+      'Enter the ZIP code (12345 or 12345-6789) under Report details.',
+    );
+  }
+  if (!sectionLevels.containsKey(e.level)) {
+    issues.add('Choose the event type under Report details.');
+  }
+
+  // Sections.
+  if (sections.length > 99) {
+    issues.add('US Chess reports allow at most 99 sections.');
+  }
+  if (sections.map((s) => s.rounds.length).toSet().length > 1) {
+    issues.add(
+      'Sections with different numbers of rounds cannot be reported together yet.',
+    );
+  }
+  if (sections.any((s) => s.doubleGames)) {
+    issues.add('Double-game sections cannot be reported yet.');
+  }
+  if (e.transitions.any((t) => (t['effectiveRound'] as int) > 1)) {
+    issues.add(
+      'Players moved between sections after play started; this cannot be reported yet.',
+    );
+  }
+  for (final s in sections) {
+    check(
+      _textProblem(s.name, 30),
+      'Section name "${s.name}" {}. Rename the section.',
+    );
+    final members = s.players.toSet();
+    if (members.length < 2) {
+      issues.add('Section ${s.name} needs at least two players to be rated.');
+    }
+    if (s.rounds.length > 32 || members.length > 9999) {
+      issues.add('Section ${s.name} exceeds 32 rounds or 9999 players.');
+    }
+    if (s.finished &&
+        !s.rounds.any((r) => r.games.any((g) => g.outcome.played))) {
+      issues.add('Section ${s.name} has no played games to rate.');
+    }
+    for (final r in s.rounds) {
+      if (r.games.any(
+            (g) => !members.contains(g.white) || !members.contains(g.black),
+          ) ||
+          r.byes.any((b) => !members.contains(b.player))) {
+        issues.add(
+          'Section ${s.name}, round ${r.number} includes a player who is no longer in the section.',
+        );
+      }
+    }
+  }
+
+  // Players.
+  final entrants = [
+    for (final s in sections)
+      for (final id in s.players) (s, e.player(id)),
+  ];
+  final noId = [
+    for (final (_, p) in entrants)
+      if (!isMemberId(p.memberId)) p.name,
+  ];
+  if (noId.isNotEmpty) {
+    issues.add(
+      'US Chess ID missing or invalid for ${_list(noId)}. Every player needs one to be rated.',
+    );
+  }
+  final byId = <String, List<(Section, Player)>>{};
+  for (final entry in entrants) {
+    if (isMemberId(entry.$2.memberId)) {
+      byId.putIfAbsent(entry.$2.memberId, () => []).add(entry);
+    }
+  }
+  for (final MapEntry(key: id, value: same) in byId.entries) {
+    final people = same.map((x) => x.$2.personId ?? x.$2.id).toSet();
+    final sectionIds = same.map((x) => x.$1.id).toSet();
+    if (people.length > 1 || sectionIds.length < same.length) {
+      issues.add(
+        'US Chess ID $id is entered for ${_list(same.map((x) => x.$2.name))}.',
+      );
+    }
+  }
+  final noState = [
+    for (final (_, p) in entrants)
+      if (p.state.isEmpty) p.name,
+  ];
+  if (noState.isNotEmpty) {
+    issues.add(
+      'State missing for ${_list(noState)}. Look them up by US Chess ID, enter it in the player panel, or use the button below.',
+    );
+  }
+  for (final (_, p) in entrants) {
+    check(
+      reportNameProblem(playerReportName(p)),
+      '${p.name}: name {}. Set "Name on rating report" in the player panel.',
+    );
+  }
+  return issues;
+}
+
+Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
+  final issues = ratingPreflight(e, today: today);
+  if (issues.isNotEmpty) throw TournamentException(issues.join('\n'));
+  final tc = TimeControl.parse(e.timeControl);
+  final system = tc.category!.code!;
+  final begin = e.date.replaceAll('-', ''),
+      end = e.lastDate.replaceAll('-', '');
+  final sections = reportedSections(e);
   const headerFields = [
     DbfField('H_FORMAT', 5),
     DbfField('H_PROGRAM', 10),
@@ -131,7 +295,9 @@ Map<String, Uint8List> ratingPackage(Event e, ReportMetadata metadata) {
     DbfField('H_SENDCROS', 1),
     DbfField('H_CTD_ID', 8),
     DbfField('H_ATD_ID', 8),
-    DbfField('H_OTHER_TD', 255),
+    // 2C lists 255; dBase III character fields hold at most 254 bytes, and
+    // this optional field is always empty here.
+    DbfField('H_OTHER_TD', 254),
   ];
   const sectionFields = [
     DbfField('S_EVENT_ID', 12),
@@ -171,16 +337,18 @@ Map<String, Uint8List> ratingPackage(Event e, ReportMetadata metadata) {
     sectionRows.add({
       'S_EVENT_ID': 'MEOW',
       'S_SEC_NUM': number,
-      'S_SEC_NAME': s.name,
-      'S_R_SYSTEM': metadata.ratingSystem,
-      'S_TIMECTL': e.timeControl,
+      'S_SEC_NAME': reportText(s.name)!,
+      'S_R_SYSTEM': system,
+      'S_TIMECTL': tc.reportText,
       'S_CTD_ID': e.tdId,
+      // Quads and round robins are reported round by round, as a Swiss; US
+      // Chess documents this as an accepted alternative.
       'S_TRN_TYPE': 'S',
       'S_TOT_RNDS': '$rounds',
       'S_LST_PAIR': '${s.players.length}',
-      'S_BEG_DATE': dateCode,
-      'S_END_DATE': dateCode,
-      'S_SCH_LVL': 'N',
+      'S_BEG_DATE': begin,
+      'S_END_DATE': end,
+      'S_SCH_LVL': e.level,
       'S_GR_PRIX': 'N',
       'S_GP_PTS': '0',
       'S_FIDE': 'N',
@@ -192,8 +360,8 @@ Map<String, Uint8List> ratingPackage(Event e, ReportMetadata metadata) {
         'D_SEC_NUM': number,
         'D_PAIR_NUM': '${pairs[id]}',
         'D_MEM_ID': player.memberId,
-        'D_NAME': player.name,
-        'D_STATE': '',
+        'D_NAME': playerReportName(player)!,
+        'D_STATE': player.state,
         'D_RATING': '${player.rating}',
       };
       for (final r in s.rounds) {
@@ -203,23 +371,22 @@ Map<String, Uint8List> ratingPackage(Event e, ReportMetadata metadata) {
         String code;
         if (game == null) {
           final bye = r.byes.where((b) => b.player == id).firstOrNull;
-          code =
-              '${bye?.points == 2
-                  ? 'B'
-                  : bye?.points == 1
-                  ? 'H'
-                  : 'U'}0';
+          code = switch (bye?.points) {
+            2 => 'B0',
+            1 => 'H0',
+            _ => 'U0',
+          };
         } else {
           final white = game.white == id,
-              points = game.white == id
+              points = white
                   ? game.outcome.whiteScore
                   : game.outcome.blackScore;
           code = game.outcome.played
-              ? '${points == 2
-                    ? 'W'
-                    : points == 1
-                    ? 'D'
-                    : 'L'}${pairs[white ? game.black : game.white]}${white ? 'W' : 'B'}'
+              ? '${switch (points) {
+                  2 => 'W',
+                  1 => 'D',
+                  _ => 'L',
+                }}${pairs[white ? game.black : game.white]}${white ? 'W' : 'B'}'
               : '${points == 2 ? 'X' : 'F'}0';
         }
         row['D_RND${r.number.toString().padLeft(2, '0')}'] = code;
@@ -227,20 +394,21 @@ Map<String, Uint8List> ratingPackage(Event e, ReportMetadata metadata) {
       detailRows.add(row);
     }
   }
+  final date = DateTime.parse(e.lastDate);
   return {
     'THEXPORT.DBF': encodeDbf(headerFields, [
       {
         'H_FORMAT': '2C',
-        'H_PROGRAM': 'MEOW 0.1',
+        'H_PROGRAM': 'MEOW $appVersion',
         'H_EVENT_ID': 'MEOW',
-        'H_NAME': e.name,
+        'H_NAME': reportText(e.name)!,
         'H_TOT_SECT': '${sections.length}',
-        'H_BEG_DATE': dateCode,
-        'H_END_DATE': dateCode,
+        'H_BEG_DATE': begin,
+        'H_END_DATE': end,
         'H_AFF_ID': e.affiliateId,
-        'H_CITY': metadata.city,
-        'H_STATE': metadata.state,
-        'H_ZIPCODE': metadata.zip,
+        'H_CITY': reportText(e.city)!,
+        'H_STATE': e.state,
+        'H_ZIPCODE': e.zip,
         'H_COUNTRY': 'USA',
         'H_SENDCROS': 'N',
         'H_CTD_ID': e.tdId,
@@ -251,12 +419,8 @@ Map<String, Uint8List> ratingPackage(Event e, ReportMetadata metadata) {
   };
 }
 
-Future<String> writeRatingPackage(
-  Event e,
-  ReportMetadata metadata,
-  String parent,
-) async {
-  final files = ratingPackage(e, metadata);
+Future<String> writeRatingPackage(Event e, String parent) async {
+  final files = ratingPackage(e);
   // OS-created unique directories keep simultaneous exports from sharing
   // staging files, even on clocks with coarse timestamp resolution.
   final root = Directory(parent);
@@ -266,14 +430,17 @@ Future<String> writeRatingPackage(
   final name = 'meow-r${e.revision}-$suffix';
   try {
     for (final entry in files.entries) {
-      await File(p.join(staging.path, entry.key))
-          .writeAsBytes(entry.value, flush: true);
+      await File(
+        p.join(staging.path, entry.key),
+      ).writeAsBytes(entry.value, flush: true);
     }
     await File(p.join(staging.path, 'manifest.json')).writeAsString(
       const JsonEncoder.withIndent('  ').convert({
         'eventId': e.id,
         'revision': e.revision,
         'schema': '2C-2025-character-correction',
+        'ratingSystem': TimeControl.parse(e.timeControl).category!.code,
+        'timeControl': TimeControl.parse(e.timeControl).reportText,
         'status':
             'UNVERIFIED — TD/provider validation required before submission',
         'files': files.map((k, v) => MapEntry(k, v.length)),

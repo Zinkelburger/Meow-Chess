@@ -22,10 +22,11 @@ def rejected(folder):
 
 def run(source):
     with tempfile.TemporaryDirectory(prefix='meow-dbf-negative-') as temp:
-        for case in ['field-type', 'truncated', 'wrong-results', 'wrong-identity']:
+        for case in ['field-type', 'truncated', 'wrong-results', 'wrong-identity',
+                     'wrong-rating-system', 'blank-state', 'wrong-name']:
             folder = Path(temp) / case
             shutil.copytree(source, folder)
-            path = folder / 'TDEXPORT.DBF'
+            path = folder / ('TSEXPORT.DBF' if case == 'wrong-rating-system' else 'TDEXPORT.DBF')
             raw = bytearray(path.read_bytes())
             if case == 'field-type':
                 raw[32 + 11] = ord('N')
@@ -44,10 +45,18 @@ def run(source):
                                 raw[offset] = ord('L') if raw[offset] == ord('W') else ord('W')
                         if case == 'wrong-identity' and field.name == 'D_MEM_ID':
                             raw[offset:offset + 8] = b'99999999'
+                        if case == 'wrong-rating-system' and field.name == 'S_R_SYSTEM':
+                            # A plausible code that contradicts the time control.
+                            raw[offset] = ord('Q') if raw[offset] != ord('Q') else ord('R')
+                        if case == 'blank-state' and field.name == 'D_STATE' and row == 0:
+                            raw[offset:offset + 2] = b'  '
+                        if case == 'wrong-name' and field.name == 'D_NAME' and row == 0:
+                            raw[offset:offset + 5] = b'XXXXX'
                         offset += field.length
             path.write_bytes(raw)
             rejected(folder)
-    print('PASS: validator rejects wrong field types, truncation, reciprocal-but-wrong results and wrong member IDs.')
+    print('PASS: validator rejects wrong field types, truncation, reciprocal-but-wrong results, wrong member IDs, '
+          'a rating system that contradicts the time control, a blank state and a wrong name.')
 
 
 if __name__ == '__main__':

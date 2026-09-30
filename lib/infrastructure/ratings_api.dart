@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../domain/model.dart';
+import '../domain/us_chess.dart';
 
 class MemberObservation {
   const MemberObservation({
@@ -13,9 +14,13 @@ class MemberObservation {
     this.expiration,
     this.status,
     this.state,
+    this.reportName,
   });
   final String id, name, retrievedAt;
   final String? expiration, status, state;
+
+  /// `LAST, FIRST` from the separate US Chess name fields.
+  final String? reportName;
   final Map<String, int?> ratings;
   factory MemberObservation.parse(Json json, DateTime retrieved) {
     if (json['id'] is! String) {
@@ -38,6 +43,14 @@ class MemberObservation {
       expiration: json['expirationDate'] as String?,
       status: json['status'] as String?,
       state: json['stateRep'] as String?,
+      reportName: json['lastName'] is String
+          ? reportText(
+              [
+                json['lastName'] as String,
+                if (json['firstName'] case final String first) first,
+              ].where((x) => x.trim().isNotEmpty).join(', '),
+            )?.toUpperCase()
+          : null,
     );
   }
   Json toJson() => {
@@ -48,6 +61,7 @@ class MemberObservation {
     'expiration': expiration,
     'status': status,
     'state': state,
+    'reportName': reportName,
   };
 }
 
@@ -81,7 +95,8 @@ class RatingsApi {
         401 ||
         403 => 'US Chess rejected this API key. Update it in Data sources.',
         404 => 'Member ID not found. No local record was changed.',
-        429 => 'US Chess rate limit reached. Retry later; local operation remains available.',
+        429 =>
+          'US Chess rate limit reached. Retry later; local operation remains available.',
         _ =>
           'US Chess lookup failed (HTTP ${response.statusCode}). No local record was changed.',
       });
