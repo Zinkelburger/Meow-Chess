@@ -54,6 +54,41 @@ strict ASCII export;
 independent backup/reopen; same-progress section combination with preserved history;
 exact-ID authenticated provider review with stale-response rejection.
 
+### Clearer tournament-day workspace
+
+Players and Rounds have a permanent section sidebar. Search names without needing
+spaces (`quad12`), or use the section's ordinal (`section2`). Ctrl+J focuses this
+search; Enter opens the first match. The sidebar shows player counts before play
+and current-round missing-result counts during play. Reports have their own
+**Include sections** selector for print, CSV and text output; the rating package
+always covers the entire event and is labelled accordingly.
+
+Players is a read-only crosstable with opponent references (`W37`, `D10`, `L5`),
+using stable event roster numbers shown in the # column, independent of sort and
+search. Byes use `B` plus their points; `F` suffixes mark forfeits. Edit requested
+byes in player details, where **None** removes a request. IDs and tiebreaks are
+optional under **View**, alongside the advanced standings filters. Imports and
+spreadsheet paste live in the menu beside **+ Add player**. Bulk actions only
+appear when players are selected.
+
+Rounds opens a single section by default. Its full-width table has larger names
+and score boxes, without ratings. Search by player or exact board number. The
+row menu provides mouse entry and **Still playing / clear result**, which returns
+both boxes to blank. Keyboard 1/0/5 entry and Delete continue to work. The player
+details header and close button stay visible while its contents scroll.
+
+Select partners and choose **Assign team** to record a shared mixed-doubles team
+name, or edit a player's team in their details. This records membership only;
+it does not implement team-match pairings, prize eligibility, or team scoring.
+Select two players and choose **Do not pair together** for sibling/other requests;
+player details also add and remove these requests. Swiss proposals respect them,
+and impossible requests report a conflict. Quads/round robins report a conflict
+when their fixed schedule requires that meeting, so the TD can separate the
+players or remove the request. Requests preserve posted games and are checked
+when posting new or replacing unstarted pairings. Teams and requests persist in
+player JSON and participate in undo, redo and backups; older records default to
+no team and no requests.
+
 A Swiss proposal is labelled `score-swiss-pilot-v1`. Its priorities are score
 proximity, upper/lower-half preference, non-repeat opponents, color balance and
 lowest eligible non-repeat bye. It is **not a qualified US Chess Swiss engine**.

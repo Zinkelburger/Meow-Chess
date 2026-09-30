@@ -53,13 +53,17 @@ class Player {
     this.checkedIn = false,
     this.withdrawn = false,
     this.club = '',
+    this.team = '',
+    Set<String> avoid = const {},
     this.notes = '',
     this.source = '',
     Map<int, int> byes = const {},
     this.personId,
     this.house = false,
-  }) : byes = Map.unmodifiable(byes);
-  final String id, name, memberId, club, notes, source;
+  }) : byes = Map.unmodifiable(byes),
+       avoid = Set.unmodifiable(avoid);
+  final String id, name, memberId, club, team, notes, source;
+  final Set<String> avoid;
   final String? personId;
   final int rating;
   final bool checkedIn, withdrawn, house;
@@ -71,6 +75,8 @@ class Player {
     bool? checkedIn,
     bool? withdrawn,
     String? club,
+    String? team,
+    Set<String>? avoid,
     String? notes,
     Map<int, int>? byes,
     bool? house,
@@ -83,6 +89,8 @@ class Player {
     checkedIn: checkedIn ?? this.checkedIn,
     withdrawn: withdrawn ?? this.withdrawn,
     club: club ?? this.club,
+    team: team ?? this.team,
+    avoid: avoid ?? this.avoid,
     notes: notes ?? this.notes,
     source: source,
     byes: byes ?? this.byes,
@@ -97,6 +105,8 @@ class Player {
     'checkedIn': checkedIn,
     'withdrawn': withdrawn,
     'club': club,
+    'team': team,
+    'avoid': avoid.toList()..sort(),
     'notes': notes,
     'source': source,
     'house': house,
@@ -111,6 +121,8 @@ class Player {
     checkedIn: j['checkedIn'],
     withdrawn: j['withdrawn'],
     club: j['club'],
+    team: j['team'] ?? '',
+    avoid: Set<String>.from(j['avoid'] ?? const []),
     notes: j['notes'],
     source: j['source'],
     house: j['house'] ?? false,
@@ -348,8 +360,7 @@ class Event {
     List<Json> transitions = const [],
     this.notes = '',
     this.submission = '',
-    this.policy =
-        'Requested byes: ½ point before the round is posted. Standings: points, then Buchholz, then Sonneborn–Berger.',
+    this.policy = 'Requested byes: ½ point before the round is posted. Standings: points, then Buchholz, then Sonneborn–Berger.',
   }) : players = List.unmodifiable(players),
        sections = List.unmodifiable(sections),
        transitions = List.unmodifiable(

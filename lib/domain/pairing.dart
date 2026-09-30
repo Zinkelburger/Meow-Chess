@@ -55,6 +55,20 @@ Format pairingFormat(Section section) =>
     ? Format.swiss
     : section.format;
 
+/// Explicit player requests are independent of team membership.
+bool pairingRestricted(Event event, String a, String b) =>
+    event.player(a).avoid.contains(b) || event.player(b).avoid.contains(a);
+
+void checkPairingRequests(Event event, Iterable<Game> games) {
+  for (final game in games) {
+    if (pairingRestricted(event, game.white, game.black)) {
+      throw TournamentException(
+        '${event.player(game.white).name} and ${event.player(game.black).name} have a do-not-pair request. Move them to different sections or remove the request in player details.',
+      );
+    }
+  }
+}
+
 /// Bounded, deterministic score-group Swiss for pilot use. This is deliberately
 /// not advertised as a certified US Chess rules implementation.
 Round proposeRound(Event event, Section section, String Function() id) {
@@ -108,6 +122,11 @@ Round proposeRound(Event event, Section section, String Function() id) {
         continue;
       }
       if (available.contains(a) && available.contains(b)) {
+        if (pairingRestricted(event, a, b)) {
+          throw TournamentException(
+            '${event.player(a).name} and ${event.player(b).name} have a do-not-pair request. A round robin requires everyone to meet; move them to different sections or remove the request.',
+          );
+        }
         pairs.add((a, b));
       } else if (available.contains(a) || available.contains(b)) {
         final absent = byes.firstWhere(
@@ -171,7 +190,11 @@ Round proposeRound(Event event, Section section, String Function() id) {
       final a = left.first;
       final choices = left
           .skip(1)
-          .where((b) => !(opponents[a]?.contains(b) ?? false))
+          .where(
+            (b) =>
+                !(opponents[a]?.contains(b) ?? false) &&
+                !pairingRestricted(event, a, b),
+          )
           .toList();
       choices.sort((b, c) {
         final distanceB = (scores[a]! - scores[b]!).abs(),
@@ -215,7 +238,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
     }
     if (result == null) {
       throw const TournamentException(
-        'No non-repeat pairing without a repeated full-point bye. Review the field or enter a manual round with an exception reason.',
+        'No pairing satisfies the opponent requests, repeat-game limits and bye limits. Review player requests or adjust the sections.',
       );
     }
     pairs.addAll(result);

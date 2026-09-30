@@ -1,15 +1,19 @@
 import 'dart:typed_data';
+
 import 'package:csv/csv.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+
 import '../domain/model.dart';
 import '../domain/standings.dart';
 
 enum ReportKind { packet, pairings, standings, crosstable }
 
-String crosstable(Event e, {bool asciiOnly = false}) {
+String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
   final lines = <String>['${e.name} | ${e.date} | revision ${e.revision}', ''];
-  for (final s in e.sections.where((s) => s.players.isNotEmpty)) {
+  for (final s in e.sections.where(
+    (s) => s.players.isNotEmpty && (sectionId == null || s.id == sectionId),
+  )) {
     final rows = standings(e, s);
     final numbers = {for (final (i, id) in s.players.indexed) id: i + 1};
     final nameWidth = rows.fold(
@@ -73,7 +77,7 @@ String crosstable(Event e, {bool asciiOnly = false}) {
   return text;
 }
 
-String standingsCsv(Event e) => Csv().encode([
+String standingsCsv(Event e, {String? sectionId}) => Csv().encode([
   [
     'Section',
     'Pairing number',
@@ -83,7 +87,9 @@ String standingsCsv(Event e) => Csv().encode([
     'Buchholz',
     'Sonneborn-Berger',
   ],
-  for (final s in e.sections)
+  for (final s in e.sections.where(
+    (s) => sectionId == null || s.id == sectionId,
+  ))
     for (final row in standings(e, s))
       [
         _safe(s.name),
