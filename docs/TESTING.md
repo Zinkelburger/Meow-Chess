@@ -30,8 +30,9 @@ python3 -m venv "$HOME/.local/share/meow-test-tools"
 MEOW_PYTHON="$HOME/.local/share/meow-test-tools/bin/python" scripts/ci.sh exports
 ```
 
-The wrapper uses the shared bounded runner. Integration runs on a private Xvfb
-display. If the runner is occupied, inspect `scripts/ci.sh status` and wait for a
+The wrapper uses the shared bounded runner. Each integration test file runs in a
+separate Flutter invocation and private Xvfb display/session, so native app and
+debug-connection state cannot leak into the next test executable. If the runner is occupied, inspect `scripts/ci.sh status` and wait for a
 slot; do not run heavy commands outside containment. `MEOW_JOB_RUNNER` may select
 another configured runner. No Python runtime is needed by the distributed app.
 
@@ -46,7 +47,10 @@ flutter test --concurrency=2
 python -m pip install dbfread==2.0.7
 python scripts/verify_dbf.py artifacts/dbf-contract
 python scripts/verify_recovery.py
-flutter test integration_test -d windows
+foreach ($target in Get-ChildItem integration_test/*_test.dart) {
+    flutter test $target.FullName -d windows
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 ```
 
 ## Coverage and boundaries

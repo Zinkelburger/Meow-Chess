@@ -65,12 +65,23 @@ jobs:
         if: runner.os == 'Linux'
         env:
           MEOW_DATA_DIR: ${{ runner.temp }}/meow-test-library
-        run: xvfb-run -a -s '-screen 0 1440x1000x24' flutter test integration_test -d linux --reporter expanded --file-reporter json:artifacts/desktop-tests.json
+        run: |
+          for target in integration_test/*_test.dart; do
+            name=$(basename "$target" .dart)
+            xvfb-run -a -s '-screen 0 1440x1000x24' dbus-run-session -- \
+              flutter test "$target" -d linux --reporter expanded \
+              --file-reporter "json:artifacts/desktop-$name.json"
+          done
       - name: Windows desktop tournament day
         if: runner.os == 'Windows'
         env:
           MEOW_DATA_DIR: ${{ runner.temp }}/meow-test-library
-        run: flutter test integration_test -d windows --reporter expanded --file-reporter json:artifacts/desktop-tests.json
+        shell: pwsh
+        run: |
+          foreach ($target in Get-ChildItem integration_test/*_test.dart) {
+            flutter test $target.FullName -d windows --reporter expanded --file-reporter "json:artifacts/desktop-$($target.BaseName).json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Test evidence
         if: always()
         uses: actions/upload-artifact@v4

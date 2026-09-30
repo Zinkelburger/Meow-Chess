@@ -18,7 +18,11 @@ case "${1:-test}" in
   lint) python3 scripts/lint.py ;;
   status) exec "$runner" status ;;
   test) shift || true; exec "$runner" with -- flutter test --concurrency=2 "$@" ;;
-  integration) exec "$runner" with --headless -- flutter test integration_test -d linux ;;
+  integration)
+    for target in integration_test/*_test.dart; do
+      "$runner" with --headless -- flutter test "$target" -d linux
+    done
+    ;;
   recovery) exec "$runner" with -- python3 scripts/verify_recovery.py ;;
   exports) exec "$runner" with -- "${MEOW_PYTHON:-python3}" scripts/check_exports.py ;;
   build) exec "$runner" with -- flutter build linux --release ;;
