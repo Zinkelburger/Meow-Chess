@@ -172,4 +172,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('jump shortcut from Reports retains search focus over result autofocus', (tester) async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    c.post((await tester.runAsync(() => c.propose()))!);
+    await mount(tester, c);
+    await tester.tap(find.text('Reports').first);
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byKey(const ValueKey('section-search'))).focusNode!.hasFocus, true);
+    await tester.enterText(find.byKey(const ValueKey('section-search')), 'quad2');
+    await tester.pumpAndSettle();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(c.repository.readPreference('view'), '${c.event!.sections.last.id}|results');
+  });
+
 }
