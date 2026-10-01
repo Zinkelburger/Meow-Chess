@@ -258,6 +258,7 @@ class _PlayersViewState extends State<PlayersView> {
       _Side.add => PlayerPanel(
         key: panel,
         controller: c,
+        sectionId: widget.sectionId,
         onClose: () => showSide(null),
       ),
       _Side.paste => _PastePanel(controller: c, onClose: () => showSide(null)),
@@ -1089,10 +1090,14 @@ class PlayerPanel extends StatefulWidget {
     required this.controller,
     required this.onClose,
     this.player,
+    this.sectionId,
     this.memberLookup = fetchMember,
     super.key,
   });
   final TournamentController controller;
+
+  /// Where a new player goes by default: the section on screen.
+  final String? sectionId;
 
   /// Null to add a new player.
   final Player? player;
@@ -1153,6 +1158,9 @@ class PlayerPanelState extends State<PlayerPanel> {
 
   /// The last player added, confirmed under the add form.
   String? added;
+
+  /// The section a new player joins; null leaves them unsectioned.
+  late String? joinSection = widget.sectionId;
 
   TournamentController get c => widget.controller;
   Map<String, String> get values => text.map((k, v) => MapEntry(k, v.text));
@@ -1233,6 +1241,7 @@ class PlayerPanelState extends State<PlayerPanel> {
   bool commit() {
     if (!dirty) return true;
     final v = values, adding = widget.player == null;
+    ({String? into, String? problem}) joined = (into: null, problem: null);
     final ok = attempt(() {
       final rating = parseRating(v['rating']!);
       if (v['name']!.trim().isEmpty) {
@@ -1247,28 +1256,48 @@ class PlayerPanelState extends State<PlayerPanel> {
           'Enter the state as two letters, like MA.',
         );
       }
-      c.savePlayer(
-        (adding ? Player(id: c.newId(), name: '') : fresh).copy(
-          name: v['name']!.trim(),
-          memberId: v['memberId']!.trim(),
-          rating: rating,
-          state: state,
-          reportName: v['reportName']!.trim(),
-          team: v['team']!.trim(),
-          notes: v['notes']!,
-        ),
+      final saved = (adding ? Player(id: c.newId(), name: '') : fresh).copy(
+        name: v['name']!.trim(),
+        memberId: v['memberId']!.trim(),
+        rating: rating,
+        state: state,
+        reportName: v['reportName']!.trim(),
+        team: v['team']!.trim(),
+        notes: v['notes']!,
       );
+      c.savePlayer(saved);
+      if (adding) joined = joinNew(saved);
       // Show the saved capitals rather than leaving the panel looking unsaved.
       if (!adding) text['state']!.text = state;
     });
     // The add form clears for the next player.
     if (ok && adding) {
       setState(() {
-        added = v['name']!.trim();
+        added = joined.into == null
+            ? v['name']!.trim()
+            : '${v['name']!.trim()} to ${joined.into}';
         load();
+        error = joined.problem;
       });
     }
     return ok;
+  }
+
+  /// Puts a walk-up straight into [joinSection]. Returns where they went,
+  /// or, when that cannot happen yet, why; the player stays added either way.
+  ({String? into, String? problem}) joinNew(Player p) {
+    final s = c.event!.sections.where((s) => s.id == joinSection).firstOrNull;
+    if (s == null) return (into: null, problem: null);
+    try {
+      c.movePlayers([p.id], s.id, reason: s.rounds.isEmpty ? '' : 'Late entry');
+      return (into: s.name, problem: null);
+    } catch (error) {
+      return (
+        into: null,
+        problem:
+            'Added ${p.name}, but not to ${s.name} yet. ${plainMessage(error)}',
+      );
+    }
   }
 
   void pickSection(String? target) {
@@ -1384,6 +1413,25 @@ class PlayerPanelState extends State<PlayerPanel> {
         onClose: close,
         children: [
           ...fields,
+          if (c.event!.sections.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: DropdownButtonFormField<String?>(
+                key: const ValueKey('panel-join-section'),
+                initialValue: joinSection,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Section'),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('Not in a section yet'),
+                  ),
+                  for (final s in c.event!.sections)
+                    DropdownMenuItem(value: s.id, child: Text(s.name)),
+                ],
+                onChanged: (v) => setState(() => joinSection = v),
+              ),
+            ),
           Align(
             alignment: Alignment.centerLeft,
             child: FilledButton(onPressed: commit, child: const Text('Add')),

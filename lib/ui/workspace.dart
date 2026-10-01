@@ -214,7 +214,18 @@ class _WorkspaceState extends State<Workspace> {
       onClose: dock.close,
     ),
   );
-  Future<void> lookup() => actions.lookup();
+
+  /// Ctrl+L or the toolbar: the Lookup panel, toggled.
+  void lookup() => dock.id == 'lookup'
+      ? dock.close()
+      : dock.show(
+          'lookup',
+          LookupPanel(
+            key: const ValueKey('lookup'),
+            controller: c,
+            onClose: dock.close,
+          ),
+        );
 
   void undo() =>
       travel(context, c, c.graph.back, (a) => c.undo(acceptLosses: a));
@@ -361,6 +372,12 @@ class _WorkspaceState extends State<Workspace> {
                           ),
                         ),
                         const SizedBox(width: 12),
+                        _barIcon(
+                          Icons.person_search_outlined,
+                          'Find player (Ctrl+L)',
+                          lookup,
+                          selected: dock.id == 'lookup',
+                        ),
                         _barIcon(
                           Icons.chevron_left,
                           c.canUndo

@@ -1,19 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../application/failures.dart';
-
-/// Opens a dialog with no enter/exit animation so it appears immediately.
-Future<T?> openDialog<T>({
-  required BuildContext context,
-  required WidgetBuilder builder,
-  bool barrierDismissible = true,
-}) => showDialog<T>(
-  context: context,
-  builder: builder,
-  barrierDismissible: barrierDismissible,
-  animationStyle: AnimationStyle.noAnimation,
-);
 
 class FieldSpec {
   const FieldSpec(

@@ -770,3 +770,149 @@ void showPrint(
     ),
   );
 }
+
+/// Where a player is: a large, read-only answer to "where am I playing?",
+/// readable by the player standing across the table.
+class LookupPanel extends StatefulWidget {
+  const LookupPanel({
+    required this.controller,
+    required this.onClose,
+    super.key,
+  });
+  final TournamentController controller;
+  final VoidCallback onClose;
+  @override
+  State<LookupPanel> createState() => _LookupPanelState();
+}
+
+class _LookupPanelState extends State<LookupPanel> {
+  final query = TextEditingController();
+
+  @override
+  void dispose() {
+    query.dispose();
+    super.dispose();
+  }
+
+  List<Player> matches(Event e) {
+    final q = query.text.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+    final words = q.split(RegExp(r'\s+'));
+    return e.players
+        .where(
+          (p) =>
+              p.memberId == q ||
+              words.every((w) => p.name.toLowerCase().contains(w)),
+        )
+        .take(8)
+        .toList();
+  }
+
+  /// This round for [p]: board and opponent, a bye, or why neither.
+  (String, String?) answer(Event e, Player p) {
+    final s = e.sectionOf(p.id);
+    if (p.withdrawn) return ('Withdrawn', s?.name);
+    if (s == null) return ('Not in a section yet', null);
+    final r = s.rounds.lastOrNull;
+    if (r == null) return ('Not paired yet', s.name);
+    final bye = r.byes.where((b) => b.player == p.id).firstOrNull;
+    final where = '${s.name} · round ${r.number}';
+    if (bye != null) {
+      return (
+        'Bye this round · ${bye.points == 2
+            ? '1 point'
+            : bye.points == 1
+            ? '½ point'
+            : 'no points'}',
+        where,
+      );
+    }
+    final g = r.games
+        .where((g) => g.white == p.id || g.black == p.id)
+        .firstOrNull;
+    if (g == null) return ('Not paired this round', where);
+    final white = g.white == p.id;
+    final opponent = e.player(white ? g.black : g.white);
+    return (
+      'Board ${g.board} · ${white ? 'White' : 'Black'} vs ${opponent.name}',
+      where,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.controller.event!, colors = Theme.of(context).colorScheme;
+    final found = matches(e);
+    return SidePanel(
+      key: const ValueKey('lookup-panel'),
+      title: 'Find player',
+      width: 480,
+      onClose: widget.onClose,
+      children: [
+        TextField(
+          key: const ValueKey('lookup-query'),
+          controller: query,
+          autofocus: true,
+          style: const TextStyle(fontSize: 20),
+          decoration: const InputDecoration(
+            hintText: 'Name or US Chess ID',
+            prefixIcon: Icon(Icons.search),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 16),
+        if (query.text.trim().isNotEmpty && found.isEmpty)
+          Text(
+            'No player matches “${query.text.trim()}”.',
+            style: TextStyle(fontSize: 18, color: colors.onSurfaceVariant),
+          ),
+        for (final p in found) ...[
+          Semantics(
+            container: true,
+            child: Padding(
+              key: ValueKey('lookup-${p.id}'),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Builder(
+                builder: (context) {
+                  final (main, where) = answer(e, p);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        p.name,
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w600,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        main,
+                        style: const TextStyle(fontSize: 24, height: 1.25),
+                      ),
+                      if (where != null)
+                        Text(
+                          where,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+          Divider(color: colors.outlineVariant),
+        ],
+        if (query.text.trim().isEmpty)
+          Text(
+            'Type part of a name. The answer is large enough to turn the screen toward the player.',
+            style: TextStyle(color: colors.onSurfaceVariant),
+          ),
+      ],
+    );
+  }
+}

@@ -1,7 +1,6 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import '../application/tournament_controller.dart';
-import '../domain/model.dart';
 import '../infrastructure/sqlite_event_repository.dart';
 import 'dialogs.dart';
 
@@ -34,13 +33,6 @@ class WorkspaceActions {
     }
   }
 
-  Future<void> lookup() async {
-    await openDialog<void>(
-      context: context,
-      builder: (context) => _Lookup(event: c.event!),
-    );
-  }
-
   Future<void> saveCopy({bool practice = false}) async {
     try {
       final location = await getSaveLocation(
@@ -67,83 +59,6 @@ class WorkspaceActions {
 
   Future<void> _markPractice(String path) async {
     await markPracticeCopy(path);
-  }
-}
-
-class _Lookup extends StatefulWidget {
-  const _Lookup({required this.event});
-  final Event event;
-  @override
-  State<_Lookup> createState() => _LookupState();
-}
-
-class _LookupState extends State<_Lookup> {
-  String query = '';
-  @override
-  Widget build(BuildContext context) {
-    final e = widget.event;
-    final players = e.players
-        .where(
-          (p) =>
-              query.isNotEmpty &&
-              (p.name.toLowerCase().contains(query.toLowerCase()) ||
-                  p.memberId == query ||
-                  '${(e.sectionOf(p.id)?.players.indexOf(p.id) ?? -1) + 1}' ==
-                      query),
-        )
-        .toList();
-    return AlertDialog(
-      title: const Text('Find player'),
-      content: SizedBox(
-        width: 680,
-        height: 460,
-        child: Column(
-          children: [
-            TextField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Name, US Chess ID or player number',
-              ),
-              onChanged: (v) => setState(() => query = v),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView(
-                children: [
-                  for (final p in players)
-                    Builder(
-                      builder: (context) {
-                        final s = e.sectionOf(p.id),
-                            g = s?.rounds.lastOrNull?.games
-                                .where(
-                                  (g) => g.white == p.id || g.black == p.id,
-                                )
-                                .firstOrNull;
-                        return ListTile(
-                          title: Text(
-                            p.name,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          subtitle: Text(
-                            '${s?.name ?? 'No section'} · ${g == null ? 'No current game' : 'Board ${g.board} · ${g.white == p.id ? 'White' : 'Black'} vs ${e.player(g.white == p.id ? g.black : g.white).name}'}${p.byes.isEmpty ? '' : '\nByes: ${p.byes.entries.map((b) => 'Round ${b.key} (${scoreText(b.value)})').join(', ')}'}',
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
-        ),
-      ],
-    );
   }
 }
 

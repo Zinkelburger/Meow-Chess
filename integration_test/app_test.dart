@@ -132,6 +132,16 @@ void main() {
             await screenshot('print-docked');
             await tester.tap(find.byTooltip('Close (Esc)'));
             await tester.pumpAndSettle();
+            await tester.tap(find.byTooltip('Find player (Ctrl+L)'));
+            await tester.pumpAndSettle();
+            await tester.enterText(
+              find.byKey(const ValueKey('lookup-query')),
+              'morgan',
+            );
+            await tester.pumpAndSettle();
+            await screenshot('lookup-docked');
+            await tester.tap(find.byTooltip('Find player (Ctrl+L)'));
+            await tester.pumpAndSettle();
           }
         }
         expect(
