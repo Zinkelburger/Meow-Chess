@@ -7,30 +7,37 @@ import '../domain/history.dart';
 import '../domain/model.dart';
 import 'dialogs.dart';
 
-/// Moves through history, first confirming when that removes play already
-/// recorded. [move] receives whether that removal was accepted.
-Future<void> travel(
+/// Moves through history at once. When that takes away play already
+/// recorded, a notice says what and offers the way back; nothing is lost,
+/// because the state being left stays in History. [move] receives whether
+/// that removal was accepted.
+void travel(
   BuildContext context,
   TournamentController c,
   int? node,
   void Function(bool acceptLosses) move,
-) async {
+) {
   if (node == null) return;
   try {
+    final from = c.graph.head;
     final lost = c.lossesTo(node);
-    if (lost.isNotEmpty &&
-        !await confirm(
-          context,
-          'Go back past recorded play?',
-          'This removes play that has already been recorded:\n\n'
-              '${lost.map((l) => '•  $l').join('\n')}\n\n'
-              'Nothing is deleted for good: the current state stays in History, '
-              'so you can go forward to it again.',
-          action: 'Go back anyway',
-        )) {
-      return;
-    }
     move(lost.isNotEmpty);
+    if (lost.isNotEmpty && from != null && context.mounted) {
+      showNotice(
+        context,
+        'Went back past recorded play: ${lost.join('; ')}.',
+        action: SnackBarAction(
+          label: 'Go forward',
+          onPressed: () {
+            try {
+              c.restore(from, acceptLosses: true);
+            } catch (e) {
+              if (context.mounted) showFailure(context, e);
+            }
+          },
+        ),
+      );
+    }
   } catch (e) {
     if (context.mounted) showFailure(context, e);
   }

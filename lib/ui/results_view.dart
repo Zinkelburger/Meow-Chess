@@ -10,9 +10,8 @@ import 'dialogs.dart';
 import 'history_panel.dart' show historyTime, travel;
 import 'players_view.dart'
     show boardRange, halves, PlayerPanel, PlayerPanelState, PlayerDetailsLayout;
-import 'reports_view.dart' show previewPacket;
+import 'panels.dart';
 import 'theme.dart';
-import 'workspace_actions.dart';
 
 class BoardRow {
   const BoardRow(this.section, this.round, this.game);
@@ -93,6 +92,13 @@ class _ResultsViewState extends State<ResultsView> {
 
   /// A result key was pressed on a read-only round.
   bool nudged = false;
+
+  /// Editing pairings: two clicked players swap places.
+  bool swapping = false;
+  String? swapPick;
+
+  /// The game whose pairing-only assumption is open in the side panel.
+  String? assumeFor;
   String roundSignature = '';
 
   /// A result waiting for a reason, because later rounds are paired:
@@ -460,34 +466,67 @@ class _ResultsViewState extends State<ResultsView> {
     return KeyEventResult.handled;
   }
 
-  Future<void> assume(String gameId) async {
-    await editFields(
-      context,
-      title: 'Assume a result for pairing',
-      description:
-          'Use when a game is still going but the next round must be paired. This is not a real result and does not count for points or ratings.',
-      fields: const [
-        FieldSpec(
-          'score',
-          'Assume',
-          options: {'0.5': 'Draw', '1': 'White wins', '0': 'Black wins'},
-        ),
-        FieldSpec('reason', 'Reason', required: true),
-      ],
-      values: const {'score': '0.5'},
-      onSave: (values) {
-        final outcome = switch (values['score']) {
-          '1' => Outcome.whiteWin,
-          '0.5' => Outcome.draw,
-          '0' => Outcome.blackWin,
-          _ => null,
-        };
-        if (outcome == null) {
-          throw const TournamentException('Choose a result.');
-        }
-        c.setPairingAssumption(gameId, outcome, values['reason']!);
-      },
-    );
+  void assume(String gameId) {
+    if (panel.currentState?.commit() == false) return;
+    setState(() {
+      assumeFor = gameId;
+      openPlayerId = null;
+    });
+  }
+
+  Widget assumePanel(String gameId) => FieldsPanel(
+    key: ValueKey('assume-$gameId'),
+    title: 'Assume a result for pairing',
+    description:
+        'Use when a game is still going but the next round must be paired. This is not a real result and does not count for points or ratings.',
+    fields: const [
+      FieldSpec(
+        'score',
+        'Assume',
+        options: {'0.5': 'Draw', '1': 'White wins', '0': 'Black wins'},
+      ),
+      FieldSpec('reason', 'Reason', required: true),
+    ],
+    values: const {'score': '0.5'},
+    saveLabel: 'Assume for pairing',
+    onClose: () => setState(() => assumeFor = null),
+    onSave: (values) {
+      final outcome = switch (values['score']) {
+        '1' => Outcome.whiteWin,
+        '0.5' => Outcome.draw,
+        '0' => Outcome.blackWin,
+        _ => null,
+      };
+      if (outcome == null) {
+        throw const TournamentException('Choose a result.');
+      }
+      c.setPairingAssumption(gameId, outcome, values['reason']!.trim());
+    },
+  );
+
+  /// First click picks a player; the second swaps the two, saved as a new
+  /// pairing revision. Two players on one board swap colours.
+  void pickSwap(String id) {
+    final a = swapPick;
+    if (a == null || a == id) {
+      setState(() => swapPick = a == id ? null : id);
+      return;
+    }
+    setState(() => swapPick = null);
+    final s = sections.single, r = s.rounds.last, e = c.event!;
+    String swapped(String x) => x == a
+        ? id
+        : x == id
+        ? a
+        : x;
+    try {
+      c.replacePairing(s.id, r.number, [
+        for (final g in r.games)
+          g.copy(white: swapped(g.white), black: swapped(g.black)),
+      ], 'Swapped ${e.player(a).name} and ${e.player(id).name}');
+    } catch (error) {
+      showFailure(context, error);
+    }
   }
 
   @override
@@ -510,8 +549,18 @@ class _ResultsViewState extends State<ResultsView> {
         ? null
         : all.where((r) => r.game.id == pending!.$1).firstOrNull;
     final player = e.players.where((p) => p.id == openPlayerId).firstOrNull;
+    if (assumeFor != null && !all.any((r) => r.game.id == assumeFor)) {
+      assumeFor = null;
+    }
+    final single = widget.sectionId == null ? null : shown.singleOrNull;
+    if (viewingPast || single == null || single.$2.hasPlay) {
+      swapping = false;
+      swapPick = null;
+    }
     return PlayerDetailsLayout(
-      panel: player == null
+      panel: assumeFor != null
+          ? assumePanel(assumeFor!)
+          : player == null
           ? null
           : PlayerPanel(
               key: panel,
@@ -527,6 +576,7 @@ class _ResultsViewState extends State<ResultsView> {
             _strip(context, shown, viewingPast),
           ],
           if (viewingPast) _pastBanner(context, shown),
+          if (swapping) _swapBanner(context, shown.single.$2),
           _legend(context),
           if (pending case (_, final outcome, _) when pendingRow != null)
             _reasonBar(context, pendingRow, outcome),
@@ -721,10 +771,13 @@ class _ResultsViewState extends State<ResultsView> {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        if (editable)
+        if (editable && !swapping)
           TextButton(
-            onPressed: () =>
-                WorkspaceActions(context, c).editPairing(single.$1.id),
+            key: const ValueKey('edit-pairings'),
+            onPressed: () => setState(() {
+              swapping = true;
+              swapPick = null;
+            }),
             child: const Text('Edit pairings'),
           ),
         if (justPosted)
@@ -741,7 +794,7 @@ class _ResultsViewState extends State<ResultsView> {
         OutlinedButton.icon(
           key: const ValueKey('print-round'),
           onPressed: () =>
-              previewPacket(context, c.event!, sectionId: widget.sectionId),
+              showPrint(context, c.event!, sectionId: widget.sectionId),
           icon: const Icon(Icons.print_outlined, size: 18),
           label: const Text('Print packet'),
         ),
@@ -845,6 +898,42 @@ class _ResultsViewState extends State<ResultsView> {
           TextButton(
             onPressed: () => pickRound(null, number),
             child: Text('Back to round $current'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _swapBanner(BuildContext context, Round r) {
+    final colors = Theme.of(context).colorScheme;
+    final picked = swapPick == null ? null : c.event!.player(swapPick!);
+    return Container(
+      key: const ValueKey('swap-banner'),
+      margin: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+      padding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
+      decoration: BoxDecoration(
+        color: colors.secondaryContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.swap_horiz, size: 18, color: colors.onSecondaryContainer),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              picked == null
+                  ? 'Editing round ${r.number} pairings. Click two players to swap them; two on one board swap colours. Each swap saves and can be undone.'
+                  : 'Swap ${picked.name} with… click another player, or click ${picked.name} again to cancel.',
+              style: TextStyle(color: colors.onSecondaryContainer),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: () => setState(() {
+              swapping = false;
+              swapPick = null;
+            }),
+            child: const Text('Done editing'),
           ),
         ],
       ),
@@ -1206,6 +1295,29 @@ class _ResultsViewState extends State<ResultsView> {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       );
+      if (swapping) {
+        final picked = swapPick == p.id;
+        return Semantics(
+          selected: picked,
+          button: true,
+          child: InkWell(
+            key: ValueKey('round-player-${g.id}-${p.id}'),
+            onTap: () => pickSwap(p.id),
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: picked ? colors.primary.withValues(alpha: 0.12) : null,
+                border: Border.all(
+                  color: picked ? colors.primary : colors.outlineVariant,
+                ),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: label,
+            ),
+          ),
+        );
+      }
       return Tooltip(
         message: '${p.name} · Double-click to open player details',
         child: InkWell(

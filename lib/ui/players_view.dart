@@ -11,6 +11,7 @@ import '../domain/standings.dart';
 import '../domain/us_chess.dart';
 import '../infrastructure/roster_import.dart';
 import 'dialogs.dart';
+import 'panels.dart' show FieldsPanel;
 import 'theme.dart';
 import 'identity_review.dart';
 import 'results_view.dart' show scoreMark;
@@ -215,6 +216,22 @@ class _PlayersViewState extends State<PlayersView> {
     }
   }
 
+  /// Names a team for the ticked players, beside the table.
+  Widget teamPanel() {
+    final e = c.event!, ids = selected.toList();
+    final teams = ids.map((id) => e.player(id).team).toSet();
+    return FieldsPanel(
+      key: ValueKey('team-${ids.join()}'),
+      title: 'Team for ${ids.length} ${ids.length == 1 ? 'player' : 'players'}',
+      description:
+          'Use the same name for mixed-doubles partners. Leave blank to remove the team. Team membership does not change individual pairings.',
+      fields: const [FieldSpec('team', 'Team name')],
+      values: {'team': teams.length == 1 ? teams.single : ''},
+      onClose: () => showSide(null),
+      onSave: (v) => c.assignTeam(ids, v['team'] ?? ''),
+    );
+  }
+
   bool matches(Player p) {
     final q = search.text.trim().toLowerCase();
     return q.isEmpty ||
@@ -229,6 +246,8 @@ class _PlayersViewState extends State<PlayersView> {
     if (side == _Side.player && !e.players.any((p) => p.id == open)) {
       side = open = null;
     }
+    selected.removeWhere((id) => !e.players.any((p) => p.id == id));
+    if (side == _Side.team && selected.isEmpty) side = null;
     final panelWidget = switch (side) {
       _Side.player => PlayerPanel(
         key: panel,
@@ -242,6 +261,7 @@ class _PlayersViewState extends State<PlayersView> {
         onClose: () => showSide(null),
       ),
       _Side.paste => _PastePanel(controller: c, onClose: () => showSide(null)),
+      _Side.team => teamPanel(),
       null => null,
     };
     if (e.players.isEmpty) {
@@ -714,19 +734,7 @@ class _PlayersViewState extends State<PlayersView> {
                   ],
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
-                    onPressed: () async {
-                      final ids = selected.toList();
-                      final teams = ids.map((id) => e.player(id).team).toSet();
-                      await editFields(
-                        context,
-                        title: 'Team for ${ids.length} players',
-                        description:
-                            'Use the same name for mixed-doubles partners. Leave blank to remove the team. Team membership does not change individual pairings.',
-                        fields: const [FieldSpec('team', 'Team name')],
-                        values: {'team': teams.length == 1 ? teams.single : ''},
-                        onSave: (v) => c.assignTeam(ids, v['team'] ?? ''),
-                      );
-                    },
+                    onPressed: () => showSide(_Side.team),
                     icon: const Icon(Icons.group_outlined, size: 18),
                     label: const Text('Assign team'),
                   ),
@@ -1656,7 +1664,7 @@ class PlayerPanelState extends State<PlayerPanel> {
   }
 }
 
-enum _Side { player, add, paste }
+enum _Side { player, add, paste, team }
 
 /// Keeps tables compact and reserves a details column on wide windows.
 class PlayerDetailsLayout extends StatelessWidget {
@@ -1709,56 +1717,68 @@ class SidePanel extends StatelessWidget {
     required this.title,
     required this.onClose,
     required this.children,
+    this.width = 360,
+    this.scrolls = true,
     super.key,
   });
   final String title;
   final VoidCallback onClose;
   final List<Widget> children;
+  final double width;
+
+  /// False when the single child fills the panel and scrolls itself.
+  final bool scrolls;
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return CallbackShortcuts(
       bindings: {const SingleActivator(LogicalKeyboardKey.escape): onClose},
       child: Container(
-        width: 360,
+        width: width,
         margin: const EdgeInsets.fromLTRB(0, 0, 20, 16),
         decoration: BoxDecoration(
           color: colors.surfaceContainerLowest,
           border: Border.all(color: colors.outlineVariant),
         ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+        // List tiles inside draw their highlight on this.
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: 'Close (Esc)',
-                    icon: const Icon(Icons.close),
-                    onPressed: onClose,
-                  ),
-                ],
-              ),
-            ),
-            const Divider(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: children,
+                    IconButton(
+                      tooltip: 'Close (Esc)',
+                      icon: const Icon(Icons.close),
+                      onPressed: onClose,
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              const Divider(),
+              Expanded(
+                child: scrolls
+                    ? SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: children,
+                        ),
+                      )
+                    : children.single,
+              ),
+            ],
+          ),
         ),
       ),
     );

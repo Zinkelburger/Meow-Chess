@@ -4,8 +4,6 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
@@ -14,68 +12,12 @@ import '../domain/us_chess.dart';
 import '../infrastructure/reports.dart';
 import '../infrastructure/dbf_export.dart';
 import 'dialogs.dart';
+import 'panels.dart';
 
 Future<void> saveArtifact(String name, Uint8List bytes) async {
   final location = await getSaveLocation(suggestedName: name);
   if (location != null) {
     await XFile.fromData(bytes, name: name).saveTo(location.path);
-  }
-}
-
-Future<void> previewPacket(
-  BuildContext context,
-  Event event, {
-  String? sectionId,
-  ReportKind kind = ReportKind.packet,
-}) async {
-  try {
-    final font = pw.Font.ttf(
-      await rootBundle.load('assets/fonts/Inter-Regular.ttf'),
-    );
-    final bytes = await reportPdf(
-      event,
-      kind,
-      sectionId: sectionId,
-      font: font,
-    );
-    if (!context.mounted) return;
-    await openDialog<void>(
-      context: context,
-      builder: (context) => Dialog(
-        child: SizedBox(
-          width: 1000,
-          height: 760,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(event.name)),
-                    IconButton(
-                      tooltip: 'Close preview',
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: PdfPreview(
-                  build: (_) => bytes,
-                  canChangePageFormat: false,
-                  canChangeOrientation: false,
-                  allowSharing: false,
-                  pdfFileName: 'meow-r${event.revision}.pdf',
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  } catch (e) {
-    if (context.mounted) showFailure(context, e);
   }
 }
 
@@ -201,12 +143,7 @@ class _ReportsViewState extends State<ReportsView> {
               OutlinedButton.icon(
                 onPressed: e.sections.isEmpty
                     ? null
-                    : () => previewPacket(
-                        context,
-                        e,
-                        sectionId: scope,
-                        kind: kind,
-                      ),
+                    : () => showPrint(context, e, sectionId: scope, kind: kind),
                 icon: Icon(icon),
                 label: Text(label),
               ),
@@ -302,30 +239,7 @@ class _ReportsViewState extends State<ReportsView> {
           ),
         ),
         const SizedBox(height: 24),
-        Text(
-          'Submission notes',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 8),
-        Text(e.submission.isEmpty ? 'Nothing recorded yet.' : e.submission),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: () => editFields(
-              context,
-              title: 'Submission notes',
-              description:
-                  'Keep track of when you uploaded the report, its reference number, and any corrections.',
-              fields: const [FieldSpec('submission', 'Notes', lines: 5)],
-              values: {'submission': e.submission},
-              onSave: (v) => controller.change(
-                'Update submission record',
-                controller.event!.copy(submission: v['submission']),
-              ),
-            ),
-            child: const Text('Edit notes'),
-          ),
-        ),
+        SubmissionNotes(controller: controller),
       ],
     );
   }
@@ -544,6 +458,114 @@ class ReportDetailsState extends State<ReportDetails> {
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => setState(load),
+                  child: const Text('Revert'),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// When the report was uploaded, its reference number and corrections.
+/// Typed in place; saves on Save or when focus leaves the box.
+class SubmissionNotes extends StatefulWidget {
+  const SubmissionNotes({required this.controller, super.key});
+  final TournamentController controller;
+  @override
+  State<SubmissionNotes> createState() => _SubmissionNotesState();
+}
+
+class _SubmissionNotesState extends State<SubmissionNotes> {
+  late final text = TextEditingController(
+    text: widget.controller.event!.submission,
+  );
+  late String shown = widget.controller.event!.submission;
+  final focus = FocusNode(debugLabel: 'submission notes');
+  String? error;
+  bool get dirty => text.text != widget.controller.event!.submission;
+
+  @override
+  void initState() {
+    super.initState();
+    focus.addListener(() {
+      if (!focus.hasFocus) save();
+    });
+  }
+
+  @override
+  void didUpdateWidget(SubmissionNotes oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Follow undo and other outside changes unless mid-edit.
+    final stored = widget.controller.event!.submission;
+    if (text.text == shown && stored != shown) text.text = shown = stored;
+  }
+
+  @override
+  void dispose() {
+    text.dispose();
+    focus.dispose();
+    super.dispose();
+  }
+
+  void save() {
+    if (!dirty) return;
+    try {
+      widget.controller.change(
+        'Update submission record',
+        widget.controller.event!.copy(submission: text.text),
+      );
+      setState(() {
+        shown = text.text;
+        error = null;
+      });
+    } catch (e) {
+      setState(() => error = plainMessage(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Submission notes',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'When you uploaded the report, its reference number, and any corrections.',
+          style: TextStyle(color: colors.onSurfaceVariant),
+        ),
+        const SizedBox(height: 8),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: TextField(
+            key: const ValueKey('submission-notes'),
+            controller: text,
+            focusNode: focus,
+            minLines: 3,
+            maxLines: 8,
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(error!, style: TextStyle(color: colors.error)),
+          ),
+        if (dirty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: [
+                FilledButton(onPressed: save, child: const Text('Save')),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => setState(() => text.text = shown),
                   child: const Text('Revert'),
                 ),
               ],

@@ -50,7 +50,7 @@ void registerTeamWorkflowTests() {
       await tester.tap(find.byKey(const ValueKey('type-swiss')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('field-rounds')), '3');
-      await tester.tap(find.text('Save'));
+      await tester.tap(find.byKey(const ValueKey('create-sections')));
       await tester.pumpAndSettle();
       expect(c.event!.sections.single.format, Format.swiss);
       // The first and fourth seeds would normally meet in round one.
@@ -80,7 +80,7 @@ void registerTeamWorkflowTests() {
       await tester.pumpAndSettle();
       expect(c.event!.player(first).avoid, {sibling});
       expect(c.event!.player(sibling).avoid, {first});
-      await tester.tap(find.text('Pair next round'));
+      await tester.tap(find.byKey(const ValueKey('pair-next-round')));
       await tester.pumpAndSettle();
       final games = c.event!.sections.single.rounds.single.games;
       expect(games, hasLength(3));

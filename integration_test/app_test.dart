@@ -102,7 +102,7 @@ void main() {
 
       await mount();
       await screenshot('players');
-      await tester.tap(find.text('Pair next round'));
+      await tester.tap(find.byKey(const ValueKey('pair-next-round')));
       await tester.pumpAndSettle();
       for (var round = 0; round < 3; round++) {
         for (final section in c.event!.sections) {
@@ -126,6 +126,12 @@ void main() {
           }
           if (round == 0 && section.id == c.event!.sections.first.id) {
             await screenshot('results-section');
+            await tester.tap(find.byKey(const ValueKey('print-round')));
+            await tester.pumpAndSettle(const Duration(seconds: 1));
+            expect(find.byKey(const ValueKey('print-panel')), findsOneWidget);
+            await screenshot('print-docked');
+            await tester.tap(find.byTooltip('Close (Esc)'));
+            await tester.pumpAndSettle();
           }
         }
         expect(
@@ -141,7 +147,7 @@ void main() {
         await tester.pumpAndSettle();
         if (round == 0) await screenshot('results-grid');
         if (round < 2) {
-          await tester.tap(find.text('Pair next round'));
+          await tester.tap(find.byKey(const ValueKey('pair-next-round')));
           await tester.pumpAndSettle();
         }
       }

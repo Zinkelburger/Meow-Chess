@@ -45,9 +45,11 @@ void main() {
     expect(find.text('Quad 1 round 1: 2 results'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('history-restore')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Go back anyway'));
-    await tester.pumpAndSettle();
+    // No confirmation: the panel already showed what is affected, and the
+    // notice offers the way back.
     expect(c.graph.head, paired);
+    expect(find.textContaining('Went back past recorded play'), findsOneWidget);
+    expect(find.text('Go forward'), findsOneWidget);
     expect(c.event!.games.every((g) => g.outcome == Outcome.unreported), true);
 
     // Ctrl+Shift+Z steps forward along the line just left.

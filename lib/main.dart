@@ -80,6 +80,7 @@ class _MeowAppState extends State<MeowApp> {
 
   @override
   void dispose() {
+    newName.dispose();
     files.dispose();
     controller?.dispose();
     super.dispose();
@@ -116,15 +117,18 @@ class _MeowAppState extends State<MeowApp> {
     if (mounted) setState(() {});
   }
 
+  /// The new event's name, typed in place on the welcome screen.
+  bool naming = false;
+  final newName = TextEditingController();
+
   Future<void> create(BuildContext context) async {
-    final fields = await editFields(
-      context,
-      title: 'New tournament',
-      fields: const [FieldSpec('name', 'Event name', required: true)],
-    );
-    if (fields == null) return;
+    final name = newName.text.trim();
+    if (name.isEmpty) {
+      setState(() => error = 'Enter the event name.');
+      return;
+    }
     final location = await getSaveLocation(
-      suggestedName: '${_fileStem(fields['name']!)}.meow',
+      suggestedName: '${_fileStem(name)}.meow',
     );
     if (location != null) {
       if (File(location.path).existsSync()) {
@@ -136,7 +140,9 @@ class _MeowAppState extends State<MeowApp> {
         }
         return;
       }
-      open(location.path, name: fields['name']);
+      newName.clear();
+      naming = false;
+      open(location.path, name: name);
     }
   }
 
@@ -217,15 +223,54 @@ class _MeowAppState extends State<MeowApp> {
                           'Run Swiss and quad chess tournaments. Each event is saved as a .meow file on this computer and works without internet.',
                         ),
                         const SizedBox(height: 24),
+                        if (naming)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 320,
+                                  child: TextField(
+                                    key: const ValueKey('new-event-name'),
+                                    controller: newName,
+                                    autofocus: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Event name',
+                                      hintText: 'Saturday Quads',
+                                    ),
+                                    onSubmitted: (_) => create(context),
+                                  ),
+                                ),
+                                FilledButton(
+                                  onPressed: () => create(context),
+                                  child: const Text('Choose where to save…'),
+                                ),
+                                TextButton(
+                                  onPressed: () => setState(() {
+                                    naming = false;
+                                    newName.clear();
+                                  }),
+                                  child: const Text('Cancel'),
+                                ),
+                              ],
+                            ),
+                          ),
                         Wrap(
                           spacing: 12,
                           runSpacing: 12,
                           children: [
-                            FilledButton.icon(
-                              onPressed: () => create(context),
-                              icon: const Icon(Icons.add),
-                              label: const Text('New tournament'),
-                            ),
+                            if (!naming)
+                              FilledButton.icon(
+                                onPressed: () => setState(() {
+                                  naming = true;
+                                  error = null;
+                                }),
+                                icon: const Icon(Icons.add),
+                                label: const Text('New tournament'),
+                              ),
                             OutlinedButton.icon(
                               onPressed: choose,
                               icon: const Icon(Icons.folder_open),
