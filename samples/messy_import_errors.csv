@@ -1,0 +1,13 @@
+Name,US Chess ID,Rating,State,Club
+Valid Vera,33000001,1800,MA,Meow Chess Club
+,33000002,1750,MA,Missing name row
+Short Id Sam,12345,1700,NH,ID is not eight digits
+Huge Rating Hal,33000004,5200,MA,Rating out of range
+Bad State Bo,33000005,1650,Mass,State not two letters
+Letters Lou,33000006,fifteen hundred,MA,Non-numeric rating
+Dup Id Dana,33000001,1600,MA,Same ID as Valid Vera (skipped on import)
+Valid Vera,,1590,MA,Same name with no ID (skipped on import)
+"Comma, Carla",33000009,1580,RI,Quoted name with comma
+Unrated Uri,33000010,unr,CT,
+  Spacey Stan  ,  33000011  ,  1500  , vt ,Whitespace and lowercase state
+
