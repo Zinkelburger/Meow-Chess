@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
@@ -1215,7 +1216,7 @@ class PlayerPanelState extends State<PlayerPanel> {
       if (error != null) setState(() => error = null);
       return true;
     } catch (e) {
-      setState(() => error = '$e');
+      setState(() => error = plainMessage(e));
       return false;
     }
   }
@@ -1324,7 +1325,7 @@ class PlayerPanelState extends State<PlayerPanel> {
         }
       });
     } catch (e) {
-      if (current()) setState(() => lookupError = '$e');
+      if (current()) setState(() => lookupError = plainMessage(e));
     } finally {
       if (current()) setState(() => looking = false);
     }
@@ -1797,7 +1798,7 @@ class _PastePanelState extends State<_PastePanel> {
         error = null;
       });
     } catch (e) {
-      setState(() => error = '$e');
+      setState(() => error = plainMessage(e));
     }
   }
 

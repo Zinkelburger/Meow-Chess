@@ -9,6 +9,7 @@ import '../domain/history.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import 'event_repository.dart';
+import 'failures.dart';
 
 class PairingBatch {
   const PairingBatch(this.revision, this.rounds, this.issues);
@@ -639,7 +640,8 @@ class TournamentController extends ChangeNotifier {
       repository.writePreference('lastBackup', '${e.revision}|$destination');
       backupWarning = null;
     } catch (error) {
-      backupWarning = 'Saved locally, but secondary backup failed: $error';
+      backupWarning =
+          'Saved to the event file, but the backup copy failed. ${plainMessage(error)}';
     }
     notifyListeners();
   }

@@ -336,7 +336,7 @@ class WorkspaceActions {
         await _markPractice(location.path);
       }
       if (context.mounted) {
-        showFailure(
+        showNotice(
           context,
           '${practice ? 'Practice copy' : 'Copy'} saved to ${location.path}',
         );

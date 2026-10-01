@@ -84,7 +84,7 @@ void main() {
       ..writeAsStringSync('keep');
     c.change('Backup config', c.event!.copy(backupFolder: notDirectory.path));
     c.secondaryBackup();
-    expect(c.backupWarning, contains('Saved locally'));
+    expect(c.backupWarning, contains('Saved to the event file'));
     expect(notDirectory.readAsStringSync(), 'keep');
     expect(c.repository.load()!.players.length, 8);
   });

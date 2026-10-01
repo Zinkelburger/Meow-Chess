@@ -435,13 +435,8 @@ class _ResultsViewState extends State<ResultsView> {
           LogicalKeyboardKey.period,
           LogicalKeyboardKey.numpadDecimal,
         ].contains(key)) {
-      if (forfeit) {
-        showFailure(
-          context,
-          'Forfeit: press 1 if this player won, 0 if they lost. Escape cancels.',
-        );
-        return KeyEventResult.handled;
-      }
+      // A forfeit has no draw; the forfeit line already says what to press.
+      if (forfeit) return KeyEventResult.handled;
       outcome = Outcome.draw;
     } else if ([
       LogicalKeyboardKey.digit1,
@@ -540,7 +535,8 @@ class _ResultsViewState extends State<ResultsView> {
                 ? const EmptyState(
                     icon: Icons.grid_view_outlined,
                     title: 'No rounds yet',
-                    body: 'Click “Pair next round” to pair the first round.',
+                    body:
+                        'Post round 1 with the button above. Boards appear here as soon as it is posted.',
                   )
                 : visible.isEmpty && !shown.any((x) => x.$2.byes.isNotEmpty)
                 ? EmptyState(
@@ -855,19 +851,51 @@ class _ResultsViewState extends State<ResultsView> {
     );
   }
 
+  /// Every key a score box understands, so nothing has to be remembered.
   Widget _legend(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-      color: forfeit ? colors.errorContainer : null,
-      child: Text(
-        forfeit
-            ? 'Forfeit: press 1 if this player won, 0 if they lost. Escape cancels.'
-            : 'Click a result box: 1 win · 0 loss · 5 draw · Delete to clear. The other score fills automatically.',
-        style: TextStyle(
-          fontSize: 13,
-          color: forfeit ? colors.onErrorContainer : colors.onSurfaceVariant,
+    if (forfeit) {
+      return Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: colors.errorContainer,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          'Forfeit: press 1 if this player won, 0 if they lost. Esc cancels.',
+          style: TextStyle(color: colors.onErrorContainer),
+        ),
+      );
+    }
+    final key = TextStyle(fontWeight: FontWeight.w600, color: colors.onSurface);
+    final keys = [
+      ('1 W', 'win'),
+      ('0 L', 'loss'),
+      ('5 D =', 'draw'),
+      ('F', 'forfeit, then 1 or 0'),
+      ('+ −', 'forfeit win/loss'),
+      ('X', 'double forfeit'),
+      ('Del', 'clear'),
+      ('M', 'menu'),
+      ('↑ ↓', 'board'),
+      ('← →', 'player'),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+      child: Text.rich(
+        key: const ValueKey('result-keys'),
+        TextSpan(
+          style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
+          children: [
+            const TextSpan(text: 'Score box keys:  '),
+            for (final (i, (k, what)) in keys.indexed) ...[
+              if (i > 0) const TextSpan(text: '   '),
+              TextSpan(text: k, style: key),
+              TextSpan(text: ' $what'),
+            ],
+          ],
         ),
       ),
     );

@@ -140,6 +140,8 @@ class _WorkspaceState extends State<Workspace> {
     }
   }
 
+  /// Pairs and posts the next round in [sectionId], or in every section
+  /// that is ready. Anything worth checking stays on screen until dismissed.
   Future<void> pair() async {
     if (pairing) return;
     setState(() => pairing = true);
@@ -149,40 +151,40 @@ class _WorkspaceState extends State<Workspace> {
       if (batch.rounds.isEmpty) {
         throw TournamentException(
           batch.issues.values.join('\n').isEmpty
-              ? 'Nothing to pair. Create a section with players first.'
+              ? 'No section is ready for another round.'
               : batch.issues.values.join('\n'),
         );
       }
-      final warnings = [
+      final swiss = batch.rounds.values.any(
+        (r) => r.policy == 'score-swiss-pilot-v1',
+      );
+      // The Swiss caveat is said once per event, not on every post.
+      final caveat =
+          swiss && c.repository.readPreference('swiss-caveat') == null;
+      final notes = [
         ...batch.issues.entries.map(
           (e) =>
               '${c.event!.sections.firstWhere((s) => s.id == e.key).name}: ${e.value}',
         ),
-        if (batch.rounds.values.any((r) => r.policy == 'score-swiss-pilot-v1'))
-          'Swiss pairings come from a test algorithm that is not yet certified. Look them over; open a section to use Edit pairings.',
+        if (caveat)
+          'Swiss pairings come from a test algorithm that is not yet certified. Look them over before players sit down; Edit pairings fixes a board until play starts.',
       ];
-      // Pair straight away; anything worth checking is fixed afterwards
-      // with Edit pairings or undone.
+      // Post straight away; anything worth checking is fixed afterwards
+      // with Edit pairings or Undo post.
       c.post(batch);
+      if (caveat) c.repository.writePreference('swiss-caveat', 'shown');
       if (!mounted) return;
+      setState(() => postNotes = notes);
       go(TaskView.results);
-      if (warnings.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(warnings.join('\n')),
-            duration: const Duration(seconds: 12),
-            showCloseIcon: true,
-            action: SnackBarAction(label: 'Undo', onPressed: undo),
-          ),
-          snackBarAnimationStyle: AnimationStyle.noAnimation,
-        );
-      }
     } catch (e) {
       if (mounted) showFailure(context, e);
     } finally {
       if (mounted) setState(() => pairing = false);
     }
   }
+
+  /// Notes from the last post, kept until the TD dismisses them.
+  List<String> postNotes = const [];
 
   WorkspaceActions get actions => WorkspaceActions(context, c);
   Future<void> sectionSettings() => actions.sectionSettings(sectionId!);
@@ -421,31 +423,12 @@ class _WorkspaceState extends State<Workspace> {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    const SizedBox(width: 20),
-                                    Tooltip(
-                                      message: section == null
-                                          ? 'Pair the next round in all sections'
-                                          : 'Pair the next round in ${section.name}',
-                                      child: FilledButton.icon(
-                                        key: const ValueKey('pair-next-round'),
-                                        onPressed: pairing || e.sections.isEmpty
-                                            ? null
-                                            : pair,
-                                        icon: const Icon(
-                                          Icons.arrow_forward,
-                                          size: 18,
-                                        ),
-                                        iconAlignment: IconAlignment.end,
-                                        label: Text(
-                                          pairing
-                                              ? 'Pairing…'
-                                              : 'Pair next round',
-                                        ),
-                                      ),
-                                    ),
+                                    const SizedBox(width: 16),
+                                    _postControl(context, e, section),
                                   ],
                                 ),
                               ),
+                            if (postNotes.isNotEmpty) _postNotes(context),
                             Expanded(child: content),
                           ],
                         ),
@@ -489,6 +472,108 @@ class _WorkspaceState extends State<Workspace> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// The post button, labelled with what it will post. When nothing can
+  /// be posted it says why beside it, and once every round is played it
+  /// gives way to the event-complete state.
+  Widget _postControl(BuildContext context, Event e, Section? section) {
+    final colors = Theme.of(context).colorScheme;
+    final state = postState(e, section);
+    final muted = TextStyle(color: colors.onSurfaceVariant);
+    if (state.complete) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle_outline, size: 18, color: colors.primary),
+          const SizedBox(width: 8),
+          Text(
+            key: const ValueKey('event-complete'),
+            section == null
+                ? 'All rounds played'
+                : 'All ${section.plannedRounds} rounds played',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 16),
+          OutlinedButton(
+            onPressed: () => go(TaskView.reports),
+            child: const Text('Final reports'),
+          ),
+        ],
+      );
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (state.why != null)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Text(
+                state.why!,
+                key: const ValueKey('post-blocked'),
+                style: muted,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ),
+        FilledButton.icon(
+          key: const ValueKey('pair-next-round'),
+          onPressed: pairing || state.label == null ? null : pair,
+          icon: const Icon(Icons.arrow_forward, size: 18),
+          iconAlignment: IconAlignment.end,
+          label: Text(pairing ? 'Posting…' : state.label ?? 'Post next round'),
+        ),
+      ],
+    );
+  }
+
+  Widget _postNotes(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      key: const ValueKey('post-notes'),
+      margin: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              Icons.info_outline,
+              size: 18,
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final note in postNotes)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(note),
+                  ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Dismiss',
+            icon: const Icon(Icons.close, size: 18),
+            visualDensity: VisualDensity.compact,
+            onPressed: () => setState(() => postNotes = const []),
+          ),
+        ],
       ),
     );
   }
@@ -720,4 +805,67 @@ class _WorkspaceState extends State<Workspace> {
       visualDensity: VisualDensity.compact,
     );
   }
+}
+
+/// What the post button would do for [section] (null for every section):
+/// its label, why it is held back, or that every round has been played.
+({String? label, String? why, bool complete}) postState(
+  Event e,
+  Section? section,
+) {
+  final scope = section == null ? e.sections : [section];
+  if (scope.isEmpty) {
+    return (
+      label: null,
+      why: 'Create sections on the Players page first.',
+      complete: false,
+    );
+  }
+  final active = scope.where((s) => s.players.isNotEmpty).toList();
+  if (active.isEmpty) {
+    return (
+      label: null,
+      why: section == null
+          ? 'Move players into a section first.'
+          : 'Move players into ${section.name} first.',
+      complete: false,
+    );
+  }
+  final open = active.where((s) => s.rounds.length < s.plannedRounds).toList();
+  int waiting(Section s) => s.rounds
+      .expand((r) => r.games)
+      .where((g) => !g.outcome.resolved && g.pairingAssumption == null)
+      .length;
+  if (open.isEmpty) {
+    final missing = active.fold(0, (n, s) => n + waiting(s));
+    if (missing == 0) return (label: null, why: null, complete: true);
+    return (
+      label: null,
+      why:
+          'Last round posted · $missing ${missing == 1 ? 'result' : 'results'} still to enter.',
+      complete: false,
+    );
+  }
+  final ready = open.where((s) => waiting(s) == 0).toList();
+  final held = open.where((s) => waiting(s) > 0).toList();
+  String results(int n) => '$n ${n == 1 ? 'result' : 'results'}';
+  String? why;
+  if (held.length == 1) {
+    final s = held.single;
+    why = section != null
+        ? 'Enter ${results(waiting(s))} first.'
+        : '${s.name} waits for ${results(waiting(s))}.';
+  } else if (held.isNotEmpty) {
+    final n = held.fold(0, (n, s) => n + waiting(s));
+    why = '${held.length} sections wait for ${results(n)}.';
+  }
+  if (ready.isEmpty) return (label: null, why: why, complete: false);
+  final numbers = ready.map((s) => s.rounds.length + 1).toSet();
+  final round = numbers.length == 1
+      ? 'Post round ${numbers.single}'
+      : 'Post next rounds';
+  final label = section == null && (ready.length > 1 || e.sections.length > 1)
+      ? '$round · ${ready.length} ${ready.length == 1 ? 'section' : 'sections'}'
+      : round;
+  return (label: label, why: why, complete: false);
 }

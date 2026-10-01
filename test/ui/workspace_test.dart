@@ -125,7 +125,17 @@ void main() {
     expect(find.text('Import players from file…'), findsOneWidget);
     expect(find.text('Paste from spreadsheet'), findsOneWidget);
     expect(find.text('Overview'), findsNothing);
-    expect(find.text('Pair next round'), findsOneWidget);
+    // Nothing to post yet, and the button says why beside it.
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('pair-next-round')))
+          .onPressed,
+      isNull,
+    );
+    expect(
+      find.text('Create sections on the Players page first.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('players without sections are offered a tournament type', (
@@ -147,8 +157,9 @@ void main() {
     await tester.tap(find.text('Create 2 sections'));
     await tester.pumpAndSettle();
     expect(c.event!.sections.map((s) => s.name), ['Quad 1', 'Quad 2']);
+    expect(find.text('Post round 1 · 2 sections'), findsOneWidget);
     // Players need no check-in to be paired.
-    await tester.tap(find.text('Pair next round'));
+    await tester.tap(find.byKey(const ValueKey('pair-next-round')));
     // Pairing runs in an isolate, outside the fake test clock.
     await tester.runAsync(() async {
       for (var i = 0; i < 200 && c.event!.games.isEmpty; i++) {

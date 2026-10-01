@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../application/failures.dart';
+
 /// Opens a dialog with no enter/exit animation so it appears immediately.
 Future<T?> openDialog<T>({
   required BuildContext context,
@@ -111,7 +113,7 @@ class _FieldsDialogState extends State<_FieldsDialog> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          error = e.toString();
+          error = plainMessage(e);
           busy = false;
         });
       }
@@ -174,7 +176,8 @@ class _FieldsDialogState extends State<_FieldsDialog> {
                             } catch (e) {
                               if (mounted) {
                                 setState(
-                                  () => error = 'Draft could not be saved: $e',
+                                  () => error =
+                                      'Draft could not be saved. ${plainMessage(e)}',
                                 );
                               }
                             }
@@ -240,13 +243,49 @@ Future<bool> confirm(
     ) ??
     false;
 
+/// Shows a problem until it is dismissed: errors must not time out before
+/// a TD who was helping a player gets back to the screen.
 void showFailure(BuildContext context, Object error) {
-  ScaffoldMessenger.of(context).showSnackBar(
+  final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+  final colors = Theme.of(context).colorScheme;
+  messenger.showSnackBar(
     SnackBar(
-      content: Text(error.toString()),
-      duration: const Duration(seconds: 8),
+      content: Row(
+        children: [
+          Icon(Icons.error_outline, color: colors.onError, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              plainMessage(error),
+              style: TextStyle(color: colors.onError),
+            ),
+          ),
+        ],
+      ),
+      backgroundColor: colors.error,
+      closeIconColor: colors.onError,
+      persist: true,
       showCloseIcon: true,
     ),
     snackBarAnimationStyle: AnimationStyle.noAnimation,
   );
+}
+
+/// Confirms something that worked, such as a saved file. Not for errors.
+void showNotice(
+  BuildContext context,
+  String message, {
+  SnackBarAction? action,
+}) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 6),
+        showCloseIcon: true,
+        action: action,
+      ),
+      snackBarAnimationStyle: AnimationStyle.noAnimation,
+    );
 }

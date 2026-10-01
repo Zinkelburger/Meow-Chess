@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../infrastructure/ratings_api.dart';
 
@@ -57,7 +58,9 @@ class _ApiKeyFieldState extends State<ApiKeyField> {
       setState(() => status = 'Key saved.');
       widget.onSaved?.call();
     } catch (e) {
-      if (mounted) setState(() => status = 'Could not save the key: $e');
+      if (mounted) {
+        setState(() => status = 'Could not save the key. ${plainMessage(e)}');
+      }
     }
   }
 

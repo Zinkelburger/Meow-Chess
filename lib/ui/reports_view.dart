@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
@@ -109,7 +110,7 @@ class _ReportsViewState extends State<ReportsView> {
         );
       }
       if (context.mounted) {
-        showFailure(context, 'Rating report saved to $path');
+        showNotice(context, 'Rating report saved to $path');
       }
     } catch (e) {
       if (context.mounted) showFailure(context, e);
@@ -466,7 +467,7 @@ class ReportDetailsState extends State<ReportDetails> {
       setState(load);
       return true;
     } catch (e) {
-      setState(() => error = '$e');
+      setState(() => error = plainMessage(e));
       return false;
     }
   }
@@ -476,7 +477,7 @@ class ReportDetailsState extends State<ReportDetails> {
     try {
       c.change('Edit event type', c.event!.copy(level: level));
     } catch (e) {
-      setState(() => error = '$e');
+      setState(() => error = plainMessage(e));
     }
   }
 

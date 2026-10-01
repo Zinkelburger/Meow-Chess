@@ -7,35 +7,38 @@ import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/ratings_api.dart';
 
 void main() {
-  test('credentials go only to the fixed HTTPS provider and never follow redirects', () async {
-    var requests = 0;
-    final client = MockClient((request) async {
-      requests++;
-      expect(request.url.scheme, 'https');
-      expect(request.url.host, 'ratings-api.uschess.org');
-      expect(request.url.path, '/api/v2/members/00123456');
-      expect(request.url.query, isEmpty);
-      expect(request.headers['X-Api-Key'], 'private-test-key');
-      expect(request.followRedirects, false);
-      return http.Response(
-        '',
-        302,
-        headers: {'location': 'https://unrelated.example/collect'},
-      );
-    });
-    addTearDown(client.close);
-    await expectLater(
-      RatingsApi(client).member('00123456', 'private-test-key'),
-      throwsA(
-        isA<TournamentException>().having(
-          (e) => e.message,
-          'safe diagnostic',
-          allOf(contains('302'), isNot(contains('private-test-key'))),
+  test(
+    'credentials go only to the fixed HTTPS provider and never follow redirects',
+    () async {
+      var requests = 0;
+      final client = MockClient((request) async {
+        requests++;
+        expect(request.url.scheme, 'https');
+        expect(request.url.host, 'ratings-api.uschess.org');
+        expect(request.url.path, '/api/v2/members/00123456');
+        expect(request.url.query, isEmpty);
+        expect(request.headers['X-Api-Key'], 'private-test-key');
+        expect(request.followRedirects, false);
+        return http.Response(
+          '',
+          302,
+          headers: {'location': 'https://unrelated.example/collect'},
+        );
+      });
+      addTearDown(client.close);
+      await expectLater(
+        RatingsApi(client).member('00123456', 'private-test-key'),
+        throwsA(
+          isA<TournamentException>().having(
+            (e) => e.message,
+            'safe diagnostic',
+            allOf(contains('302'), isNot(contains('private-test-key'))),
+          ),
         ),
-      ),
-    );
-    expect(requests, 1);
-  });
+      );
+      expect(requests, 1);
+    },
+  );
 
   test(
     'invalid IDs and empty credentials never make network requests',

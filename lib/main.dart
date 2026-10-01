@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'application/failures.dart';
 import 'application/tournament_controller.dart';
 import 'application/demo.dart';
 import 'infrastructure/native_file_requests.dart';
@@ -110,7 +111,7 @@ class _MeowAppState extends State<MeowApp> {
       library.writeAsStringSync(jsonEncode(recent), flush: true);
     } catch (e) {
       if (next != controller) next?.dispose();
-      error = 'Could not open this event: $e';
+      error = 'Could not open this event. ${plainMessage(e)}';
     }
     if (mounted) setState(() {});
   }

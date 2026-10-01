@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
+import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
@@ -138,7 +139,7 @@ class EventPanelState extends State<EventPanel> {
       setState(load);
       return true;
     } catch (e) {
-      setState(() => error = '$e');
+      setState(() => error = plainMessage(e));
       return false;
     }
   }
