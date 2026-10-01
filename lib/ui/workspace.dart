@@ -188,7 +188,6 @@ class _WorkspaceState extends State<Workspace> {
   Future<void> sectionSettings() => actions.sectionSettings(sectionId!);
   Future<void> combine() => actions.combine(sectionId!);
   Future<void> lookup() => actions.lookup();
-  Future<void> editPairing() => actions.editPairing(sectionId!);
 
   void undo() =>
       travel(context, c, c.graph.back, (a) => c.undo(acceptLosses: a));
@@ -216,7 +215,6 @@ class _WorkspaceState extends State<Workspace> {
   Widget build(BuildContext context) {
     final e = c.event!, colors = Theme.of(context).colorScheme;
     final section = e.sections.where((s) => s.id == sectionId).firstOrNull;
-    final current = section?.rounds.lastOrNull;
     final content = switch (view) {
       TaskView.players => PlayersView(
         key: ValueKey('players-${section?.id}'),
@@ -423,26 +421,6 @@ class _WorkspaceState extends State<Workspace> {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    if (view == TaskView.results &&
-                                        current != null &&
-                                        !current.complete) ...[
-                                      if (current.startedAt == null)
-                                        TextButton(
-                                          onPressed: () {
-                                            try {
-                                              c.startRound(section!.id);
-                                            } catch (e) {
-                                              showFailure(context, e);
-                                            }
-                                          },
-                                          child: const Text('Start round'),
-                                        ),
-                                      if (!current.hasPlay)
-                                        TextButton(
-                                          onPressed: editPairing,
-                                          child: const Text('Edit pairings'),
-                                        ),
-                                    ],
                                     const SizedBox(width: 20),
                                     Tooltip(
                                       message: section == null

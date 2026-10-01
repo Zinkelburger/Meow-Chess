@@ -129,6 +129,7 @@ ThemeData meowTheme(Brightness brightness) {
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         animationDuration: instant,
+        shape: const WidgetStatePropertyAll(shape),
         backgroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? colors.surfaceContainerHigh

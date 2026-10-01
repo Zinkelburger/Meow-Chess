@@ -279,38 +279,45 @@ class TournamentController extends ChangeNotifier {
     secondaryBackup();
   }
 
-  void startRound(String sectionId) {
-    final e = event!;
-    final section = _section(sectionId);
-    if (section.rounds.isEmpty) {
-      throw const TournamentException('Post a round before starting it.');
+  void startRound(String sectionId) => startRounds([sectionId]);
+
+  /// Starts the current round of each section as one revision.
+  void startRounds(Iterable<String> sectionIds) {
+    final e = event!, ids = sectionIds.toSet();
+    if (ids.isEmpty) {
+      throw const TournamentException('No round is waiting to start.');
     }
-    if (section.rounds.last.startedAt != null) {
-      throw const TournamentException('This round has already started.');
+    for (final id in ids) {
+      final section = _section(id);
+      if (section.rounds.isEmpty) {
+        throw const TournamentException('Post a round before starting it.');
+      }
+      if (section.rounds.last.startedAt != null) {
+        throw const TournamentException('This round has already started.');
+      }
+      if (section.rounds.last.complete) {
+        throw const TournamentException('This round is already complete.');
+      }
+      if (section.rounds
+          .take(section.rounds.length - 1)
+          .any((r) => !r.complete)) {
+        throw TournamentException(
+          '${section.name}: earlier games are still unresolved. A pairing assumption permits posting, not simultaneous play.',
+        );
+      }
     }
-    if (section.rounds.last.complete) {
-      throw const TournamentException('This round is already complete.');
-    }
-    if (section.rounds
-        .take(section.rounds.length - 1)
-        .any((r) => !r.complete)) {
-      throw const TournamentException(
-        'Earlier games are still unresolved. A pairing assumption permits posting, not simultaneous play.',
-      );
-    }
+    final now = DateTime.now().toUtc().toIso8601String();
     change(
-      'Start round',
+      ids.length == 1 ? 'Start round' : 'Start round in ${ids.length} sections',
       e.copy(
         sections: e.sections
             .map(
-              (s) => s.id != sectionId
+              (s) => !ids.contains(s.id)
                   ? s
                   : s.copy(
                       rounds: [
                         ...s.rounds.take(s.rounds.length - 1),
-                        s.rounds.last.copy(
-                          startedAt: DateTime.now().toUtc().toIso8601String(),
-                        ),
+                        s.rounds.last.copy(startedAt: now),
                       ],
                     ),
             )

@@ -442,7 +442,7 @@ void main() {
       expect(find.byTooltip('Enter or clear result (M)'), findsOneWidget);
       await tester.tap(find.byTooltip('Enter or clear result (M)'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Still playing / clear result'));
+      await tester.tap(find.text('Clear result'));
       await tester.pumpAndSettle();
       expect(c.event!.games.first.outcome, Outcome.unreported);
       for (final side in ['w', 'b']) {
