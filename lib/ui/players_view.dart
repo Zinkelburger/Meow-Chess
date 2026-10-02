@@ -128,10 +128,16 @@ class _PlayersViewState extends State<PlayersView> {
   /// score once a round is paired.
   bool? byScore;
 
-  /// Standings options: count only prize-eligible players, and show only
-  /// players rated under this (0 for everyone).
+  /// Standings options: count only prize-eligible players, and rank only
+  /// players rated under this prize class (0 for everyone).
   bool prizes = false;
   int ceiling = 0;
+
+  /// Players whose "why this rank" line is open.
+  final why = <String>{};
+
+  /// Rank labels ("T-2") and the rows each was ranked among, by player.
+  var ranks = <String, (String, List<Standing>)>{};
 
   /// Players in on-screen order, for arrow-key movement.
   List<Player> order = const [];
@@ -139,17 +145,20 @@ class _PlayersViewState extends State<PlayersView> {
 
   /// Whether the table shows points and tiebreaks.
   bool scores = false;
-  bool showTiebreaks = false;
+
+  /// Standings order, with Rank, BH and SB columns.
+  bool ranking = false;
   bool showIds = false;
   TournamentController get c => widget.controller;
 
   // Fixed column widths keep the table narrow and aligned.
   static const _check = 40.0,
       _number = 36.0,
-      _name = 240.0,
+      _rank = 64.0,
+      _name = 200.0,
       _rating = 64.0,
       _id = 100.0,
-      _round = 76.0,
+      _round = 64.0,
       _points = 52.0,
       _tiebreak = 52.0;
 
@@ -323,6 +332,16 @@ class _PlayersViewState extends State<PlayersView> {
         .map((g) => g.$1?.plannedRounds ?? 0)
         .fold(0, (int a, b) => a > b ? a : b);
     order = [for (final g in groups) ...g.$2];
+    ranking = ranked;
+    // Ranked within the prize class on view; a search only hides rows.
+    ranks = {
+      if (ranked)
+        for (final (s, _) in groups)
+          if (tables[s?.id] case final table?)
+            ...rankLabels(
+              table.values.where((row) => inClass(row.player)).toList(),
+            ),
+    };
     final items = <Widget>[
       for (final (s, players) in groups) ...[
         _groupHeader(context, s, players),
@@ -337,7 +356,7 @@ class _PlayersViewState extends State<PlayersView> {
         for (final p in players)
           _row(
             context,
-            '${e.players.indexWhere((x) => x.id == p.id) + 1}',
+            s == null ? '' : '${s.players.indexOf(p.id) + 1}',
             p,
             s,
             rounds,
@@ -354,7 +373,8 @@ class _PlayersViewState extends State<PlayersView> {
         _rating +
         (showIds ? _id : 0) +
         rounds * _round +
-        (started ? _points + (showTiebreaks ? 2 * _tiebreak : 0) : 0) +
+        (ranked ? _rank : 0) +
+        (started ? _points + (ranked ? 2 * _tiebreak : 0) : 0) +
         28;
     return PlayerDetailsLayout(
       panel: panelWidget,
@@ -373,7 +393,7 @@ class _PlayersViewState extends State<PlayersView> {
                 const SizedBox(height: 4),
                 Text(
                   started
-                      ? '$shown players · W win, D draw, L loss + opponent # · B bye · Edit results in Rounds.'
+                      ? '$shown players · W win, D draw, L loss + opponent\'s pairing number · B bye · Edit results in Rounds.'
                       : '$shown players · Select a name to edit details or request a bye.',
                   style: TextStyle(color: colors.onSurfaceVariant),
                 ),
@@ -441,47 +461,6 @@ class _PlayersViewState extends State<PlayersView> {
                               onChanged: (v) => setState(() => showIds = v!),
                               child: const Text('US Chess IDs'),
                             ),
-                            CheckboxMenuButton(
-                              value: showTiebreaks,
-                              onChanged: (v) =>
-                                  setState(() => showTiebreaks = v!),
-                              child: const Text('Tiebreaks (BH / SB)'),
-                            ),
-                            if (ranked) ...[
-                              const Divider(),
-                              SubmenuButton(
-                                menuChildren: [
-                                  for (final n in [
-                                    0,
-                                    2200,
-                                    2000,
-                                    1900,
-                                    1800,
-                                    1600,
-                                    1500,
-                                    1400,
-                                    1200,
-                                  ])
-                                    RadioMenuButton<int>(
-                                      value: n,
-                                      groupValue: ceiling,
-                                      onChanged: (v) =>
-                                          setState(() => ceiling = v!),
-                                      child: Text(
-                                        n == 0 ? 'All ratings' : 'Under $n',
-                                      ),
-                                    ),
-                                ],
-                                child: const Text('Rating filter'),
-                              ),
-                              CheckboxMenuButton(
-                                value: prizes,
-                                onChanged: (v) => setState(() => prizes = v!),
-                                child: const Text(
-                                  'Exclude early round-robin withdrawals',
-                                ),
-                              ),
-                            ],
                           ],
                         ),
                         OutlinedButton.icon(
@@ -525,25 +504,7 @@ class _PlayersViewState extends State<PlayersView> {
                     return Row(children: [searchBox, const Spacer(), actions]);
                   },
                 ),
-                if (ranked && (ceiling != 0 || prizes))
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Wrap(
-                      spacing: 8,
-                      children: [
-                        if (ceiling != 0)
-                          InputChip(
-                            label: Text('Under $ceiling'),
-                            onDeleted: () => setState(() => ceiling = 0),
-                          ),
-                        if (prizes)
-                          InputChip(
-                            label: const Text('Early withdrawals excluded'),
-                            onDeleted: () => setState(() => prizes = false),
-                          ),
-                      ],
-                    ),
-                  ),
+                if (ranked) _prizeClasses(context, groups),
               ],
             ),
           ),
@@ -784,6 +745,7 @@ class _PlayersViewState extends State<PlayersView> {
         child: Row(
           children: [
             const SizedBox(width: _check),
+            if (ranking) cell(_rank, 'RANK'),
             cell(_number, '#'),
             const Expanded(child: Text('NAME')),
             cell(_rating, 'RATING'),
@@ -791,13 +753,13 @@ class _PlayersViewState extends State<PlayersView> {
             for (var r = 1; r <= rounds; r++) cell(_round, 'R$r', center: true),
             if (scores) ...[
               cell(_points, 'PTS', center: true),
-              if (showTiebreaks)
+              if (ranking)
                 Tooltip(
                   message:
                       'Buchholz: the total score of everyone this player has played',
                   child: cell(_tiebreak, 'BH', center: true),
                 ),
-              if (showTiebreaks)
+              if (ranking)
                 Tooltip(
                   message:
                       'Sonneborn–Berger: opponents\' scores, weighted by this player\'s result against each',
@@ -911,7 +873,11 @@ class _PlayersViewState extends State<PlayersView> {
       final white = g.white == pid;
       final score = white ? g.outcome.whiteScore : g.outcome.blackScore;
       final opponent = white ? g.black : g.white;
-      final number = e.players.indexWhere((p) => p.id == opponent) + 1;
+      // The opponent's pairing number, as printed on the crosstable.
+      final home = s.players.contains(opponent) ? s : e.sectionOf(opponent);
+      final number = home == null
+          ? '?'
+          : '${home.players.indexOf(opponent) + 1}';
       final result = score == 2
           ? 'W'
           : score == 1
@@ -989,91 +955,269 @@ class _PlayersViewState extends State<PlayersView> {
             ),
           ),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              width: _check,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: PlainCheckbox(
-                  value: selected.contains(p.id),
-                  onChanged: (v) => setState(
-                    () => v! ? selected.add(p.id) : selected.remove(p.id),
+            Row(
+              children: [
+                SizedBox(
+                  width: _check,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: PlainCheckbox(
+                      value: selected.contains(p.id),
+                      onChanged: (v) => setState(
+                        () => v! ? selected.add(p.id) : selected.remove(p.id),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            cell(_number, number, muted),
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  children: [
+                if (ranking) _rankCell(context, p),
+                cell(_number, number, muted),
+                Expanded(
+                  child: Text.rich(
                     TextSpan(
-                      text: p.name,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: p.withdrawn ? colors.onSurfaceVariant : null,
-                        decoration: p.withdrawn
-                            ? TextDecoration.lineThrough
-                            : null,
-                      ),
+                      children: [
+                        TextSpan(
+                          text: p.name,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: p.withdrawn ? colors.onSurfaceVariant : null,
+                            decoration: p.withdrawn
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        if (p.team.isNotEmpty)
+                          TextSpan(
+                            text: '  · ${p.team}',
+                            style: muted.copyWith(fontSize: 12),
+                          ),
+                        if (p.withdrawn)
+                          TextSpan(
+                            text: '  withdrawn',
+                            style: muted.copyWith(fontSize: 12),
+                          ),
+                      ],
                     ),
-                    if (p.team.isNotEmpty)
-                      TextSpan(
-                        text: '  · ${p.team}',
-                        style: muted.copyWith(fontSize: 12),
-                      ),
-                    if (p.withdrawn)
-                      TextSpan(
-                        text: '  withdrawn',
-                        style: muted.copyWith(fontSize: 12),
-                      ),
-                  ],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            cell(
-              _rating,
-              ratingText(p.rating),
-              const TextStyle(fontFamily: 'SourceCodePro'),
-            ),
-            if (showIds)
-              cell(
-                _id,
-                p.memberId.isEmpty ? '—' : p.memberId,
-                muted.copyWith(fontFamily: 'SourceCodePro'),
-              ),
-            for (var r = 1; r <= rounds; r++) _roundCell(context, p, s, r),
-            if (scores) ...[
-              SizedBox(
-                width: _points,
-                child: Text(
-                  standing == null ? '' : halves(standing.points),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                cell(
+                  _rating,
+                  ratingText(p.rating),
+                  const TextStyle(fontFamily: 'SourceCodePro'),
                 ),
-              ),
-              if (showTiebreaks)
-                for (final value in [
-                  standing == null ? '' : halves(standing.buchholz),
-                  standing == null ? '' : quarters(standing.sonneborn),
-                ])
+                if (showIds)
+                  cell(
+                    _id,
+                    p.memberId.isEmpty ? '—' : p.memberId,
+                    muted.copyWith(fontFamily: 'SourceCodePro'),
+                  ),
+                for (var r = 1; r <= rounds; r++) _roundCell(context, p, s, r),
+                if (scores) ...[
                   SizedBox(
-                    width: _tiebreak,
+                    width: _points,
                     child: Text(
-                      value,
+                      standing == null ? '' : halves(standing.points),
                       textAlign: TextAlign.center,
-                      style: muted.copyWith(fontSize: 13),
+                      style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
-            ],
+                  if (ranking)
+                    for (final value in [
+                      standing == null ? '' : halves(standing.buchholz),
+                      standing == null ? '' : quarters(standing.sonneborn),
+                    ])
+                      SizedBox(
+                        width: _tiebreak,
+                        child: Text(
+                          value,
+                          textAlign: TextAlign.center,
+                          style: muted.copyWith(fontSize: 13),
+                        ),
+                      ),
+                ],
+              ],
+            ),
+            if (why.contains(p.id) && ranks[p.id] != null && standing != null)
+              Padding(
+                key: ValueKey('why-${p.id}'),
+                padding: const EdgeInsets.fromLTRB(_check, 2, 8, 6),
+                child: Text(
+                  whyRank(ranks[p.id]!.$2, standing),
+                  style: muted.copyWith(fontSize: 13),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
+
+  /// Rank, with a disclosure that says why: tap or press Enter.
+  Widget _rankCell(BuildContext context, Player p) {
+    final colors = Theme.of(context).colorScheme;
+    final label = ranks[p.id]?.$1;
+    if (label == null) return const SizedBox(width: _rank);
+    final open = why.contains(p.id);
+    return SizedBox(
+      width: _rank,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Semantics(
+          button: true,
+          expanded: open,
+          label: 'Rank $label. Why this rank',
+          child: InkWell(
+            key: ValueKey('rank-${p.id}'),
+            borderRadius: BorderRadius.circular(4),
+            onTap: () =>
+                setState(() => open ? why.remove(p.id) : why.add(p.id)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.clip,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    open ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Prize classes as chips in view: everyone, or under a rating.
+  Widget _prizeClasses(
+    BuildContext context,
+    List<(Section?, List<Player>)> groups,
+  ) {
+    final e = c.event!;
+    final rated = [
+      for (final (s, _) in groups)
+        if (s != null)
+          for (final id in s.players)
+            if (e.player(id).rating > 0) e.player(id).rating,
+    ];
+    // Offer a class only when it holds someone, and not everyone.
+    final classes = [
+      for (final n in const [2200, 2000, 1800, 1600, 1400, 1200])
+        if (rated.any((r) => r < n) && !rated.every((r) => r < n)) n,
+    ];
+    if (ceiling != 0 && !classes.contains(ceiling)) classes.add(ceiling);
+    final robin = groups.any(
+      (g) => g.$1 != null && g.$1!.format != Format.swiss,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Wrap(
+        key: const ValueKey('prize-classes'),
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            'Prize class',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          for (final n in [0, ...classes])
+            ChoiceChip(
+              key: ValueKey('class-$n'),
+              chipAnimationStyle: noChipAnimation,
+              label: Text(n == 0 ? 'Everyone' : 'Under $n'),
+              selected: ceiling == n,
+              onSelected: (_) => setState(() => ceiling = n),
+            ),
+          if (robin)
+            FilterChip(
+              chipAnimationStyle: noChipAnimation,
+              label: const Text('Exclude early round-robin withdrawals'),
+              selected: prizes,
+              onSelected: (v) => setState(() => prizes = v),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ranks for rows already in standings order: equal points, Buchholz and
+/// Sonneborn–Berger share a rank, marked "T-2".
+Map<String, (String, List<Standing>)> rankLabels(List<Standing> rows) {
+  final rank = <String, int>{};
+  for (final (i, r) in rows.indexed) {
+    final prev = i == 0 ? null : rows[i - 1];
+    rank[r.player.id] =
+        prev != null &&
+            prev.points == r.points &&
+            prev.buchholz == r.buchholz &&
+            prev.sonneborn == r.sonneborn
+        ? rank[prev.player.id]!
+        : i + 1;
+  }
+  final counts = <int, int>{};
+  for (final n in rank.values) {
+    counts[n] = (counts[n] ?? 0) + 1;
+  }
+  return {
+    for (final r in rows)
+      r.player.id: (
+        counts[rank[r.player.id]]! > 1
+            ? 'T-${rank[r.player.id]}'
+            : '${rank[r.player.id]}',
+        rows,
+      ),
+  };
+}
+
+/// Why [row] ranks where it does among [rows], in one or two sentences.
+String whyRank(List<Standing> rows, Standing row) {
+  String names(List<Standing> xs) {
+    final n = xs.map((x) => x.player.name).toList();
+    if (n.length > 3) {
+      return '${n.take(2).join(', ')} and ${n.length - 2} others';
+    }
+    if (n.length == 1) return n.single;
+    return '${n.take(n.length - 1).join(', ')} and ${n.last}';
+  }
+
+  final points = halves(row.points);
+  final pts = '$points ${row.points == 2 ? 'point' : 'points'}';
+  final same = rows
+      .where((x) => x.points == row.points && x.player.id != row.player.id)
+      .toList();
+  if (same.isEmpty) return 'The only player on $pts.';
+  final bh = halves(row.buchholz);
+  final sameBh = same.where((x) => x.buchholz == row.buchholz).toList();
+  if (sameBh.isEmpty) {
+    return 'Tied on $pts with ${names(same)}. Buchholz, the total score of the opponents played, breaks the tie: $bh against ${same.map((x) => halves(x.buchholz)).join(', ')}.';
+  }
+  final sb = quarters(row.sonneborn);
+  final sameSb = sameBh.where((x) => x.sonneborn == row.sonneborn).toList();
+  if (sameSb.isEmpty) {
+    return 'Tied on $pts and Buchholz $bh with ${names(sameBh)}. Sonneborn–Berger, opponents\' scores weighted by this player\'s result against each, breaks the tie: $sb against ${sameBh.map((x) => quarters(x.sonneborn)).join(', ')}.';
+  }
+  return 'Tied with ${names(sameSb)} on $pts, Buchholz $bh and Sonneborn–Berger $sb, so they share the rank. Tied players are listed alphabetically.';
 }
 
 String formatName(Format f) => switch (f) {

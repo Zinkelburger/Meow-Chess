@@ -253,7 +253,7 @@ void main() {
         find.descendant(
           of: winner,
           matching: find.text(
-            'W${c.event!.players.indexWhere((p) => p.id == g.white) + 1}',
+            'W${c.event!.sectionOf(g.white)!.players.indexOf(g.white) + 1}',
           ),
         ),
         findsOneWidget,
@@ -262,7 +262,7 @@ void main() {
         find.descendant(
           of: loser,
           matching: find.text(
-            'L${c.event!.players.indexWhere((p) => p.id == g.black) + 1}',
+            'L${c.event!.sectionOf(g.black)!.players.indexOf(g.black) + 1}',
           ),
         ),
         findsOneWidget,
