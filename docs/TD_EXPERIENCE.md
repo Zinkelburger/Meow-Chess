@@ -12,13 +12,14 @@ The [usability review](TD_USABILITY_REVIEW.md) records additional refinements an
 
 **Know what needs attention, do the next tournament task quickly, and recover from
 mistakes without losing trust in the event.** Fun means responsive, understandable,
-and satisfying. The product can have a little cat personality in onboarding and
-empty states. Results, pairing exceptions and submission errors use plain language.
+and satisfying. Cat personality inside the app stays near zero (PRODUCT.md);
+the `.meow` file name is the brand's cat moment. Results, pairing exceptions and submission errors use plain language.
 No confetti, fake success scores, distracting motion or playful error messages.
 
 ## The main view
 
-Use one persistent event workspace, in the visual style of Chess Auto Prep V2.
+Use one persistent event workspace. Its visual system, the warm-paper theme
+that shipped, is recorded in [DESIGN.md](../DESIGN.md).
 
 ```
 Meow-Chess  /  Saturday Quads    Saved locally   Round 2 started 11:15 · estimated finish 13:35   Find   Event menu
@@ -351,11 +352,10 @@ The TD is interrupted constantly; the product must not punish that.
 
 ## Visual language and reusable components
 
-Use V2's dark neutrals: background `#1B1B1D`, panel `#242427`, selected surface
-`#38383D`, primary text `#E6E6E8`, secondary `#9A9AA0`, accent `#8EAAD2`. These are
-starting tokens, with contrast verified for real states. Use restrained borders,
-small corner radii, Inter for UI and a monospace face for IDs/ASCII output. Use
-4/8/12/16/24 spacing. Comfortable default row height about 44px; compact about 36px;
+Colors, type, spacing and component tokens live in [DESIGN.md](../DESIGN.md),
+which describes the shipped warm-paper light and dark themes and supersedes the
+earlier V2 dark starting tokens. Use restrained borders, small corner radii, Inter
+for UI and a monospace face for IDs/ASCII output. Use 4/8/12/16/24 spacing. Comfortable default row height about 44px; compact about 36px;
 coarse-pointer targets at least 44px. Body text 14–16px, secondary no smaller than
 12px. Actual zoom/system text settings take precedence over density.
 

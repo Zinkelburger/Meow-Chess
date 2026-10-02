@@ -1,0 +1,554 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-02T04:04:10+00:00",
+  "title": "Design System: Meow-Chess",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Ledger Blue",
+        "tonalRamp": [
+          "#0f2340",
+          "#163866",
+          "#1f4e8c",
+          "#3a6aa8",
+          "#5a87c2",
+          "#8fb4e8",
+          "#c3d6f2",
+          "#e8eff9"
+        ]
+      },
+      "primary-dark": {
+        "role": "primary",
+        "displayName": "Ledger Blue (dark theme)",
+        "tonalRamp": [
+          "#0f2340",
+          "#163866",
+          "#1f4e8c",
+          "#3a6aa8",
+          "#5a87c2",
+          "#8fb4e8",
+          "#c3d6f2",
+          "#e8eff9"
+        ]
+      },
+      "on-primary": {
+        "role": "primary",
+        "displayName": "On Ledger Blue",
+        "tonalRamp": [
+          "#0f2340",
+          "#163866",
+          "#1f4e8c",
+          "#3a6aa8",
+          "#5a87c2",
+          "#8fb4e8",
+          "#c3d6f2",
+          "#e8eff9"
+        ]
+      },
+      "on-primary-dark": {
+        "role": "primary",
+        "displayName": "On Ledger Blue (dark theme)",
+        "tonalRamp": [
+          "#0f2340",
+          "#163866",
+          "#1f4e8c",
+          "#3a6aa8",
+          "#5a87c2",
+          "#8fb4e8",
+          "#c3d6f2",
+          "#e8eff9"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "paper-dark": {
+        "role": "neutral",
+        "displayName": "Warm Paper (dark theme)",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "sheet": {
+        "role": "neutral",
+        "displayName": "White Sheet",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "sheet-dark": {
+        "role": "neutral",
+        "displayName": "White Sheet (dark theme)",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "shelf": {
+        "role": "neutral",
+        "displayName": "Shelf",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "shelf-dark": {
+        "role": "neutral",
+        "displayName": "Shelf (dark theme)",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "step": {
+        "role": "neutral",
+        "displayName": "Step",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "step-dark": {
+        "role": "neutral",
+        "displayName": "Step (dark theme)",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Ruling Grey (3:1 edge)",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "rule-dark": {
+        "role": "neutral",
+        "displayName": "Ruling Grey (dark theme)",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline (decorative)",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "hairline-dark": {
+        "role": "neutral",
+        "displayName": "Hairline (dark theme)",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "ink-inverse": {
+        "role": "neutral",
+        "displayName": "Ink Inverse",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "ink-inverse-dark": {
+        "role": "neutral",
+        "displayName": "Ink Inverse (dark theme)",
+        "tonalRamp": [
+          "#0c0c0b",
+          "#1c1c1b",
+          "#2a2a28",
+          "#343430",
+          "#7f7b6a",
+          "#d9d6cc",
+          "#ebe9e2",
+          "#f4f3ef"
+        ]
+      },
+      "practice-amber": {
+        "role": "tertiary",
+        "displayName": "Practice Amber",
+        "tonalRamp": [
+          "#2a1f08",
+          "#3d2e10",
+          "#4a3000",
+          "#7a5a1c",
+          "#b08a3e",
+          "#e0c27e",
+          "#f6dfa9",
+          "#f8e4b8"
+        ]
+      },
+      "practice-amber-ink": {
+        "role": "tertiary",
+        "displayName": "Practice Amber Ink",
+        "tonalRamp": [
+          "#2a1f08",
+          "#3d2e10",
+          "#4a3000",
+          "#7a5a1c",
+          "#b08a3e",
+          "#e0c27e",
+          "#f6dfa9",
+          "#f8e4b8"
+        ]
+      },
+      "practice-amber-dark": {
+        "role": "tertiary",
+        "displayName": "Practice Amber (dark theme)",
+        "tonalRamp": [
+          "#2a1f08",
+          "#3d2e10",
+          "#4a3000",
+          "#7a5a1c",
+          "#b08a3e",
+          "#e0c27e",
+          "#f6dfa9",
+          "#f8e4b8"
+        ]
+      },
+      "practice-amber-ink-dark": {
+        "role": "tertiary",
+        "displayName": "Practice Amber Ink (dark theme)",
+        "tonalRamp": [
+          "#2a1f08",
+          "#3d2e10",
+          "#4a3000",
+          "#7a5a1c",
+          "#b08a3e",
+          "#e0c27e",
+          "#f6dfa9",
+          "#f8e4b8"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Rounds wall-sheet title and lookup player name."
+      },
+      "headline-facts": {
+        "displayName": "Headline Facts",
+        "purpose": "Muted tabular facts beside the round title."
+      },
+      "lookup-answer": {
+        "displayName": "Lookup Answer",
+        "purpose": "Lookup panel answer, readable from standing height."
+      },
+      "score-mark": {
+        "displayName": "Score Mark",
+        "purpose": "Result marks inside score boxes."
+      },
+      "board-number": {
+        "displayName": "Board Number",
+        "purpose": "Board column in board rows."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel, section and card titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Tables, lists, forms."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Secondary muted lines."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Buttons, chips, segments."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Score-box captions, status bar, pills, column headers. The 12px floor."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "US Chess IDs, ratings, history hashes."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "instant",
+        "value": "0ms",
+        "purpose": "Every button, chip, segment, checkbox and SnackBar changes state with zero animation; NoSplash, no ripple."
+      },
+      {
+        "name": "tooltip-wait",
+        "value": "400ms",
+        "purpose": "Tooltip hover delay; tooltips never carry information that is not otherwise on screen."
+      },
+      {
+        "name": "notice-duration",
+        "value": "8s",
+        "purpose": "Success notices; errors persist until closed."
+      }
+    ],
+    "focus": [
+      {
+        "name": "control-ring",
+        "value": "2px solid onSurface",
+        "purpose": "Buttons, icon buttons, chips, segmented buttons, PlainCheckbox; dark on light paper, light on dark, visible on filled buttons."
+      },
+      {
+        "name": "field-ring",
+        "value": "2px solid primary",
+        "purpose": "Text fields and score boxes."
+      }
+    ],
+    "breakpoints": [],
+    "layout": {
+      "controlHeight": "36px",
+      "pageGutter": "24px",
+      "toolbarMinHeight": "48px",
+      "boardRowMinHeight": "52px",
+      "sidePanelWidth": "360px",
+      "dockWideWidth": "480px",
+      "minTextSize": "12px"
+    }
+  },
+  "components": [
+    {
+      "name": "Filled Button",
+      "kind": "button",
+      "refersTo": "button-filled",
+      "description": "The next step in a region (Post round, Save). Instant colour change, onSurface focus ring.",
+      "html": "<button class=\"ds-btn-filled\">Post round 2 &rarr;</button>",
+      "css": ".ds-btn-filled { font-family: Inter, sans-serif; font-size:14px; font-weight:500; height:36px; padding:0 12px; background:#1f4e8c; color:#fff; border:none; border-radius:4px; cursor:pointer; transition:none; } .ds-btn-filled:hover { background:#1a4378; } .ds-btn-filled:focus-visible { outline: 2px solid #1b1c1a; outline-offset: 0; }"
+    },
+    {
+      "name": "Outlined Button",
+      "kind": "button",
+      "refersTo": "button-outlined",
+      "description": "Secondary actions (Print packet, Final reports).",
+      "html": "<button class=\"ds-btn-outlined\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z\"/></svg> Print packet</button>",
+      "css": ".ds-btn-outlined { font-family: Inter, sans-serif; font-size:14px; font-weight:500; height:36px; padding:0 12px; display:inline-flex; gap:8px; align-items:center; background:#fff; color:#1f4e8c; border:1px solid #7f7b6a; border-radius:4px; cursor:pointer; transition:none; } .ds-btn-outlined:hover { background:#f4f3ef; } .ds-btn-outlined:focus-visible { border:2px solid #1b1c1a; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Search and form fields; white sheet fill, 3:1 edge, 2px blue focus border.",
+      "html": "<input class=\"ds-input\" placeholder=\"Find player or board\">",
+      "css": ".ds-input { font-family: Inter, sans-serif; font-size:14px; height:36px; box-sizing:border-box; padding:8px 12px; background:#fff; color:#1b1c1a; border:1px solid #7f7b6a; border-radius:6px; outline:none; } .ds-input:focus-visible { border:2px solid #1f4e8c; padding:7px 11px; }"
+    },
+    {
+      "name": "View Tabs",
+      "kind": "nav",
+      "refersTo": "toolbar",
+      "description": "Toolbar view switch on the shelf; the selected tab inverts.",
+      "html": "<nav class=\"ds-toolbar\"><button class=\"ds-tab\">Players</button><button class=\"ds-tab ds-tab-on\">Rounds</button><button class=\"ds-tab\">Reports</button></nav>",
+      "css": ".ds-toolbar { font-family: Inter, sans-serif; display:flex; gap:4px; align-items:center; min-height:48px; padding:4px 12px; background:#ebe9e2; border-bottom:1px solid #d9d6cc; } .ds-tab { font-family: Inter, sans-serif; font-size:14px; font-weight:500; height:32px; padding:0 12px; background:none; color:#1b1c1a; border:none; border-radius:4px; cursor:pointer; transition:none; } .ds-tab:hover { background:#e5e3dd; } .ds-tab-on, .ds-tab-on:hover { background:#1b1c1a; color:#f4f3ef; } .ds-tab:focus-visible { outline: 2px solid #1b1c1a; outline-offset: 0; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Toggle filter (Missing only); selected is a surface step, no checkmark.",
+      "html": "<button class=\"ds-chip\">All</button> <button class=\"ds-chip ds-chip-on\">Missing only</button>",
+      "css": ".ds-chip { font-family: Inter, sans-serif; font-size:14px; font-weight:500; height:36px; padding:0 12px; background:#f4f3ef; color:#1b1c1a; border:1px solid #7f7b6a; border-radius:4px; cursor:pointer; transition:none; } .ds-chip-on { background:#e5e3dd; } .ds-chip:focus-visible { border:2px solid #1b1c1a; }"
+    },
+    {
+      "name": "Score Box",
+      "kind": "custom",
+      "refersTo": "score-box",
+      "description": "Result entry at each end of a board row; locked is shelf, disputed is error with a caption.",
+      "html": "<div class=\"ds-scores\"><button class=\"ds-score\">&frac12;</button><button class=\"ds-score\">1<small>playing</small></button><span class=\"ds-score ds-score-locked\">0</span></div>",
+      "css": ".ds-scores { display:flex; gap:12px; } .ds-score { font-family: Inter, sans-serif; width:64px; min-height:44px; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; font-size:20px; font-weight:600; line-height:1.15; background:#f4f3ef; color:#1b1c1a; border:1px solid #7f7b6a; border-radius:4px; cursor:text; } .ds-score small { font-size:12px; font-weight:400; line-height:1.1; color:#47463f; } .ds-score-locked { background:#ebe9e2; cursor:default; } .ds-score:focus-visible { outline:none; border:2px solid #1f4e8c; }"
+    },
+    {
+      "name": "Board Row",
+      "kind": "custom",
+      "refersTo": "board-row",
+      "description": "52px ruled row with tabular board number, white left, black right.",
+      "html": "<div class=\"ds-row\"><span class=\"ds-board\">2</span><span class=\"ds-mini\">&frac12;</span><span class=\"ds-name\">Morgan Lee</span><span class=\"ds-name ds-r\">Jamie Patel</span><span class=\"ds-mini\">&frac12;</span></div>",
+      "css": ".ds-row { font-family: Inter, sans-serif; display:flex; align-items:center; gap:12px; min-height:52px; padding:4px 16px; background:#fff; border-top:1px solid rgba(217,214,204,.5); } .ds-board { width:60px; font-size:19px; font-weight:600; font-variant-numeric:tabular-nums; } .ds-name { flex:1; font-size:18px; } .ds-r { text-align:right; } .ds-mini { width:64px; height:44px; display:inline-flex; align-items:center; justify-content:center; font-size:20px; font-weight:600; border:1px solid #7f7b6a; border-radius:4px; background:#f4f3ef; }"
+    },
+    {
+      "name": "Docked Side Panel",
+      "kind": "card",
+      "refersTo": "side-panel",
+      "description": "The one right-hand panel: bordered white sheet, square corners, Esc closes.",
+      "html": "<aside class=\"ds-panel\"><header><span>Find player</span><button aria-label=\"Close\">&times;</button></header><div class=\"ds-panel-body\"><div class=\"ds-big\">Morgan Lee</div><div class=\"ds-ans\">Board 2 &middot; White vs Jamie Patel</div></div></aside>",
+      "css": ".ds-panel { font-family: Inter, sans-serif; width:360px; background:#fff; border:1px solid #d9d6cc; color:#1b1c1a; } .ds-panel header { display:flex; justify-content:space-between; align-items:center; padding:8px 8px 8px 16px; font-size:15px; font-weight:600; border-bottom:1px solid #d9d6cc; } .ds-panel header button { width:36px; height:36px; background:none; border:none; font-size:20px; border-radius:4px; cursor:pointer; } .ds-panel header button:focus-visible { outline: 2px solid #1b1c1a; outline-offset: 0; } .ds-panel-body { padding:16px; } .ds-big { font-size:26px; font-weight:600; line-height:1.2; } .ds-ans { font-size:24px; line-height:1.25; }"
+    },
+    {
+      "name": "Practice Banner",
+      "kind": "custom",
+      "refersTo": "practice-banner",
+      "description": "Full-width amber strip under the toolbar, practice copies only.",
+      "html": "<div class=\"ds-practice\"><strong>Practice copy</strong> &middot; Nothing here changes a real event. Try anything; undo is always there.</div>",
+      "css": ".ds-practice { font-family: Inter, sans-serif; font-size:14px; padding:8px 24px; background:#f8e4b8; color:#4a3000; }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "A worded status; neutral step or good secondaryContainer.",
+      "html": "<span class=\"ds-pill\">Not started</span> <span class=\"ds-pill ds-pill-good\">Posted</span>",
+      "css": ".ds-pill { font-family: Inter, sans-serif; font-size:12px; padding:4px 8px; border-radius:4px; background:#e5e3dd; color:#47463f; } .ds-pill-good { background:#d6e3f7; color:#0f2340; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Wall Sheet",
+    "overview": "**Creative North Star: \"The Wall Sheet\"**\n\nMeow-Chess looks like the paper a tournament director tapes to the wall, set on a warm desk. The page is a warm off-white paper (dark: a near-black warm charcoal), tables sit on white sheets, and everything that matters during a round (board numbers, scores, the round line) is set big enough to read from standing height. Chrome is quiet: a pale shelf toolbar, a narrow section rail, a status bar that states what was saved. One deep blue carries action; everything else is warm grey.\n\nThe system is an Operate tool, dense where a TD scans and large where a TD or a player has to read at a glance. Change is instant: no ripples, no fades, no slide-ins. Depth comes from borders and surface steps, never shadows. Work happens in place, in the table or in one docked panel on the right, and every edit applies immediately with undo behind it. Paper is a real output, so the screen borrows paper's habits: tabular figures, ruled rows, plain headings.\n\nCat personality stops at the logo in the toolbar and the `.meow` file extension. Nothing inside a workflow is themed.",
+    "keyCharacteristics": [
+      "Warm-paper neutrals with one deep-blue accent; amber reserved for practice mode.",
+      "Instant state changes: zero animation durations, no splash, no chip or checkbox animation.",
+      "Flat: borders and three surface steps carry all depth.",
+      "Big, tabular wall-sheet type on the Rounds view; compact 14px Inter everywhere else; nothing under 12px.",
+      "One right-hand docked panel at a time; no modal dialogs.",
+      "A 36px control height shared by every button, field and toggle so rows line up."
+    ],
+    "rules": [
+      {
+        "name": "The One Ink Rule",
+        "body": "Ledger Blue means \"act here\" or \"focus is here\". Neutral states are carried by surface steps, not by tinting things blue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three-to-One Edge Rule",
+        "body": "Every interactive control's edge is Ruling Grey (3:1). Hairline is for decoration only.",
+        "section": "colors"
+      },
+      {
+        "name": "The Amber Means Practice Rule",
+        "body": "Practice Amber is exclusive to the practice-copy banner; never use it for warnings or emphasis.",
+        "section": "colors"
+      },
+      {
+        "name": "The Twelve Floor Rule",
+        "body": "No text below 12px, anywhere.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Column Rule",
+        "body": "Any number read down a column (board, score, rank, rating) uses tabular figures or Source Code Pro.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Dock Rule",
+        "body": "At most one panel is docked on the right at a time (player details and forms at 360px; print and lookup at 480px). Opening another replaces it; asking for the same one again closes it; Esc closes it.",
+        "section": "layout"
+      },
+      {
+        "name": "The Border, Not Shadow Rule",
+        "body": "If something needs to stand apart, give it a sheet surface and a hairline border. Never a shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** put edits inline or in the single right-hand docked panel, apply them immediately, and offer Undo instead of a confirmation.",
+      "**Do** keep every control at the 36px control height with a 3:1 Ruling Grey edge.",
+      "**Do** show keyboard focus with the 2px ring (`onSurface` on buttons, chips and checkboxes; Ledger Blue on text fields and score boxes).",
+      "**Do** pair every status colour with a word or icon: banners name their state, pills carry text, disputed scores carry a caption.",
+      "**Do** use tabular figures for anything read down a column, and Source Code Pro for IDs and ratings.",
+      "**Do** use the TD's words: Post a round, wall sheet, pairing number, house player, bye, withdraw; Share online for the network action.",
+      "**Do** separate surfaces with borders and surface steps (paper, shelf, step, white sheet)."
+    ],
+    "donts": [
+      "**Don't** open modal dialogs or pop-ups for edits, confirmations or previews. Native OS file pickers and SnackBars with Undo are the only exceptions.",
+      "**Don't** put information only in a hover or tooltip; it must be on screen or reachable by keyboard.",
+      "**Don't** convey status by colour alone.",
+      "**Don't** say \"publish\"; a round is Posted.",
+      "**Don't** add cat personality to workflows, results, pairings, errors or empty states; the logo and `.meow` are the brand's cat moments.",
+      "**Don't** animate: no ripples, fades, slides, scale-ins or confetti. State changes are instant.",
+      "**Don't** use shadows or elevation.",
+      "**Don't** set text below 12px.",
+      "**Don't** use Practice Amber for anything but the practice-copy banner."
+    ]
+  }
+}
