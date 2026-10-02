@@ -229,7 +229,7 @@ void main() {
       expect(c.event!.player('p0').byes, isEmpty);
       final bye = find.byKey(const ValueKey('panel-bye-2'));
       await tester.ensureVisible(bye);
-      await tester.tap(find.descendant(of: bye, matching: find.text('½')));
+      await tester.tap(find.descendant(of: bye, matching: find.text('½ pt')));
       await tester.pump();
       expect(c.event!.player('p0').byes[2], 1);
       await tester.tap(find.descendant(of: bye, matching: find.text('None')));
@@ -291,7 +291,7 @@ void main() {
     final g = section.rounds.single.games.first;
     c.recordResult(g.id, Outcome.blackWin);
     await mountPlayers(tester, c);
-    expect(find.text('PTS'), findsOneWidget);
+    expect(find.text('Pts'), findsOneWidget);
     // The winner, seeded lower, is now listed first in the section.
     final top = tester.getTopLeft(find.text(c.event!.player(g.black).name));
     final seed1 = tester.getTopLeft(
@@ -340,7 +340,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byKey(const ValueKey('panel-bye-2')),
-        matching: find.text('½'),
+        matching: find.text('½ pt'),
       ),
     );
     await tester.pump();

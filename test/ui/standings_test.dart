@@ -56,7 +56,7 @@ void main() {
       c.recordResult(g.id, Outcome.draw);
     }
     await mountPlayers(tester, c);
-    expect(find.text('RANK'), findsOneWidget);
+    expect(find.text('Rank'), findsOneWidget);
     expect(find.text('BH'), findsOneWidget);
     expect(find.text('SB'), findsOneWidget);
     // All four in a quad drew: everyone is tied.
@@ -74,7 +74,7 @@ void main() {
     // Seed order drops the rank column and keeps pairing numbers.
     await tester.tap(find.text('Seed order'));
     await tester.pump();
-    expect(find.text('RANK'), findsNothing);
+    expect(find.text('Rank'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 

@@ -85,11 +85,6 @@ ThemeData meowTheme(Brightness brightness) {
         side: BorderSide(color: colors.outlineVariant),
       ),
     ),
-    dialogTheme: DialogThemeData(
-      backgroundColor: colors.surfaceContainerLowest,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-    ),
     inputDecorationTheme: InputDecorationTheme(
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
       enabledBorder: OutlineInputBorder(

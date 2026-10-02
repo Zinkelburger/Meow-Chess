@@ -206,13 +206,26 @@ class _ReportsViewState extends State<ReportsView> {
               ),
             ),
           ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            onPressed: issues.isEmpty ? () => exportRating(context) : null,
-            icon: const Icon(Icons.folder_outlined),
-            label: const Text('Create rating report files'),
-          ),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            OutlinedButton.icon(
+              onPressed: issues.isEmpty ? () => exportRating(context) : null,
+              icon: const Icon(Icons.folder_outlined),
+              label: const Text('Create rating report files'),
+            ),
+            // A disabled button says why beside it.
+            if (issues.isNotEmpty)
+              Text(
+                'Resolve the ${issues.length == 1 ? 'item' : '${issues.length} items'} above first.',
+                key: const ValueKey('rating-blocked'),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
         ),
         const SizedBox(height: 24),
         SubmissionNotes(controller: controller),
@@ -262,6 +275,8 @@ class _ReportsViewState extends State<ReportsView> {
       ),
       child: ExpansionTile(
         key: const PageStorageKey('rating-preflight-details'),
+        // A short list is shown open; a long one stays tidy until asked.
+        initiallyExpanded: issues.length <= 5,
         shape: const Border(),
         collapsedShape: const Border(),
         leading: Icon(

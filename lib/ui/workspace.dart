@@ -13,6 +13,7 @@ import 'panels.dart';
 import 'players_view.dart';
 import 'results_view.dart';
 import 'reports_view.dart';
+import 'theme.dart';
 import 'workspace_actions.dart';
 
 enum TaskView { players, results, reports }
@@ -830,12 +831,24 @@ class _WorkspaceState extends State<Workspace> {
                 decoration: InputDecoration(
                   hintText: 'Jump to section',
                   prefixIcon: const Icon(Icons.search, size: 18),
-                  prefixIconConstraints: const BoxConstraints(minWidth: 32),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: controlHeight,
+                  ),
+                  suffixIconConstraints: const BoxConstraints(
+                    minWidth: 32,
+                    minHeight: controlHeight,
+                  ),
                   suffixIcon: q.isEmpty
                       ? null
                       : IconButton(
                           tooltip: 'Clear section search',
                           icon: const Icon(Icons.close, size: 16),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 28,
+                            height: 28,
+                          ),
                           onPressed: () => setState(sectionSearch.clear),
                         ),
                 ),

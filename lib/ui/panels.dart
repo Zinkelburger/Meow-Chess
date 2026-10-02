@@ -690,11 +690,15 @@ class _PrintPanelState extends State<PrintPanel> {
     final font = pw.Font.ttf(
       await rootBundle.load('assets/fonts/Inter-Regular.ttf'),
     );
+    final bold = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/Inter-SemiBold.ttf'),
+    );
     return reportPdf(
       widget.event,
       widget.kind,
       sectionId: widget.sectionId,
       font: font,
+      bold: bold,
     );
   }();
 

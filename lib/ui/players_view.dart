@@ -405,11 +405,24 @@ class _PlayersViewState extends State<PlayersView> {
                         decoration: InputDecoration(
                           hintText: 'Search players',
                           prefixIcon: const Icon(Icons.search, size: 20),
+                          prefixIconConstraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: controlHeight,
+                          ),
+                          suffixIconConstraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: controlHeight,
+                          ),
                           suffixIcon: search.text.isEmpty
                               ? null
                               : IconButton(
                                   tooltip: 'Clear search',
                                   icon: const Icon(Icons.close, size: 18),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 32,
+                                    height: 32,
+                                  ),
                                   onPressed: () => setState(search.clear),
                                 ),
                         ),
@@ -734,20 +747,19 @@ class _PlayersViewState extends State<PlayersView> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          letterSpacing: 0.3,
           color: colors.onSurfaceVariant,
         ),
         child: Row(
           children: [
             const SizedBox(width: _check),
-            if (ranking) cell(_rank, 'RANK'),
+            if (ranking) cell(_rank, 'Rank'),
             cell(_number, '#'),
-            const Expanded(child: Text('NAME')),
-            cell(_rating, 'RATING'),
-            if (showIds) cell(_id, 'US CHESS ID'),
+            const Expanded(child: Text('Name')),
+            cell(_rating, 'Rating'),
+            if (showIds) cell(_id, 'US Chess ID'),
             for (var r = 1; r <= rounds; r++) cell(_round, 'R$r', center: true),
             if (scores) ...[
-              cell(_points, 'PTS', center: true),
+              cell(_points, 'Pts', center: true),
               if (ranking)
                 Tooltip(
                   message:
@@ -1721,6 +1733,13 @@ class PlayerPanelState extends State<PlayerPanel> {
         ],
         if (open.isNotEmpty) ...[
           heading('Byes'),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Points a requested bye scores in each round not yet paired.',
+              style: muted,
+            ),
+          ),
           for (final r in open)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -1737,9 +1756,9 @@ class PlayerPanelState extends State<PlayerPanel> {
                       ),
                       segments: const [
                         ButtonSegment(value: -1, label: Text('None')),
-                        ButtonSegment(value: 1, label: Text('½')),
-                        ButtonSegment(value: 0, label: Text('0')),
-                        ButtonSegment(value: 2, label: Text('1')),
+                        ButtonSegment(value: 1, label: Text('½ pt')),
+                        ButtonSegment(value: 0, label: Text('0 pt')),
+                        ButtonSegment(value: 2, label: Text('1 pt')),
                       ],
                       selected: {p.byes[r] ?? -1},
                       onSelectionChanged: p.withdrawn
@@ -1814,22 +1833,31 @@ class PlayerPanelState extends State<PlayerPanel> {
               deleteButtonTooltipMessage: 'Allow pairing with ${other.name}',
             ),
           ),
-        DropdownButton<String>(
-          key: const ValueKey('avoid-player'),
-          isExpanded: true,
-          hint: const Text('Choose a player to avoid…'),
-          items: [
-            for (final other in e.players.where(
-              (other) => other.id != p.id && !p.avoid.contains(other.id),
-            ))
-              DropdownMenuItem(
-                value: other.id,
-                child: Text(other.name, overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: (id) {
-            if (id != null) attempt(() => c.avoidPair(p.id, id, true));
+        // Typed, not scrolled: a club event has 100+ names.
+        Autocomplete<Player>(
+          key: ValueKey('avoid-${p.id}-${p.avoid.length}'),
+          displayStringForOption: (o) => o.name,
+          optionsBuilder: (value) {
+            final q = value.text.trim().toLowerCase();
+            if (q.isEmpty) return const [];
+            return e.players.where(
+              (o) =>
+                  o.id != p.id &&
+                  !p.avoid.contains(o.id) &&
+                  o.name.toLowerCase().contains(q),
+            );
           },
+          onSelected: (o) => attempt(() => c.avoidPair(p.id, o.id, true)),
+          fieldViewBuilder: (context, text, focus, submit) => TextField(
+            key: const ValueKey('avoid-player'),
+            controller: text,
+            focusNode: focus,
+            decoration: const InputDecoration(
+              hintText: 'Type a name to avoid…',
+              prefixIcon: Icon(Icons.person_off_outlined, size: 18),
+            ),
+            onSubmitted: (_) => submit(),
+          ),
         ),
         if (s != null && s.format != Format.swiss)
           Text(

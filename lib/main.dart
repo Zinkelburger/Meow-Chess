@@ -167,6 +167,31 @@ class _MeowAppState extends State<MeowApp> {
     }
   }
 
+  /// When an event file last changed, for the recent list.
+  String changed(String filename) {
+    try {
+      final file = File(filename);
+      if (!file.existsSync()) return 'File not found';
+      final t = file.lastModifiedSync(), now = DateTime.now();
+      final clock =
+          '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+      if (t.year == now.year && t.month == now.month && t.day == now.day) {
+        return 'Changed today $clock';
+      }
+      return 'Changed ${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return 'Unreadable';
+    }
+  }
+
+  /// Takes an event off the recent list; the file itself is untouched.
+  void forget(String filename) {
+    setState(() => recent = recent.where((x) => x != filename).toList());
+    try {
+      library.writeAsStringSync(jsonEncode(recent), flush: true);
+    } catch (_) {}
+  }
+
   Future<void> choose() async {
     final file = await openFile(
       acceptedTypeGroups: [
@@ -329,11 +354,15 @@ class _MeowAppState extends State<MeowApp> {
                                   p.basenameWithoutExtension(filename),
                                 ),
                                 subtitle: Text(
-                                  filename,
+                                  '${changed(filename)} · $filename',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                trailing: const Icon(Icons.chevron_right),
+                                trailing: IconButton(
+                                  tooltip: 'Remove from recent events',
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () => forget(filename),
+                                ),
                                 onTap: () => open(filename),
                               ),
                             ),

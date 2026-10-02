@@ -771,6 +771,17 @@ class _ResultsViewState extends State<ResultsView> {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        if (!viewingPast &&
+            single != null &&
+            single.$2.hasPlay &&
+            !single.$2.complete)
+          Text(
+            'Pairings locked: play has started.',
+            key: const ValueKey('pairings-locked'),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         if (editable && !swapping)
           TextButton(
             key: const ValueKey('edit-pairings'),

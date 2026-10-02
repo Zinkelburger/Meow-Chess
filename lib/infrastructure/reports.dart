@@ -104,12 +104,32 @@ String standingsCsv(Event e, {String? sectionId}) => Csv().encode([
 String _safe(String text) =>
     RegExp(r'^[=+@\-\t\r]').hasMatch(text) ? "'$text" : text;
 
+/// Half-points as printed on paper: ½, 1½.
+String _halves(int n) => n == 1
+    ? '½'
+    : n.isOdd
+    ? '${n ~/ 2}½'
+    : '${n ~/ 2}';
+
+/// Quarter-points (Sonneborn–Berger) as printed: ¼, 2½, 3¾.
+String _quarters(int n) {
+  final whole = n ~/ 4, part = const ['', '¼', '½', '¾'][n % 4];
+  return whole == 0 && part.isNotEmpty ? part : '$whole$part';
+}
+
+/// Sorts a wall list by surname, as players look for themselves.
+String _surnameKey(String name) {
+  final parts = name.trim().split(RegExp(r'\s+'));
+  return [parts.last, ...parts.take(parts.length - 1)].join(' ').toLowerCase();
+}
+
 Future<Uint8List> reportPdf(
   Event e,
   ReportKind kind, {
   String? sectionId,
   bool a4 = false,
   pw.Font? font,
+  pw.Font? bold,
 }) async {
   final doc = pw.Document();
   for (final s in e.sections.where(
@@ -131,9 +151,10 @@ Future<Uint8List> reportPdf(
       pw.TableHelper.fromTextArray(
         headers: headers,
         data: rows,
-        cellStyle: const pw.TextStyle(fontSize: 10),
-        headerStyle: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-        cellPadding: const pw.EdgeInsets.all(7),
+        // Read from a step away on the wall.
+        cellStyle: const pw.TextStyle(fontSize: 12),
+        headerStyle: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+        cellPadding: const pw.EdgeInsets.all(6),
       ),
     );
     if (kind == ReportKind.pairings || kind == ReportKind.packet) {
@@ -144,7 +165,7 @@ Future<Uint8List> reportPdf(
         for (final b in current.byes) {
           widgets.add(
             pw.Text(
-              '${e.player(b.player).name}: ${b.reason} (${scoreText(b.points)})',
+              '${e.player(b.player).name}: ${b.reason} (${_halves(b.points)})',
             ),
           );
         }
@@ -178,7 +199,7 @@ Future<Uint8List> reportPdf(
                 'Black',
                 e.player(g.white).name,
               ),
-          ]..sort((a, b) => a.$1.compareTo(b.$1));
+          ]..sort((a, b) => _surnameKey(a.$1).compareTo(_surnameKey(b.$1)));
           grid(
             ['Player', 'Board', 'Color', 'Opponent'],
             [
@@ -193,14 +214,16 @@ Future<Uint8List> reportPdf(
       grid(
         ['Rank', 'Player', 'Rating', 'Points', 'BH', 'SB'],
         [
-          for (final (_, r) in table.indexed)
+          for (final r in table)
             [
-              '${r.rank}',
+              table.where((x) => x.rank == r.rank).length > 1
+                  ? 'T-${r.rank}'
+                  : '${r.rank}',
               r.player.name,
-              '${r.player.rating}',
-              scoreText(r.points),
-              scoreText(r.buchholz),
-              '${r.sonneborn / 4}',
+              r.player.rating == 0 ? 'UNR' : '${r.player.rating}',
+              _halves(r.points),
+              _halves(r.buchholz),
+              _quarters(r.sonneborn),
             ],
         ],
       );
@@ -219,7 +242,7 @@ Future<Uint8List> reportPdf(
           for (final row in table)
             [
               row.player.name,
-              scoreText(row.points),
+              _halves(row.points),
               for (final r in s.rounds)
                 r.games
                     .where(
@@ -241,7 +264,7 @@ Future<Uint8List> reportPdf(
         margin: const pw.EdgeInsets.all(32),
         theme: font == null
             ? null
-            : pw.ThemeData.withFont(base: font, bold: font),
+            : pw.ThemeData.withFont(base: font, bold: bold ?? font),
         header: (_) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
