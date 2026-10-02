@@ -192,6 +192,7 @@ class PlainCheckbox extends StatefulWidget {
     required this.value,
     required this.onChanged,
     this.tristate = false,
+    this.label,
     super.key,
   });
 
@@ -199,6 +200,7 @@ class PlainCheckbox extends StatefulWidget {
   final bool? value;
   final ValueChanged<bool?>? onChanged;
   final bool tristate;
+  final String? label;
 
   @override
   State<PlainCheckbox> createState() => _PlainCheckboxState();
@@ -222,6 +224,7 @@ class _PlainCheckboxState extends State<PlainCheckbox> {
         ? colors.primary
         : colors.onSurface.withValues(alpha: 0.38);
     return Semantics(
+      label: widget.label,
       checked: widget.value == true,
       mixed: widget.tristate && widget.value == null,
       enabled: enabled,

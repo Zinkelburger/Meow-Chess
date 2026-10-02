@@ -13,6 +13,9 @@ import '../infrastructure/reports.dart';
 import '../infrastructure/dbf_export.dart';
 import 'dialogs.dart';
 import 'panels.dart';
+import 'drafts.dart';
+import 'event_panel.dart';
+import 'players_view.dart';
 
 Future<void> saveArtifact(String name, Uint8List bytes) async {
   final location = await getSaveLocation(suggestedName: name);
@@ -22,20 +25,196 @@ Future<void> saveArtifact(String name, Uint8List bytes) async {
 }
 
 class ReportsView extends StatefulWidget {
-  const ReportsView({required this.controller, this.sectionId, super.key});
+  const ReportsView({
+    required this.controller,
+    this.sectionId,
+    this.onResults,
+    this.onStandings,
+    this.onBackups,
+    super.key,
+  });
   final TournamentController controller;
   final String? sectionId;
+  final ValueChanged<String?>? onResults;
+  final VoidCallback? onStandings, onBackups;
   @override
   State<ReportsView> createState() => _ReportsViewState();
 }
 
 class _ReportsViewState extends State<ReportsView> {
   String? scope;
+  final detailsKey = GlobalKey<ReportDetailsState>();
+  final scroll = ScrollController();
   TournamentController get controller => widget.controller;
   @override
   void initState() {
     super.initState();
     scope = widget.sectionId;
+    final saved = controller.workspaceState.readMap(
+      'reports-view-${scope ?? "all"}',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && scroll.hasClients) {
+        scroll.jumpTo(
+          (saved["scroll"] as num? ?? 0).toDouble().clamp(
+            0,
+            scroll.position.maxScrollExtent,
+          ),
+        );
+      }
+    });
+    scroll.addListener(() {
+      controller.workspaceState.writeMap('reports-view-${scope ?? "all"}', {
+        "scroll": scroll.offset,
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    scroll.dispose();
+    super.dispose();
+  }
+
+  void repair(ReportRepair action) {
+    final dock = Dock.maybeOf(context);
+    switch (action.destination) {
+      case ReportDestination.report:
+        detailsKey.currentState?.focusField(action.field ?? 'city');
+      case ReportDestination.results:
+        widget.onResults?.call(action.id);
+      case ReportDestination.event:
+        dock?.show(
+          ('report-event', action.field),
+          ListenableBuilder(
+            listenable: controller,
+            builder: (_, _) => EventPanel(
+              key: ValueKey('report-event-${action.field}'),
+              controller: controller,
+              initialField: action.field,
+              onClose: dock.close,
+            ),
+          ),
+        );
+      case ReportDestination.player:
+        dock?.show(
+          ('report-player', action.id, action.field),
+          ListenableBuilder(
+            listenable: controller,
+            builder: (_, _) {
+              final player = controller.event!.players
+                  .where((p) => p.id == action.id)
+                  .firstOrNull;
+              if (player == null) {
+                return SidePanel(
+                  title: 'Player removed',
+                  onClose: dock.close,
+                  children: const [
+                    Text('This player is no longer in the event.'),
+                  ],
+                );
+              }
+              return PlayerPanel(
+                key: ValueKey('report-player-${action.id}-${action.field}'),
+                controller: controller,
+                player: player,
+                focusField: action.field,
+                onClose: dock.close,
+              );
+            },
+          ),
+        );
+      case ReportDestination.section:
+        if (action.id != null && dock != null) {
+          dock.show((
+            'report-section',
+            action.id,
+          ), sectionSettingsPanel(controller, action.id!, dock.close));
+        }
+    }
+  }
+
+  Widget finishChecklist(Event e, int issues) {
+    final remaining = e.games.where((g) => !g.outcome.resolved).length;
+    final export = controller.repository
+        .readPreference('lastExport')
+        ?.split('|');
+    final exportRevision = export == null ? null : int.tryParse(export.last);
+    final backup = controller.repository
+        .readPreference('lastBackup')
+        ?.split('|');
+    final backupRevision = backup == null ? null : int.tryParse(backup.first);
+    String revisionState(int? revision, String absent) => revision == null
+        ? absent
+        : revision == e.revision
+        ? 'Current · revision $revision'
+        : 'Revision $revision · newer changes are not included';
+    return ExpansionTile(
+      key: const PageStorageKey('finish-event'),
+      initiallyExpanded:
+          e.sections.isNotEmpty && e.sections.every((s) => s.finished),
+      tilePadding: EdgeInsets.zero,
+      title: const Text('Finish event'),
+      children: [
+        for (final (title, detail, action, callback)
+            in <(String, String, String, VoidCallback?)>[
+              (
+                'Results',
+                '$remaining unresolved games · ${e.sections.where((s) => s.finished).length} of ${e.sections.length} sections complete',
+                'Open results',
+                widget.onResults == null ? null : () => widget.onResults!(null),
+              ),
+              (
+                'Standings and prizes',
+                'Review ties and select the prize class before printing.',
+                'Open standings',
+                widget.onStandings,
+              ),
+              (
+                'Rating report',
+                '$issues items need attention. Exported, submitted and accepted are separate states.',
+                '',
+                null,
+              ),
+              (
+                'Export',
+                revisionState(exportRevision, 'Not exported'),
+                '',
+                null,
+              ),
+              (
+                'Backup',
+                controller.backupWarning ??
+                    revisionState(backupRevision, 'No backup recorded'),
+                'Backups',
+                widget.onBackups,
+              ),
+              (
+                'Submission',
+                e.submission.isEmpty
+                    ? 'Not recorded'
+                    : 'Notes recorded · acceptance is not verified by this app',
+                '',
+                null,
+              ),
+            ])
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text('$title: $detail'),
+                  if (callback != null)
+                    TextButton(onPressed: callback, child: Text(action)),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Future<void> exportRating(BuildContext context) async {
@@ -50,6 +229,7 @@ class _ReportsViewState extends State<ReportsView> {
           'lastExport',
           '$path|${event.revision}',
         );
+        if (mounted) setState(() {});
       }
       if (context.mounted) {
         showNotice(context, 'Rating report saved to $path');
@@ -85,12 +265,15 @@ class _ReportsViewState extends State<ReportsView> {
 
   @override
   Widget build(BuildContext context) {
-    final e = controller.event!, issues = ratingPreflight(e);
+    final e = controller.event!, issues = ratingIssues(e);
     final stateless = _stateless(e);
     if (scope != null && !e.sections.any((s) => s.id == scope)) scope = null;
     return ListView(
+      controller: scroll,
       padding: const EdgeInsets.all(24),
       children: [
+        finishChecklist(e, issues.length),
+        const SizedBox(height: 16),
         Text(
           'Print & export · ${e.sections.where((s) => s.id == scope).firstOrNull?.name ?? 'All sections'}',
           key: const ValueKey('report-scope'),
@@ -181,7 +364,7 @@ class _ReportsViewState extends State<ReportsView> {
           'Not yet tested with the US Chess upload site. Check the files before uploading.',
         ),
         const SizedBox(height: 16),
-        ReportDetails(controller: controller),
+        ReportDetails(key: detailsKey, controller: controller),
         const SizedBox(height: 12),
         _summary(context, e),
         const SizedBox(height: 12),
@@ -263,7 +446,7 @@ class _ReportsViewState extends State<ReportsView> {
   }
 
   /// Keep preflight details available without overwhelming the print controls.
-  Widget _warnings(BuildContext context, List<String> issues) {
+  Widget _warnings(BuildContext context, List<ReportIssue> issues) {
     final colors = Theme.of(context).colorScheme;
     return Container(
       key: const ValueKey('rating-warnings'),
@@ -295,7 +478,25 @@ class _ReportsViewState extends State<ReportsView> {
           for (final issue in issues)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('• $issue'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('• ${issue.message}'),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final action in issue.repairs)
+                        TextButton(
+                          key: ValueKey(
+                            'repair-${action.destination.name}-${action.id}-${action.field}',
+                          ),
+                          onPressed: () => repair(action),
+                          child: Text(action.label),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
         ],
       ),
@@ -320,6 +521,8 @@ class ReportDetailsState extends State<ReportDetails> {
   ];
   final text = {for (final f in _fields) f.$1: TextEditingController()};
   String? error;
+  late FormDraft draft;
+  final fieldFocus = <String, FocusNode>{};
   Map<String, String> shown = const {};
   TournamentController get c => widget.controller;
   Map<String, String> get values => text.map((k, v) => MapEntry(k, v.text));
@@ -341,16 +544,24 @@ class ReportDetailsState extends State<ReportDetails> {
   void initState() {
     super.initState();
     load();
+    draft = FormDraft(c.workspaceState, 'draft-report-details', text, stored);
   }
 
   @override
   void didUpdateWidget(ReportDetails oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (mapEquals(values, shown) && !mapEquals(shown, stored)) load();
+    if (mapEquals(values, shown) && !mapEquals(shown, stored)) {
+      draft.reset(stored);
+      load();
+    }
   }
 
   @override
   void dispose() {
+    draft.dispose();
+    for (final node in fieldFocus.values) {
+      node.dispose();
+    }
     for (final t in text.values) {
       t.dispose();
     }
@@ -369,6 +580,7 @@ class ReportDetailsState extends State<ReportDetails> {
           zip: v['zip']!.trim(),
         ),
       );
+      draft.reset(stored);
       setState(load);
       return true;
     } catch (e) {
@@ -386,6 +598,17 @@ class ReportDetailsState extends State<ReportDetails> {
     }
   }
 
+  void focusField(String field) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final node = fieldFocus[field];
+      node?.requestFocus();
+      if (node?.context case final target?) {
+        Scrollable.ensureVisible(target, alignment: 0.25);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final e = c.event!, colors = Theme.of(context).colorScheme;
@@ -393,6 +616,7 @@ class ReportDetailsState extends State<ReportDetails> {
       key: const ValueKey('report-details'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        DraftStatus(draft: draft),
         Text('Report details', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Wrap(
@@ -406,6 +630,10 @@ class ReportDetailsState extends State<ReportDetails> {
                 child: TextField(
                   key: ValueKey('report-$key'),
                   controller: text[key],
+                  focusNode: fieldFocus.putIfAbsent(
+                    key,
+                    () => FocusNode(debugLabel: key),
+                  ),
                   textCapitalization: key == 'state'
                       ? TextCapitalization.characters
                       : TextCapitalization.words,
@@ -418,6 +646,10 @@ class ReportDetailsState extends State<ReportDetails> {
               width: 300,
               child: DropdownButtonFormField<String>(
                 key: ValueKey('report-level-${e.level}'),
+                focusNode: fieldFocus.putIfAbsent(
+                  'level',
+                  () => FocusNode(debugLabel: 'event type'),
+                ),
                 initialValue: sectionLevels.containsKey(e.level)
                     ? e.level
                     : null,
@@ -443,13 +675,17 @@ class ReportDetailsState extends State<ReportDetails> {
         if (dirty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Row(
+            child: Wrap(
+              spacing: 8,
               children: [
                 FilledButton(onPressed: commit, child: const Text('Save')),
                 const SizedBox(width: 8),
                 TextButton(
-                  onPressed: () => setState(load),
-                  child: const Text('Revert'),
+                  onPressed: () {
+                    draft.reset(stored);
+                    setState(load);
+                  },
+                  child: const Text('Discard draft'),
                 ),
               ],
             ),
@@ -460,7 +696,7 @@ class ReportDetailsState extends State<ReportDetails> {
 }
 
 /// When the report was uploaded, its reference number and corrections.
-/// Typed in place; saves on Save or when focus leaves the box.
+/// Typed in place; Save applies it and navigation preserves the draft.
 class SubmissionNotes extends StatefulWidget {
   const SubmissionNotes({required this.controller, super.key});
   final TournamentController controller;
@@ -475,14 +711,18 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
   late String shown = widget.controller.event!.submission;
   final focus = FocusNode(debugLabel: 'submission notes');
   String? error;
+  late FormDraft draft;
   bool get dirty => text.text != widget.controller.event!.submission;
 
   @override
   void initState() {
     super.initState();
-    focus.addListener(() {
-      if (!focus.hasFocus) save();
-    });
+    draft = FormDraft(
+      widget.controller.workspaceState,
+      'draft-submission',
+      {'notes': text},
+      {'notes': shown},
+    );
   }
 
   @override
@@ -490,11 +730,15 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
     super.didUpdateWidget(oldWidget);
     // Follow undo and other outside changes unless mid-edit.
     final stored = widget.controller.event!.submission;
-    if (text.text == shown && stored != shown) text.text = shown = stored;
+    if (text.text == shown && stored != shown) {
+      draft.reset({'notes': stored});
+      shown = stored;
+    }
   }
 
   @override
   void dispose() {
+    draft.dispose();
     text.dispose();
     focus.dispose();
     super.dispose();
@@ -507,6 +751,7 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
         'Update submission record',
         widget.controller.event!.copy(submission: text.text),
       );
+      draft.reset({'notes': text.text});
       setState(() {
         shown = text.text;
         error = null;
@@ -522,6 +767,7 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        DraftStatus(draft: draft),
         Text(
           'Submission notes',
           style: Theme.of(context).textTheme.titleMedium,
@@ -551,13 +797,15 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
         if (dirty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Row(
+            child: Wrap(
+              spacing: 8,
               children: [
                 FilledButton(onPressed: save, child: const Text('Save')),
                 const SizedBox(width: 8),
                 TextButton(
-                  onPressed: () => setState(() => text.text = shown),
-                  child: const Text('Revert'),
+                  onPressed: () =>
+                      setState(() => draft.reset({'notes': shown})),
+                  child: const Text('Discard draft'),
                 ),
               ],
             ),

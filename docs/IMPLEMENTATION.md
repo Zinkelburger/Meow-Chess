@@ -54,6 +54,31 @@ strict ASCII export;
 independent backup/reopen; same-progress section combination with preserved history;
 exact-ID authenticated provider review with stale-response rejection.
 
+### Interrupted work and final reports
+
+Form drafts now live in event-file preferences, independently of audited tournament
+revisions. Player registration/edits, event and report details, submission notes,
+section settings/creation, team assignment, section combination, temporary result
+assumptions and pasted imports survive navigation. Close/Escape leaves the draft;
+Save/Add applies it. Player, event, report and submission forms have an explicit
+Discard draft action. Failed preference writes remain recoverable in memory and
+show retry controls; only a successful write promises recovery after restarting.
+
+Players retains filters, selection and scroll per section. Results retains search,
+round, board side and scroll; historical rounds reopen read-only, and a new round
+resets the view. History, event details, player details, lookup and print share one
+contextual panel slot. Navigation/action rows adapt at larger text sizes; constrained
+roster/results tool areas scroll independently so the table keeps usable space.
+The visible **Keys** button opens the keyboard reference.
+
+Print previews name their selected section(s), round(s) and revision, retain that
+scope on refresh, and require an explicit choice before printing an outdated
+revision. Generation errors have Retry. Printed standings inherit the selected
+prize class and early-withdrawal filter. Report problems open their associated
+player, event, report, section or results editor. **Finish event** brings together
+remaining results, standings, export/backup revisions and submission notes. Notes
+record what the TD reports; the app does not verify federation acceptance.
+
 ### Clearer tournament-day workspace
 
 Players and Rounds have a permanent section sidebar. Search names without needing
@@ -64,7 +89,7 @@ and current-round missing-result counts during play. Reports have their own
 always covers the entire event and is labelled accordingly.
 
 Players is a read-only crosstable with opponent references (`W37`, `D10`, `L5`),
-using stable event roster numbers shown in the # column, independent of sort and
+using section pairing numbers shown in the # column, independent of sort and
 search. Byes use `B` plus their points; `F` suffixes mark forfeits. Edit requested
 byes in player details, where **None** removes a request. IDs and tiebreaks are
 optional under **View**, alongside the advanced standings filters. Imports and
@@ -125,10 +150,10 @@ is written; see `research/notes/US_CHESS_REPORTING.md` for sources.
   eligibility rules and automated prize allocation. Configurable tie-break orders,
   eligibility overrides, templates, structured ruling/appeal records, explicit
   effective-round withdrawal and late-entry scoring also remain release work.
-- Full per-section workspace/draft restoration, all-round reciprocal player matrix,
-  advanced accessibility and large-field performance qualification. Import has
-  header inference, not a custom column-mapping editor. Class filters currently
-  apply to the Players page standings view, not printable prize-allocation reports.
+- All-round reciprocal player matrix, human screen-reader evaluation and large-field
+  performance qualification. Import has header inference, not a custom column-mapping
+  editor. Prize-class filtering is available on screen and in printed standings;
+  automated prize allocation remains separate unfinished work.
 - Windows/macOS native build, printing, signing and recovery qualification; real
   printer testing on each OS and working-TD usability rehearsal.
 - Later tranches: team matches, bughouse, native SwissSys interchange, FIDE and hosted

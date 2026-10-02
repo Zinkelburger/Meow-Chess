@@ -83,6 +83,10 @@ void main() {
       find.byKey(const ValueKey('panel-name')),
       'Edited name',
     );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
     await doubleClick(
       tester,
       find.byKey(ValueKey('round-player-${game.id}-${game.black}')),

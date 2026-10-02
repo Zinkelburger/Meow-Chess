@@ -322,7 +322,11 @@ void main() {
     await tester.pump();
     expect(find.byType(Dialog), findsNothing);
     await tester.enterText(find.byKey(const ValueKey('panel-rating')), '1777');
-    // Opening another player saves the first.
+    // Saving is explicit; opening another player only preserves a draft.
+    await tester.pump();
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
+    await tester.pump();
     await tester.tap(find.text(c.event!.player(b).name));
     await tester.pump();
     expect(c.event!.player(a).rating, 1777);

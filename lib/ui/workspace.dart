@@ -10,6 +10,7 @@ import 'desktop_window.dart';
 import 'event_panel.dart';
 import 'history_panel.dart';
 import 'panels.dart';
+import '../infrastructure/reports.dart' show ReportKind;
 import 'players_view.dart';
 import 'results_view.dart';
 import 'reports_view.dart';
@@ -47,15 +48,17 @@ class _WorkspaceState extends State<Workspace> {
   final eventPanel = GlobalKey<EventPanelState>();
 
   /// New sections, section settings, combine and print, docked at the right.
-  final dock = DockController();
+  late final dock = DockController(tournament: c);
+  final resultsKeys = <String, GlobalKey<ResultsViewState>>{};
   Timer? clock;
   TournamentController get c => widget.controller;
   @override
   void initState() {
     super.initState();
     c.addListener(refresh);
+    c.workspaceState.addListener(refresh);
     dock.addListener(dockChanged);
-    final saved = c.repository.readPreference('view');
+    final saved = c.workspaceState.read('view');
     if (saved != null) {
       final fields = saved.split('|');
       if (fields.length == 2) {
@@ -65,7 +68,8 @@ class _WorkspaceState extends State<Workspace> {
             TaskView.players;
       }
     }
-    historyOpen = c.repository.readPreference('historyPanel') == 'open';
+    historyOpen = c.workspaceState.read('historyPanel') == 'open';
+    if (historyOpen) dock.claim('history');
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -77,6 +81,7 @@ class _WorkspaceState extends State<Workspace> {
     sectionSearch.dispose();
     sectionFocus.dispose();
     c.removeListener(refresh);
+    c.workspaceState.removeListener(refresh);
     dock
       ..removeListener(dockChanged)
       ..dispose();
@@ -88,6 +93,7 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   void go(TaskView next) {
+    if (view != next) dock.close();
     setState(() {
       view = next;
       if (next == TaskView.results && sectionId == null) {
@@ -101,6 +107,7 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   void pickSection(String? id, {TaskView? next}) {
+    if (id != sectionId || (next != null && next != view)) dock.close();
     setState(() {
       sectionId = id;
       if (next != null) view = next;
@@ -134,11 +141,7 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   void remember() {
-    try {
-      c.repository.writePreference('view', '${sectionId ?? ''}|${view.name}');
-    } catch (e) {
-      showFailure(context, e);
-    }
+    c.workspaceState.write('view', '${sectionId ?? ''}|${view.name}');
   }
 
   void addSections() => dock.show(
@@ -232,31 +235,87 @@ class _WorkspaceState extends State<Workspace> {
       travel(context, c, c.graph.forward, (a) => c.redo(acceptLosses: a));
 
   void toggleHistory() {
-    setState(() => historyOpen = !historyOpen);
-    try {
-      c.repository.writePreference(
-        'historyPanel',
-        historyOpen ? 'open' : 'closed',
-      );
-    } catch (e) {
-      showFailure(context, e);
+    if (historyOpen) {
+      dock.close();
+    } else {
+      dock.claim('history');
     }
   }
 
-  /// One panel at the right at a time, so the page keeps its width.
   void toggleEvent() {
-    if (eventOpen && eventPanel.currentState?.commit() == false) return;
-    if (!eventOpen) dock.close();
-    setState(() => eventOpen = !eventOpen);
+    if (eventOpen) {
+      dock.close();
+    } else {
+      dock.claim('event');
+    }
   }
 
   void dockChanged() {
-    if (dock.panel != null && eventOpen) {
-      if (eventPanel.currentState?.commit() == false) return;
-      eventOpen = false;
-    }
+    historyOpen = dock.id == 'history';
+    eventOpen = dock.id == 'event';
+    c.workspaceState.write('historyPanel', historyOpen ? 'open' : 'closed');
     refresh();
   }
+
+  void printCurrent() {
+    if (view == TaskView.results) {
+      resultsKeys[sectionId ?? 'all']?.currentState?.printRound();
+      return;
+    }
+    final options = c.workspaceState.readMap(
+      'players-view-${sectionId ?? 'all'}',
+    );
+    showPrint(
+      context,
+      c.event!,
+      sectionId: sectionId,
+      kind: view == TaskView.players ? ReportKind.standings : ReportKind.packet,
+      ceiling: view == TaskView.players ? options['ceiling'] as int? ?? 0 : 0,
+      forPrizes: view == TaskView.players && options['prizes'] == true,
+    );
+  }
+
+  void keyboardHelp() => dock.show(
+    'keyboard-help',
+    SidePanel(
+      title: 'Keyboard reference',
+      onClose: dock.close,
+      children: [
+        const Text(
+          'Results apply to the focused player’s score box. They save immediately, then advance to the next missing board.',
+        ),
+        const SizedBox(height: 16),
+        for (final (keys, action) in const [
+          ('1 / W', 'This player wins'),
+          ('0 / L', 'This player loses'),
+          ('5 / D', 'Draw'),
+          ('F, then 1 or 0', 'Forfeit result'),
+          ('+ / −', 'Forfeit win / loss'),
+          ('X', 'Double forfeit'),
+          ('Delete', 'Clear the result'),
+          ('↑ / ↓', 'Previous / next board'),
+          ('← / →', 'Other player'),
+          ('M', 'Result menu'),
+          ('Tab, then Enter', 'Open the focused player'),
+          ('Ctrl+L', 'Find a player'),
+          ('Ctrl+J', 'Find a section'),
+          ('Ctrl+P', 'Print this view'),
+          ('Ctrl+Z', 'Undo'),
+          ('Ctrl+Shift+Z / Ctrl+Y', 'Redo'),
+          ('Ctrl+H', 'History'),
+          ('Esc', 'Close the panel; keep its draft'),
+          ('F1', 'This reference'),
+        ])
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text('$keys — $action'),
+          ),
+        const Text(
+          'Result keys never score games while you are typing in a text field. Earlier rounds remain read-only until you choose Correct a result.',
+        ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -272,7 +331,10 @@ class _WorkspaceState extends State<Workspace> {
             : addSections,
       ),
       TaskView.results => ResultsView(
-        key: ValueKey('results-${section?.id}'),
+        key: resultsKeys.putIfAbsent(
+          section?.id ?? 'all',
+          () => GlobalKey<ResultsViewState>(),
+        ),
         controller: c,
         sectionId: section?.id,
       ),
@@ -280,6 +342,9 @@ class _WorkspaceState extends State<Workspace> {
         key: ValueKey('reports-${section?.id}'),
         controller: c,
         sectionId: section?.id,
+        onResults: (id) => pickSection(id, next: TaskView.results),
+        onStandings: () => go(TaskView.players),
+        onBackups: showBackups,
       ),
     };
     final dark = Theme.of(context).brightness == Brightness.dark;
@@ -288,12 +353,9 @@ class _WorkspaceState extends State<Workspace> {
         const SingleActivator(LogicalKeyboardKey.keyJ, control: true):
             jumpToSection,
         const SingleActivator(LogicalKeyboardKey.keyL, control: true): lookup,
-        const SingleActivator(LogicalKeyboardKey.keyP, control: true): () =>
-            showPrint(
-              context,
-              e,
-              sectionId: view == TaskView.reports ? null : section?.id,
-            ),
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+            printCurrent,
+        const SingleActivator(LogicalKeyboardKey.f1): keyboardHelp,
         const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
           if (!editingText) undo();
         },
@@ -322,191 +384,242 @@ class _WorkspaceState extends State<Workspace> {
                   // Top bar: event name and pages on the left, tool icons pinned
                   // to the right.
                   WorkspaceToolbar(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            hitTestBehavior: HitTestBehavior.deferToChild,
-                            child: Row(
-                              children: [
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 260,
-                                  ),
-                                  child: Tooltip(
-                                    message: 'Event details',
-                                    child: TextButton.icon(
-                                      key: const ValueKey('event-details'),
-                                      onPressed: toggleEvent,
-                                      iconAlignment: IconAlignment.end,
-                                      icon: Icon(
-                                        Icons.edit_outlined,
-                                        size: 16,
-                                        color: colors.onSurfaceVariant,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final navigation = SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          hitTestBehavior: HitTestBehavior.deferToChild,
+                          child: Row(
+                            children: [
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 260,
+                                ),
+                                child: Tooltip(
+                                  message: 'Event details',
+                                  child: TextButton.icon(
+                                    key: const ValueKey('event-details'),
+                                    onPressed: toggleEvent,
+                                    iconAlignment: IconAlignment.end,
+                                    icon: Icon(
+                                      Icons.edit_outlined,
+                                      size: 16,
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: colors.onSurface,
+                                      backgroundColor: eventOpen
+                                          ? colors.primary.withValues(
+                                              alpha: 0.12,
+                                            )
+                                          : null,
+                                      minimumSize: const Size(0, 32),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
                                       ),
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: colors.onSurface,
-                                        backgroundColor: eventOpen
-                                            ? colors.primary.withValues(
-                                                alpha: 0.12,
-                                              )
-                                            : null,
-                                        minimumSize: const Size(0, 32),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                        ),
-                                      ),
-                                      label: Text(
-                                        e.name,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 15,
-                                        ),
+                                    ),
+                                    label: Text(
+                                      e.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 15,
                                       ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 24),
-                                for (final (task, label) in [
-                                  (TaskView.players, 'Players'),
-                                  (TaskView.results, 'Rounds'),
-                                  (TaskView.reports, 'Reports'),
-                                ])
-                                  _tab(label, view == task, () => go(task)),
-                              ],
+                              ),
+                              const SizedBox(width: 24),
+                              for (final (task, label) in [
+                                (TaskView.players, 'Players'),
+                                (TaskView.results, 'Rounds'),
+                                (TaskView.reports, 'Reports'),
+                              ])
+                                _tab(label, view == task, () => go(task)),
+                            ],
+                          ),
+                        );
+                        final actions = Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _barIcon(
+                              Icons.person_search_outlined,
+                              'Find player (Ctrl+L)',
+                              lookup,
+                              selected: dock.id == 'lookup',
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        _barIcon(
-                          Icons.person_search_outlined,
-                          'Find player (Ctrl+L)',
-                          lookup,
-                          selected: dock.id == 'lookup',
-                        ),
-                        _undoButton(context),
-                        _barIcon(
-                          Icons.chevron_right,
-                          c.canRedo
-                              ? 'Forward: redo ${c.redoLabel} (Ctrl+Shift+Z)'
-                              : 'Nothing to redo',
-                          c.canRedo ? redo : null,
-                        ),
-                        _barIcon(
-                          Icons.account_tree_outlined,
-                          historyOpen
-                              ? 'Hide history (Ctrl+H)'
-                              : 'History (Ctrl+H)',
-                          toggleHistory,
-                          selected: historyOpen,
-                        ),
-                        _barIcon(
-                          dark
-                              ? Icons.light_mode_outlined
-                              : Icons.dark_mode_outlined,
-                          dark ? 'Light mode' : 'Dark mode',
-                          widget.onTheme,
-                        ),
-                        SizedBox(
-                          height: 24,
-                          child: VerticalDivider(
-                            width: 17,
-                            color: colors.outlineVariant,
-                          ),
-                        ),
-                        _barIcon(
-                          Icons.home_outlined,
-                          'Close event',
-                          widget.onClose,
-                        ),
-                      ],
+                            TextButton.icon(
+                              onPressed: keyboardHelp,
+                              icon: const Icon(
+                                Icons.keyboard_outlined,
+                                size: 18,
+                              ),
+                              label: const Text('Keys'),
+                            ),
+                            _undoButton(context),
+                            _barIcon(
+                              Icons.chevron_right,
+                              c.canRedo
+                                  ? 'Forward: redo ${c.redoLabel} (Ctrl+Shift+Z)'
+                                  : 'Nothing to redo',
+                              c.canRedo ? redo : null,
+                            ),
+                            _barIcon(
+                              Icons.account_tree_outlined,
+                              historyOpen
+                                  ? 'Hide history (Ctrl+H)'
+                                  : 'History (Ctrl+H)',
+                              toggleHistory,
+                              selected: historyOpen,
+                            ),
+                            _barIcon(
+                              dark
+                                  ? Icons.light_mode_outlined
+                                  : Icons.dark_mode_outlined,
+                              dark ? 'Light mode' : 'Dark mode',
+                              widget.onTheme,
+                            ),
+                            SizedBox(
+                              height: 24,
+                              child: VerticalDivider(
+                                width: 17,
+                                color: colors.outlineVariant,
+                              ),
+                            ),
+                            _barIcon(
+                              Icons.home_outlined,
+                              'Close event',
+                              widget.onClose,
+                            ),
+                          ],
+                        );
+                        if (constraints.maxWidth /
+                                MediaQuery.textScalerOf(context).scale(1) <
+                            1000) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              navigation,
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: actions,
+                              ),
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            Expanded(child: navigation),
+                            const SizedBox(width: 12),
+                            actions,
+                          ],
+                        );
+                      },
                     ),
                   ),
                   if (e.practice) _practiceBanner(context),
                   Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _sectionSidebar(context),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (c.backupWarning != null)
-                                MaterialBanner(
-                                  content: Text(c.backupWarning!),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: c.secondaryBackup,
-                                      child: const Text('Retry'),
-                                    ),
-                                  ],
-                                ),
-                              if (view != TaskView.reports)
-                                Container(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    24,
-                                    12,
-                                    24,
-                                    12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: Border(
-                                      bottom: BorderSide(
-                                        color: colors.outlineVariant,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          section?.name ?? 'All sections',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Flexible(
-                                        flex: 3,
-                                        child: _postControl(
-                                          context,
-                                          e,
-                                          section,
-                                        ),
+                    child: LayoutBuilder(
+                      builder: (context, layout) => Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _sectionSidebar(context),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (c.backupWarning != null)
+                                  MaterialBanner(
+                                    content: Text(c.backupWarning!),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: c.secondaryBackup,
+                                        child: const Text('Retry'),
                                       ),
                                     ],
                                   ),
-                                ),
-                              if (postNotes.isNotEmpty) _postNotes(context),
-                              Expanded(child: content),
-                            ],
-                          ),
-                        ),
-                        if (dock.panel != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 16),
-                            child: dock.panel,
-                          ),
-                        if (eventOpen)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 16),
-                            child: EventPanel(
-                              key: eventPanel,
-                              controller: c,
-                              onClose: toggleEvent,
+                                if (view != TaskView.reports)
+                                  Container(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      24,
+                                      12,
+                                      24,
+                                      12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color: colors.outlineVariant,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            section?.name ?? 'All sections',
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Flexible(
+                                          flex: 3,
+                                          child: _postControl(
+                                            context,
+                                            e,
+                                            section,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                if (postNotes.isNotEmpty) _postNotes(context),
+                                Expanded(child: content),
+                              ],
                             ),
                           ),
-                        if (historyOpen)
-                          HistoryPanel(controller: c, onClose: toggleHistory),
-                      ],
+                          if (dock.panel != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: (layout.maxWidth - 208) * 0.48,
+                                ),
+                                child: dock.panel,
+                              ),
+                            ),
+                          if (eventOpen)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: (layout.maxWidth - 208) * 0.48,
+                                ),
+                                child: EventPanel(
+                                  key: eventPanel,
+                                  controller: c,
+                                  onClose: toggleEvent,
+                                ),
+                              ),
+                            ),
+                          if (historyOpen)
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: (layout.maxWidth - 208) * 0.48,
+                              ),
+                              child: HistoryPanel(
+                                controller: c,
+                                onClose: toggleHistory,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                   _statusBar(context, e),
@@ -591,43 +704,56 @@ class _WorkspaceState extends State<Workspace> {
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: colors.outlineVariant)),
       ),
-      child: Row(
-        children: [
-          Icon(Icons.check, size: 14, color: colors.onSurfaceVariant),
-          const SizedBox(width: 4),
-          Text(
-            head == null ? 'Saved' : 'Saved ${historyTime(head.timestamp)}',
-            key: const ValueKey('status-saved'),
-            style: style,
-          ),
-          Text('  ·  ', style: style),
-          TextButton(
-            key: const ValueKey('status-backup'),
-            onPressed: showBackups,
-            style: TextButton.styleFrom(
-              minimumSize: const Size(0, 24),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              textStyle: const TextStyle(fontSize: 12),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            Icon(Icons.check, size: 14, color: colors.onSurfaceVariant),
+            const SizedBox(width: 4),
+            Text(
+              head == null
+                  ? 'Event saved'
+                  : 'Event saved ${historyTime(head.timestamp)}',
+              key: const ValueKey('status-saved'),
+              style: style,
             ),
-            child: Text(
-              e.backupFolder.isEmpty
-                  ? 'No backup folder'
-                  : c.backupWarning != null
-                  ? 'Backup failed'
-                  : backedUp == null
-                  ? 'Backups on'
-                  : 'Backup $backedUp',
+            Text('  ·  ', style: style),
+            TextButton(
+              key: const ValueKey('status-backup'),
+              onPressed: showBackups,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 24),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+              child: Text(
+                e.backupFolder.isEmpty
+                    ? 'No backup folder'
+                    : c.backupWarning != null
+                    ? 'Backup failed'
+                    : backedUp == null
+                    ? 'Backups on'
+                    : 'Backup $backedUp',
+              ),
             ),
-          ),
-          Text('  ·  Revision ${e.revision}  ·  ', style: style),
-          Expanded(
-            child: Text(
+            Text('  ·  Revision ${e.revision}  ·  ', style: style),
+            Text(
               '${e.players.length} players · ${e.sections.length} sections · ${widget.path}',
               overflow: TextOverflow.ellipsis,
               style: style,
             ),
-          ),
-        ],
+            if (c.workspaceState.failures.isNotEmpty) ...[
+              Text(
+                ' · Draft or workspace state not saved',
+                style: TextStyle(color: colors.error),
+              ),
+              TextButton(
+                onPressed: c.workspaceState.retry,
+                child: const Text('Retry'),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

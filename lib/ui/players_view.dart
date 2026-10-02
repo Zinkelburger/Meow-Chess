@@ -11,7 +11,9 @@ import '../domain/standings.dart';
 import '../domain/us_chess.dart';
 import '../infrastructure/roster_import.dart';
 import 'dialogs.dart';
-import 'panels.dart' show FieldsPanel;
+import 'drafts.dart';
+import 'panels.dart' show FieldsPanel, Dock, showPrint;
+import '../infrastructure/reports.dart' show ReportKind;
 import 'theme.dart';
 import 'identity_review.dart';
 import 'results_view.dart' show scoreMark;
@@ -162,17 +164,81 @@ class _PlayersViewState extends State<PlayersView> {
       _points = 52.0,
       _tiebreak = 52.0;
 
+  String get preference => 'players-view-${widget.sectionId ?? 'all'}';
+  final scroll = ScrollController();
+  String get panelOwner => 'players-panel-${widget.sectionId ?? 'all'}';
+  bool ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final saved = c.workspaceState.readMap(preference);
+    search.text = saved['search'] as String? ?? '';
+    open = saved['open'] as String?;
+    side = _Side.values.where((v) => v.name == saved['side']).firstOrNull;
+    selected.addAll((saved['selected'] as List? ?? []).whereType<String>());
+    byScore = saved['byScore'] as bool?;
+    ceiling = saved['ceiling'] as int? ?? 0;
+    prizes = saved['prizes'] == true;
+    moveTo = saved['moveTo'] as String?;
+    moveReason.text = saved['moveReason'] as String? ?? '';
+    ready = true;
+    search.addListener(remember);
+    moveReason.addListener(remember);
+    scroll.addListener(remember);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (scroll.hasClients) {
+        scroll.jumpTo(
+          (saved['scroll'] as num? ?? 0).toDouble().clamp(
+            0,
+            scroll.position.maxScrollExtent,
+          ),
+        );
+      }
+      if (side != null) Dock.maybeOf(context)?.claim(panelOwner);
+    });
+  }
+
+  void remember() {
+    if (!ready) return;
+    c.workspaceState.writeMap(preference, {
+      'search': search.text,
+      'open': open,
+      'side': side?.name,
+      'selected': selected.toList(),
+      'byScore': byScore,
+      'ceiling': ceiling,
+      'prizes': prizes,
+      'moveTo': moveTo,
+      'moveReason': moveReason.text,
+      'scroll': scroll.hasClients ? scroll.offset : 0,
+    });
+  }
+
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    remember();
+  }
+
   @override
   void dispose() {
+    remember();
+    scroll.dispose();
     search.dispose();
     moveReason.dispose();
     super.dispose();
   }
 
-  /// Changes the side panel, saving the previous player's edits first.
+  /// Changes the panel; partial edits remain separate, recoverable drafts.
   void showSide(_Side? next, [String? id]) {
+    if (next != null) {
+      Dock.maybeOf(context)?.claim(panelOwner);
+    } else if (Dock.maybeOf(context)?.id == panelOwner) {
+      Dock.maybeOf(context)?.close();
+    }
     if (next == side && id == open) return;
-    if (panel.currentState?.commit() == false) return;
     setState(() {
       side = next;
       open = id;
@@ -231,6 +297,8 @@ class _PlayersViewState extends State<PlayersView> {
     final teams = ids.map((id) => e.player(id).team).toSet();
     return FieldsPanel(
       key: ValueKey('team-${ids.join()}'),
+      controller: c,
+      draftKey: 'draft-team-${(ids.toList()..sort()).join(',')}',
       title: 'Team for ${ids.length} ${ids.length == 1 ? 'player' : 'players'}',
       description:
           'Use the same name for mixed-doubles partners. Leave blank to remove the team. Team membership does not change individual pairings.',
@@ -257,7 +325,11 @@ class _PlayersViewState extends State<PlayersView> {
     }
     selected.removeWhere((id) => !e.players.any((p) => p.id == id));
     if (side == _Side.team && selected.isEmpty) side = null;
-    final panelWidget = switch (side) {
+    final coordinator = Dock.maybeOf(context);
+    final visibleSide = coordinator == null || coordinator.id == panelOwner
+        ? side
+        : null;
+    final panelWidget = switch (visibleSide) {
       _Side.player => PlayerPanel(
         key: panel,
         controller: c,
@@ -304,7 +376,7 @@ class _PlayersViewState extends State<PlayersView> {
       return [
         for (final row in table.values) row.player,
         for (final id in s.players)
-          if (!table.containsKey(id)) e.player(id),
+          if (!prizes && !table.containsKey(id)) e.player(id),
       ].where((p) => matches(p) && inClass(p)).toList();
     }
 
@@ -378,156 +450,193 @@ class _PlayersViewState extends State<PlayersView> {
         28;
     return PlayerDetailsLayout(
       panel: panelWidget,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  started
-                      ? '$shown players · W win, D draw, L loss + opponent\'s pairing number · B bye · Edit results in Rounds.'
-                      : '$shown players · Select a name to edit details or request a bye.',
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-                const SizedBox(height: 16),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final searchBox = SizedBox(
-                      width: constraints.maxWidth < 300
-                          ? constraints.maxWidth
-                          : 280,
-                      child: TextField(
-                        key: const ValueKey('player-search'),
-                        controller: search,
-                        decoration: InputDecoration(
-                          hintText: 'Search players',
-                          prefixIcon: const Icon(Icons.search, size: 20),
-                          prefixIconConstraints: const BoxConstraints(
-                            minWidth: 36,
-                            minHeight: controlHeight,
-                          ),
-                          suffixIconConstraints: const BoxConstraints(
-                            minWidth: 36,
-                            minHeight: controlHeight,
-                          ),
-                          suffixIcon: search.text.isEmpty
-                              ? null
-                              : IconButton(
-                                  tooltip: 'Clear search',
-                                  icon: const Icon(Icons.close, size: 18),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 32,
-                                    height: 32,
-                                  ),
-                                  onPressed: () => setState(search.clear),
-                                ),
-                        ),
-                        onChanged: (_) => setState(() {}),
-                        onSubmitted: (_) {
-                          final first = order.firstOrNull;
-                          if (first != null) openPlayer(first.id);
-                        },
+      child: LayoutBuilder(
+        builder: (context, layout) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: layout.maxHeight * 0.55),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        started
+                            ? '$shown players · W win, D draw, L loss + opponent\'s pairing number · B bye · Edit results in Rounds.'
+                            : '$shown players · Select a name to edit details or request a bye.',
+                        style: TextStyle(color: colors.onSurfaceVariant),
                       ),
-                    );
-                    final actions = Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        if (started)
-                          SegmentedButton<bool>(
-                            key: const ValueKey('player-order'),
-                            showSelectedIcon: false,
-                            segments: const [
-                              ButtonSegment(
-                                value: true,
-                                label: Text('Standings'),
+                      const SizedBox(height: 16),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final searchBox = SizedBox(
+                            width: constraints.maxWidth < 300
+                                ? constraints.maxWidth
+                                : 280,
+                            child: TextField(
+                              key: const ValueKey('player-search'),
+                              controller: search,
+                              decoration: InputDecoration(
+                                hintText: 'Search players',
+                                prefixIcon: const Icon(Icons.search, size: 20),
+                                prefixIconConstraints: const BoxConstraints(
+                                  minWidth: 36,
+                                  minHeight: controlHeight,
+                                ),
+                                suffixIconConstraints: const BoxConstraints(
+                                  minWidth: 36,
+                                  minHeight: controlHeight,
+                                ),
+                                suffixIcon: search.text.isEmpty
+                                    ? null
+                                    : IconButton(
+                                        tooltip: 'Clear search',
+                                        icon: const Icon(Icons.close, size: 18),
+                                        padding: EdgeInsets.zero,
+                                        constraints:
+                                            const BoxConstraints.tightFor(
+                                              width: 32,
+                                              height: 32,
+                                            ),
+                                        onPressed: () => setState(search.clear),
+                                      ),
                               ),
-                              ButtonSegment(
-                                value: false,
-                                label: Text('Seed order'),
+                              onChanged: (_) => setState(() {}),
+                              onSubmitted: (_) {
+                                final first = order.firstOrNull;
+                                if (first != null) openPlayer(first.id);
+                              },
+                            ),
+                          );
+                          final actions = Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (started)
+                                SegmentedButton<bool>(
+                                  key: const ValueKey('player-order'),
+                                  showSelectedIcon: false,
+                                  segments: const [
+                                    ButtonSegment(
+                                      value: true,
+                                      label: Text('Standings'),
+                                    ),
+                                    ButtonSegment(
+                                      value: false,
+                                      label: Text('Seed order'),
+                                    ),
+                                  ],
+                                  selected: {ranked},
+                                  onSelectionChanged: (v) =>
+                                      setState(() => byScore = v.first),
+                                ),
+                              if (ranked)
+                                OutlinedButton.icon(
+                                  key: const ValueKey('print-standings'),
+                                  onPressed: () => showPrint(
+                                    context,
+                                    c.event!,
+                                    sectionId: widget.sectionId,
+                                    kind: ReportKind.standings,
+                                    ceiling: ceiling,
+                                    forPrizes: prizes,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.print_outlined,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Print standings'),
+                                ),
+                              MenuAnchor(
+                                builder: (context, menu, child) =>
+                                    TextButton.icon(
+                                      onPressed: () => menu.isOpen
+                                          ? menu.close()
+                                          : menu.open(),
+                                      icon: const Icon(Icons.tune, size: 18),
+                                      label: const Text('View'),
+                                    ),
+                                menuChildren: [
+                                  CheckboxMenuButton(
+                                    value: showIds,
+                                    onChanged: (v) =>
+                                        setState(() => showIds = v!),
+                                    child: const Text('US Chess IDs'),
+                                  ),
+                                ],
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => showSide(_Side.add),
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Add player'),
+                              ),
+                              MenuAnchor(
+                                builder: (context, menu, child) => IconButton(
+                                  tooltip: 'Import players',
+                                  icon: const Icon(Icons.more_horiz),
+                                  onPressed: () =>
+                                      menu.isOpen ? menu.close() : menu.open(),
+                                ),
+                                menuChildren: [
+                                  MenuItemButton(
+                                    leadingIcon: const Icon(
+                                      Icons.upload_file_outlined,
+                                    ),
+                                    onPressed: () =>
+                                        importRosterFile(context, c),
+                                    child: const Text('Import file…'),
+                                  ),
+                                  MenuItemButton(
+                                    leadingIcon: const Icon(
+                                      Icons.content_paste,
+                                    ),
+                                    onPressed: () => showSide(_Side.paste),
+                                    child: const Text('Paste from spreadsheet'),
+                                  ),
+                                ],
                               ),
                             ],
-                            selected: {ranked},
-                            onSelectionChanged: (v) =>
-                                setState(() => byScore = v.first),
-                          ),
-                        MenuAnchor(
-                          builder: (context, menu, child) => TextButton.icon(
-                            onPressed: () =>
-                                menu.isOpen ? menu.close() : menu.open(),
-                            icon: const Icon(Icons.tune, size: 18),
-                            label: const Text('View'),
-                          ),
-                          menuChildren: [
-                            CheckboxMenuButton(
-                              value: showIds,
-                              onChanged: (v) => setState(() => showIds = v!),
-                              child: const Text('US Chess IDs'),
-                            ),
-                          ],
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => showSide(_Side.add),
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add player'),
-                        ),
-                        MenuAnchor(
-                          builder: (context, menu, child) => IconButton(
-                            tooltip: 'Import players',
-                            icon: const Icon(Icons.more_horiz),
-                            onPressed: () =>
-                                menu.isOpen ? menu.close() : menu.open(),
-                          ),
-                          menuChildren: [
-                            MenuItemButton(
-                              leadingIcon: const Icon(
-                                Icons.upload_file_outlined,
-                              ),
-                              onPressed: () => importRosterFile(context, c),
-                              child: const Text('Import file…'),
-                            ),
-                            MenuItemButton(
-                              leadingIcon: const Icon(Icons.content_paste),
-                              onPressed: () => showSide(_Side.paste),
-                              child: const Text('Paste from spreadsheet'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    );
-                    if (constraints.maxWidth /
-                            MediaQuery.textScalerOf(context).scale(1) <
-                        1000) {
-                      return Wrap(
-                        spacing: 16,
-                        runSpacing: 12,
-                        children: [searchBox, actions],
-                      );
-                    }
-                    return Row(children: [searchBox, const Spacer(), actions]);
-                  },
+                          );
+                          if (constraints.maxWidth /
+                                  MediaQuery.textScalerOf(context).scale(1) <
+                              1000) {
+                            return Wrap(
+                              spacing: 16,
+                              runSpacing: 12,
+                              children: [searchBox, actions],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              searchBox,
+                              const SizedBox(width: 16),
+                              Expanded(child: actions),
+                            ],
+                          );
+                        },
+                      ),
+                      if (ranked) _prizeClasses(context, groups),
+                    ],
+                  ),
                 ),
-                if (ranked) _prizeClasses(context, groups),
-              ],
-            ),
-          ),
-          if (unassigned > 0 && widget.onAddSections != null)
-            _banner(
-              context,
-              '$unassigned ${unassigned == 1 ? 'player is' : 'players are'} not in a section yet.',
-              FilledButton(
-                onPressed: widget.onAddSections,
-                child: const Text('Create sections…'),
               ),
             ),
-          _selectionBar(context),
-          Expanded(child: _table(context, items, width)),
-        ],
+            if (unassigned > 0 && widget.onAddSections != null)
+              _banner(
+                context,
+                '$unassigned ${unassigned == 1 ? 'player is' : 'players are'} not in a section yet.',
+                FilledButton(
+                  onPressed: widget.onAddSections,
+                  child: const Text('Create sections…'),
+                ),
+              ),
+            _selectionBar(context),
+            Expanded(child: _table(context, items, width)),
+          ],
+        ),
       ),
     );
   }
@@ -561,7 +670,12 @@ class _PlayersViewState extends State<PlayersView> {
                       child: Column(
                         children: [
                           _columns(context, rounds),
-                          Expanded(child: ListView(children: items)),
+                          Expanded(
+                            child: ListView(
+                              controller: scroll,
+                              children: items,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -638,7 +752,7 @@ class _PlayersViewState extends State<PlayersView> {
     return Container(
       margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      height: controlHeight + 12,
+      constraints: const BoxConstraints(minHeight: controlHeight + 12),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(4),
@@ -798,6 +912,8 @@ class _PlayersViewState extends State<PlayersView> {
             child: Align(
               alignment: Alignment.centerLeft,
               child: PlainCheckbox(
+                label:
+                    'Select all visible players in ${s?.name ?? 'unassigned players'}',
                 tristate: true,
                 value: ids.isEmpty || picked == 0
                     ? false
@@ -972,6 +1088,7 @@ class _PlayersViewState extends State<PlayersView> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: PlainCheckbox(
+                      label: 'Select ${p.name}',
                       value: selected.contains(p.id),
                       onChanged: (v) => setState(
                         () => v! ? selected.add(p.id) : selected.remove(p.id),
@@ -1243,9 +1360,11 @@ class PlayerPanel extends StatefulWidget {
     this.player,
     this.sectionId,
     this.memberLookup = fetchMember,
+    this.focusField,
     super.key,
   });
   final TournamentController controller;
+  final String? focusField;
 
   /// Where a new player goes by default: the section on screen.
   final String? sectionId;
@@ -1270,7 +1389,24 @@ class PlayerPanelState extends State<PlayerPanel> {
     ('notes', 'Private notes', 3),
   ];
   final text = {for (final f in _fields) f.$1: TextEditingController()};
+  final fieldFocus = {for (final f in _fields) f.$1: FocusNode()};
+
+  void focusRequestedField() {
+    final node = fieldFocus[widget.focusField];
+    if (node == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      node.requestFocus();
+      if (node.context != null) {
+        Scrollable.ensureVisible(node.context!, alignment: 0.2);
+      }
+    });
+  }
+
   final reason = TextEditingController();
+  late FormDraft draft;
+  final joinDraft = TextEditingController();
+  final moveTarget = TextEditingController();
   String? error;
 
   /// A move waiting for a reason, because play has started.
@@ -1339,14 +1475,56 @@ class PlayerPanelState extends State<PlayerPanel> {
   void initState() {
     super.initState();
     load();
+    restoreDraft();
     _lastMemberIdText = text['memberId']!.text;
     text['memberId']!.addListener(memberIdChanged);
+    focusRequestedField();
+  }
+
+  void restoreDraft() {
+    draft = FormDraft(
+      c.workspaceState,
+      'draft-player-${widget.player?.id ?? 'new'}',
+      {
+        ...text,
+        'join': joinDraft,
+        'moveReason': reason,
+        'moveTarget': moveTarget,
+      },
+      {
+        ...stored(widget.player),
+        'join': widget.sectionId ?? '',
+        'moveReason': '',
+        'moveTarget': '',
+      },
+    );
+    moveTo = c.event!.sections.any((s) => s.id == moveTarget.text)
+        ? moveTarget.text
+        : null;
+    joinSection = joinDraft.text.isEmpty ? null : joinDraft.text;
+    if (!c.event!.sections.any((s) => s.id == joinSection)) joinSection = null;
+  }
+
+  void discardDraft() {
+    draft.reset({
+      ...stored(widget.player),
+      'join': widget.sectionId ?? '',
+      'moveReason': '',
+      'moveTarget': '',
+    });
+    joinSection = widget.sectionId;
+    moveTo = null;
+    setState(() => error = null);
   }
 
   @override
   void didUpdateWidget(PlayerPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     final old = oldWidget;
+    if (old.focusField != widget.focusField ||
+        old.player?.id != widget.player?.id) {
+      focusRequestedField();
+    }
     if (old.controller != widget.controller ||
         old.player?.id != widget.player?.id ||
         (old.player?.memberId != widget.player?.memberId &&
@@ -1354,19 +1532,34 @@ class PlayerPanelState extends State<PlayerPanel> {
       invalidateLookup();
     }
     if (old.player?.id != widget.player?.id) {
+      draft.dispose();
       moveTo = null;
       reason.clear();
       member = null;
       lookupError = null;
       load();
-    } else if (mapEquals(values, stored(old.player))) {
+      restoreDraft();
+    } else if (mapEquals(values, stored(old.player)) &&
+        !mapEquals(stored(old.player), stored(widget.player))) {
       // Follow outside changes (undo, lookup) unless the user is mid-edit.
+      draft.reset({
+        ...stored(widget.player),
+        'join': joinDraft.text,
+        'moveReason': reason.text,
+        'moveTarget': moveTarget.text,
+      });
       load();
     }
   }
 
   @override
   void dispose() {
+    draft.dispose();
+    for (final node in fieldFocus.values) {
+      node.dispose();
+    }
+    joinDraft.dispose();
+    moveTarget.dispose();
     for (final t in text.values) {
       t.dispose();
     }
@@ -1420,6 +1613,12 @@ class PlayerPanelState extends State<PlayerPanel> {
       if (adding) joined = joinNew(saved);
       // Show the saved capitals rather than leaving the panel looking unsaved.
       if (!adding) text['state']!.text = state;
+      draft.reset({
+        ...stored(adding ? null : saved),
+        'join': joinSection ?? '',
+        'moveReason': reason.text,
+        'moveTarget': moveTarget.text,
+      });
     });
     // The add form clears for the next player.
     if (ok && adding) {
@@ -1460,7 +1659,10 @@ class PlayerPanelState extends State<PlayerPanel> {
           s.rounds.isNotEmpty,
     );
     if (started) {
-      setState(() => moveTo = target);
+      setState(() {
+        moveTo = target;
+        moveTarget.text = target;
+      });
     } else {
       attempt(() => c.movePlayers([widget.player!.id], target));
     }
@@ -1480,6 +1682,7 @@ class PlayerPanelState extends State<PlayerPanel> {
     )) {
       setState(() {
         moveTo = null;
+        moveTarget.clear();
         reason.clear();
       });
     }
@@ -1529,7 +1732,9 @@ class PlayerPanelState extends State<PlayerPanel> {
           child: TextField(
             key: ValueKey('panel-$key'),
             controller: text[key],
-            autofocus: widget.player == null && i == 0,
+            focusNode: fieldFocus[key],
+            autofocus:
+                widget.focusField == null && widget.player == null && i == 0,
             maxLines: lines,
             textCapitalization: key == 'state'
                 ? TextCapitalization.characters
@@ -1553,9 +1758,7 @@ class PlayerPanelState extends State<PlayerPanel> {
           child: Text(error!, style: TextStyle(color: colors.error)),
         ),
     ];
-    void close() {
-      if (commit()) widget.onClose();
-    }
+    void close() => widget.onClose();
 
     final player = widget.player;
     if (player == null) {
@@ -1563,6 +1766,7 @@ class PlayerPanelState extends State<PlayerPanel> {
         title: 'Add player',
         onClose: close,
         children: [
+          DraftStatus(draft: draft),
           ...fields,
           if (c.event!.sections.isNotEmpty)
             Padding(
@@ -1580,12 +1784,24 @@ class PlayerPanelState extends State<PlayerPanel> {
                   for (final s in c.event!.sections)
                     DropdownMenuItem(value: s.id, child: Text(s.name)),
                 ],
-                onChanged: (v) => setState(() => joinSection = v),
+                onChanged: (v) => setState(() {
+                  joinSection = v;
+                  joinDraft.text = v ?? '';
+                }),
               ),
             ),
           Align(
             alignment: Alignment.centerLeft,
-            child: FilledButton(onPressed: commit, child: const Text('Add')),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                FilledButton(onPressed: commit, child: const Text('Add')),
+                TextButton(
+                  onPressed: discardDraft,
+                  child: const Text('Discard draft'),
+                ),
+              ],
+            ),
           ),
           if (added != null)
             Padding(
@@ -1618,6 +1834,7 @@ class PlayerPanelState extends State<PlayerPanel> {
       title: p.name,
       onClose: close,
       children: [
+        DraftStatus(draft: draft),
         if (p.withdrawn)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -1625,13 +1842,14 @@ class PlayerPanelState extends State<PlayerPanel> {
           ),
         ...fields,
         if (dirty)
-          Row(
+          Wrap(
+            spacing: 8,
             children: [
               FilledButton(onPressed: commit, child: const Text('Save')),
               const SizedBox(width: 8),
               TextButton(
-                onPressed: () => setState(load),
-                child: const Text('Revert'),
+                onPressed: discardDraft,
+                child: const Text('Discard draft'),
               ),
             ],
           ),
@@ -1805,6 +2023,7 @@ class PlayerPanelState extends State<PlayerPanel> {
                 TextButton(
                   onPressed: () => setState(() {
                     moveTo = null;
+                    moveTarget.clear();
                     reason.clear();
                   }),
                   child: const Text('Cancel'),
@@ -1891,16 +2110,19 @@ class PlayerDetailsLayout extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final reserve = panel != null || constraints.maxWidth >= 1120;
-      final contentWidth = (constraints.maxWidth - (reserve ? 360 : 0)).clamp(
-        360.0,
+      final panelWidth = reserve
+          ? (constraints.maxWidth * 0.48).clamp(0.0, 360.0)
+          : 0.0;
+      final contentWidth = (constraints.maxWidth - panelWidth).clamp(
+        0.0,
         1100.0,
       );
       // Small windows can scroll across the table and details together.
       return SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: SizedBox(
-          width: constraints.maxWidth < contentWidth + (reserve ? 360 : 0)
-              ? contentWidth + (reserve ? 360 : 0)
+          width: constraints.maxWidth < contentWidth + panelWidth
+              ? contentWidth + panelWidth
               : constraints.maxWidth,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1910,7 +2132,7 @@ class PlayerDetailsLayout extends StatelessWidget {
               if (reserve)
                 SizedBox(
                   key: const ValueKey('player-details-area'),
-                  width: 360,
+                  width: panelWidth,
                   child: panel == null
                       ? null
                       : Padding(
@@ -2012,7 +2234,7 @@ class _PastePanel extends StatefulWidget {
 
 class _PastePanelState extends State<_PastePanel> {
   late final text = TextEditingController(
-    text: widget.controller.repository.readPreference('import-draft') ?? '',
+    text: widget.controller.workspaceState.read('import-draft') ?? '',
   );
   String? summary, error;
 
@@ -2026,7 +2248,7 @@ class _PastePanelState extends State<_PastePanel> {
     final c = widget.controller;
     try {
       final result = importRoster(c, text.text);
-      c.repository.writePreference('import-draft', '');
+      c.workspaceState.write('import-draft', '');
       text.clear();
       setState(() {
         summary = result;
@@ -2040,6 +2262,8 @@ class _PastePanelState extends State<_PastePanel> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final draftError =
+        widget.controller.workspaceState.failures['import-draft'];
     return SidePanel(
       title: 'Paste players',
       onClose: widget.onClose,
@@ -2059,14 +2283,25 @@ class _PastePanelState extends State<_PastePanel> {
             hintText: 'Name,ID,Rating\nMorgan Lee,12345678,1650',
           ),
           onChanged: (v) {
-            try {
-              widget.controller.repository.writePreference('import-draft', v);
-            } catch (_) {
-              // A lost draft only matters after a crash.
-            }
+            widget.controller.workspaceState.write('import-draft', v);
+            setState(() {});
           },
         ),
         const SizedBox(height: 12),
+        if (draftError != null || text.text.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              draftError == null
+                  ? 'Draft saved · not imported'
+                  : 'Draft not saved to disk. $draftError',
+              style: TextStyle(
+                color: draftError == null
+                    ? colors.onSurfaceVariant
+                    : colors.error,
+              ),
+            ),
+          ),
         if (error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -2074,7 +2309,22 @@ class _PastePanelState extends State<_PastePanel> {
           ),
         Align(
           alignment: Alignment.centerLeft,
-          child: FilledButton(onPressed: save, child: const Text('Import')),
+          child: Wrap(
+            spacing: 8,
+            children: [
+              FilledButton(onPressed: save, child: const Text('Import')),
+              if (widget.controller.workspaceState.failures.containsKey(
+                'import-draft',
+              ))
+                TextButton(
+                  onPressed: () {
+                    widget.controller.workspaceState.retry();
+                    setState(() {});
+                  },
+                  child: const Text('Retry draft save'),
+                ),
+            ],
+          ),
         ),
         if (summary != null)
           Padding(

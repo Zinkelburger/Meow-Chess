@@ -10,6 +10,7 @@ import '../domain/model.dart';
 import '../domain/pairing.dart';
 import 'event_repository.dart';
 import 'failures.dart';
+import 'workspace_state.dart';
 
 class PairingBatch {
   const PairingBatch(this.revision, this.rounds, this.issues);
@@ -21,6 +22,7 @@ class PairingBatch {
 class TournamentController extends ChangeNotifier {
   TournamentController(this.repository) : event = repository.load();
   final EventRepository repository;
+  late final workspaceState = WorkspaceState(repository);
   Event? event;
   String? backupWarning;
   bool _closed = false;
@@ -652,6 +654,7 @@ class TournamentController extends ChangeNotifier {
   @override
   void dispose() {
     _closed = true;
+    workspaceState.dispose();
     repository.close();
     super.dispose();
   }

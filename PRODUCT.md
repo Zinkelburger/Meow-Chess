@@ -10,7 +10,7 @@ Recorded as `web` only because Impeccable has no desktop value; no iOS/Android g
 
 ## Users
 
-The primary user is a solo club tournament director: one person, one laptop, one printer, running Boylston-style US Chess events (Saturday quads with a bottom Swiss, weekly evening Swiss, double-round blitz) alone. They work under time pressure, standing at the door during check-in, interrupted constantly by players and parents, and switching between sections all day. Their jobs: check players in, make sections, post pairings, take results fast, correct mistakes, answer "where am I playing?", print wall sheets and crosstables, and leave with a report US Chess accepts.
+The primary user is a solo club tournament director: one person, one laptop, one printer, running Boylston-style US Chess events (Saturday quads with a bottom Swiss, weekly evening Swiss, double-round blitz) alone. They work under time pressure, helping arrivals at the door, interrupted constantly by players and parents, and switching between sections all day. Their jobs: register walk-ups, make sections, post pairings, take results fast, correct mistakes, answer "where am I playing?", print wall sheets and crosstables, and leave with a report US Chess accepts.
 
 Secondary audiences, confirmed by the docs but not the design target: players reading posted pairings and standings (on paper or a second screen), and a relief TD taking over mid-event.
 
@@ -22,11 +22,11 @@ Meow-Chess is an offline-first tournament director workspace for US Chess events
 
 An easy, modern TD tool that makes quads and ordinary Swiss events simple where SwissSys is overcomplicated. Common club formats get a real guided workflow, not a hidden combination of generic section operations, and the default path is the batch path.
 
-Secondary strengths that support that position: keyboard-speed results, check-in and lookup; durable saves with history and understandable recovery; free, open (AGPLv3), offline and cross-platform with Linux first-class.
+Secondary strengths that support that position: keyboard-speed results, walk-up registration and lookup; durable saves with history and understandable recovery; free, open (AGPLv3), offline and cross-platform with Linux first-class.
 
 ## Operating Context
 
-- **The tournament day, on the clock:** roster in before players arrive, check-in at the door, round-one preflight, post round, results during play, corrections, standings and prizes, end-of-day reporting. `docs/TD_DAY.md` owns the timeline and targets.
+- **The tournament day, on the clock:** roster in before players arrive, walk-up registration at the door, round-one preflight, post round, results during play, corrections, standings and prizes, end-of-day reporting. `docs/TD_DAY.md` owns the timeline and targets.
 - **Events are files:** each event is a local `.meow` SQLite file, opened from a recent-event library or by double-click. No account or network is needed to run rounds; network only enriches ratings and identity, and a failed lookup never blocks result entry or printing.
 - **Paper is a real output:** pairings, wall sheets, ASCII crosstables and round packets are printed on white paper.
 - **Inputs:** pasted or imported registration tables (often messy, with stale or conflicting data), the US Chess ratings API, TD decisions at the door.
@@ -38,8 +38,9 @@ Secondary strengths that support that position: keyboard-speed results, check-in
 - Shipped (1.0.0): event library and workspace, roster import, identity review, quads and individual Swiss/round-robin sections, keyboard results entry, standings and crosstables, reports and printing, history tree with undo/redo and restore, US Chess DBF export. `docs/IMPLEMENTATION.md` is the authority on what is built and tested.
 - Unverified: US Chess federation acceptance of exports and full Swiss pairing-priority conformance. Never claim either.
 - Planned scope (team standings, bughouse, online events, leagues, accelerated pairings, FIDE) lives in `docs/PRODUCT_PLAN.md` and `docs/FULL_FEATURE_MAP.md`; it is not shipped.
+- No attendance/check-in workflow: pair all eligible registered players. Record no-shows as forfeits and offer withdrawal; do not require an arrival flag before pairing. This is the user’s explicit direction.
 - Out of scope: cloud registration, payments, SMS, multi-TD editing, club management.
-- No modal pop-ups. Edits happen inline or in a docked side panel beside the table, apply immediately, and rely on undo instead of confirm or preview dialogs. Toasts with Undo and native OS file pickers are fine.
+- No modal pop-ups. Edits happen inline or in a docked side panel beside the table. Result shortcuts apply immediately with undo; forms use explicit Save/Add and preserve partial drafts on Close/Escape. Toasts with Undo and native OS file pickers are fine.
 - TD vocabulary is binding (K22): **Post** a round, never "publish"; **Share online** is the network action; use wall sheet, pairing number, house player, bye, withdraw.
 - Keyboard contract: result shortcuts (1/0/5, W/L/D) commit immediately and advance; shortcuts never fire while a text field has focus. See `docs/RESULT_ENTRY.md` and `docs/TD_EXPERIENCE.md`.
 - Every screen survives being abandoned: half-done forms, imports and result sequences persist across navigation and restart.
@@ -69,4 +70,4 @@ Secondary strengths that support that position: keyboard-speed results, check-in
 
 ## Accessibility & Inclusion
 
-Required (N05): keyboard-only operation of every core workflow, screen-reader labels, status never conveyed by color alone, visible focus rings, and no clipped actions or hover-only information at 200% text or zoom. Check-in and the player lookup panel must be legible from standing height and readable by a player facing the screen. Honor reduced motion. Printing uses a high-contrast white-paper style.
+Required (N05): keyboard-only operation of every core workflow, screen-reader labels, status never conveyed by color alone, visible focus rings, and no clipped actions or hover-only information at 200% text or zoom. The player lookup panel must be legible from standing height and readable by a player facing the screen. Honor reduced motion. Printing uses a high-contrast white-paper style.

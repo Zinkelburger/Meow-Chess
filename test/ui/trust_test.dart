@@ -59,7 +59,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('status-bar')),
-        matching: find.textContaining('Saved '),
+        matching: find.textContaining('Event saved '),
       ),
       findsOneWidget,
     );

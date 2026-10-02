@@ -71,7 +71,7 @@ Uint8List encodeDbf(
 
 /// Sent as `H_PROGRAM` (at most ten characters). A test keeps it equal to the
 /// version in pubspec.yaml.
-const appVersion = '1.0.0';
+const appVersion = '1.1.0';
 
 /// Sections that appear in the report: every section with entrants.
 List<Section> reportedSections(Event e) =>
@@ -104,95 +104,168 @@ String _day(DateTime d) =>
 /// to be refused. Each entry says what to change. Empty means the files can be
 /// created. Field rules follow the 2C format (research/local/uscf-fileformat.txt)
 /// and rating categories follow rule 5C (research/local/uscf-rules-2026.txt).
-List<String> ratingPreflight(Event e, {DateTime? today}) {
-  final issues = <String>[];
-  void check(String? problem, String message) {
-    if (problem != null) issues.add(message.replaceFirst('{}', problem));
+enum ReportDestination { event, report, player, section, results }
+
+class ReportRepair {
+  const ReportRepair(this.label, this.destination, {this.id, this.field});
+  final String label;
+  final ReportDestination destination;
+  final String? id, field;
+}
+
+class ReportIssue {
+  const ReportIssue(this.message, this.repairs);
+  final String message;
+  final List<ReportRepair> repairs;
+}
+
+List<String> ratingPreflight(Event e, {DateTime? today}) =>
+    ratingIssues(e, today: today).map((issue) => issue.message).toList();
+
+List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
+  final issues = <ReportIssue>[];
+  void add(String message, {List<ReportRepair> repairs = const []}) =>
+      issues.add(ReportIssue(message, repairs));
+  ReportRepair event(String field) =>
+      ReportRepair('Edit event details', ReportDestination.event, field: field);
+  ReportRepair report(String field) => ReportRepair(
+    'Edit report details',
+    ReportDestination.report,
+    field: field,
+  );
+  ReportRepair player(Player p, String field) => ReportRepair(
+    'Edit ${p.name}',
+    ReportDestination.player,
+    id: p.id,
+    field: field,
+  );
+  void check(String? problem, String message, {ReportRepair? repair}) {
+    if (problem != null) {
+      add(
+        message.replaceFirst('{}', problem),
+        repairs: repair == null ? [] : [repair],
+      );
+    }
   }
 
   final sections = reportedSections(e);
-  if (e.practice) issues.add('Practice copies cannot produce rating reports.');
-  if (sections.isEmpty) issues.add('Create sections and add players first.');
+  if (e.practice) add('Practice copies cannot produce rating reports.');
+  if (sections.isEmpty) add('Create sections and add players first.');
   if (sections.any((s) => !s.finished)) {
-    issues.add('Complete all scheduled rounds and results.');
+    add(
+      'Complete all scheduled rounds and results.',
+      repairs: [
+        for (final s in sections.where((s) => !s.finished))
+          ReportRepair(
+            'Open ${s.name} results',
+            ReportDestination.results,
+            id: s.id,
+          ),
+      ],
+    );
   }
 
   // Event details.
-  check(_textProblem(e.name, 35), 'Event name {}. Change it in Event details.');
+  check(
+    _textProblem(e.name, 35),
+    'Event name {}. Change it in Event details.',
+    repair: event('name'),
+  );
   if (!isMemberId(e.tdId)) {
-    issues.add(
+    add(
       'Enter the chief TD\'s eight-digit US Chess ID in Event details.',
+      repairs: [event('td')],
     );
   }
   if (!isAffiliateId(e.affiliateId)) {
-    issues.add(
+    add(
       'Enter the affiliate ID in Event details: the letter A and seven digits, like A6012345.',
+      repairs: [event('affiliate')],
     );
   }
   final now = _day(today ?? DateTime.now());
   if (!isEventDate(e.date) ||
       (e.endDate.isNotEmpty &&
           (!isEventDate(e.endDate) || e.endDate.compareTo(e.date) < 0))) {
-    issues.add(
+    add(
       'Check the event dates in Event details: the last day cannot come before the first.',
+      repairs: [event('date')],
     );
   } else if (e.lastDate.compareTo(now) > 0) {
-    issues.add(
+    add(
       'The event ends after today (${e.lastDate}). Check the dates in Event details.',
+      repairs: [event('date')],
     );
   } else if (e.date.compareTo('2000-01-01') < 0) {
-    issues.add('Check the event date in Event details (${e.date}).');
+    add(
+      'Check the event date in Event details (${e.date}).',
+      repairs: [event('date')],
+    );
   }
   try {
     final tc = TimeControl.parse(e.timeControl);
     final category = tc.category;
     if (category == null) {
-      issues.add(
+      add(
         'Time control ${e.timeControl} is not ratable: rule 5C needs at least five minutes in total, and five in the first control above G/10.',
+        repairs: [event('time')],
       );
     } else if (category.code == null) {
-      issues.add(
+      add(
         'Blitz events cannot be reported in this file format yet. Report them on the US Chess website.',
       );
     }
     check(
       tc.reportText.length > 40 ? 'is too long for the report' : null,
       'Time control {}. Simplify it in Event details.',
+      repair: event('time'),
     );
   } on TournamentException catch (error) {
-    issues.add('${error.message} Change it in Event details.');
+    add(
+      '${error.message} Change it in Event details.',
+      repairs: [event('time')],
+    );
   }
 
   // Report details.
-  check(_textProblem(e.city, 21), 'City {}. Enter it under Report details.');
+  check(
+    _textProblem(e.city, 21),
+    'City {}. Enter it under Report details.',
+    repair: report('city'),
+  );
   if (!usStates.contains(e.state)) {
-    issues.add(
+    add(
       'Enter the two-letter state where the event was held under Report details.',
+      repairs: [report('state')],
     );
   }
   if (!isZipCode(e.zip)) {
-    issues.add(
+    add(
       'Enter the ZIP code (12345 or 12345-6789) under Report details.',
+      repairs: [report('zip')],
     );
   }
   if (!sectionLevels.containsKey(e.level)) {
-    issues.add('Choose the event type under Report details.');
+    add(
+      'Choose the event type under Report details.',
+      repairs: [report('level')],
+    );
   }
 
   // Sections.
   if (sections.length > 99) {
-    issues.add('US Chess reports allow at most 99 sections.');
+    add('US Chess reports allow at most 99 sections.');
   }
   if (sections.map((s) => s.rounds.length).toSet().length > 1) {
-    issues.add(
+    add(
       'Sections with different numbers of rounds cannot be reported together yet.',
     );
   }
   if (sections.any((s) => s.doubleGames)) {
-    issues.add('Double-game sections cannot be reported yet.');
+    add('Double-game sections cannot be reported yet.');
   }
   if (e.transitions.any((t) => (t['effectiveRound'] as int) > 1)) {
-    issues.add(
+    add(
       'Players moved between sections after play started; this cannot be reported yet.',
     );
   }
@@ -200,24 +273,30 @@ List<String> ratingPreflight(Event e, {DateTime? today}) {
     check(
       _textProblem(s.name, 30),
       'Section name "${s.name}" {}. Rename the section.',
+      repair: ReportRepair(
+        'Edit ${s.name}',
+        ReportDestination.section,
+        id: s.id,
+        field: 'name',
+      ),
     );
     final members = s.players.toSet();
     if (members.length < 2) {
-      issues.add('Section ${s.name} needs at least two players to be rated.');
+      add('Section ${s.name} needs at least two players to be rated.');
     }
     if (s.rounds.length > 32 || members.length > 9999) {
-      issues.add('Section ${s.name} exceeds 32 rounds or 9999 players.');
+      add('Section ${s.name} exceeds 32 rounds or 9999 players.');
     }
     if (s.finished &&
         !s.rounds.any((r) => r.games.any((g) => g.outcome.played))) {
-      issues.add('Section ${s.name} has no played games to rate.');
+      add('Section ${s.name} has no played games to rate.');
     }
     for (final r in s.rounds) {
       if (r.games.any(
             (g) => !members.contains(g.white) || !members.contains(g.black),
           ) ||
           r.byes.any((b) => !members.contains(b.player))) {
-        issues.add(
+        add(
           'Section ${s.name}, round ${r.number} includes a player who is no longer in the section.',
         );
       }
@@ -231,11 +310,12 @@ List<String> ratingPreflight(Event e, {DateTime? today}) {
   ];
   final noId = [
     for (final (_, p) in entrants)
-      if (!isMemberId(p.memberId)) p.name,
+      if (!isMemberId(p.memberId)) p,
   ];
   if (noId.isNotEmpty) {
-    issues.add(
-      'US Chess ID missing or invalid for ${_list(noId)}. Every player needs one to be rated.',
+    add(
+      'US Chess ID missing or invalid for ${_list(noId.map((p) => p.name))}. Every player needs one to be rated.',
+      repairs: [for (final p in noId) player(p, 'memberId')],
     );
   }
   final byId = <String, List<(Section, Player)>>{};
@@ -248,24 +328,27 @@ List<String> ratingPreflight(Event e, {DateTime? today}) {
     final people = same.map((x) => x.$2.personId ?? x.$2.id).toSet();
     final sectionIds = same.map((x) => x.$1.id).toSet();
     if (people.length > 1 || sectionIds.length < same.length) {
-      issues.add(
+      add(
         'US Chess ID $id is entered for ${_list(same.map((x) => x.$2.name))}.',
+        repairs: [for (final (_, p) in same) player(p, 'memberId')],
       );
     }
   }
   final noState = [
     for (final (_, p) in entrants)
-      if (p.state.isEmpty) p.name,
+      if (p.state.isEmpty) p,
   ];
   if (noState.isNotEmpty) {
-    issues.add(
-      'State missing for ${_list(noState)}. Look them up by US Chess ID, enter it in the player panel, or use the button below.',
+    add(
+      'State missing for ${_list(noState.map((p) => p.name))}. Look them up by US Chess ID, enter it in the player panel, or use the button below.',
+      repairs: [for (final p in noState) player(p, 'state')],
     );
   }
   for (final (_, p) in entrants) {
     check(
       reportNameProblem(playerReportName(p)),
       '${p.name}: name {}. Set "Name on rating report" in the player panel.',
+      repair: player(p, 'reportName'),
     );
   }
   return issues;

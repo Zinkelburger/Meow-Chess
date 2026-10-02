@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -58,18 +57,24 @@ class ResultsView extends StatefulWidget {
   final TournamentController controller;
   final String? sectionId;
   @override
-  State<ResultsView> createState() => _ResultsViewState();
+  State<ResultsView> createState() => ResultsViewState();
 }
 
-class _ResultsViewState extends State<ResultsView> {
+class ResultsViewState extends State<ResultsView> {
   final panel = GlobalKey<PlayerPanelState>();
   String? openPlayerId;
   TournamentController get c => widget.controller;
 
   void showPlayer(String? id) {
-    if (openPlayerId == id) return;
-    if (panel.currentState?.commit() == false) return;
-    setState(() => openPlayerId = id);
+    if (id != null) {
+      Dock.maybeOf(context)?.claim(panelOwner);
+    } else if (Dock.maybeOf(context)?.id == panelOwner) {
+      Dock.maybeOf(context)?.close();
+    }
+    setState(() {
+      openPlayerId = id;
+      assumeFor = null;
+    });
     // Result shortcuts should not fire while inspecting a player.
     FocusManager.instance.primaryFocus?.unfocus();
   }
@@ -84,7 +89,7 @@ class _ResultsViewState extends State<ResultsView> {
   bool missingOnly = false, forfeit = false, busy = false;
 
   /// An earlier round on screen; null shows each section's current round.
-  /// Never remembered: the page always reopens on the current round.
+  /// Restored read-only; a newly posted round resets the selection.
   int? selectedRound;
 
   /// Whether results in an earlier round may be changed.
@@ -105,19 +110,70 @@ class _ResultsViewState extends State<ResultsView> {
   /// (game, outcome, typed in White's box).
   (String, Outcome, bool)? pending;
   String get preference => 'results-${widget.sectionId ?? 'all'}';
+  String get panelOwner => 'results-panel-${widget.sectionId ?? 'all'}';
+  String? activeBox;
+  bool ready = false;
 
   @override
   void initState() {
     super.initState();
     roundSignature = signature();
-    final saved = c.repository.readPreference(preference);
-    if (saved != null) {
-      try {
-        missingOnly = jsonDecode(saved)['missingOnly'] ?? false;
-      } catch (_) {}
+    final saved = c.workspaceState.readMap(preference);
+    missingOnly = saved['missingOnly'] == true;
+    if (saved['signature'] == roundSignature) {
+      selectedRound = saved['round'] as int?;
+      jump.text = saved['search'] as String? ?? '';
+      activeBox = saved['box'] as String?;
+      reason.text = saved['reason'] as String? ?? '';
+      final edit = saved['pending'] as List?;
+      if (edit != null &&
+          edit.length == 3 &&
+          edit[0] is String &&
+          edit[2] is bool) {
+        final outcome = Outcome.values
+            .where((v) => v.name == edit[1])
+            .firstOrNull;
+        if (outcome != null) {
+          pending = (edit[0] as String, outcome, edit[2] as bool);
+        }
+      }
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => focusFirst());
+    ready = true;
+    jump.addListener(remember);
+    reason.addListener(remember);
+    scroll.addListener(remember);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final key = activeBox;
+      final node = key == null ? null : boxes[key];
+      if (node?.context != null) {
+        node!.requestFocus();
+      } else {
+        focusFirst();
+      }
+      if (scroll.hasClients && saved['signature'] == roundSignature) {
+        scroll.jumpTo(
+          (saved['scroll'] as num? ?? 0).toDouble().clamp(
+            0,
+            scroll.position.maxScrollExtent,
+          ),
+        );
+      }
+    });
   }
+
+  @override
+  void setState(VoidCallback fn) {
+    super.setState(fn);
+    remember();
+  }
+
+  void printRound() => showPrint(
+    context,
+    c.event!,
+    sectionId: widget.sectionId,
+    roundNumber: selectedRound,
+  );
 
   Iterable<Section> get sections => c.event!.sections.where(
     (s) => widget.sectionId == null || s.id == widget.sectionId,
@@ -135,6 +191,9 @@ class _ResultsViewState extends State<ResultsView> {
       selectedRound = null;
       correcting = nudged = forfeit = false;
       pending = null;
+      activeBox = null;
+      jump.clear();
+      reason.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (scroll.hasClients) scroll.jumpTo(0);
@@ -142,10 +201,13 @@ class _ResultsViewState extends State<ResultsView> {
       });
     }
     roundSignature = next;
+    remember();
   }
 
   @override
   void dispose() {
+    remember();
+    ready = false;
     for (final n in boxes.values) {
       n.dispose();
     }
@@ -155,10 +217,19 @@ class _ResultsViewState extends State<ResultsView> {
     super.dispose();
   }
 
-  FocusNode box(String gameId, bool white) => boxes.putIfAbsent(
-    '$gameId-${white ? 'w' : 'b'}',
-    () => FocusNode(debugLabel: 'score $gameId ${white ? 'white' : 'black'}'),
-  );
+  FocusNode box(String gameId, bool white) =>
+      boxes.putIfAbsent('$gameId-${white ? 'w' : 'b'}', () {
+        final node = FocusNode(
+          debugLabel: 'score $gameId ${white ? 'white' : 'black'}',
+        );
+        node.addListener(() {
+          if (node.hasFocus) {
+            activeBox = '$gameId-${white ? 'w' : 'b'}';
+            remember();
+          }
+        });
+        return node;
+      });
 
   /// The round of [s] on screen.
   Round? shownRound(Section s) => selectedRound == null
@@ -207,14 +278,19 @@ class _ResultsViewState extends State<ResultsView> {
   }
 
   void remember() {
-    try {
-      c.repository.writePreference(
-        preference,
-        jsonEncode({'missingOnly': missingOnly}),
-      );
-    } catch (e) {
-      showFailure(context, e);
-    }
+    if (!ready) return;
+    c.workspaceState.writeMap(preference, {
+      'missingOnly': missingOnly,
+      'signature': roundSignature,
+      'round': selectedRound,
+      'search': jump.text,
+      'box': activeBox,
+      'scroll': scroll.hasClients ? scroll.offset : 0,
+      'reason': reason.text,
+      'pending': pending == null
+          ? null
+          : [pending!.$1, pending!.$2.name, pending!.$3],
+    });
   }
 
   void focusBox(String gameId, bool white) {
@@ -314,7 +390,7 @@ class _ResultsViewState extends State<ResultsView> {
   void savePending() {
     final (id, outcome, white) = pending!;
     final row = rows().where((r) => r.game.id == id).firstOrNull;
-    if (row == null) return;
+    if (row == null || locked(row)) return;
     if (reason.text.trim().isEmpty) {
       showFailure(context, 'Give a reason for changing this result.');
       return;
@@ -467,8 +543,8 @@ class _ResultsViewState extends State<ResultsView> {
   }
 
   void assume(String gameId) {
-    if (panel.currentState?.commit() == false) return;
     setState(() {
+      Dock.maybeOf(context)?.claim(panelOwner);
       assumeFor = gameId;
       openPlayerId = null;
     });
@@ -476,6 +552,8 @@ class _ResultsViewState extends State<ResultsView> {
 
   Widget assumePanel(String gameId) => FieldsPanel(
     key: ValueKey('assume-$gameId'),
+    controller: c,
+    draftKey: 'draft-assume-$gameId',
     title: 'Assume a result for pairing',
     description:
         'Use when a game is still going but the next round must be paired. This is not a real result and does not count for points or ratings.',
@@ -489,7 +567,10 @@ class _ResultsViewState extends State<ResultsView> {
     ],
     values: const {'score': '0.5'},
     saveLabel: 'Assume for pairing',
-    onClose: () => setState(() => assumeFor = null),
+    onClose: () {
+      Dock.maybeOf(context)?.close();
+      setState(() => assumeFor = null);
+    },
     onSave: (values) {
       final outcome = switch (values['score']) {
         '1' => Outcome.whiteWin,
@@ -558,7 +639,11 @@ class _ResultsViewState extends State<ResultsView> {
       swapPick = null;
     }
     return PlayerDetailsLayout(
-      panel: assumeFor != null
+      panel:
+          Dock.maybeOf(context) != null &&
+              Dock.maybeOf(context)!.id != panelOwner
+          ? null
+          : assumeFor != null
           ? assumePanel(assumeFor!)
           : player == null
           ? null
@@ -568,41 +653,57 @@ class _ResultsViewState extends State<ResultsView> {
               player: player,
               onClose: () => showPlayer(null),
             ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (shown.isNotEmpty) ...[
-            _roundLine(context, shown, all, roundNumbers),
-            _strip(context, shown, viewingPast),
+      child: LayoutBuilder(
+        builder: (context, layout) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: layout.maxHeight * 0.6),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (shown.isNotEmpty) ...[
+                      _roundLine(context, shown, all, roundNumbers),
+                      _strip(context, shown, viewingPast),
+                    ],
+                    if (viewingPast) _pastBanner(context, shown),
+                    if (swapping) _swapBanner(context, shown.single.$2),
+                    _legend(context),
+                    if (pending case (
+                      _,
+                      final outcome,
+                      _,
+                    ) when pendingRow != null && !locked(pendingRow))
+                      _reasonBar(context, pendingRow, outcome),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: roundNumbers.isEmpty
+                  ? const EmptyState(
+                      icon: Icons.grid_view_outlined,
+                      title: 'No rounds yet',
+                      body:
+                          'Post round 1 with the button above. Boards appear here as soon as it is posted.',
+                    )
+                  : visible.isEmpty && !shown.any((x) => x.$2.byes.isNotEmpty)
+                  ? EmptyState(
+                      icon: missingOnly && jump.text.isEmpty
+                          ? Icons.check_circle_outline
+                          : Icons.search_off,
+                      title: missingOnly && jump.text.isEmpty
+                          ? 'All results entered'
+                          : 'No matching boards',
+                      body: missingOnly && jump.text.isEmpty
+                          ? 'Turn off Missing only to review them.'
+                          : 'Try another name or board number, or turn off Missing only.',
+                    )
+                  : _table(context, shown, visible, latest),
+            ),
           ],
-          if (viewingPast) _pastBanner(context, shown),
-          if (swapping) _swapBanner(context, shown.single.$2),
-          _legend(context),
-          if (pending case (_, final outcome, _) when pendingRow != null)
-            _reasonBar(context, pendingRow, outcome),
-          Expanded(
-            child: roundNumbers.isEmpty
-                ? const EmptyState(
-                    icon: Icons.grid_view_outlined,
-                    title: 'No rounds yet',
-                    body:
-                        'Post round 1 with the button above. Boards appear here as soon as it is posted.',
-                  )
-                : visible.isEmpty && !shown.any((x) => x.$2.byes.isNotEmpty)
-                ? EmptyState(
-                    icon: missingOnly && jump.text.isEmpty
-                        ? Icons.check_circle_outline
-                        : Icons.search_off,
-                    title: missingOnly && jump.text.isEmpty
-                        ? 'All results entered'
-                        : 'No matching boards',
-                    body: missingOnly && jump.text.isEmpty
-                        ? 'Turn off Missing only to review them.'
-                        : 'Try another name or board number, or turn off Missing only.',
-                  )
-                : _table(context, shown, visible, latest),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -804,8 +905,7 @@ class _ResultsViewState extends State<ResultsView> {
           ),
         OutlinedButton.icon(
           key: const ValueKey('print-round'),
-          onPressed: () =>
-              showPrint(context, c.event!, sectionId: widget.sectionId),
+          onPressed: printRound,
           icon: const Icon(Icons.print_outlined, size: 18),
           label: const Text('Print packet'),
         ),
@@ -869,7 +969,10 @@ class _ResultsViewState extends State<ResultsView> {
         color: background,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Row(
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Icon(
             correcting ? Icons.edit_outlined : Icons.lock_outline,
@@ -877,17 +980,15 @@ class _ResultsViewState extends State<ResultsView> {
             color: foreground,
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              correcting
-                  ? 'Correcting round $number. Each change asks for a reason; round $current pairings stay as posted.'
-                  : nudged
-                  ? 'Round $number is read-only. Choose Correct a result to change it.'
-                  : 'Round $number is read-only. Round $current is the current round.',
-              style: TextStyle(
-                color: foreground,
-                fontWeight: nudged && !correcting ? FontWeight.w600 : null,
-              ),
+          Text(
+            correcting
+                ? 'Correcting round $number. Each change asks for a reason; round $current pairings stay as posted.'
+                : nudged
+                ? 'Round $number is read-only. Choose Correct a result to change it.'
+                : 'Round $number is read-only. Round $current is the current round.',
+            style: TextStyle(
+              color: foreground,
+              fontWeight: nudged && !correcting ? FontWeight.w600 : null,
             ),
           ),
           const SizedBox(width: 8),
@@ -926,17 +1027,18 @@ class _ResultsViewState extends State<ResultsView> {
         color: colors.secondaryContainer,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Row(
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Icon(Icons.swap_horiz, size: 18, color: colors.onSecondaryContainer),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              picked == null
-                  ? 'Editing round ${r.number} pairings. Click two players to swap them; two on one board swap colours. Each swap saves and can be undone.'
-                  : 'Swap ${picked.name} with… click another player, or click ${picked.name} again to cancel.',
-              style: TextStyle(color: colors.onSecondaryContainer),
-            ),
+          Text(
+            picked == null
+                ? 'Editing round ${r.number} pairings. Click two players to swap them; two on one board swap colours. Each swap saves and can be undone.'
+                : 'Swap ${picked.name} with… click another player, or click ${picked.name} again to cancel.',
+            style: TextStyle(color: colors.onSecondaryContainer),
           ),
           const SizedBox(width: 8),
           FilledButton(
@@ -1124,7 +1226,9 @@ class _ResultsViewState extends State<ResultsView> {
     );
   }
 
-  static const _board = 72.0, _box = 64.0, _more = 44.0, _row = 52.0;
+  static const _board = 72.0, _more = 44.0, _row = 52.0;
+  double scoreWidth(BuildContext context) =>
+      math.max(64, MediaQuery.textScalerOf(context).scale(48));
 
   Widget _columns(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -1137,11 +1241,11 @@ class _ResultsViewState extends State<ResultsView> {
           fontWeight: FontWeight.w600,
           color: colors.onSurfaceVariant,
         ),
-        child: const Row(
+        child: Row(
           children: [
-            SizedBox(width: _board, child: Text('Board')),
+            const SizedBox(width: _board, child: Text('Board')),
             SizedBox(
-              width: _box,
+              width: scoreWidth(context),
               child: Text('Score', textAlign: TextAlign.center),
             ),
             SizedBox(width: 12),
@@ -1150,7 +1254,7 @@ class _ResultsViewState extends State<ResultsView> {
             Expanded(child: Text('Black', textAlign: TextAlign.right)),
             SizedBox(width: 12),
             SizedBox(
-              width: _box,
+              width: scoreWidth(context),
               child: Text('Score', textAlign: TextAlign.center),
             ),
             SizedBox(width: _more),
@@ -1235,7 +1339,7 @@ class _ResultsViewState extends State<ResultsView> {
             ),
           ),
           SizedBox(
-            width: _box,
+            width: scoreWidth(context),
             child: Text(
               halves(b.points),
               textAlign: TextAlign.center,
@@ -1494,7 +1598,7 @@ class _ResultsViewState extends State<ResultsView> {
               key: ValueKey('score-${g.id}-${white ? 'w' : 'b'}'),
               onTap: () => focusBox(g.id, white),
               child: Container(
-                width: _box,
+                width: scoreWidth(context),
                 constraints: const BoxConstraints(minHeight: 44),
                 padding: EdgeInsets.symmetric(
                   vertical: caption == null ? 8 : 4,

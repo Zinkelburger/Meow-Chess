@@ -90,3 +90,30 @@ encoding, uppercase `.EXE` launcher handling in Dart native hooks, and an E2E
 navigation target clipped by the smaller Windows viewport. These are fixed in
 the passing run. This run tests desktop debug builds; installer launch checks
 remain part of the release packaging workflow and were not executed by this run.
+
+## UI recovery and output verification — October 2, 2026
+
+The Impeccable follow-up implementation passed `scripts/ci.sh analyze`,
+`scripts/ci.sh lint`, and the full 189-test unit/widget suite. All five native Linux
+integration targets passed (seven test cases). The new workflow target was rerun
+after the large-text score-column correction; subsequent player-draft fixes passed
+the full unit/widget suite and the focused player/workspace tests.
+
+New regression coverage includes actual form input across Escape and event-file
+reopen, pending section-move target/reason recovery, injected preference-write
+failure and retry, current-record merging when restoring drafts, result board-side
+restoration, historical rounds reopening read-only, explicit print round scope,
+stale preview acknowledgment and refresh, PDF retry, invalidated print scope,
+prize-class ranking, structured report repair destinations, panel replacement,
+and the full workspace at 1280×720 with 200% text.
+
+`integration_test/workflow_accessibility_test.dart` exercises native draft editing,
+keyboard scoring, lookup by pairing number, historical PDF preview, stale/refresh
+states and dark/light Reports. Inspected captures are in ignored
+`artifacts/workflow-*.png`; the revised capture confirms the 200% Score headings
+stay on one line. The native tournament-day suite also regenerates the PDF packet
+and checks event-file/backup recovery.
+
+These checks do not establish physical-printer behavior, Windows/macOS native
+qualification, human screen-reader usability, federation acceptance or measured
+performance with working TDs. Those remain the qualification boundaries above.

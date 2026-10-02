@@ -7,6 +7,7 @@ import '../domain/us_chess.dart';
 import 'history_panel.dart' show historyTime;
 import 'identity_review.dart';
 import 'players_view.dart' show SidePanel;
+import 'drafts.dart';
 import 'workspace_actions.dart';
 
 /// Event details, docked at the right like a player.
@@ -14,10 +15,12 @@ class EventPanel extends StatefulWidget {
   const EventPanel({
     required this.controller,
     required this.onClose,
+    this.initialField,
     super.key,
   });
   final TournamentController controller;
   final VoidCallback onClose;
+  final String? initialField;
   @override
   State<EventPanel> createState() => EventPanelState();
 }
@@ -36,6 +39,8 @@ class EventPanelState extends State<EventPanel> {
   ];
   final text = {for (final f in _fields) f.$1: TextEditingController()};
   String? error;
+  late FormDraft draft;
+  final fieldFocus = <String, FocusNode>{};
   TournamentController get c => widget.controller;
   Map<String, String> get values => text.map((k, v) => MapEntry(k, v.text));
   bool get dirty => !mapEquals(values, stored);
@@ -70,17 +75,26 @@ class EventPanelState extends State<EventPanel> {
   void initState() {
     super.initState();
     load();
+    draft = FormDraft(c.workspaceState, 'draft-event', text, stored);
+    if (widget.initialField case final field?) focusField(field);
   }
 
   @override
   void didUpdateWidget(EventPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Follow outside changes unless the user is mid-edit.
-    if (mapEquals(values, shown) && !mapEquals(shown, stored)) load();
+    if (mapEquals(values, shown) && !mapEquals(shown, stored)) {
+      draft.reset(stored);
+      load();
+    }
   }
 
   @override
   void dispose() {
+    draft.dispose();
+    for (final node in fieldFocus.values) {
+      node.dispose();
+    }
     for (final t in text.values) {
       t.dispose();
     }
@@ -137,12 +151,24 @@ class EventPanelState extends State<EventPanel> {
       );
       // Reload so normalized values (such as a capitalized affiliate ID)
       // show as saved.
+      draft.reset(stored);
       setState(load);
       return true;
     } catch (e) {
       setState(() => error = plainMessage(e));
       return false;
     }
+  }
+
+  void focusField(String field) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final node = fieldFocus[field];
+      node?.requestFocus();
+      if (node?.context case final target?) {
+        Scrollable.ensureVisible(target, alignment: 0.25);
+      }
+    });
   }
 
   @override
@@ -155,16 +181,19 @@ class EventPanelState extends State<EventPanel> {
     );
     return SidePanel(
       title: 'Event details',
-      onClose: () {
-        if (commit()) widget.onClose();
-      },
+      onClose: widget.onClose,
       children: [
+        DraftStatus(draft: draft),
         for (final (key, label, lines) in _fields)
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 8),
             child: TextField(
               key: ValueKey('event-$key'),
               controller: text[key],
+              focusNode: fieldFocus.putIfAbsent(
+                key,
+                () => FocusNode(debugLabel: key),
+              ),
               maxLines: lines,
               decoration: InputDecoration(
                 labelText: label,
@@ -189,8 +218,11 @@ class EventPanelState extends State<EventPanel> {
               FilledButton(onPressed: commit, child: const Text('Save')),
               const SizedBox(width: 8),
               TextButton(
-                onPressed: () => setState(load),
-                child: const Text('Revert'),
+                onPressed: () {
+                  draft.reset(stored);
+                  setState(load);
+                },
+                child: const Text('Discard draft'),
               ),
             ],
           ),

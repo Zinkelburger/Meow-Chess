@@ -123,19 +123,100 @@ String _surnameKey(String name) {
   return [parts.last, ...parts.take(parts.length - 1)].join(' ').toLowerCase();
 }
 
+/// An explicit historical scope never silently substitutes the latest round.
+Event eventThroughRound(Event event, int? roundNumber, {String? sectionId}) {
+  if (roundNumber == null) return event;
+  final scoped = event.sections.where(
+    (s) => sectionId == null || s.id == sectionId,
+  );
+  if (roundNumber < 0 ||
+      (roundNumber > 0 &&
+          !scoped.any((s) => s.rounds.any((r) => r.number == roundNumber)))) {
+    throw TournamentException(
+      'Round $roundNumber is no longer available. Close this preview and choose a posted round.',
+    );
+  }
+  return event.copy(
+    sections: [
+      for (final s in event.sections)
+        s.copy(rounds: s.rounds.where((r) => r.number <= roundNumber).toList()),
+    ],
+  );
+}
+
+/// Rank within the requested prize class using the same tie rules as the screen.
+List<Standing> reportStandings(
+  Event event,
+  Section section, {
+  int ceiling = 0,
+  bool forPrizes = false,
+}) {
+  final rows = standings(event, section, forPrizes: forPrizes)
+      .where(
+        (r) =>
+            ceiling == 0 || (r.player.rating > 0 && r.player.rating < ceiling),
+      )
+      .toList();
+  var rank = 1;
+  return [
+    for (var i = 0; i < rows.length; i++)
+      (() {
+        final r = rows[i];
+        if (i > 0 &&
+            (r.points != rows[i - 1].points ||
+                r.buchholz != rows[i - 1].buchholz ||
+                r.sonneborn != rows[i - 1].sonneborn)) {
+          rank = i + 1;
+        }
+        return Standing(
+          r.player,
+          r.points,
+          r.buchholz,
+          r.sonneborn,
+          r.played,
+          rank: rank,
+        );
+      })(),
+  ];
+}
+
 Future<Uint8List> reportPdf(
   Event e,
   ReportKind kind, {
   String? sectionId,
   bool a4 = false,
+  int? roundNumber,
+  Map<String, int>? roundNumbers,
+  int ceiling = 0,
+  bool forPrizes = false,
   pw.Font? font,
   pw.Font? bold,
 }) async {
+  final source = e;
+  if (roundNumbers != null &&
+      roundNumbers.keys.any((id) => !source.sections.any((s) => s.id == id))) {
+    throw const TournamentException(
+      'A selected section is no longer available. Close this preview and select sections again.',
+    );
+  }
+  if (roundNumbers == null && roundNumber != null) {
+    eventThroughRound(source, roundNumber, sectionId: sectionId);
+  }
   final doc = pw.Document();
-  for (final s in e.sections.where(
-    (s) => s.players.isNotEmpty && (sectionId == null || s.id == sectionId),
+  for (final scope in source.sections.where(
+    (s) =>
+        s.players.isNotEmpty &&
+        (sectionId == null || s.id == sectionId) &&
+        (roundNumbers == null || roundNumbers.containsKey(s.id)) &&
+        (roundNumbers != null ||
+            roundNumber == null ||
+            roundNumber == 0 ||
+            s.rounds.any((r) => r.number == roundNumber)),
   )) {
-    final table = standings(e, s);
+    final number = roundNumbers?[scope.id] ?? roundNumber;
+    e = eventThroughRound(source, number, sectionId: scope.id);
+    final s = e.sections.firstWhere((s) => s.id == scope.id);
+    final table = reportStandings(e, s, ceiling: ceiling, forPrizes: forPrizes);
     final current = s.rounds.lastOrNull;
     final widgets = <pw.Widget>[];
     void title(String text) => widgets.add(
@@ -210,7 +291,9 @@ Future<Uint8List> reportPdf(
       }
     }
     if (kind == ReportKind.standings || kind == ReportKind.packet) {
-      title('Standings');
+      title(
+        'Standings${ceiling == 0 ? '' : ' · Under $ceiling'}${forPrizes ? ' · Excluding early round-robin withdrawals' : ''}',
+      );
       grid(
         ['Rank', 'Player', 'Rating', 'Points', 'BH', 'SB'],
         [

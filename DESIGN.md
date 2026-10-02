@@ -247,7 +247,7 @@ Spacing snaps to 4 / 8 / 12 / 16 / 24, with 32 / 40 / 48 for larger separations.
 When the window is narrower than the table plus a panel, the content scrolls horizontally rather than squeezing columns. The toolbar grows with large text instead of clipping.
 
 ### Named Rules
-**The One Dock Rule.** At most one panel is docked on the right at a time (player details and forms at 360px; print and lookup at 480px). Opening another replaces it; asking for the same one again closes it; Esc closes it.
+**The One Dock Rule.** At most one contextual panel is open on the right at a time, including player details, history, event details, lookup and print. Preferred widths are 360px for forms and 480px for lookup/print, capped at 48% of available workspace width. Opening another replaces it; asking for the same one again closes it; Esc closes it.
 
 ## Elevation & Depth
 
@@ -301,7 +301,7 @@ Full-width-in-gutter strips with an icon and words, 4px corners: read-only round
 White sheet, hairline border, square corners, title row (15px SemiBold) with a close button; Esc closes. 360px for details and short forms; 480px for print and the player lookup, whose answer runs at 26px / 24px so it reads from standing height.
 
 ### Status bar and messages
-The bottom bar states the save in words ("Saved 23:39"), at 12px muted. Notices are SnackBars that last 8s with a close button and an Undo action when one applies. Errors are a persistent red SnackBar with an icon and close button that never times out. All appear without animation.
+The bottom bar states the save in words ("Event saved 23:39"), at 12px muted. Notices are SnackBars that last 8s with a close button and an Undo action when one applies. Errors are a persistent red SnackBar with an icon and close button that never times out. All appear without animation.
 
 ### StatusPill and EmptyState
 StatusPill: 12px text, 4px by 8px padding, 4px corners, Step (neutral) or secondaryContainer (good), always a word, never a dot. EmptyState: centred 40px muted icon, title, body, optional action, max 440px wide.
@@ -329,3 +329,9 @@ StatusPill: 12px text, 4px by 8px padding, 4px corners, Step (neutral) or second
 - **Don't** use Practice Amber for anything but the practice-copy banner.
 
 The older "V2 dark tokens" in `docs/TD_EXPERIENCE.md` are superseded by this file.
+
+### Interrupted work and output scope
+
+Forms keep partial and invalid input as local drafts, separate from audited event revisions. Save/Add applies the form; Close/Escape preserves it; Discard draft restores the committed record. A failed draft write is visible and retryable. The event save indicator never promises draft durability. Results restore the last board, side, search and scroll per section; historical rounds reopen read-only and newly posted rounds reset the view.
+
+Print previews name their sections, rounds and event revision. They retain their scope while refreshed; event changes disable printing until the TD refreshes or explicitly chooses the older revision. Prize-class filters carry into printed standings. Report blockers link to their repair fields, and the finish-event checklist distinguishes exported revisions, backups and manually recorded submission notes from external acceptance.
