@@ -185,7 +185,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
         ),
       ),
     );
-    final small = TextStyle(fontSize: 11, color: colors.onSurfaceVariant);
+    final small = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
     return Container(
       width: 400,
       decoration: BoxDecoration(
@@ -200,17 +200,6 @@ class _HistoryPanelState extends State<HistoryPanel> {
             child: Row(
               children: [
                 Text('History', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(width: 6),
-                Tooltip(
-                  message:
-                      'Select an operation to review it.\n'
-                      'Left / right: undo / redo\nUp / down: review\nEnter: restore · Escape: close details',
-                  child: Icon(
-                    Icons.info_outline,
-                    size: 15,
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
                 const Spacer(),
                 IconButton(
                   tooltip: c.canUndo ? 'Undo ${c.undoLabel}' : 'At the start',
@@ -231,6 +220,14 @@ class _HistoryPanelState extends State<HistoryPanel> {
                   visualDensity: VisualDensity.compact,
                 ),
               ],
+            ),
+          ),
+          Padding(
+            key: const ValueKey('history-keys'),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'Select a step to review it. ← → undo and redo · ↑ ↓ review · Enter restores · Esc closes details',
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
             ),
           ),
           Divider(height: 1, color: colors.outlineVariant),
@@ -367,7 +364,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
                                       ),
                                       label: Text(
                                         '${expanded ? 'Collapse' : 'Saved'} branch · ${branch.length} ${branch.length == 1 ? 'operation' : 'operations'}',
-                                        style: const TextStyle(fontSize: 11),
+                                        style: const TextStyle(fontSize: 12),
                                       ),
                                     ),
                                   ),
@@ -426,7 +423,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
             child: Text(
               '#$operationId',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 fontFamily: 'SourceCodePro',
                 color: colors.onSurfaceVariant,
               ),

@@ -17,8 +17,9 @@ class WorkspaceToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      // Grows with large text instead of clipping it.
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
         border: Border(bottom: BorderSide(color: colors.outlineVariant)),

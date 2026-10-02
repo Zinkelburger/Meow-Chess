@@ -13,7 +13,6 @@ import 'panels.dart';
 import 'players_view.dart';
 import 'results_view.dart';
 import 'reports_view.dart';
-import 'theme.dart';
 import 'workspace_actions.dart';
 
 enum TaskView { players, results, reports }
@@ -54,7 +53,7 @@ class _WorkspaceState extends State<Workspace> {
   void initState() {
     super.initState();
     c.addListener(refresh);
-    dock.addListener(refresh);
+    dock.addListener(dockChanged);
     final saved = c.repository.readPreference('view');
     if (saved != null) {
       final fields = saved.split('|');
@@ -78,7 +77,7 @@ class _WorkspaceState extends State<Workspace> {
     sectionFocus.dispose();
     c.removeListener(refresh);
     dock
-      ..removeListener(refresh)
+      ..removeListener(dockChanged)
       ..dispose();
     super.dispose();
   }
@@ -244,9 +243,19 @@ class _WorkspaceState extends State<Workspace> {
     }
   }
 
+  /// One panel at the right at a time, so the page keeps its width.
   void toggleEvent() {
     if (eventOpen && eventPanel.currentState?.commit() == false) return;
+    if (!eventOpen) dock.close();
     setState(() => eventOpen = !eventOpen);
+  }
+
+  void dockChanged() {
+    if (dock.panel != null && eventOpen) {
+      if (eventPanel.currentState?.commit() == false) return;
+      eventOpen = false;
+    }
+    refresh();
   }
 
   @override
@@ -322,8 +331,7 @@ class _WorkspaceState extends State<Workspace> {
                                     maxWidth: 260,
                                   ),
                                   child: Tooltip(
-                                    message:
-                                        'Event details, backups and copies',
+                                    message: 'Event details',
                                     child: TextButton.icon(
                                       key: const ValueKey('event-details'),
                                       onPressed: toggleEvent,
@@ -356,10 +364,6 @@ class _WorkspaceState extends State<Workspace> {
                                     ),
                                   ),
                                 ),
-                                if (e.practice) ...[
-                                  const SizedBox(width: 10),
-                                  const StatusPill('Practice copy'),
-                                ],
                                 const SizedBox(width: 20),
                                 for (final (task, label) in [
                                   (TaskView.players, 'Players'),
@@ -378,13 +382,7 @@ class _WorkspaceState extends State<Workspace> {
                           lookup,
                           selected: dock.id == 'lookup',
                         ),
-                        _barIcon(
-                          Icons.chevron_left,
-                          c.canUndo
-                              ? 'Back: undo ${c.undoLabel} (Ctrl+Z)'
-                              : 'Nothing to undo',
-                          c.canUndo ? undo : null,
-                        ),
+                        _undoButton(context),
                         _barIcon(
                           Icons.chevron_right,
                           c.canRedo
@@ -422,6 +420,7 @@ class _WorkspaceState extends State<Workspace> {
                       ],
                     ),
                   ),
+                  if (e.practice) _practiceBanner(context),
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -506,27 +505,7 @@ class _WorkspaceState extends State<Workspace> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(color: colors.outlineVariant),
-                      ),
-                    ),
-                    child: DefaultTextStyle.merge(
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: colors.onSurfaceVariant,
-                      ),
-                      child: Text(
-                        '${e.players.length} players · ${e.sections.length} sections · ${widget.path}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
+                  _statusBar(context, e),
                 ],
               ),
             ),
@@ -535,6 +514,130 @@ class _WorkspaceState extends State<Workspace> {
       ),
     );
   }
+
+  /// Back, named: "Undo Result, board 3" in words, not only on hover.
+  Widget _undoButton(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    if (!c.canUndo) {
+      return _barIcon(Icons.undo, 'Nothing to undo', null);
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 240),
+      child: Tooltip(
+        message: 'Undo ${c.undoLabel} (Ctrl+Z)',
+        child: TextButton.icon(
+          key: const ValueKey('undo'),
+          onPressed: undo,
+          icon: const Icon(Icons.undo, size: 18),
+          style: TextButton.styleFrom(
+            foregroundColor: colors.onSurface,
+            minimumSize: const Size(0, 32),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+          ),
+          label: Text('Undo ${c.undoLabel}', overflow: TextOverflow.ellipsis),
+        ),
+      ),
+    );
+  }
+
+  /// A practice copy looks different at a glance, so nobody runs the real
+  /// event in it by mistake.
+  Widget _practiceBanner(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Amber paper, unlike any other surface in the app; text at 7:1+.
+    final background = dark ? const Color(0xff3d2e10) : const Color(0xfff8e4b8);
+    final ink = dark ? const Color(0xfff6dfa9) : const Color(0xff4a3000);
+    return Container(
+      key: const ValueKey('practice-banner'),
+      color: background,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      child: Row(
+        children: [
+          Icon(Icons.science_outlined, size: 18, color: ink),
+          const SizedBox(width: 8),
+          Text(
+            'Practice copy',
+            style: TextStyle(fontWeight: FontWeight.w600, color: ink),
+          ),
+          Flexible(
+            child: Text(
+              '  ·  Nothing here changes a real event. Try anything; undo is always there.',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: ink),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// What is safe: when the file was last saved, when it was last backed
+  /// up, and the revision. Backups open from here.
+  Widget _statusBar(BuildContext context, Event e) {
+    final colors = Theme.of(context).colorScheme;
+    final head = c.graph.nodes[c.graph.head];
+    final backup = c.repository.readPreference('lastBackup')?.split('|');
+    final backedUp = backup != null && backup.length > 2
+        ? historyTime(backup[2])
+        : null;
+    final style = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
+    return Container(
+      key: const ValueKey('status-bar'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: colors.outlineVariant)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check, size: 14, color: colors.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(
+            head == null ? 'Saved' : 'Saved ${historyTime(head.timestamp)}',
+            key: const ValueKey('status-saved'),
+            style: style,
+          ),
+          Text('  ·  ', style: style),
+          TextButton(
+            key: const ValueKey('status-backup'),
+            onPressed: showBackups,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 24),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+            child: Text(
+              e.backupFolder.isEmpty
+                  ? 'No backup folder'
+                  : c.backupWarning != null
+                  ? 'Backup failed'
+                  : backedUp == null
+                  ? 'Backups on'
+                  : 'Backup $backedUp',
+            ),
+          ),
+          Text('  ·  Revision ${e.revision}  ·  ', style: style),
+          Expanded(
+            child: Text(
+              '${e.players.length} players · ${e.sections.length} sections · ${widget.path}',
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void showBackups() => dock.id == 'backups'
+      ? dock.close()
+      : dock.show(
+          'backups',
+          BackupsPanel(
+            key: const ValueKey('backups'),
+            controller: c,
+            onClose: dock.close,
+          ),
+        );
 
   /// The post button, labelled with what it will post. When nothing can
   /// be posted it says why beside it, and once every round is played it
@@ -549,12 +652,15 @@ class _WorkspaceState extends State<Workspace> {
         children: [
           Icon(Icons.check_circle_outline, size: 18, color: colors.primary),
           const SizedBox(width: 8),
-          Text(
-            key: const ValueKey('event-complete'),
-            section == null
-                ? 'All rounds played'
-                : 'All ${section.plannedRounds} rounds played',
-            style: const TextStyle(fontWeight: FontWeight.w600),
+          Flexible(
+            child: Text(
+              key: const ValueKey('event-complete'),
+              section == null
+                  ? 'All rounds played'
+                  : 'All ${section.plannedRounds} rounds played',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           const SizedBox(width: 16),
           OutlinedButton(
@@ -581,12 +687,17 @@ class _WorkspaceState extends State<Workspace> {
               ),
             ),
           ),
-        FilledButton.icon(
-          key: const ValueKey('pair-next-round'),
-          onPressed: pairing || state.label == null ? null : pair,
-          icon: const Icon(Icons.arrow_forward, size: 18),
-          iconAlignment: IconAlignment.end,
-          label: Text(pairing ? 'Posting…' : state.label ?? 'Post next round'),
+        Flexible(
+          child: FilledButton.icon(
+            key: const ValueKey('pair-next-round'),
+            onPressed: pairing || state.label == null ? null : pair,
+            icon: const Icon(Icons.arrow_forward, size: 18),
+            iconAlignment: IconAlignment.end,
+            label: Text(
+              pairing ? 'Posting…' : state.label ?? 'Post next round',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ),
       ],
     );

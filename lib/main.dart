@@ -55,6 +55,22 @@ class _MeowAppState extends State<MeowApp> {
   final navigator = GlobalKey<NavigatorState>();
   late final files = NativeFileRequests(open: openFromDesktop);
   File get library => File(p.join(widget.dataDirectory.path, 'library.json'));
+
+  /// App-wide choices that outlive one event, such as the theme.
+  File get settings => File(p.join(widget.dataDirectory.path, 'settings.json'));
+
+  void toggleTheme() {
+    setState(() => light = !light);
+    try {
+      settings.writeAsStringSync(
+        jsonEncode({'theme': light ? 'light' : 'dark'}),
+        flush: true,
+      );
+    } catch (_) {
+      // The theme still switches; it just will not be remembered.
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +82,11 @@ class _MeowAppState extends State<MeowApp> {
       error =
           'Recent-event list could not be read. Your event files are unaffected.';
     }
+    try {
+      if (settings.existsSync()) {
+        light = jsonDecode(settings.readAsStringSync())['theme'] != 'dark';
+      }
+    } catch (_) {}
     if (widget.initialPath != null) open(widget.initialPath!);
     files.start();
   }
@@ -186,7 +207,7 @@ class _MeowAppState extends State<MeowApp> {
             controller: controller!,
             path: path!,
             onClose: close,
-            onTheme: () => setState(() => light = !light),
+            onTheme: toggleTheme,
           )
         : Builder(
             builder: (context) => Scaffold(
@@ -208,7 +229,7 @@ class _MeowAppState extends State<MeowApp> {
                             ),
                             const Spacer(),
                             TextButton.icon(
-                              onPressed: () => setState(() => light = !light),
+                              onPressed: toggleTheme,
                               icon: Icon(
                                 light
                                     ? Icons.dark_mode_outlined

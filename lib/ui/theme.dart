@@ -3,6 +3,21 @@ import 'package:flutter/material.dart';
 /// Every button, field and toggle shares this height so rows line up.
 const double controlHeight = 36;
 
+/// Keyboard focus is a ring of this width in [focusRing], on every control.
+const double focusRingWidth = 2;
+
+/// The focus ring colour: dark on light paper, light on the dark theme, so
+/// it shows on filled buttons as well as on the page.
+Color focusRing(ColorScheme c) => c.onSurface;
+
+/// A control's border: the 3:1 outline, or the focus ring when focused.
+WidgetStateProperty<BorderSide?> focusSide(ColorScheme c, {BorderSide? rest}) =>
+    WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.focused)
+          ? BorderSide(color: focusRing(c), width: focusRingWidth)
+          : rest,
+    );
+
 ThemeData meowTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
   final colors = ColorScheme.fromSeed(
@@ -22,7 +37,8 @@ ThemeData meowTheme(Brightness brightness) {
         ? const Color(0xff343430)
         : const Color(0xffe5e3dd),
     outlineVariant: dark ? const Color(0xff3d3c38) : const Color(0xffd9d6cc),
-    outline: dark ? const Color(0xff6b6960) : const Color(0xffa9a597),
+    // At least 3:1 against every surface, for field and control edges.
+    outline: dark ? const Color(0xff858278) : const Color(0xff7f7b6a),
     inverseSurface: dark ? const Color(0xff0c0c0b) : const Color(0xff1d1d1b),
     onInverseSurface: const Color(0xfff4f3ef),
   );
@@ -48,6 +64,7 @@ ThemeData meowTheme(Brightness brightness) {
     // No ink ripple: taps respond immediately.
     splashFactory: NoSplash.splashFactory,
     scaffoldBackgroundColor: colors.surface,
+    focusColor: colors.primary.withValues(alpha: 0.16),
     textTheme: const TextTheme(
       bodyLarge: TextStyle(fontSize: 14),
       bodyMedium: TextStyle(fontSize: 14),
@@ -77,7 +94,11 @@ ThemeData meowTheme(Brightness brightness) {
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(6),
-        borderSide: BorderSide(color: colors.outlineVariant),
+        borderSide: BorderSide(color: colors.outline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(6),
+        borderSide: BorderSide(color: colors.primary, width: focusRingWidth),
       ),
       isDense: true,
       filled: true,
@@ -101,18 +122,20 @@ ThemeData meowTheme(Brightness brightness) {
         padding: buttonPadding,
         textStyle: buttonText,
         shape: shape,
-      ),
+      ).copyWith(side: focusSide(colors)),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        animationDuration: instant,
-        minimumSize: minimum,
-        padding: buttonPadding,
-        textStyle: buttonText,
-        shape: shape,
-        backgroundColor: colors.surfaceContainerLowest,
-        side: BorderSide(color: colors.outline),
-      ),
+      style:
+          OutlinedButton.styleFrom(
+            animationDuration: instant,
+            minimumSize: minimum,
+            padding: buttonPadding,
+            textStyle: buttonText,
+            shape: shape,
+            backgroundColor: colors.surfaceContainerLowest,
+          ).copyWith(
+            side: focusSide(colors, rest: BorderSide(color: colors.outline)),
+          ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
@@ -121,15 +144,16 @@ ThemeData meowTheme(Brightness brightness) {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         textStyle: buttonText,
         shape: shape,
-      ),
+      ).copyWith(side: focusSide(colors)),
     ),
-    iconButtonTheme: const IconButtonThemeData(
-      style: ButtonStyle(animationDuration: instant),
+    iconButtonTheme: IconButtonThemeData(
+      style: ButtonStyle(animationDuration: instant, side: focusSide(colors)),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         animationDuration: instant,
         shape: const WidgetStatePropertyAll(shape),
+        side: focusSide(colors, rest: BorderSide(color: colors.outline)),
         backgroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? colors.surfaceContainerHigh
@@ -146,7 +170,11 @@ ThemeData meowTheme(Brightness brightness) {
       shape: shape,
       labelStyle: buttonText.copyWith(color: colors.onSurface),
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      side: BorderSide(color: colors.outline),
+      side: WidgetStateBorderSide.resolveWith(
+        (states) => states.contains(WidgetState.focused)
+            ? BorderSide(color: focusRing(colors), width: focusRingWidth)
+            : BorderSide(color: colors.outline),
+      ),
     ),
     tooltipTheme: const TooltipThemeData(
       waitDuration: Duration(milliseconds: 400),
@@ -164,7 +192,7 @@ final noChipAnimation = ChipAnimationStyle(
 
 /// A checkbox that flips state immediately. Material's [Checkbox] scales and
 /// fades its tick in, which there is no switch to turn off.
-class PlainCheckbox extends StatelessWidget {
+class PlainCheckbox extends StatefulWidget {
   const PlainCheckbox({
     required this.value,
     required this.onChanged,
@@ -177,27 +205,35 @@ class PlainCheckbox extends StatelessWidget {
   final ValueChanged<bool?>? onChanged;
   final bool tristate;
 
-  void _toggle() => onChanged?.call(switch (value) {
+  @override
+  State<PlainCheckbox> createState() => _PlainCheckboxState();
+}
+
+class _PlainCheckboxState extends State<PlainCheckbox> {
+  bool focused = false;
+
+  void _toggle() => widget.onChanged?.call(switch (widget.value) {
     false => true,
-    true => tristate ? null : false,
+    true => widget.tristate ? null : false,
     null => false,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final enabled = onChanged != null;
-    final on = value != false;
+    final enabled = widget.onChanged != null;
+    final on = widget.value != false;
     final fill = enabled
         ? colors.primary
         : colors.onSurface.withValues(alpha: 0.38);
     return Semantics(
-      checked: value == true,
-      mixed: tristate && value == null,
+      checked: widget.value == true,
+      mixed: widget.tristate && widget.value == null,
       enabled: enabled,
       child: FocusableActionDetector(
         enabled: enabled,
         mouseCursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+        onShowFocusHighlight: (v) => setState(() => focused = v),
         actions: {
           ActivateIntent: CallbackAction<ActivateIntent>(
             onInvoke: (_) => _toggle(),
@@ -206,30 +242,36 @@ class PlainCheckbox extends StatelessWidget {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: enabled ? _toggle : null,
-          child: SizedBox.square(
-            dimension: 24,
-            child: Center(
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: on ? fill : null,
-                  borderRadius: BorderRadius.circular(2),
-                  border: on
-                      ? null
-                      : Border.all(
-                          color: enabled ? colors.outline : fill,
-                          width: 1,
-                        ),
-                ),
-                child: on
-                    ? Icon(
-                        value == null ? Icons.remove : Icons.check,
-                        size: 16,
-                        color: colors.onPrimary,
-                      )
-                    : null,
+          child: Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              border: focused
+                  ? Border.all(color: focusRing(colors), width: focusRingWidth)
+                  : null,
+            ),
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                color: on ? fill : null,
+                borderRadius: BorderRadius.circular(2),
+                border: on
+                    ? null
+                    : Border.all(
+                        color: enabled ? colors.outline : fill,
+                        width: 1,
+                      ),
               ),
+              child: on
+                  ? Icon(
+                      widget.value == null ? Icons.remove : Icons.check,
+                      size: 16,
+                      color: colors.onPrimary,
+                    )
+                  : null,
             ),
           ),
         ),

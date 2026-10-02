@@ -637,7 +637,10 @@ class TournamentController extends ChangeNotifier {
         '${e.id}-r${e.revision}-${DateTime.now().microsecondsSinceEpoch}.meow',
       );
       repository.backup(destination);
-      repository.writePreference('lastBackup', '${e.revision}|$destination');
+      repository.writePreference(
+        'lastBackup',
+        '${e.revision}|$destination|${DateTime.now().toUtc().toIso8601String()}',
+      );
       backupWarning = null;
     } catch (error) {
       backupWarning =

@@ -4,11 +4,12 @@ import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
+import 'history_panel.dart' show historyTime;
 import 'identity_review.dart';
 import 'players_view.dart' show SidePanel;
 import 'workspace_actions.dart';
 
-/// Event details, backups and copies, docked at the right like a player.
+/// Event details, docked at the right like a player.
 class EventPanel extends StatefulWidget {
   const EventPanel({
     required this.controller,
@@ -146,10 +147,8 @@ class EventPanelState extends State<EventPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final e = c.event!, colors = Theme.of(context).colorScheme;
-    final actions = WorkspaceActions(context, c);
+    final colors = Theme.of(context).colorScheme;
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
-    final backup = c.repository.readPreference('lastBackup');
     Widget heading(String label) => Padding(
       padding: const EdgeInsets.only(top: 20, bottom: 8),
       child: Text(label, style: Theme.of(context).textTheme.titleMedium),
@@ -195,11 +194,62 @@ class EventPanelState extends State<EventPanel> {
               ),
             ],
           ),
-        heading('Backups'),
+        heading('US Chess API key'),
+        Text('Only needed to look up US Chess IDs online.', style: muted),
+        const SizedBox(height: 8),
+        const ApiKeyField(),
+      ],
+    );
+  }
+}
+
+/// Backups and copies of the event file, opened from the status bar.
+class BackupsPanel extends StatelessWidget {
+  const BackupsPanel({
+    required this.controller,
+    required this.onClose,
+    super.key,
+  });
+  final TournamentController controller;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = controller, e = c.event!, colors = Theme.of(context).colorScheme;
+    final actions = WorkspaceActions(context, c);
+    final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
+    final last = c.repository.readPreference('lastBackup')?.split('|');
+    Widget heading(String label) => Padding(
+      padding: const EdgeInsets.only(top: 20, bottom: 8),
+      child: Text(label, style: Theme.of(context).textTheme.titleMedium),
+    );
+    return SidePanel(
+      title: 'Backups',
+      onClose: onClose,
+      children: [
+        Text(
+          'Every change is saved to the event file as you work. A backup folder, ideally on a USB stick or another disk, gets a full copy after each posted round.',
+          style: muted,
+        ),
+        if (c.backupWarning != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(
+              c.backupWarning!,
+              style: TextStyle(color: colors.error),
+            ),
+          ),
+        heading('Backup folder'),
         Text(
           e.backupFolder.isEmpty
-              ? 'No backup folder. Every change is still saved to the event file.'
-              : 'Backing up to ${e.backupFolder}${backup == null ? '' : ' · last at revision ${backup.split('|').first} (now ${e.revision})'}',
+              ? 'None chosen.'
+              : [
+                  e.backupFolder,
+                  if (last != null && last.length > 2)
+                    'Last copy ${historyTime(last[2])}, revision ${last.first} (now ${e.revision})'
+                  else if (last != null)
+                    'Last copy at revision ${last.first} (now ${e.revision})',
+                ].join('\n'),
           style: muted,
         ),
         const SizedBox(height: 8),
@@ -242,10 +292,6 @@ class EventPanelState extends State<EventPanel> {
             ),
           ],
         ),
-        heading('US Chess API key'),
-        Text('Only needed to look up US Chess IDs online.', style: muted),
-        const SizedBox(height: 8),
-        const ApiKeyField(),
       ],
     );
   }

@@ -1319,11 +1319,23 @@ class _ResultsViewState extends State<ResultsView> {
         );
       }
       return Tooltip(
-        message: '${p.name} · Double-click to open player details',
-        child: InkWell(
-          key: ValueKey('round-player-${g.id}-${p.id}'),
-          onDoubleTap: () => showPlayer(p.id),
-          child: label,
+        message: '${p.name} · Double-click or press Enter for player details',
+        child: CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.enter): () =>
+                showPlayer(p.id),
+            const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
+                showPlayer(p.id),
+          },
+          child: Semantics(
+            button: true,
+            hint: 'Opens player details',
+            child: InkWell(
+              key: ValueKey('round-player-${g.id}-${p.id}'),
+              onDoubleTap: () => showPlayer(p.id),
+              child: label,
+            ),
+          ),
         ),
       );
     }
@@ -1481,7 +1493,7 @@ class _ResultsViewState extends State<ResultsView> {
                   color: lock ? colors.surfaceContainerLow : colors.surface,
                   border: node.hasFocus
                       ? Border.all(color: colors.primary, width: 2)
-                      : Border.all(color: colors.outlineVariant),
+                      : Border.all(color: colors.outline),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Column(
