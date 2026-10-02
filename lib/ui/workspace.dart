@@ -121,7 +121,6 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   void jumpToSection() {
-    if (view == TaskView.reports) go(TaskView.results);
     // Run after the destination page's initial result focus has settled.
     WidgetsBinding.instance.endOfFrame.then((_) {
       if (!mounted) return;
@@ -276,7 +275,11 @@ class _WorkspaceState extends State<Workspace> {
         controller: c,
         sectionId: section?.id,
       ),
-      TaskView.reports => ReportsView(controller: c),
+      TaskView.reports => ReportsView(
+        key: ValueKey('reports-${section?.id}'),
+        controller: c,
+        sectionId: section?.id,
+      ),
     };
     final dark = Theme.of(context).brightness == Brightness.dark;
     return CallbackShortcuts(
@@ -364,7 +367,7 @@ class _WorkspaceState extends State<Workspace> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 20),
+                                const SizedBox(width: 24),
                                 for (final (task, label) in [
                                   (TaskView.players, 'Players'),
                                   (TaskView.results, 'Rounds'),
@@ -425,7 +428,7 @@ class _WorkspaceState extends State<Workspace> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (view != TaskView.reports) _sectionSidebar(context),
+                        _sectionSidebar(context),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -550,7 +553,7 @@ class _WorkspaceState extends State<Workspace> {
     return Container(
       key: const ValueKey('practice-banner'),
       color: background,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: Row(
         children: [
           Icon(Icons.science_outlined, size: 18, color: ink),
@@ -583,7 +586,7 @@ class _WorkspaceState extends State<Workspace> {
     final style = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
     return Container(
       key: const ValueKey('status-bar'),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: colors.outlineVariant)),
       ),
@@ -717,7 +720,7 @@ class _WorkspaceState extends State<Workspace> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.only(top: 4),
             child: Icon(
               Icons.info_outline,
               size: 18,
@@ -731,7 +734,7 @@ class _WorkspaceState extends State<Workspace> {
               children: [
                 for (final note in postNotes)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Text(note),
                   ),
               ],
@@ -907,7 +910,7 @@ class _WorkspaceState extends State<Workspace> {
             key: ValueKey('section-chip-${id ?? 'all'}'),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,
-              vertical: 2,
+              vertical: 4,
             ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(6),
@@ -933,7 +936,7 @@ class _WorkspaceState extends State<Workspace> {
   Widget _tab(String text, bool selected, VoidCallback action) {
     final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(right: 2),
+      padding: const EdgeInsets.only(right: 4),
       child: TextButton(
         onPressed: action,
         style: TextButton.styleFrom(

@@ -246,13 +246,14 @@ void main() {
       await tester.tap(find.text('Reports'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
-      expect(find.byKey(const ValueKey('section-chip-all')), findsNothing);
-      expect(find.text('Include sections'), findsOneWidget);
-      await tester.tap(find.text('All sections'));
+      // The sidebar stays, and choosing a section scopes the printouts.
+      await tester.tap(find.byKey(const ValueKey('section-chip-all')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(c.event!.sections.last.name).last);
+      expect(find.text('Print & export · All sections'), findsOneWidget);
+      final last = c.event!.sections.last;
+      await tester.tap(find.byKey(ValueKey('section-chip-${last.id}')));
       await tester.pumpAndSettle();
-      expect(find.text(c.event!.sections.last.name), findsOneWidget);
+      expect(find.text('Print & export · ${last.name}'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -329,9 +330,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
+      // Reports keeps its sidebar, so jumping stays on Reports.
       expect(
         c.repository.readPreference('view'),
-        '${c.event!.sections.last.id}|results',
+        '${c.event!.sections.last.id}|reports',
       );
     },
   );

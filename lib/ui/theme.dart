@@ -50,7 +50,7 @@ ThemeData meowTheme(Brightness brightness) {
     fontSize: 14,
     fontWeight: FontWeight.w500,
   );
-  const buttonPadding = EdgeInsets.symmetric(horizontal: 14);
+  const buttonPadding = EdgeInsets.symmetric(horizontal: 12);
   const minimum = Size(0, controlHeight);
   // Buttons change colour instantly on hover/press instead of fading.
   const instant = Duration.zero;
@@ -88,7 +88,7 @@ ThemeData meowTheme(Brightness brightness) {
     dialogTheme: DialogThemeData(
       backgroundColor: colors.surfaceContainerLowest,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+      actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
     ),
     inputDecorationTheme: InputDecorationTheme(
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
@@ -103,7 +103,7 @@ ThemeData meowTheme(Brightness brightness) {
       isDense: true,
       filled: true,
       fillColor: colors.surfaceContainerLowest,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     ),
     dataTableTheme: DataTableThemeData(
       headingRowColor: WidgetStatePropertyAll(colors.surfaceContainerLow),
@@ -141,7 +141,7 @@ ThemeData meowTheme(Brightness brightness) {
       style: TextButton.styleFrom(
         animationDuration: instant,
         minimumSize: minimum,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         textStyle: buttonText,
         shape: shape,
       ).copyWith(side: focusSide(colors)),
@@ -337,7 +337,7 @@ class EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(body, textAlign: TextAlign.center),
-            if (action != null) ...[const SizedBox(height: 20), action!],
+            if (action != null) ...[const SizedBox(height: 24), action!],
           ],
         ),
       ),

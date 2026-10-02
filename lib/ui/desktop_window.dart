@@ -27,7 +27,7 @@ class WorkspaceToolbar extends StatelessWidget {
       child: Row(
         children: [
           const Tooltip(message: 'Meow Chess', child: MeowLogo()),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(child: child),
         ],
       ),

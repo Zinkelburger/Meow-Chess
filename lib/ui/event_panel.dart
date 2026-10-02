@@ -150,7 +150,7 @@ class EventPanelState extends State<EventPanel> {
     final colors = Theme.of(context).colorScheme;
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
     Widget heading(String label) => Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 8),
+      padding: const EdgeInsets.only(top: 24, bottom: 8),
       child: Text(label, style: Theme.of(context).textTheme.titleMedium),
     );
     return SidePanel(
@@ -220,7 +220,7 @@ class BackupsPanel extends StatelessWidget {
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
     final last = c.repository.readPreference('lastBackup')?.split('|');
     Widget heading(String label) => Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 8),
+      padding: const EdgeInsets.only(top: 24, bottom: 8),
       child: Text(label, style: Theme.of(context).textTheme.titleMedium),
     );
     return SidePanel(

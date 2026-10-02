@@ -86,7 +86,7 @@ class _ApiKeyFieldState extends State<ApiKeyField> {
       ),
       if (status != null)
         Padding(
-          padding: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.only(top: 8),
           child: Text(
             status!,
             style: TextStyle(

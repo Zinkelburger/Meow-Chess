@@ -92,7 +92,7 @@ void main() {
     expect(find.byKey(const ValueKey('event-complete')), findsOneWidget);
     await tester.tap(find.text('Final reports'));
     await tester.pumpAndSettle();
-    expect(find.text('Print & export'), findsOneWidget);
+    expect(find.byKey(const ValueKey('report-scope')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 

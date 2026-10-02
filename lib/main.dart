@@ -222,7 +222,7 @@ class _MeowAppState extends State<MeowApp> {
                         Row(
                           children: [
                             const MeowLogo(size: 88),
-                            const SizedBox(width: 20),
+                            const SizedBox(width: 24),
                             Text(
                               'Meow Chess',
                               style: Theme.of(context).textTheme.headlineSmall,

@@ -91,43 +91,19 @@ class _ReportsViewState extends State<ReportsView> {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Text('Reports', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 6),
-        const Text('Print handouts or export tournament results.'),
-        const SizedBox(height: 24),
-        Wrap(
-          spacing: 16,
-          runSpacing: 12,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Print & export',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            SizedBox(
-              width: 260,
-              child: DropdownButtonFormField<String>(
-                key: ValueKey(
-                  'report-scope-${e.sections.map((s) => s.id).join('-')}',
-                ),
-                initialValue: e.sections.any((s) => s.id == scope)
-                    ? scope!
-                    : '',
-                decoration: const InputDecoration(
-                  labelText: 'Include sections',
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: '',
-                    child: Text('All sections'),
-                  ),
-                  for (final s in e.sections)
-                    DropdownMenuItem(value: s.id, child: Text(s.name)),
-                ],
-                onChanged: (id) => setState(() => scope = id == '' ? null : id),
-              ),
-            ),
-          ],
+        Text(
+          'Print & export · ${e.sections.where((s) => s.id == scope).firstOrNull?.name ?? 'All sections'}',
+          key: const ValueKey('report-scope'),
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          scope == null
+              ? 'Every section. Choose one in the sidebar to print only that section.'
+              : 'Only this section. Choose All sections in the sidebar to print everything.',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -149,7 +125,7 @@ class _ReportsViewState extends State<ReportsView> {
               ),
           ],
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
 
         Wrap(
           spacing: 12,
@@ -191,14 +167,14 @@ class _ReportsViewState extends State<ReportsView> {
             ),
           ],
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
         Text(
           'US Chess rating report',
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 8),
         const Text(
-          'Includes the entire event, regardless of the section filter above.',
+          'Includes the entire event, whatever section is chosen in the sidebar.',
         ),
         const SizedBox(height: 8),
         const Text(
@@ -298,12 +274,12 @@ class _ReportsViewState extends State<ReportsView> {
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
         subtitle: const Text('Review before creating the rating report.'),
-        childrenPadding: const EdgeInsets.fromLTRB(56, 0, 20, 16),
+        childrenPadding: const EdgeInsets.fromLTRB(56, 0, 24, 16),
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final issue in issues)
             Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 8),
               child: Text('• $issue'),
             ),
         ],

@@ -347,7 +347,7 @@ class _PlayersViewState extends State<PlayersView> {
         _groupHeader(context, s, players),
         if (players.isEmpty)
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
             child: Text(
               'No players. Tick players below and move them here.',
               style: TextStyle(color: colors.onSurfaceVariant),
@@ -382,15 +382,10 @@ class _PlayersViewState extends State<PlayersView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Players',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 4),
                 Text(
                   started
                       ? '$shown players · W win, D draw, L loss + opponent\'s pairing number · B bye · Edit results in Rounds.'
@@ -533,7 +528,7 @@ class _PlayersViewState extends State<PlayersView> {
             body: 'Try a different name or US Chess ID.',
           )
         : Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final minimum =
@@ -582,7 +577,7 @@ class _PlayersViewState extends State<PlayersView> {
             const Text(
               'Import a CSV or tab-separated file with columns Name, US Chess ID and Rating. A header row is optional.',
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -608,7 +603,7 @@ class _PlayersViewState extends State<PlayersView> {
   );
 
   Widget _banner(BuildContext context, String text, Widget action) => Container(
-    margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+    margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
     padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
     decoration: BoxDecoration(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -628,8 +623,8 @@ class _PlayersViewState extends State<PlayersView> {
     final e = c.event!, colors = Theme.of(context).colorScheme;
     final allWithdrawn = selected.every((id) => e.player(id).withdrawn);
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       height: controlHeight + 12,
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
@@ -777,7 +772,7 @@ class _PlayersViewState extends State<PlayersView> {
     final ids = players.map((p) => p.id).toSet();
     final picked = ids.where(selected.contains).length;
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: colors.outlineVariant),
@@ -910,7 +905,7 @@ class _PlayersViewState extends State<PlayersView> {
           label: tip,
           child: Padding(
             key: ValueKey('round-${p.id}-$r'),
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             child: Text(
               mark,
               textAlign: TextAlign.center,
@@ -1044,7 +1039,7 @@ class _PlayersViewState extends State<PlayersView> {
             if (why.contains(p.id) && ranks[p.id] != null && standing != null)
               Padding(
                 key: ValueKey('why-${p.id}'),
-                padding: const EdgeInsets.fromLTRB(_check, 2, 8, 6),
+                padding: const EdgeInsets.fromLTRB(_check, 4, 8, 8),
                 child: Text(
                   whyRank(ranks[p.id]!.$2, standing),
                   style: muted.copyWith(fontSize: 13),
@@ -1076,7 +1071,7 @@ class _PlayersViewState extends State<PlayersView> {
             onTap: () =>
                 setState(() => open ? why.remove(p.id) : why.add(p.id)),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1594,7 +1589,7 @@ class PlayerPanelState extends State<PlayerPanel> {
     final e = c.event!, p = player, s = e.sectionOf(p.id);
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
     Widget heading(String label) => Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 8),
+      padding: const EdgeInsets.only(top: 24, bottom: 8),
       child: Text(label, style: Theme.of(context).textTheme.titleMedium),
     );
     // Byes can be requested for rounds not yet paired.
@@ -1660,7 +1655,7 @@ class PlayerPanelState extends State<PlayerPanel> {
               child: Text(lookupError!, style: TextStyle(color: colors.error)),
             ),
           if (member case final m?) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600)),
             Text(
               [
@@ -1669,7 +1664,7 @@ class PlayerPanelState extends State<PlayerPanel> {
               ].join(' · '),
               style: muted,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -1728,7 +1723,7 @@ class PlayerPanelState extends State<PlayerPanel> {
           heading('Byes'),
           for (final r in open)
             Padding(
-              padding: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
                   SizedBox(width: 72, child: Text('Round $r')),
@@ -1811,7 +1806,7 @@ class PlayerPanelState extends State<PlayerPanel> {
               (p.avoid.contains(other.id) || other.avoid.contains(p.id)),
         ))
           Padding(
-            padding: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.only(bottom: 8),
             child: InputChip(
               label: Text(other.name),
               onDeleted: () =>
@@ -1891,7 +1886,7 @@ class PlayerDetailsLayout extends StatelessWidget {
                   child: panel == null
                       ? null
                       : Padding(
-                          padding: const EdgeInsets.only(top: 20),
+                          padding: const EdgeInsets.only(top: 24),
                           child: panel,
                         ),
                 ),
@@ -1927,7 +1922,7 @@ class SidePanel extends StatelessWidget {
       bindings: {const SingleActivator(LogicalKeyboardKey.escape): onClose},
       child: Container(
         width: width,
-        margin: const EdgeInsets.fromLTRB(0, 0, 20, 16),
+        margin: const EdgeInsets.fromLTRB(0, 0, 24, 16),
         decoration: BoxDecoration(
           color: colors.surfaceContainerLowest,
           border: Border.all(color: colors.outlineVariant),

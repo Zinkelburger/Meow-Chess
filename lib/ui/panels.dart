@@ -471,7 +471,7 @@ class _QuadPlayer extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(4),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           decoration: BoxDecoration(
             color: picked ? colors.primary.withValues(alpha: 0.12) : null,
             border: Border.all(

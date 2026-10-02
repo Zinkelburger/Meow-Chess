@@ -947,7 +947,7 @@ class _ResultsViewState extends State<ResultsView> {
       return Container(
         width: double.infinity,
         margin: const EdgeInsets.fromLTRB(24, 0, 24, 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: colors.errorContainer,
           borderRadius: BorderRadius.circular(4),
@@ -1153,7 +1153,7 @@ class _ResultsViewState extends State<ResultsView> {
   Widget _sectionRow(BuildContext context, Section s, Round r) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: colors.outlineVariant)),
       ),
@@ -1305,7 +1305,7 @@ class _ResultsViewState extends State<ResultsView> {
             onTap: () => pickSwap(p.id),
             borderRadius: BorderRadius.circular(4),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: picked ? colors.primary.withValues(alpha: 0.12) : null,
                 border: Border.all(
@@ -1486,7 +1486,7 @@ class _ResultsViewState extends State<ResultsView> {
                 width: _box,
                 constraints: const BoxConstraints(minHeight: 44),
                 padding: EdgeInsets.symmetric(
-                  vertical: caption == null ? 6 : 2,
+                  vertical: caption == null ? 8 : 4,
                 ),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(

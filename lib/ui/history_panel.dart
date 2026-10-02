@@ -276,10 +276,10 @@ class _HistoryPanelState extends State<HistoryPanel> {
                                       minHeight: _rowHeight,
                                     ),
                                     padding: const EdgeInsets.fromLTRB(
-                                      6,
-                                      10,
+                                      8,
                                       12,
-                                      10,
+                                      12,
+                                      12,
                                     ),
                                     child: Column(
                                       crossAxisAlignment:
@@ -310,7 +310,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
                                               historyTime(row.node.timestamp),
                                               style: small,
                                             ),
-                                            const SizedBox(width: 6),
+                                            const SizedBox(width: 8),
                                             Icon(
                                               isSelected
                                                   ? Icons.expand_less
@@ -382,7 +382,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
           ),
           Divider(height: 1, color: colors.outlineVariant),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Text('All branches are saved.', style: small),
           ),
         ],
@@ -403,7 +403,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
       );
     }
     Widget label(String text) => Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 6),
+      padding: const EdgeInsets.only(top: 12, bottom: 8),
       child: Text(
         text,
         style: TextStyle(
@@ -414,7 +414,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
       ),
     );
     Widget operation(int operationId) => Padding(
-      padding: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -469,14 +469,14 @@ class _HistoryPanelState extends State<HistoryPanel> {
 
     return Padding(
       key: ValueKey('history-details-$id'),
-      padding: const EdgeInsets.fromLTRB(6, 0, 16, 14),
+      padding: const EdgeInsets.fromLTRB(8, 0, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (items.length > 1) ...[
             for (final item in items)
               Padding(
-                padding: const EdgeInsets.only(bottom: 5),
+                padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   item,
                   style: const TextStyle(fontSize: 12, height: 1.4),
