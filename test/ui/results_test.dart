@@ -42,7 +42,7 @@ void main() {
       find.text('Added New One. Enter the next player, or close.'),
       findsOneWidget,
     );
-    await tester.tap(find.byTooltip('Import players'));
+    await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Paste from spreadsheet'));
     await tester.pumpAndSettle();

@@ -60,6 +60,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
     // p3 tops nothing in Quad 1; p4 leads Quad 2. Swap them.
+    await tester.ensureVisible(find.byKey(const ValueKey('quad-player-p3')));
     await tester.tap(find.byKey(const ValueKey('quad-player-p3')));
     await tester.pump();
     await tester.ensureVisible(find.byKey(const ValueKey('quad-player-p4')));

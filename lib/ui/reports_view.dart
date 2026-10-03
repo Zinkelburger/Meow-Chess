@@ -166,13 +166,15 @@ class _ReportsViewState extends State<ReportsView> {
               ),
               (
                 'Standings and prizes',
-                'Review ties and select the prize class before printing.',
+                'Check ties and prize classes',
                 'Open standings',
                 widget.onStandings,
               ),
               (
                 'Rating report',
-                '$issues items need attention. Exported, submitted and accepted are separate states.',
+                issues == 0
+                    ? 'Ready'
+                    : '$issues ${issues == 1 ? 'item needs' : 'items need'} attention',
                 '',
                 null,
               ),
@@ -191,9 +193,7 @@ class _ReportsViewState extends State<ReportsView> {
               ),
               (
                 'Submission',
-                e.submission.isEmpty
-                    ? 'Not recorded'
-                    : 'Notes recorded · acceptance is not verified by this app',
+                e.submission.isEmpty ? 'Not recorded' : 'Notes recorded',
                 '',
                 null,
               ),
@@ -275,18 +275,9 @@ class _ReportsViewState extends State<ReportsView> {
         finishChecklist(e, issues.length),
         const SizedBox(height: 16),
         Text(
-          'Print & export · ${e.sections.where((s) => s.id == scope).firstOrNull?.name ?? 'All sections'}',
+          'Print · ${e.sections.where((s) => s.id == scope).firstOrNull?.name ?? 'All sections'}',
           key: const ValueKey('report-scope'),
           style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          scope == null
-              ? 'Every section. Choose one in the sidebar to print only that section.'
-              : 'Only this section. Choose All sections in the sidebar to print everything.',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -306,15 +297,7 @@ class _ReportsViewState extends State<ReportsView> {
                 icon: Icon(icon),
                 label: Text(label),
               ),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            OutlinedButton(
+            TextButton(
               onPressed: () async {
                 try {
                   await saveArtifact(
@@ -327,9 +310,9 @@ class _ReportsViewState extends State<ReportsView> {
                   if (context.mounted) showFailure(context, error);
                 }
               },
-              child: const Text('Standings (CSV)'),
+              child: const Text('Save CSV'),
             ),
-            OutlinedButton(
+            TextButton(
               onPressed: () async {
                 try {
                   await saveArtifact(
@@ -346,7 +329,7 @@ class _ReportsViewState extends State<ReportsView> {
                   if (context.mounted) showFailure(context, error);
                 }
               },
-              child: const Text('Crosstable (text)'),
+              child: const Text('Save text crosstable'),
             ),
           ],
         ),
@@ -355,13 +338,12 @@ class _ReportsViewState extends State<ReportsView> {
           'US Chess rating report',
           style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 8),
-        const Text(
-          'Includes the entire event, whatever section is chosen in the sidebar.',
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Not yet tested with the US Chess upload site. Check the files before uploading.',
+        const SizedBox(height: 4),
+        Text(
+          'Covers every section. Not yet tested with the US Chess upload site.',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 16),
         ReportDetails(key: detailsKey, controller: controller),
@@ -397,7 +379,7 @@ class _ReportsViewState extends State<ReportsView> {
             OutlinedButton.icon(
               onPressed: issues.isEmpty ? () => exportRating(context) : null,
               icon: const Icon(Icons.folder_outlined),
-              label: const Text('Create rating report files'),
+              label: const Text('Save rating report'),
             ),
             // A disabled button says why beside it.
             if (issues.isNotEmpty)

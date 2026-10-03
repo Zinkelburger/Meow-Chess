@@ -32,6 +32,7 @@ void main() {
     c.reserveBye(players[4].id, 2, 1);
     final screenshotKey = GlobalKey();
     var brightness = Brightness.light;
+    var textScale = 1.0;
     late StateSetter setTheme;
     await tester.pumpWidget(
       RepaintBoundary(
@@ -42,6 +43,12 @@ void main() {
             return MaterialApp(
               debugShowCheckedModeBanner: false,
               theme: meowTheme(brightness),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(textScale)),
+                child: child!,
+              ),
               home: Workspace(
                 controller: c,
                 path: 'Practice event',
@@ -81,6 +88,10 @@ void main() {
     setTheme(() => brightness = Brightness.dark);
     await tester.pumpAndSettle();
     await screenshot('history-branches-dark');
+    await tester.binding.setSurfaceSize(const Size(1280, 720));
+    setTheme(() => textScale = 2.0);
+    await tester.pumpAndSettle();
+    await screenshot('history-large-text-dark');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();

@@ -75,6 +75,23 @@ void main() {
         image.dispose();
       }
 
+      await click(find.byKey(const ValueKey('event-details')));
+      await tester.enterText(
+        find.byKey(const ValueKey('event-name')),
+        'An unfinished event edit',
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Discard draft'));
+      await tester.pumpAndSettle();
+      await capture('workflow-event-draft-200');
+      await click(find.text('Discard draft'));
+      expect(c.event!.name, 'Saturday Quads');
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      await click(find.byTooltip('Keyboard shortcuts (F1)'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('Keyboard shortcuts'), findsNothing);
       await click(find.text('Player 00', findRichText: true).first);
       expect(find.byType(PlayerPanel), findsOneWidget);
       await tester.enterText(

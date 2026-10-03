@@ -54,7 +54,7 @@ void main() {
     // Unfinished rounds still block the export.
     final create = tester.widget<OutlinedButton>(
       find.ancestor(
-        of: find.text('Create rating report files'),
+        of: find.text('Save rating report'),
         matching: find.byWidgetPredicate((w) => w is OutlinedButton),
       ),
     );
@@ -87,8 +87,6 @@ void main() {
           ),
         ),
       );
-      // The hint shows what the report sends when the field is left empty.
-      expect(find.text('00, PLAYER'), findsOneWidget);
       await tester.enterText(find.byKey(const ValueKey('panel-state')), 'M1');
       expect(key.currentState!.commit(), false);
       await tester.pump();

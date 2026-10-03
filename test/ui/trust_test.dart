@@ -70,13 +70,13 @@ void main() {
     expect(find.text('No backup folder'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('status-backup')));
     await tester.pumpAndSettle();
-    expect(find.text('Choose backup folder…'), findsOneWidget);
+    expect(find.text('Choose folder…'), findsOneWidget);
     // Backups no longer hide behind the event-name pencil, and the event
     // panel takes the dock's place rather than squeezing the page.
     await tester.tap(find.byKey(const ValueKey('event-details')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('event-name')), findsOneWidget);
-    expect(find.text('Choose backup folder…'), findsNothing);
+    expect(find.text('Choose folder…'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -152,7 +152,7 @@ void main() {
     final directory = Directory.systemTemp.createTempSync('meow-settings-');
     addTearDown(() => directory.deleteSync(recursive: true));
     await tester.pumpWidget(MeowApp(dataDirectory: directory));
-    await tester.tap(find.text('Dark mode'));
+    await tester.tap(find.byTooltip('Dark mode'));
     await tester.pump();
     expect(
       jsonDecode(File('${directory.path}/settings.json').readAsStringSync()),
@@ -161,7 +161,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(MeowApp(dataDirectory: directory));
     await tester.pump();
-    expect(find.text('Light mode'), findsOneWidget);
+    expect(find.byTooltip('Light mode'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }

@@ -446,8 +446,7 @@ class _NewSectionsPanelState extends State<NewSectionsPanel> {
         if (type == Format.quad && groups.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
-            'Grouped by rating, highest first; withdrawn players are left out. '
-            'Click two players to swap them.'
+            'Grouped by rating. Click two players to swap them.'
             '${replacing ? ' This replaces the current sections.' : ''}',
             style: muted,
           ),
@@ -486,7 +485,7 @@ class _NewSectionsPanelState extends State<NewSectionsPanel> {
           const SizedBox(height: 8),
           Text(
             free == 0
-                ? 'Every player is already in a section. The new section starts empty; move players into it from the Players page.'
+                ? 'Everyone is already in a section, so this one starts empty.'
                 : 'The $free ${free == 1 ? 'player' : 'players'} not yet in a section will be added.',
             style: muted,
           ),
@@ -1070,10 +1069,20 @@ class LookupPanel extends StatefulWidget {
 
 class _LookupPanelState extends State<LookupPanel> {
   final query = TextEditingController();
+  final queryFocus = FocusNode(debugLabel: 'player-lookup');
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) queryFocus.requestFocus();
+    });
+  }
 
   @override
   void dispose() {
     query.dispose();
+    queryFocus.dispose();
     super.dispose();
   }
 
@@ -1156,10 +1165,11 @@ class _LookupPanelState extends State<LookupPanel> {
         TextField(
           key: const ValueKey('lookup-query'),
           controller: query,
+          focusNode: queryFocus,
           autofocus: true,
           style: const TextStyle(fontSize: 20),
           decoration: const InputDecoration(
-            hintText: 'Name, US Chess ID, or #pairing number',
+            hintText: 'Name, US Chess ID or #number',
             prefixIcon: Icon(Icons.search),
           ),
           onChanged: (_) => setState(() {}),
@@ -1227,11 +1237,6 @@ class _LookupPanelState extends State<LookupPanel> {
           ),
           Divider(color: colors.outlineVariant),
         ],
-        if (query.text.trim().isEmpty)
-          Text(
-            'Type part of a name. The answer is large enough to turn the screen toward the player.',
-            style: TextStyle(color: colors.onSurfaceVariant),
-          ),
       ],
     );
   }

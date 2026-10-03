@@ -97,6 +97,10 @@ class _MeowAppState extends State<MeowApp> {
     if (filename == path) return;
     navigator.currentState?.popUntil((route) => route.isFirst);
     open(filename);
+    if (error != null && controller != null) {
+      final context = navigator.currentContext;
+      if (context != null) showFailure(context, error!);
+    }
   }
 
   @override
@@ -154,10 +158,7 @@ class _MeowAppState extends State<MeowApp> {
     if (location != null) {
       if (File(location.path).existsSync()) {
         if (context.mounted) {
-          showFailure(
-            context,
-            'Choose a new filename. Existing event files are never overwritten.',
-          );
+          showFailure(context, 'That file already exists. Pick a new name.');
         }
         return;
       }
@@ -253,20 +254,20 @@ class _MeowAppState extends State<MeowApp> {
                               style: Theme.of(context).textTheme.headlineSmall,
                             ),
                             const Spacer(),
-                            TextButton.icon(
+                            IconButton(
                               onPressed: toggleTheme,
+                              tooltip: light ? 'Dark mode' : 'Light mode',
                               icon: Icon(
                                 light
                                     ? Icons.dark_mode_outlined
                                     : Icons.light_mode_outlined,
                               ),
-                              label: Text(light ? 'Dark mode' : 'Light mode'),
                             ),
                           ],
                         ),
                         const SizedBox(height: 32),
                         const Text(
-                          'Run Swiss and quad chess tournaments. Each event is saved as a .meow file on this computer and works without internet.',
+                          'Run Swiss and quad chess tournaments, saved on this computer. No internet needed.',
                         ),
                         const SizedBox(height: 24),
                         if (naming)
@@ -285,14 +286,13 @@ class _MeowAppState extends State<MeowApp> {
                                     autofocus: true,
                                     decoration: const InputDecoration(
                                       labelText: 'Event name',
-                                      hintText: 'Saturday Quads',
                                     ),
                                     onSubmitted: (_) => create(context),
                                   ),
                                 ),
                                 FilledButton(
                                   onPressed: () => create(context),
-                                  child: const Text('Choose where to save…'),
+                                  child: const Text('Save'),
                                 ),
                                 TextButton(
                                   onPressed: () => setState(() {
@@ -320,7 +320,7 @@ class _MeowAppState extends State<MeowApp> {
                             OutlinedButton.icon(
                               onPressed: choose,
                               icon: const Icon(Icons.folder_open),
-                              label: const Text('Open event file'),
+                              label: const Text('Open event'),
                             ),
                             TextButton.icon(
                               onPressed: practice,
@@ -369,7 +369,7 @@ class _MeowAppState extends State<MeowApp> {
                         ],
                         const SizedBox(height: 32),
                         const Text(
-                          'Test version: Swiss pairings and US Chess rating reports are not yet certified.',
+                          'Test version: Swiss pairings and rating reports are not yet certified.',
                           style: TextStyle(fontSize: 12),
                         ),
                       ],

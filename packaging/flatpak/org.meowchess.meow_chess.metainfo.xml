@@ -34,6 +34,7 @@
     <name>Andrew Bernal</name>
   </developer>
   <releases>
+    <release version="1.1.1" date="2026-10-02" />
     <release version="1.1.0" date="2026-10-02" />
     <release version="1.0.0" date="2026-09-30" />
   </releases>

@@ -119,6 +119,64 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final width in [1100.0, 1400.0]) {
+    testWidgets('side panels keep tables still at width $width', (
+      tester,
+    ) async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      c.post((await tester.runAsync(() => c.propose()))!);
+      await mount(tester, c);
+      tester.view.physicalSize = Size(width, 900);
+      await tester.pumpAndSettle();
+      final player = c.event!.players.first;
+      final game = c.event!.games.first;
+      for (final rounds in [false, true]) {
+        if (rounds) {
+          await tester.tap(find.text('Rounds').first);
+          await tester.pumpAndSettle();
+        }
+        final row = find.byKey(
+          ValueKey(rounds ? 'game-${game.id}' : 'player-${player.id}'),
+        );
+        final before = tester.getRect(row);
+        await doubleClick(
+          tester,
+          rounds
+              ? find.byKey(ValueKey('round-player-${game.id}-${game.white}'))
+              : find.descendant(
+                  of: row,
+                  matching: find.text(player.name, findRichText: true),
+                ),
+        );
+        expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
+        expect(tester.getRect(row), before);
+        // Replacing the embedded editor with workspace tools must use the
+        // same space, including tools wider than the player editor.
+        for (final target in [
+          find.byTooltip('Keyboard shortcuts (F1)'),
+          find.byKey(const ValueKey('event-details')),
+          find.byTooltip('History (Ctrl+H)'),
+          find.byTooltip('Find player (Ctrl+L)'),
+        ]) {
+          await tester.tap(target);
+          await tester.pumpAndSettle();
+          expect(tester.getRect(row), before);
+          expect(find.byKey(const ValueKey('panel-name')), findsNothing);
+          final historyClose = find.byTooltip('Close history (Ctrl+H)');
+          await tester.tap(
+            historyClose.evaluate().isNotEmpty
+                ? historyClose
+                : find.byTooltip('Close (Esc)'),
+          );
+          await tester.pumpAndSettle();
+          expect(tester.getRect(row), before);
+          expect(tester.takeException(), isNull);
+        }
+      }
+    });
+  }
+
   testWidgets('an empty event opens on Players with file import first', (
     tester,
   ) async {
@@ -126,7 +184,7 @@ void main() {
       ..create('Club night');
     addTearDown(c.dispose);
     await mount(tester, c);
-    expect(find.text('Import players from file…'), findsOneWidget);
+    expect(find.text('Import file…'), findsOneWidget);
     expect(find.text('Paste from spreadsheet'), findsOneWidget);
     expect(find.text('Overview'), findsNothing);
     // Nothing to post yet, and the button says why beside it.
@@ -253,11 +311,11 @@ void main() {
       // The sidebar stays, and choosing a section scopes the printouts.
       await tester.tap(find.byKey(const ValueKey('section-chip-all')));
       await tester.pumpAndSettle();
-      expect(find.text('Print & export · All sections'), findsOneWidget);
+      expect(find.text('Print · All sections'), findsOneWidget);
       final last = c.event!.sections.last;
       await tester.tap(find.byKey(ValueKey('section-chip-${last.id}')));
       await tester.pumpAndSettle();
-      expect(find.text('Print & export · ${last.name}'), findsOneWidget);
+      expect(find.text('Print · ${last.name}'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

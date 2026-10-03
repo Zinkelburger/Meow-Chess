@@ -463,9 +463,7 @@ class _PlayersViewState extends State<PlayersView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        started
-                            ? '$shown players · W win, D draw, L loss + opponent\'s pairing number · B bye · Edit results in Rounds.'
-                            : '$shown players · Select a name to edit details or request a bye.',
+                        '$shown ${shown == 1 ? 'player' : 'players'}',
                         style: TextStyle(color: colors.onSurfaceVariant),
                       ),
                       const SizedBox(height: 16),
@@ -550,24 +548,6 @@ class _PlayersViewState extends State<PlayersView> {
                                   ),
                                   label: const Text('Print standings'),
                                 ),
-                              MenuAnchor(
-                                builder: (context, menu, child) =>
-                                    TextButton.icon(
-                                      onPressed: () => menu.isOpen
-                                          ? menu.close()
-                                          : menu.open(),
-                                      icon: const Icon(Icons.tune, size: 18),
-                                      label: const Text('View'),
-                                    ),
-                                menuChildren: [
-                                  CheckboxMenuButton(
-                                    value: showIds,
-                                    onChanged: (v) =>
-                                        setState(() => showIds = v!),
-                                    child: const Text('US Chess IDs'),
-                                  ),
-                                ],
-                              ),
                               OutlinedButton.icon(
                                 onPressed: () => showSide(_Side.add),
                                 icon: const Icon(Icons.add, size: 18),
@@ -575,7 +555,7 @@ class _PlayersViewState extends State<PlayersView> {
                               ),
                               MenuAnchor(
                                 builder: (context, menu, child) => IconButton(
-                                  tooltip: 'Import players',
+                                  tooltip: 'More',
                                   icon: const Icon(Icons.more_horiz),
                                   onPressed: () =>
                                       menu.isOpen ? menu.close() : menu.open(),
@@ -595,6 +575,13 @@ class _PlayersViewState extends State<PlayersView> {
                                     ),
                                     onPressed: () => showSide(_Side.paste),
                                     child: const Text('Paste from spreadsheet'),
+                                  ),
+                                  const Divider(),
+                                  CheckboxMenuButton(
+                                    value: showIds,
+                                    onChanged: (v) =>
+                                        setState(() => showIds = v!),
+                                    child: const Text('Show US Chess IDs'),
                                   ),
                                 ],
                               ),
@@ -701,9 +688,7 @@ class _PlayersViewState extends State<PlayersView> {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Import a CSV or tab-separated file with columns Name, US Chess ID and Rating. A header row is optional.',
-            ),
+            const Text('Columns: Name, US Chess ID, Rating.'),
             const SizedBox(height: 24),
             Wrap(
               spacing: 8,
@@ -711,7 +696,7 @@ class _PlayersViewState extends State<PlayersView> {
               children: [
                 FilledButton(
                   onPressed: () => importRosterFile(context, c),
-                  child: const Text('Import players from file…'),
+                  child: const Text('Import file…'),
                 ),
                 OutlinedButton(
                   onPressed: () => showSide(_Side.paste),
@@ -848,13 +833,22 @@ class _PlayersViewState extends State<PlayersView> {
     );
   }
 
+  double _columnWidth(BuildContext context, double width) =>
+      width * MediaQuery.textScalerOf(context).scale(14) / 14;
+
   Widget _columns(BuildContext context, int rounds) {
     final colors = Theme.of(context).colorScheme;
     Widget cell(double width, String text, {bool center = false}) => SizedBox(
-      width: width,
-      child: Text(text, textAlign: center ? TextAlign.center : null),
+      width: _columnWidth(context, width),
+      child: Text(
+        text,
+        textAlign: center ? TextAlign.center : null,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
     return Container(
+      key: const ValueKey('player-column-header'),
       color: colors.surfaceContainerLow,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: DefaultTextStyle.merge(
@@ -865,7 +859,7 @@ class _PlayersViewState extends State<PlayersView> {
         ),
         child: Row(
           children: [
-            const SizedBox(width: _check),
+            SizedBox(width: _columnWidth(context, _check)),
             if (ranking) cell(_rank, 'Rank'),
             cell(_number, '#'),
             const Expanded(child: Text('Name')),
@@ -908,7 +902,7 @@ class _PlayersViewState extends State<PlayersView> {
       child: Row(
         children: [
           SizedBox(
-            width: _check,
+            width: _columnWidth(context, _check),
             child: Align(
               alignment: Alignment.centerLeft,
               child: PlainCheckbox(
@@ -1014,7 +1008,9 @@ class _PlayersViewState extends State<PlayersView> {
 
   Widget _roundCell(BuildContext context, Player p, Section? s, int r) {
     final colors = Theme.of(context).colorScheme;
-    if (s != null && r > s.plannedRounds) return const SizedBox(width: _round);
+    if (s != null && r > s.plannedRounds) {
+      return SizedBox(width: _columnWidth(context, _round));
+    }
     final played = s != null && r <= s.rounds.length;
     final bye = played ? null : p.byes[r];
     final (mark, tip) = played
@@ -1026,7 +1022,7 @@ class _PlayersViewState extends State<PlayersView> {
           )
         : ('—', 'Round $r: not paired. Request byes in player details.');
     return SizedBox(
-      width: _round,
+      width: _columnWidth(context, _round),
       child: Tooltip(
         message: tip,
         child: Semantics(
@@ -1057,7 +1053,7 @@ class _PlayersViewState extends State<PlayersView> {
     final colors = Theme.of(context).colorScheme;
     final muted = TextStyle(color: colors.onSurfaceVariant);
     Widget cell(double width, String text, [TextStyle? style]) => SizedBox(
-      width: width,
+      width: _columnWidth(context, width),
       child: Text(
         text,
         maxLines: 1,
@@ -1084,7 +1080,7 @@ class _PlayersViewState extends State<PlayersView> {
             Row(
               children: [
                 SizedBox(
-                  width: _check,
+                  width: _columnWidth(context, _check),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: PlainCheckbox(
@@ -1142,7 +1138,7 @@ class _PlayersViewState extends State<PlayersView> {
                 for (var r = 1; r <= rounds; r++) _roundCell(context, p, s, r),
                 if (scores) ...[
                   SizedBox(
-                    width: _points,
+                    width: _columnWidth(context, _points),
                     child: Text(
                       standing == null ? '' : halves(standing.points),
                       textAlign: TextAlign.center,
@@ -1155,7 +1151,7 @@ class _PlayersViewState extends State<PlayersView> {
                       standing == null ? '' : quarters(standing.sonneborn),
                     ])
                       SizedBox(
-                        width: _tiebreak,
+                        width: _columnWidth(context, _tiebreak),
                         child: Text(
                           value,
                           textAlign: TextAlign.center,
@@ -1184,10 +1180,10 @@ class _PlayersViewState extends State<PlayersView> {
   Widget _rankCell(BuildContext context, Player p) {
     final colors = Theme.of(context).colorScheme;
     final label = ranks[p.id]?.$1;
-    if (label == null) return const SizedBox(width: _rank);
+    if (label == null) return SizedBox(width: _columnWidth(context, _rank));
     final open = why.contains(p.id);
     return SizedBox(
-      width: _rank,
+      width: _columnWidth(context, _rank),
       child: Align(
         alignment: Alignment.centerLeft,
         child: Semantics(
@@ -1739,15 +1735,7 @@ class PlayerPanelState extends State<PlayerPanel> {
             textCapitalization: key == 'state'
                 ? TextCapitalization.characters
                 : TextCapitalization.none,
-            decoration: InputDecoration(
-              labelText: label,
-              hintText: switch (key) {
-                'rating' => 'UNR',
-                // What the report sends when this is left empty.
-                'reportName' => reportName(text['name']!.text) ?? '',
-                _ => null,
-              },
-            ),
+            decoration: InputDecoration(labelText: label),
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) => commit(),
           ),
@@ -2100,7 +2088,11 @@ class PlayerPanelState extends State<PlayerPanel> {
 
 enum _Side { player, add, paste, team }
 
-/// Keeps tables compact and reserves a details column on wide windows.
+/// Every tool shares the same reserved column, even while it is closed.
+double detailsColumnWidth(double availableWidth) =>
+    (availableWidth * 0.48).clamp(0.0, 360.0);
+
+/// Keeps a stable details column so opening a panel never reflows the table.
 class PlayerDetailsLayout extends StatelessWidget {
   const PlayerDetailsLayout({required this.child, this.panel, super.key});
   final Widget child;
@@ -2109,10 +2101,7 @@ class PlayerDetailsLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final reserve = panel != null || constraints.maxWidth >= 1120;
-      final panelWidth = reserve
-          ? (constraints.maxWidth * 0.48).clamp(0.0, 360.0)
-          : 0.0;
+      final panelWidth = detailsColumnWidth(constraints.maxWidth);
       final contentWidth = (constraints.maxWidth - panelWidth).clamp(
         0.0,
         1100.0,
@@ -2129,17 +2118,16 @@ class PlayerDetailsLayout extends StatelessWidget {
             children: [
               SizedBox(width: contentWidth, child: child),
               const Spacer(),
-              if (reserve)
-                SizedBox(
-                  key: const ValueKey('player-details-area'),
-                  width: panelWidth,
-                  child: panel == null
-                      ? null
-                      : Padding(
-                          padding: const EdgeInsets.only(top: 24),
-                          child: panel,
-                        ),
-                ),
+              SizedBox(
+                key: const ValueKey('player-details-area'),
+                width: panelWidth,
+                child: panel == null
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 24),
+                        child: panel,
+                      ),
+              ),
             ],
           ),
         ),
@@ -2269,7 +2257,7 @@ class _PastePanelState extends State<_PastePanel> {
       onClose: widget.onClose,
       children: [
         Text(
-          'Paste rows from a spreadsheet: Name, US Chess ID, Rating. Players already in the event are not duplicated.',
+          'Columns: Name, US Chess ID, Rating. Players already here are skipped.',
           style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
         ),
         const SizedBox(height: 12),
@@ -2279,9 +2267,6 @@ class _PastePanelState extends State<_PastePanel> {
           autofocus: true,
           minLines: 10,
           maxLines: 20,
-          decoration: const InputDecoration(
-            hintText: 'Name,ID,Rating\nMorgan Lee,12345678,1650',
-          ),
           onChanged: (v) {
             widget.controller.workspaceState.write('import-draft', v);
             setState(() {});

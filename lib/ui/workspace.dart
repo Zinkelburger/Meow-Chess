@@ -44,6 +44,7 @@ class _WorkspaceState extends State<Workspace> {
   bool eventOpen = false;
   final sectionSearch = TextEditingController();
   final sectionFocus = FocusNode(debugLabel: 'section-search');
+  final workspaceFocus = FocusNode(debugLabel: 'workspace');
   final sectionKeys = <String, GlobalKey>{};
   final eventPanel = GlobalKey<EventPanelState>();
 
@@ -80,6 +81,7 @@ class _WorkspaceState extends State<Workspace> {
     clock?.cancel();
     sectionSearch.dispose();
     sectionFocus.dispose();
+    workspaceFocus.dispose();
     c.removeListener(refresh);
     c.workspaceState.removeListener(refresh);
     dock
@@ -183,7 +185,7 @@ class _WorkspaceState extends State<Workspace> {
               '${c.event!.sections.firstWhere((s) => s.id == e.key).name}: ${e.value}',
         ),
         if (caveat)
-          'Swiss pairings come from a test algorithm that is not yet certified. Look them over before players sit down; Edit pairings fixes a board until play starts.',
+          'Swiss pairings are not yet certified. Check the boards before play; Edit pairings can swap players.',
       ];
       // Post straight away; anything worth checking is fixed afterwards
       // with Edit pairings or Undo post.
@@ -255,6 +257,17 @@ class _WorkspaceState extends State<Workspace> {
     eventOpen = dock.id == 'event';
     c.workspaceState.write('historyPanel', historyOpen ? 'open' : 'closed');
     refresh();
+    if (dock.id != null) {
+      WidgetsBinding.instance.endOfFrame.then((_) {
+        if (!mounted || dock.id == null) return;
+        FocusManager.instance.applyFocusChangesIfNeeded();
+        // Removing an editor can leave focus on the route outside our shortcuts.
+        // Keep existing field focus; restore the workspace only when it lost it.
+        if (!workspaceFocus.hasFocus) {
+          workspaceFocus.requestFocus();
+        }
+      });
+    }
   }
 
   void printCurrent() {
@@ -275,47 +288,46 @@ class _WorkspaceState extends State<Workspace> {
     );
   }
 
-  void keyboardHelp() => dock.show(
-    'keyboard-help',
-    SidePanel(
-      title: 'Keyboard reference',
-      onClose: dock.close,
-      children: [
-        const Text(
-          'Results apply to the focused player’s score box. They save immediately, then advance to the next missing board.',
-        ),
-        const SizedBox(height: 16),
-        for (final (keys, action) in const [
-          ('1 / W', 'This player wins'),
-          ('0 / L', 'This player loses'),
-          ('5 / D', 'Draw'),
-          ('F, then 1 or 0', 'Forfeit result'),
-          ('+ / −', 'Forfeit win / loss'),
-          ('X', 'Double forfeit'),
-          ('Delete', 'Clear the result'),
-          ('↑ / ↓', 'Previous / next board'),
-          ('← / →', 'Other player'),
-          ('M', 'Result menu'),
-          ('Tab, then Enter', 'Open the focused player'),
-          ('Ctrl+L', 'Find a player'),
-          ('Ctrl+J', 'Find a section'),
-          ('Ctrl+P', 'Print this view'),
-          ('Ctrl+Z', 'Undo'),
-          ('Ctrl+Shift+Z / Ctrl+Y', 'Redo'),
-          ('Ctrl+H', 'History'),
-          ('Esc', 'Close the panel; keep its draft'),
-          ('F1', 'This reference'),
-        ])
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text('$keys — $action'),
+  void keyboardHelp() => dock.id == 'keyboard-help'
+      ? dock.close()
+      : dock.show(
+          'keyboard-help',
+          SidePanel(
+            title: 'Keyboard shortcuts',
+            onClose: dock.close,
+            children: [
+              const Text(
+                'Result keys score the focused player and jump to the next missing board.',
+              ),
+              const SizedBox(height: 16),
+              for (final (keys, action) in const [
+                ('1 / W', 'This player wins'),
+                ('0 / L', 'This player loses'),
+                ('5 / D', 'Draw'),
+                ('F, then 1 or 0', 'Forfeit result'),
+                ('+ / −', 'Forfeit win / loss'),
+                ('X', 'Double forfeit'),
+                ('Delete', 'Clear the result'),
+                ('↑ / ↓', 'Previous / next board'),
+                ('← / →', 'Other player'),
+                ('M', 'Result menu'),
+                ('Tab, then Enter', 'Open the focused player'),
+                ('Ctrl+L', 'Find a player'),
+                ('Ctrl+J', 'Find a section'),
+                ('Ctrl+P', 'Print this view'),
+                ('Ctrl+Z', 'Undo'),
+                ('Ctrl+Shift+Z / Ctrl+Y', 'Redo'),
+                ('Ctrl+H', 'History'),
+                ('Esc', 'Close the panel; keep its draft'),
+                ('F1', 'This reference'),
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text('$keys — $action'),
+                ),
+            ],
           ),
-        const Text(
-          'Result keys never score games while you are typing in a text field. Earlier rounds remain read-only until you choose Correct a result.',
-        ),
-      ],
-    ),
-  );
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -338,18 +350,21 @@ class _WorkspaceState extends State<Workspace> {
         controller: c,
         sectionId: section?.id,
       ),
-      TaskView.reports => ReportsView(
-        key: ValueKey('reports-${section?.id}'),
-        controller: c,
-        sectionId: section?.id,
-        onResults: (id) => pickSection(id, next: TaskView.results),
-        onStandings: () => go(TaskView.players),
-        onBackups: showBackups,
+      TaskView.reports => PlayerDetailsLayout(
+        child: ReportsView(
+          key: ValueKey('reports-${section?.id}'),
+          controller: c,
+          sectionId: section?.id,
+          onResults: (id) => pickSection(id, next: TaskView.results),
+          onStandings: () => go(TaskView.players),
+          onBackups: showBackups,
+        ),
       ),
     };
     final dark = Theme.of(context).brightness == Brightness.dark;
     return CallbackShortcuts(
       bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): dock.close,
         const SingleActivator(LogicalKeyboardKey.keyJ, control: true):
             jumpToSection,
         const SingleActivator(LogicalKeyboardKey.keyL, control: true): lookup,
@@ -375,6 +390,7 @@ class _WorkspaceState extends State<Workspace> {
       child: Dock(
         controller: dock,
         child: Focus(
+          focusNode: workspaceFocus,
           autofocus: true,
           child: Scaffold(
             body: SafeArea(
@@ -448,13 +464,11 @@ class _WorkspaceState extends State<Workspace> {
                               lookup,
                               selected: dock.id == 'lookup',
                             ),
-                            TextButton.icon(
-                              onPressed: keyboardHelp,
-                              icon: const Icon(
-                                Icons.keyboard_outlined,
-                                size: 18,
-                              ),
-                              label: const Text('Keys'),
+                            _barIcon(
+                              Icons.keyboard_outlined,
+                              'Keyboard shortcuts (F1)',
+                              keyboardHelp,
+                              selected: dock.id == 'keyboard-help',
                             ),
                             _undoButton(context),
                             _barIcon(
@@ -519,107 +533,139 @@ class _WorkspaceState extends State<Workspace> {
                   ),
                   if (e.practice) _practiceBanner(context),
                   Expanded(
-                    child: LayoutBuilder(
-                      builder: (context, layout) => Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _sectionSidebar(context),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (c.backupWarning != null)
-                                  MaterialBanner(
-                                    content: Text(c.backupWarning!),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: c.secondaryBackup,
-                                        child: const Text('Retry'),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _sectionSidebar(context),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (c.backupWarning != null)
+                                MaterialBanner(
+                                  content: Text(c.backupWarning!),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: c.secondaryBackup,
+                                      child: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
+                              if (view != TaskView.reports)
+                                Container(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    24,
+                                    12,
+                                    24,
+                                    12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: colors.outlineVariant,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          section?.name ?? 'All sections',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Flexible(
+                                        flex: 3,
+                                        child: _postControl(
+                                          context,
+                                          e,
+                                          section,
+                                        ),
                                       ),
                                     ],
                                   ),
-                                if (view != TaskView.reports)
-                                  Container(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      24,
-                                      12,
-                                      24,
-                                      12,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        bottom: BorderSide(
-                                          color: colors.outlineVariant,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            section?.name ?? 'All sections',
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
+                                ),
+                              if (postNotes.isNotEmpty) _postNotes(context),
+                              Expanded(
+                                child: LayoutBuilder(
+                                  builder: (context, layout) => Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      content,
+                                      if (dock.panel != null)
+                                        Positioned(
+                                          top: 0,
+                                          bottom: 0,
+                                          right: 0,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 16,
                                             ),
-                                            overflow: TextOverflow.ellipsis,
+                                            child: ConstrainedBox(
+                                              constraints: BoxConstraints(
+                                                maxWidth: detailsColumnWidth(
+                                                  layout.maxWidth,
+                                                ),
+                                              ),
+                                              child: dock.panel,
+                                            ),
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
-                                        Flexible(
-                                          flex: 3,
-                                          child: _postControl(
-                                            context,
-                                            e,
-                                            section,
+                                      if (eventOpen)
+                                        Positioned(
+                                          top: 0,
+                                          bottom: 0,
+                                          right: 0,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              top: 16,
+                                            ),
+                                            child: ConstrainedBox(
+                                              constraints: BoxConstraints(
+                                                maxWidth: detailsColumnWidth(
+                                                  layout.maxWidth,
+                                                ),
+                                              ),
+                                              child: EventPanel(
+                                                key: eventPanel,
+                                                controller: c,
+                                                onClose: toggleEvent,
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ],
-                                    ),
+                                      if (historyOpen)
+                                        Positioned(
+                                          top: 0,
+                                          bottom: 0,
+                                          right: 0,
+                                          child: ConstrainedBox(
+                                            constraints: BoxConstraints(
+                                              maxWidth: detailsColumnWidth(
+                                                layout.maxWidth,
+                                              ),
+                                            ),
+                                            child: HistoryPanel(
+                                              controller: c,
+                                              onClose: toggleHistory,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                                if (postNotes.isNotEmpty) _postNotes(context),
-                                Expanded(child: content),
-                              ],
-                            ),
+                                ),
+                              ),
+                            ],
                           ),
-                          if (dock.panel != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: (layout.maxWidth - 208) * 0.48,
-                                ),
-                                child: dock.panel,
-                              ),
-                            ),
-                          if (eventOpen)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: (layout.maxWidth - 208) * 0.48,
-                                ),
-                                child: EventPanel(
-                                  key: eventPanel,
-                                  controller: c,
-                                  onClose: toggleEvent,
-                                ),
-                              ),
-                            ),
-                          if (historyOpen)
-                            ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: (layout.maxWidth - 208) * 0.48,
-                              ),
-                              child: HistoryPanel(
-                                controller: c,
-                                onClose: toggleHistory,
-                              ),
-                            ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   _statusBar(context, e),
@@ -678,7 +724,7 @@ class _WorkspaceState extends State<Workspace> {
           ),
           Flexible(
             child: Text(
-              '  ·  Nothing here changes a real event. Try anything; undo is always there.',
+              '  ·  Changes here don’t touch a real event.',
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: ink),
             ),
@@ -1018,13 +1064,6 @@ class _WorkspaceState extends State<Workspace> {
                     ),
                 ],
               ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'Ctrl+J to jump',
-              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
             ),
           ),
         ],

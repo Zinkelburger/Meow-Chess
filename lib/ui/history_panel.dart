@@ -160,7 +160,11 @@ class _HistoryPanelState extends State<HistoryPanel> {
           when selected != null && selected != c.graph.head:
         restore(selected!);
       case LogicalKeyboardKey.escape:
-        select(null);
+        if (selected != null) {
+          select(null);
+        } else {
+          widget.onClose();
+        }
       default:
         return KeyEventResult.ignored;
     }
@@ -225,9 +229,15 @@ class _HistoryPanelState extends State<HistoryPanel> {
           Padding(
             key: const ValueKey('history-keys'),
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              'Select a step to review it. ← → undo and redo · ↑ ↓ review · Enter restores · Esc closes details',
-              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            child: Row(
+              children: [
+                Expanded(child: Text('Select a step to review.', style: small)),
+                const Tooltip(
+                  message:
+                      '← → undo and redo · ↑ ↓ review · Enter restores · Esc closes details or History',
+                  child: Icon(Icons.keyboard_outlined, size: 20),
+                ),
+              ],
             ),
           ),
           Divider(height: 1, color: colors.outlineVariant),
@@ -285,7 +295,11 @@ class _HistoryPanelState extends State<HistoryPanel> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Row(
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 4,
+                                          crossAxisAlignment:
+                                              WrapCrossAlignment.center,
                                           children: [
                                             Text(
                                               '#$id',
@@ -293,7 +307,6 @@ class _HistoryPanelState extends State<HistoryPanel> {
                                                 fontFamily: 'SourceCodePro',
                                               ),
                                             ),
-                                            const SizedBox(width: 8),
                                             if (isHead)
                                               Text(
                                                 'Current',
@@ -305,12 +318,10 @@ class _HistoryPanelState extends State<HistoryPanel> {
                                             else if (graph.style(id) ==
                                                 NodeStyle.future)
                                               Text('Ahead', style: small),
-                                            const Spacer(),
                                             Text(
                                               historyTime(row.node.timestamp),
                                               style: small,
                                             ),
-                                            const SizedBox(width: 8),
                                             Icon(
                                               isSelected
                                                   ? Icons.expand_less

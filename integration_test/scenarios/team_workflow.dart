@@ -50,6 +50,8 @@ void registerTeamWorkflowTests() {
       await tester.tap(find.byKey(const ValueKey('type-swiss')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('field-rounds')), '3');
+      await tester.ensureVisible(find.byKey(const ValueKey('create-sections')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('create-sections')));
       await tester.pumpAndSettle();
       expect(c.event!.sections.single.format, Format.swiss);

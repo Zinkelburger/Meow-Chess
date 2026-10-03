@@ -247,7 +247,7 @@ Spacing snaps to 4 / 8 / 12 / 16 / 24, with 32 / 40 / 48 for larger separations.
 When the window is narrower than the table plus a panel, the content scrolls horizontally rather than squeezing columns. The toolbar grows with large text instead of clipping.
 
 ### Named Rules
-**The One Dock Rule.** At most one contextual panel is open on the right at a time, including player details, history, event details, lookup and print. Preferred widths are 360px for forms and 480px for lookup/print, capped at 48% of available workspace width. Opening another replaces it; asking for the same one again closes it; Esc closes it.
+**The One Dock Rule.** At most one contextual panel is open on the right at a time, including player details, history, event details, lookup and print. Every tool uses the same reserved 360px column, capped at 48% of available workspace width. The column stays reserved when closed, so opening, closing or replacing a panel does not move the table. Opening another replaces it; asking for the same one again closes it; Esc closes it.
 
 ## Elevation & Depth
 

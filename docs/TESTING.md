@@ -117,3 +117,16 @@ and checks event-file/backup recovery.
 These checks do not establish physical-printer behavior, Windows/macOS native
 qualification, human screen-reader usability, federation acceptance or measured
 performance with working TDs. Those remain the qualification boundaries above.
+
+## UI stability verification — October 2, 2026
+
+The 1.1.1 UI fixes passed analysis, repository lint, and all 212 unit/widget tests.
+Regression coverage checks table geometry while opening, replacing and closing
+panels, navigation at 960×600 and at 1280×720 with 200% text, draft actions,
+lookup focus, Escape handling, and visible desktop file-open failures.
+
+All five native Linux integration targets have passing runs (seven test cases).
+The workflow target was rerun after the final keyboard-focus correction and
+passed. Inspected light/dark captures include large-text player drafts, event
+drafts, History and Reports. Windows qualification and installer checks run
+separately in the tag-triggered release workflow.

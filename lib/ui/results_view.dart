@@ -685,8 +685,7 @@ class ResultsViewState extends State<ResultsView> {
                   ? const EmptyState(
                       icon: Icons.grid_view_outlined,
                       title: 'No rounds yet',
-                      body:
-                          'Post round 1 with the button above. Boards appear here as soon as it is posted.',
+                      body: 'Post round 1 to see the boards here.',
                     )
                   : visible.isEmpty && !shown.any((x) => x.$2.byes.isNotEmpty)
                   ? EmptyState(
@@ -698,7 +697,7 @@ class ResultsViewState extends State<ResultsView> {
                           : 'No matching boards',
                       body: missingOnly && jump.text.isEmpty
                           ? 'Turn off Missing only to review them.'
-                          : 'Try another name or board number, or turn off Missing only.',
+                          : 'Try another name or board number.',
                     )
                   : _table(context, shown, visible, latest),
             ),
@@ -929,11 +928,12 @@ class ResultsViewState extends State<ResultsView> {
         alignment: WrapAlignment.spaceBetween,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               search,
-              const SizedBox(width: 12),
               FilterChip(
                 chipAnimationStyle: noChipAnimation,
                 label: const Text('Missing only'),
@@ -982,10 +982,10 @@ class ResultsViewState extends State<ResultsView> {
           const SizedBox(width: 8),
           Text(
             correcting
-                ? 'Correcting round $number. Each change asks for a reason; round $current pairings stay as posted.'
+                ? 'Correcting round $number. Each change asks for a reason.'
                 : nudged
                 ? 'Round $number is read-only. Choose Correct a result to change it.'
-                : 'Round $number is read-only. Round $current is the current round.',
+                : 'Round $number is read-only. Round $current is current.',
             style: TextStyle(
               color: foreground,
               fontWeight: nudged && !correcting ? FontWeight.w600 : null,
@@ -1036,7 +1036,7 @@ class ResultsViewState extends State<ResultsView> {
           const SizedBox(width: 8),
           Text(
             picked == null
-                ? 'Editing round ${r.number} pairings. Click two players to swap them; two on one board swap colours. Each swap saves and can be undone.'
+                ? 'Click two players to swap them. Two on one board swap colours.'
                 : 'Swap ${picked.name} with… click another player, or click ${picked.name} again to cancel.',
             style: TextStyle(color: colors.onSecondaryContainer),
           ),
@@ -1066,23 +1066,19 @@ class ResultsViewState extends State<ResultsView> {
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
-          'Forfeit: press 1 if this player won, 0 if they lost. Esc cancels.',
+          'Forfeit: 1 if this player won, 0 if they lost. Esc cancels.',
           style: TextStyle(color: colors.onErrorContainer),
         ),
       );
     }
     final key = TextStyle(fontWeight: FontWeight.w600, color: colors.onSurface);
     final keys = [
-      ('1 W', 'win'),
-      ('0 L', 'loss'),
-      ('5 D =', 'draw'),
-      ('F', 'forfeit, then 1 or 0'),
-      ('+ −', 'forfeit win/loss'),
-      ('X', 'double forfeit'),
+      ('1', 'win'),
+      ('0', 'loss'),
+      ('5', 'draw'),
+      ('F', 'forfeit'),
       ('Del', 'clear'),
-      ('M', 'menu'),
-      ('↑ ↓', 'board'),
-      ('← →', 'player'),
+      ('F1', 'all keys'),
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
@@ -1091,7 +1087,6 @@ class ResultsViewState extends State<ResultsView> {
         TextSpan(
           style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
           children: [
-            const TextSpan(text: 'Score box keys:  '),
             for (final (i, (k, what)) in keys.indexed) ...[
               if (i > 0) const TextSpan(text: '   '),
               TextSpan(text: k, style: key),

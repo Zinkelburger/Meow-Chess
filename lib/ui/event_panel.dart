@@ -29,7 +29,7 @@ class EventPanelState extends State<EventPanel> {
   static const _fields = [
     ('name', 'Event name', 1),
     ('date', 'Date (YYYY-MM-DD)', 1),
-    ('endDate', 'Last day, if more than one (YYYY-MM-DD)', 1),
+    ('endDate', 'Last day, if multi-day (YYYY-MM-DD)', 1),
     ('time', 'Time control', 1),
     ('venue', 'Venue or city', 1),
     ('td', 'Chief TD US Chess ID', 1),
@@ -195,14 +195,7 @@ class EventPanelState extends State<EventPanel> {
                 () => FocusNode(debugLabel: key),
               ),
               maxLines: lines,
-              decoration: InputDecoration(
-                labelText: label,
-                hintText: switch (key) {
-                  'time' => 'G/60 d/5',
-                  'affiliate' => 'A6012345',
-                  _ => null,
-                },
-              ),
+              decoration: InputDecoration(labelText: label),
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => commit(),
             ),
@@ -213,10 +206,11 @@ class EventPanelState extends State<EventPanel> {
             child: Text(error!, style: TextStyle(color: colors.error)),
           ),
         if (dirty)
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               FilledButton(onPressed: commit, child: const Text('Save')),
-              const SizedBox(width: 8),
               TextButton(
                 onPressed: () {
                   draft.reset(stored);
@@ -260,7 +254,7 @@ class BackupsPanel extends StatelessWidget {
       onClose: onClose,
       children: [
         Text(
-          'Every change is saved to the event file as you work. A backup folder, ideally on a USB stick or another disk, gets a full copy after each posted round.',
+          'Changes save as you work. A backup folder gets a full copy after each posted round; a USB stick is ideal.',
           style: muted,
         ),
         if (c.backupWarning != null)
@@ -292,9 +286,7 @@ class BackupsPanel extends StatelessWidget {
             OutlinedButton(
               onPressed: actions.chooseBackupFolder,
               child: Text(
-                e.backupFolder.isEmpty
-                    ? 'Choose backup folder…'
-                    : 'Change folder…',
+                e.backupFolder.isEmpty ? 'Choose folder…' : 'Change folder…',
               ),
             ),
             if (e.backupFolder.isNotEmpty) ...[
@@ -316,11 +308,11 @@ class BackupsPanel extends StatelessWidget {
           children: [
             OutlinedButton(
               onPressed: actions.saveCopy,
-              child: const Text('Save a copy…'),
+              child: const Text('Save copy…'),
             ),
             OutlinedButton(
               onPressed: () => actions.saveCopy(practice: true),
-              child: const Text('Practice copy…'),
+              child: const Text('Save practice copy…'),
             ),
           ],
         ),
