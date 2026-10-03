@@ -1,5 +1,5 @@
-import '../domain/model.dart';
-import 'tournament_controller.dart';
+import 'package:meow_chess/domain/model.dart';
+import 'package:meow_chess/application/tournament_controller.dart';
 
 void populatePractice(TournamentController controller) {
   controller.create('Saturday at the club', practice: true);

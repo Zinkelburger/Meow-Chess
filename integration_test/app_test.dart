@@ -7,7 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:meow_chess/application/demo.dart';
+import '../test/demo.dart';
 import 'package:meow_chess/main.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
@@ -21,39 +21,42 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   WidgetController.hitTestWarningShouldBeFatal = true;
   registerTeamWorkflowTests();
-  testWidgets(
-    'event library creates practice data, closes, and reopens its independent file',
-    (tester) async {
-      final directory = Directory.systemTemp.createTempSync('meow-library-');
-      await tester.pumpWidget(MeowApp(dataDirectory: directory));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Try a practice event'));
-      await tester.pumpAndSettle();
-      expect(find.text('Practice copy'), findsOneWidget);
-      expect(find.text('Saturday at the club'), findsWidgets);
-      await tester.tap(find.byTooltip('Close event'));
-      await tester.pumpAndSettle();
-      expect(find.text('Recent events'), findsOneWidget);
-      final recent =
-          jsonDecode(File('${directory.path}/library.json').readAsStringSync())
-              as List;
-      expect(recent, hasLength(1));
-      final saved = SqliteEventRepository(recent.single as String);
-      expect(saved.load()!.players, hasLength(22));
-      expect(saved.load()!.practice, true);
-      saved.close();
-      await tester.pumpWidget(const SizedBox());
-      await tester.pumpAndSettle();
-      await tester.pumpWidget(
-        MeowApp(dataDirectory: directory, initialPath: recent.single as String),
-      );
-      await tester.pumpAndSettle();
-      expect(find.text('Practice copy'), findsOneWidget);
-      await tester.pumpWidget(const SizedBox());
-      await tester.pumpAndSettle();
-      directory.deleteSync(recursive: true);
-    },
-  );
+  testWidgets('event library opens, closes, and reopens a real event file', (
+    tester,
+  ) async {
+    final directory = Directory.systemTemp.createTempSync('meow-library-');
+    final eventPath = '${directory.path}/club.meow';
+    final event = TournamentController(SqliteEventRepository(eventPath));
+    event.create('Saturday at the club');
+    event.dispose();
+    await tester.pumpWidget(
+      MeowApp(dataDirectory: directory, initialPath: eventPath),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Practice copy'), findsNothing);
+    expect(find.text('Saturday at the club'), findsWidgets);
+    await tester.tap(find.byTooltip('Close event'));
+    await tester.pumpAndSettle();
+    expect(find.text('Recent events'), findsOneWidget);
+    final recent =
+        jsonDecode(File('${directory.path}/library.json').readAsStringSync())
+            as List;
+    expect(recent, hasLength(1));
+    final saved = SqliteEventRepository(recent.single as String);
+    expect(saved.load()!.players, isEmpty);
+    expect(saved.load()!.practice, false);
+    saved.close();
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      MeowApp(dataDirectory: directory, initialPath: recent.single as String),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Practice copy'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    directory.deleteSync(recursive: true);
+  });
   testWidgets(
     'native tournament day: post, keyboard score, print PDF, reopen and recover backup',
     (tester) async {
@@ -102,6 +105,8 @@ void main() {
 
       await mount();
       await screenshot('players');
+      await tester.tap(find.text('Pairings').first);
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('pair-next-round')));
       await tester.pumpAndSettle();
       for (var round = 0; round < 3; round++) {
@@ -121,18 +126,20 @@ void main() {
           await tester.tap(find.byKey(ValueKey('game-${games.first.id}')));
           await tester.pump();
           for (var i = 0; i < games.length; i++) {
-            await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+            await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
             await tester.pumpAndSettle();
           }
           if (round == 0 && section.id == c.event!.sections.first.id) {
             await screenshot('results-section');
-            await tester.tap(find.byKey(const ValueKey('print-round')));
+            await tester.tap(find.byTooltip('Print preview…'));
             await tester.pumpAndSettle(const Duration(seconds: 1));
             expect(find.byKey(const ValueKey('print-panel')), findsOneWidget);
             await screenshot('print-docked');
             await tester.tap(find.byTooltip('Close (Esc)'));
             await tester.pumpAndSettle();
-            await tester.tap(find.byTooltip('Find player (Ctrl+L)'));
+            await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+            await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+            await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
             await tester.pumpAndSettle();
             await tester.enterText(
               find.byKey(const ValueKey('lookup-query')),
@@ -140,7 +147,9 @@ void main() {
             );
             await tester.pumpAndSettle();
             await screenshot('lookup-docked');
-            await tester.tap(find.byTooltip('Find player (Ctrl+L)'));
+            await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+            await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+            await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
             await tester.pumpAndSettle();
           }
         }
@@ -157,6 +166,8 @@ void main() {
         await tester.pumpAndSettle();
         if (round == 0) await screenshot('results-grid');
         if (round < 2) {
+          await tester.tap(find.text('Pairings').first);
+          await tester.pumpAndSettle();
           await tester.tap(find.byKey(const ValueKey('pair-next-round')));
           await tester.pumpAndSettle();
         }
@@ -166,12 +177,12 @@ void main() {
       await tester.tap(find.text('Players').first);
       await tester.pumpAndSettle();
       await screenshot('standings');
-      await tester.tap(find.text('Reports').first);
+      await tester.tap(find.text('Export').first);
       await tester.pumpAndSettle();
       await screenshot('reports');
       dark = true;
       await mount();
-      await tester.tap(find.text('Rounds').first);
+      await tester.tap(find.text('Pairings').first);
       await tester.pumpAndSettle();
       await screenshot('results-dark');
       final font = pw.Font.ttf(

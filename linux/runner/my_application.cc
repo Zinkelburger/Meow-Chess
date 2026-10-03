@@ -7,6 +7,7 @@
 
 #include "desktop_integration.h"
 #include "file_open_channel.h"
+#include "file_save_channel.h"
 #include "flutter/generated_plugin_registrant.h"
 
 struct _MyApplication {
@@ -95,6 +96,8 @@ static void my_application_activate(GApplication* application) {
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
   self->file_open_channel->Attach(
       fl_engine_get_binary_messenger(fl_view_get_engine(view)));
+  attach_file_save_channel(
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)), window);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }

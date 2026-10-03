@@ -10,6 +10,7 @@ import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
 import '../infrastructure/reports.dart';
+import '../infrastructure/save_location.dart';
 import '../infrastructure/dbf_export.dart';
 import 'dialogs.dart';
 import 'panels.dart';
@@ -18,7 +19,7 @@ import 'event_panel.dart';
 import 'players_view.dart';
 
 Future<void> saveArtifact(String name, Uint8List bytes) async {
-  final location = await getSaveLocation(suggestedName: name);
+  final location = await chooseSaveLocation(suggestedName: name);
   if (location != null) {
     await XFile.fromData(bytes, name: name).saveTo(location.path);
   }
@@ -154,7 +155,7 @@ class _ReportsViewState extends State<ReportsView> {
       initiallyExpanded:
           e.sections.isNotEmpty && e.sections.every((s) => s.finished),
       tilePadding: EdgeInsets.zero,
-      title: const Text('Finish event'),
+      title: const Text('Final review & backup'),
       children: [
         for (final (title, detail, action, callback)
             in <(String, String, String, VoidCallback?)>[
@@ -165,13 +166,13 @@ class _ReportsViewState extends State<ReportsView> {
                 widget.onResults == null ? null : () => widget.onResults!(null),
               ),
               (
-                'Standings and prizes',
-                'Check ties and prize classes',
+                'Standings',
+                'Review final ranks and scores',
                 'Open standings',
                 widget.onStandings,
               ),
               (
-                'Rating report',
+                'Tournament checks',
                 issues == 0
                     ? 'Ready'
                     : '$issues ${issues == 1 ? 'item needs' : 'items need'} attention',
@@ -179,7 +180,7 @@ class _ReportsViewState extends State<ReportsView> {
                 null,
               ),
               (
-                'Export',
+                'DBF files',
                 revisionState(exportRevision, 'Not exported'),
                 '',
                 null,
@@ -231,9 +232,6 @@ class _ReportsViewState extends State<ReportsView> {
         );
         if (mounted) setState(() {});
       }
-      if (context.mounted) {
-        showNotice(context, 'Rating report saved to $path');
-      }
     } catch (e) {
       if (context.mounted) showFailure(context, e);
     }
@@ -265,136 +263,184 @@ class _ReportsViewState extends State<ReportsView> {
 
   @override
   Widget build(BuildContext context) {
-    final e = controller.event!, issues = ratingIssues(e);
+    final e = controller.event!, all = ratingIssues(e);
+    final issues = [
+          for (final i in all)
+            if (i.blocking) i,
+        ],
+        advice = [
+          for (final i in all)
+            if (!i.blocking) i,
+        ];
     final stateless = _stateless(e);
     if (scope != null && !e.sections.any((s) => s.id == scope)) scope = null;
-    return ListView(
+    return SingleChildScrollView(
       controller: scroll,
       padding: const EdgeInsets.all(24),
-      children: [
-        finishChecklist(e, issues.length),
-        const SizedBox(height: 16),
-        Text(
-          'Print · ${e.sections.where((s) => s.id == scope).firstOrNull?.name ?? 'All sections'}',
-          key: const ValueKey('report-scope'),
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final (kind, label, icon) in [
-              (ReportKind.packet, 'Round packet', Icons.print_outlined),
-              (ReportKind.pairings, 'Pairings', Icons.grid_view),
-              (ReportKind.standings, 'Standings', Icons.leaderboard_outlined),
-              (ReportKind.crosstable, 'Crosstable', Icons.table_chart_outlined),
-            ])
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Finish & export',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Review the tournament, resolve outstanding issues, and generate your final files.',
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Tournament checks',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          const Text('Checks and DBF exports cover all sections.'),
+          const SizedBox(height: 12),
+          if (issues.isNotEmpty) _warnings(context, issues),
+          if (advice.isNotEmpty) _warnings(context, advice, optional: true),
+          if (issues.isEmpty)
+            const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.fact_check_outlined),
+              title: Text('Ready to export. No blocking issues found.'),
+            ),
+          if (stateless.isNotEmpty && usStates.contains(e.state))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: const ValueKey('fill-states'),
+                  onPressed: () => _fillStates(e),
+                  child: Text(
+                    'Use ${e.state} for ${stateless.length} ${stateless.length == 1 ? 'player' : 'players'} without a state',
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 24),
+          Text(
+            'US Chess DBF files',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Generate THEXPORT.DBF, TSEXPORT.DBF, and TDEXPORT.DBF for upload to US Chess.\nNot yet tested with the US Chess upload site.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ReportDetails(key: detailsKey, controller: controller),
+          const SizedBox(height: 12),
+          _summary(context, e),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
               OutlinedButton.icon(
-                onPressed: e.sections.isEmpty
-                    ? null
-                    : () => showPrint(context, e, sectionId: scope, kind: kind),
-                icon: Icon(icon),
-                label: Text(label),
+                onPressed: issues.isEmpty ? () => exportRating(context) : null,
+                icon: const Icon(Icons.folder_outlined),
+                label: const Text('Generate DBF files'),
               ),
-            TextButton(
-              onPressed: () async {
-                try {
-                  await saveArtifact(
-                    'standings-r${e.revision}.csv',
-                    Uint8List.fromList(
-                      utf8.encode(standingsCsv(e, sectionId: scope)),
-                    ),
-                  );
-                } catch (error) {
-                  if (context.mounted) showFailure(context, error);
-                }
-              },
-              child: const Text('Save CSV'),
-            ),
-            TextButton(
-              onPressed: () async {
-                try {
-                  await saveArtifact(
-                    'crosstable-r${e.revision}.txt',
-                    Uint8List.fromList(
-                      crosstable(
-                        e,
-                        asciiOnly: true,
-                        sectionId: scope,
-                      ).codeUnits,
-                    ),
-                  );
-                } catch (error) {
-                  if (context.mounted) showFailure(context, error);
-                }
-              },
-              child: const Text('Save text crosstable'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        Text(
-          'US Chess rating report',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Covers every section. Not yet tested with the US Chess upload site.',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+              // A disabled button says why beside it.
+              if (issues.isNotEmpty)
+                Text(
+                  'Resolve the ${issues.length == 1 ? 'item' : '${issues.length} items'} above first.',
+                  key: const ValueKey('rating-blocked'),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
           ),
-        ),
-        const SizedBox(height: 16),
-        ReportDetails(key: detailsKey, controller: controller),
-        const SizedBox(height: 12),
-        _summary(context, e),
-        const SizedBox(height: 12),
-        if (issues.isNotEmpty) _warnings(context, issues),
-        if (issues.isEmpty)
-          const ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.fact_check_outlined),
-            title: Text('No problems found.'),
-          ),
-        if (stateless.isNotEmpty && usStates.contains(e.state))
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                key: const ValueKey('fill-states'),
-                onPressed: () => _fillStates(e),
-                child: Text(
-                  'Use ${e.state} for ${stateless.length} ${stateless.length == 1 ? 'player' : 'players'} without a state',
+          if (controller.repository.readPreference('lastExport')
+              case final saved?)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Semantics(
+                liveRegion: true,
+                child: SelectableText(
+                  'DBF files saved to ${saved.substring(0, saved.lastIndexOf('|'))}\n'
+                  '${saved.split('|').last == '${e.revision}' ? 'Includes the current event revision.' : 'Newer changes are not included. Save again to update the report.'}',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             ),
+          const SizedBox(height: 24),
+          Text(
+            'Final standings & printouts · ${e.sections.where((s) => s.id == scope).firstOrNull?.name ?? 'All sections'}',
+            key: const ValueKey('report-scope'),
+            style: Theme.of(context).textTheme.titleLarge,
           ),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            OutlinedButton.icon(
-              onPressed: issues.isEmpty ? () => exportRating(context) : null,
-              icon: const Icon(Icons.folder_outlined),
-              label: const Text('Save rating report'),
-            ),
-            // A disabled button says why beside it.
-            if (issues.isNotEmpty)
-              Text(
-                'Resolve the ${issues.length == 1 ? 'item' : '${issues.length} items'} above first.',
-                key: const ValueKey('rating-blocked'),
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (kind, label, icon) in [
+                (ReportKind.sections, 'Pairing sheets', Icons.print_outlined),
+                (ReportKind.standings, 'Standings', Icons.leaderboard_outlined),
+                (
+                  ReportKind.crosstable,
+                  'Crosstable',
+                  Icons.table_chart_outlined,
                 ),
+              ])
+                OutlinedButton.icon(
+                  onPressed: e.sections.isEmpty
+                      ? null
+                      : () =>
+                            showPrint(context, e, sectionId: scope, kind: kind),
+                  icon: Icon(icon),
+                  label: Text(label),
+                ),
+              TextButton(
+                onPressed: () async {
+                  try {
+                    await saveArtifact(
+                      'standings-r${e.revision}.csv',
+                      Uint8List.fromList(
+                        utf8.encode(standingsCsv(e, sectionId: scope)),
+                      ),
+                    );
+                  } catch (error) {
+                    if (context.mounted) showFailure(context, error);
+                  }
+                },
+                child: const Text('Save CSV'),
               ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        SubmissionNotes(controller: controller),
-      ],
+              TextButton(
+                onPressed: () async {
+                  try {
+                    await saveArtifact(
+                      'crosstable-r${e.revision}.txt',
+                      Uint8List.fromList(
+                        crosstable(
+                          e,
+                          asciiOnly: true,
+                          sectionId: scope,
+                        ).codeUnits,
+                      ),
+                    );
+                  } catch (error) {
+                    if (context.mounted) showFailure(context, error);
+                  }
+                },
+                child: const Text('Save text crosstable'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          finishChecklist(e, issues.length),
+          const SizedBox(height: 24),
+          SubmissionNotes(controller: controller),
+        ],
+      ),
     );
   }
 
@@ -404,19 +450,27 @@ class _ReportsViewState extends State<ReportsView> {
     final muted = TextStyle(
       color: Theme.of(context).colorScheme.onSurfaceVariant,
     );
-    String rating;
-    try {
-      final tc = TimeControl.parse(e.timeControl);
-      rating =
-          '${tc.reportText}: ${tc.category?.label ?? 'not ratable'} (${tc.totalMinutes} minutes with delay or increment, rule 5C)';
-    } on TournamentException {
-      rating = '${e.timeControl}: not recognized';
+    String describe(String control) {
+      try {
+        final tc = TimeControl.parse(control);
+        return '${tc.reportText}: ${tc.category?.label ?? 'not ratable'} (${tc.totalMinutes} minutes with delay or increment, rule 5C)';
+      } on TournamentException {
+        return '$control: not recognized';
+      }
     }
+
     return Column(
       key: const ValueKey('rating-summary'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Time control $rating', style: muted),
+        if (e.sections.any((s) => s.timeControl.isNotEmpty))
+          for (final section in e.sections)
+            Text(
+              '${section.name}: ${describe(section.effectiveTimeControl(e))}',
+              style: muted,
+            )
+        else
+          Text('Time control ${describe(e.timeControl)}', style: muted),
         Text(
           e.endDate.isEmpty || e.endDate == e.date
               ? 'Played on ${e.date}'
@@ -427,11 +481,15 @@ class _ReportsViewState extends State<ReportsView> {
     );
   }
 
-  /// Keep preflight details available without overwhelming the print controls.
-  Widget _warnings(BuildContext context, List<ReportIssue> issues) {
+  /// Show blocking checks up front; keep optional advice available separately.
+  Widget _warnings(
+    BuildContext context,
+    List<ReportIssue> issues, {
+    bool optional = false,
+  }) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      key: const ValueKey('rating-warnings'),
+      key: ValueKey(optional ? 'rating-advice' : 'rating-warnings'),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
@@ -439,9 +497,10 @@ class _ReportsViewState extends State<ReportsView> {
         borderRadius: BorderRadius.circular(6),
       ),
       child: ExpansionTile(
-        key: const PageStorageKey('rating-preflight-details'),
-        // A short list is shown open; a long one stays tidy until asked.
-        initiallyExpanded: issues.length <= 5,
+        key: PageStorageKey(
+          optional ? 'rating-advice-details' : 'rating-preflight-details',
+        ),
+        initiallyExpanded: !optional,
         shape: const Border(),
         collapsedShape: const Border(),
         leading: Icon(
@@ -450,10 +509,16 @@ class _ReportsViewState extends State<ReportsView> {
           size: 20,
         ),
         title: Text(
-          '${issues.length} ${issues.length == 1 ? 'item needs' : 'items need'} attention',
+          optional
+              ? '${issues.length} optional ${issues.length == 1 ? 'check' : 'checks'}'
+              : '${issues.length} ${issues.length == 1 ? 'item needs' : 'items need'} attention',
           style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
-        subtitle: const Text('Review before creating the rating report.'),
+        subtitle: Text(
+          optional
+              ? 'US Chess accepts the report without these.'
+              : 'Resolve these before generating DBF files.',
+        ),
         childrenPadding: const EdgeInsets.fromLTRB(56, 0, 24, 16),
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

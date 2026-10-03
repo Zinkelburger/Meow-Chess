@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:meow_chess/application/demo.dart';
+import '../test/demo.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/ui/theme.dart';
@@ -72,7 +72,7 @@ void main() {
     expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
     await screenshot('player-details-roster');
     c.post(await c.propose());
-    await tester.tap(find.text('Rounds').first);
+    await tester.tap(find.text('Pairings').first);
     await tester.pumpAndSettle();
     final game = c.event!.sections.first.rounds.single.games.first;
     await doubleClick(

@@ -54,7 +54,7 @@ void main() {
     // Unfinished rounds still block the export.
     final create = tester.widget<OutlinedButton>(
       find.ancestor(
-        of: find.text('Save rating report'),
+        of: find.text('Generate DBF files'),
         matching: find.byWidgetPredicate((w) => w is OutlinedButton),
       ),
     );

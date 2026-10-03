@@ -42,23 +42,34 @@ void main() {
       find.text('Added New One. Enter the next player, or close.'),
       findsOneWidget,
     );
-    await tester.tap(find.byTooltip('More'));
+    await tester.tap(find.byKey(const ValueKey('player-tools')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Paste from spreadsheet'));
+    await tester.tap(find.text('Paste'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('paste-roster')),
       'Pasted Person,,1500',
     );
-    await tester.tap(find.text('Import'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Review import'));
+    await tester.pump();
+    expect(c.event!.players.length, before + 1);
+    await tester.tap(find.byKey(const ValueKey('confirm-roster-import')));
     await tester.pump();
     expect(c.event!.players.any((p) => p.name == 'Pasted Person'), true);
+    expect(find.byType(SnackBar), findsNothing);
+    await tester.pump(const Duration(seconds: 20));
+    expect(find.text('Imported 1 players'), findsOneWidget);
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(c.event!.players.any((p) => p.name == 'Pasted Person'), false);
+    expect(find.text('Imported 1 players'), findsNothing);
     expect(find.byType(Dialog), findsNothing);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 500));
   });
   testWidgets(
-    '1/0/5 commit and advance once; key repeat and search cannot enter results',
+    '1/0/D commit and advance once; key repeat and search cannot enter results',
     (tester) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1;
@@ -89,7 +100,7 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.digit1);
       await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
       await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
       await tester.pump();
       expect(c.event!.games.take(3).map((g) => g.outcome), [
         Outcome.whiteWin,
@@ -209,7 +220,7 @@ void main() {
         home: Scaffold(
           body: ListenableBuilder(
             listenable: c,
-            builder: (_, _) => PlayersView(controller: c),
+            builder: (_, _) => PlayersView(controller: c, standingsOnly: true),
           ),
         ),
       ),
@@ -225,11 +236,11 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('round-p0-2')));
       await tester.pumpAndSettle();
       // A row opens player details; the grid itself cannot accept scores.
-      await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
       expect(c.event!.player('p0').byes, isEmpty);
       final bye = find.byKey(const ValueKey('panel-bye-2'));
       await tester.ensureVisible(bye);
-      await tester.tap(find.descendant(of: bye, matching: find.text('½ pt')));
+      await tester.tap(find.descendant(of: bye, matching: find.text('1/2')));
       await tester.pump();
       expect(c.event!.player('p0').byes[2], 1);
       await tester.tap(find.descendant(of: bye, matching: find.text('None')));
@@ -239,7 +250,7 @@ void main() {
     },
   );
   testWidgets(
-    'players page shows W/L plus stable opponent numbers, read-only',
+    'crosstable shows numeric results with opponent context and accepts typing',
     (tester) async {
       final c = fixture();
       addTearDown(c.dispose);
@@ -250,40 +261,30 @@ void main() {
       final winner = find.byKey(ValueKey('round-${g.black}-1'));
       final loser = find.byKey(ValueKey('round-${g.white}-1'));
       expect(
-        find.descendant(
-          of: winner,
-          matching: find.text(
-            'W${c.event!.sectionOf(g.white)!.players.indexOf(g.white) + 1}',
-          ),
-        ),
+        find.descendant(of: winner, matching: find.text('1')),
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: loser,
-          matching: find.text(
-            'L${c.event!.sectionOf(g.black)!.players.indexOf(g.black) + 1}',
-          ),
-        ),
+        find.descendant(of: loser, matching: find.text('0')),
         findsOneWidget,
       );
       expect(find.text('W'), findsNothing);
       expect(find.text('L'), findsNothing);
       final tip = tester.widget<Tooltip>(
-        find.ancestor(of: winner, matching: find.byType(Tooltip)).first,
+        find.descendant(of: winner, matching: find.byType(Tooltip)).first,
       );
       expect(tip.message, contains(c.event!.player(g.white).name));
-      // Typing on the Players page never changes a result.
+      // The same typing contract applies to the standings table.
       await tester.tap(loser);
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
       await tester.pump();
-      expect(c.event!.games.first.outcome, Outcome.blackWin);
+      expect(c.event!.games.first.outcome, Outcome.whiteWin);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 500));
     },
   );
-  testWidgets('players page ranks by points once play starts', (tester) async {
+  testWidgets('crosstable ranks by points once play starts', (tester) async {
     final c = fixture();
     addTearDown(c.dispose);
     c.post((await tester.runAsync(() => c.propose()))!);
@@ -293,21 +294,12 @@ void main() {
     await mountPlayers(tester, c);
     expect(find.text('Pts'), findsOneWidget);
     // The winner, seeded lower, is now listed first in the section.
-    final top = tester.getTopLeft(find.text(c.event!.player(g.black).name));
+    final top = tester.getTopLeft(find.byKey(ValueKey('player-${g.black}')));
     final seed1 = tester.getTopLeft(
-      find.text(c.event!.player(section.players.first).name),
+      find.byKey(ValueKey('player-${section.players.first}')),
     );
     expect(top.dy, lessThan(seed1.dy));
-    await tester.tap(find.text('Seed order'));
-    await tester.pump();
-    expect(
-      tester.getTopLeft(find.text(c.event!.player(g.black).name)).dy,
-      greaterThan(
-        tester
-            .getTopLeft(find.text(c.event!.player(section.players.first).name))
-            .dy,
-      ),
-    );
+    expect(find.text('Seed order'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 500));
   });
@@ -344,7 +336,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byKey(const ValueKey('panel-bye-2')),
-        matching: find.text('½ pt'),
+        matching: find.text('1/2'),
       ),
     );
     await tester.pump();
@@ -395,7 +387,7 @@ void main() {
       // Typing over a result replaces it, like a text box.
       await tester.tap(box('w'));
       await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
       await tester.pump();
       expect(c.event!.games.first.outcome, Outcome.draw);
       expect(find.text('½'), findsNWidgets(2));
@@ -416,7 +408,7 @@ void main() {
     },
   );
   testWidgets(
-    'mouse result menu clears both scores and search finds names or boards',
+    'typing Delete clears both scores and search finds names or boards',
     (tester) async {
       tester.view.physicalSize = const Size(1400, 900);
       tester.view.devicePixelRatio = 1;
@@ -443,10 +435,9 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byKey(ValueKey('game-${g.id}')), findsOneWidget);
-      expect(find.byTooltip('Enter or clear result (M)'), findsOneWidget);
-      await tester.tap(find.byTooltip('Enter or clear result (M)'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Clear result'));
+      expect(find.byTooltip('Enter or clear result (M)'), findsNothing);
+      await tester.tap(find.byKey(ValueKey('score-${g.id}-w')));
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
       await tester.pumpAndSettle();
       expect(c.event!.games.first.outcome, Outcome.unreported);
       for (final side in ['w', 'b']) {

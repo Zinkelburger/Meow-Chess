@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../application/diagnostics.dart';
 import '../application/failures.dart';
 
 class FieldSpec {
@@ -7,15 +9,15 @@ class FieldSpec {
     this.key,
     this.label, {
     this.lines = 1,
-    this.hint,
     this.required = false,
     this.secret = false,
+    this.checkbox = false,
+    this.enabled = true,
     this.options,
   });
   final String key, label;
   final int lines;
-  final String? hint;
-  final bool required, secret;
+  final bool required, secret, checkbox, enabled;
 
   /// Stored value → displayed label. When set, the field is a drop-down.
   final Map<String, String>? options;
@@ -24,6 +26,13 @@ class FieldSpec {
 /// Shows a problem until it is dismissed: errors must not time out before
 /// a TD who was helping a player gets back to the screen.
 void showFailure(BuildContext context, Object error) {
+  final message = plainMessage(error);
+  Diagnostics.record(
+    'error notification',
+    'shown',
+    error: error,
+    context: {'message': message},
+  );
   final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
   final colors = Theme.of(context).colorScheme;
   messenger.showSnackBar(
@@ -33,10 +42,24 @@ void showFailure(BuildContext context, Object error) {
           Icon(Icons.error_outline, color: colors.onError, size: 20),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              plainMessage(error),
-              style: TextStyle(color: colors.onError),
-            ),
+            child: Text(message, style: TextStyle(color: colors.onError)),
+          ),
+          IconButton(
+            tooltip: 'Copy error message',
+            icon: const Icon(Icons.content_copy, size: 20),
+            color: colors.onError,
+            onPressed: () async {
+              try {
+                await Clipboard.setData(ClipboardData(text: message));
+              } catch (e, stack) {
+                Diagnostics.record(
+                  'copy error message',
+                  'failed',
+                  error: e,
+                  stack: stack,
+                );
+              }
+            },
           ),
         ],
       ),
@@ -47,24 +70,4 @@ void showFailure(BuildContext context, Object error) {
     ),
     snackBarAnimationStyle: AnimationStyle.noAnimation,
   );
-}
-
-/// Confirms something that worked, such as a saved file. Not for errors.
-void showNotice(
-  BuildContext context,
-  String message, {
-  SnackBarAction? action,
-}) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 8),
-        persist: false,
-        showCloseIcon: true,
-        action: action,
-      ),
-      snackBarAnimationStyle: AnimationStyle.noAnimation,
-    );
 }

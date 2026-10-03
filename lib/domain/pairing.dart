@@ -59,6 +59,11 @@ Format pairingFormat(Section section) =>
 bool pairingRestricted(Event event, String a, String b) =>
     event.player(a).avoid.contains(b) || event.player(b).avoid.contains(a);
 
+/// The same recorded color lot must be used on paper and when posting rounds.
+int quadColorLot(Section section) =>
+    section.id.codeUnits.fold<int>(0, (sum, c) => (sum * 31 + c) & 0x7fffffff) &
+    3;
+
 void checkPairingRequests(Event event, Iterable<Game> games) {
   for (final game in games) {
     if (pairingRestricted(event, game.white, game.black)) {
@@ -73,12 +78,7 @@ void checkPairingRequests(Event event, Iterable<Game> games) {
 /// not advertised as a certified US Chess rules implementation.
 Round proposeRound(Event event, Section section, String Function() id) {
   final n = section.rounds.length + 1;
-  final colorLot =
-      section.id.codeUnits.fold<int>(
-        0,
-        (sum, c) => (sum * 31 + c) & 0x7fffffff,
-      ) &
-      3;
+  final colorLot = quadColorLot(section);
   if (n > section.plannedRounds) {
     throw const TournamentException('All planned rounds have been posted.');
   }
@@ -231,7 +231,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
           byes.add(
             ByeAward(
               candidate,
-              2,
+              section.doubleGames ? 4 : 2,
               'Lowest eligible score with no prior allocated bye; feasible non-repeat pairing',
               allocated: true,
             ),

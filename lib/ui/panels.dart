@@ -9,9 +9,12 @@ import 'package:printing/printing.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
+import '../domain/pairing.dart' show pairingFormat;
+import '../domain/us_chess.dart';
 import '../domain/standings.dart';
 import '../infrastructure/reports.dart';
-import 'dialogs.dart' show FieldSpec;
+import '../infrastructure/remembered_printing.dart';
+import 'dialogs.dart' show FieldSpec, showFailure;
 import 'drafts.dart';
 import 'players_view.dart' show SidePanel, ratingText;
 
@@ -162,6 +165,9 @@ class _FieldsPanelState extends State<FieldsPanel> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final firstTextField = widget.fields
+        .where((f) => f.options == null && !f.checkbox)
+        .firstOrNull;
     return SidePanel(
       title: widget.title,
       onClose: widget.onClose,
@@ -174,10 +180,24 @@ class _FieldsPanelState extends State<FieldsPanel> {
           ),
           const SizedBox(height: 16),
         ],
-        for (final (i, f) in widget.fields.indexed)
+        for (final f in widget.fields)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: f.options != null
+            child: f.checkbox
+                ? CheckboxListTile(
+                    key: ValueKey('field-${f.key}'),
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(f.label),
+                    value: text[f.key]!.text == 'true',
+                    onChanged: !f.enabled
+                        ? null
+                        : (value) =>
+                              setState(() => text[f.key]!.text = '$value'),
+                  )
+                : f.options != null
                 ? DropdownButtonFormField<String>(
                     key: ValueKey('field-${f.key}'),
                     initialValue: text[f.key]!.text,
@@ -187,16 +207,18 @@ class _FieldsPanelState extends State<FieldsPanel> {
                       for (final o in f.options!.entries)
                         DropdownMenuItem(value: o.key, child: Text(o.value)),
                     ],
-                    onChanged: (v) => text[f.key]!.text = v!,
+                    onChanged: !f.enabled
+                        ? null
+                        : (v) => text[f.key]!.text = v!,
                   )
                 : TextField(
                     key: ValueKey('field-${f.key}'),
                     controller: text[f.key],
-                    autofocus: i == 0,
+                    autofocus: f == firstTextField,
                     maxLines: f.lines,
                     decoration: InputDecoration(
                       labelText: f.label,
-                      hintText: f.hint,
+                      alignLabelWithHint: f.lines > 1,
                     ),
                     onSubmitted: (_) => save(),
                   ),
@@ -218,8 +240,7 @@ class _FieldsPanelState extends State<FieldsPanel> {
   }
 }
 
-/// Creates sections: quads previewed beside the roster, where two clicks
-/// swap players between groups, or one Swiss or round-robin section.
+/// Creates sections with a read-only preview of rating groups.
 class NewSectionsPanel extends StatefulWidget {
   const NewSectionsPanel({
     required this.controller,
@@ -236,13 +257,13 @@ class NewSectionsPanel extends StatefulWidget {
 class _NewSectionsPanelState extends State<NewSectionsPanel> {
   Format? type;
   final name = TextEditingController(), rounds = TextEditingController();
+  final nameFocus = FocusNode(debugLabel: 'new-section-name');
   bool doubleGames = false;
   String? error;
 
   /// The quad groups on screen, and the roster revision they came from.
   List<Section> groups = const [];
   int revision = -1;
-  String? picked;
   TournamentController get c => widget.controller;
   final configuration = TextEditingController();
   late FormDraft draft;
@@ -287,6 +308,7 @@ class _NewSectionsPanelState extends State<NewSectionsPanel> {
   void dispose() {
     draft.dispose();
     configuration.dispose();
+    nameFocus.dispose();
     name.dispose();
     rounds.dispose();
     super.dispose();
@@ -303,23 +325,18 @@ class _NewSectionsPanelState extends State<NewSectionsPanel> {
     setState(() {
       type = f;
       error = null;
-      picked = null;
       if (f == Format.quad) {
         groups = const [];
         revision = -1;
       } else {
-        final robin = f == Format.roundRobin;
-        name.text = robin ? 'Round robin' : 'Open';
-        rounds.text = robin
-            ? '${free < 2
-                  ? 1
-                  : free.isEven
-                  ? free - 1
-                  : free}'
-            : '4';
         doubleGames = false;
       }
     });
+    if (f != Format.quad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) nameFocus.requestFocus();
+      });
+    }
   }
 
   /// Regroups when the roster changes underneath the preview.
@@ -329,37 +346,11 @@ class _NewSectionsPanelState extends State<NewSectionsPanel> {
       groups = c.quadPreview();
       revision = c.event!.revision;
       rememberConfiguration();
-      picked = null;
       error = null;
     } catch (e) {
       groups = const [];
       error = plainMessage(e);
     }
-  }
-
-  /// First click picks a player, the second swaps the two.
-  void pick(String id) {
-    setState(() {
-      if (picked == null || picked == id) {
-        picked = picked == id ? null : id;
-        return;
-      }
-      final a = picked!;
-      groups = [
-        for (final s in groups)
-          s.copy(
-            players: [
-              for (final p in s.players)
-                p == a
-                    ? id
-                    : p == id
-                    ? a
-                    : p,
-            ],
-          ),
-      ];
-      picked = null;
-    });
   }
 
   void create() {
@@ -446,7 +437,7 @@ class _NewSectionsPanelState extends State<NewSectionsPanel> {
         if (type == Format.quad && groups.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
-            'Grouped by rating. Click two players to swap them.'
+            'Grouped by rating. After creating sections, right-click a player or section tab to move, swap, or withdraw players.'
             '${replacing ? ' This replaces the current sections.' : ''}',
             style: muted,
           ),
@@ -476,8 +467,6 @@ class _NewSectionsPanelState extends State<NewSectionsPanel> {
               _QuadPlayer(
                 key: ValueKey('quad-player-$id'),
                 player: e.player(id),
-                picked: picked == id,
-                onTap: () => pick(id),
               ),
           ],
         ],
@@ -493,6 +482,8 @@ class _NewSectionsPanelState extends State<NewSectionsPanel> {
           TextField(
             key: const ValueKey('field-name'),
             controller: name,
+            focusNode: nameFocus,
+            autofocus: true,
             decoration: const InputDecoration(labelText: 'Section name'),
             onSubmitted: (_) => create(),
           ),
@@ -542,49 +533,25 @@ class _NewSectionsPanelState extends State<NewSectionsPanel> {
 }
 
 class _QuadPlayer extends StatelessWidget {
-  const _QuadPlayer({
-    required this.player,
-    required this.picked,
-    required this.onTap,
-    super.key,
-  });
+  const _QuadPlayer({required this.player, super.key});
   final Player player;
-  final bool picked;
-  final VoidCallback onTap;
+
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Semantics(
-      selected: picked,
-      button: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          decoration: BoxDecoration(
-            color: picked ? colors.primary.withValues(alpha: 0.12) : null,
-            border: Border.all(
-              color: picked ? colors.primary : Colors.transparent,
-            ),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            children: [
-              Expanded(child: Text(player.name)),
-              Text(
-                ratingText(player.rating),
-                style: TextStyle(
-                  color: colors.onSurfaceVariant,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(8),
+    child: Row(
+      children: [
+        Expanded(child: Text(player.name)),
+        Text(
+          ratingText(player.rating),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
-      ),
-    );
-  }
+      ],
+    ),
+  );
 }
 
 /// Name, length and board numbers of one section.
@@ -599,19 +566,64 @@ Widget sectionSettingsPanel(
     controller: c,
     draftKey: 'draft-section-$sectionId',
     title: '${s.name} settings',
-    description: 'A new first board number applies from the next round.',
-    fields: const [
-      FieldSpec('name', 'Name', required: true),
+    description:
+        'Choose how this section plays. A new first board number applies from the next round.',
+    fields: [
+      const FieldSpec('name', 'Name', required: true),
+      FieldSpec(
+        'format',
+        'Pairing format',
+        enabled: s.rounds.isEmpty,
+        options: const {
+          'swiss': 'Swiss',
+          'quad': 'Quad',
+          'roundRobin': 'Round robin',
+        },
+      ),
+      FieldSpec(
+        'sideGames',
+        'Side games',
+        checkbox: true,
+        enabled: s.rounds.isEmpty,
+      ),
+      FieldSpec(
+        'doubleGames',
+        'Play both colors',
+        checkbox: true,
+        enabled: s.rounds.isEmpty,
+      ),
       FieldSpec('rounds', 'Number of rounds', required: true),
       FieldSpec('board', 'First board number', required: true),
+      FieldSpec('timeControl', 'Time control (blank uses event default)'),
     ],
     values: {
       'name': s.name,
+      'format': s.format.name,
+      'sideGames': '${s.sideGames}',
+      'doubleGames': '${s.doubleGames}',
       'rounds': '${s.plannedRounds}',
       'board': '${s.boardStart}',
+      'timeControl': s.timeControl,
     },
     onClose: onClose,
     onSave: (v) {
+      final current = c.event!.sections
+          .where((x) => x.id == sectionId)
+          .firstOrNull;
+      if (current == null) {
+        throw const TournamentException('This section no longer exists.');
+      }
+      final format = Format.values.byName(v['format']!);
+      final sideGames = v['sideGames'] == 'true';
+      final doubleGames = v['doubleGames'] == 'true';
+      if (current.rounds.isNotEmpty &&
+          (format != current.format ||
+              sideGames != current.sideGames ||
+              doubleGames != current.doubleGames)) {
+        throw const TournamentException(
+          'Pairing format cannot change after rounds are posted.',
+        );
+      }
       final rounds = int.tryParse(v['rounds']!.trim()),
           board = int.tryParse(v['board']!.trim());
       if (rounds == null || rounds < 1 || rounds > 32) {
@@ -619,15 +631,19 @@ Widget sectionSettingsPanel(
           'Number of rounds must be between 1 and 32.',
         );
       }
-      if (rounds < s.rounds.length) {
+      if (rounds < current.rounds.length) {
         throw TournamentException(
-          '${s.rounds.length} rounds are already posted, so the section needs at least that many.',
+          '${current.rounds.length} rounds are already posted, so the section needs at least that many.',
         );
       }
       if (board == null || board < 1) {
         throw const TournamentException(
           'The first board number must be 1 or more.',
         );
+      }
+      final control = v['timeControl']!.trim();
+      if (control.isNotEmpty && control != current.timeControl) {
+        TimeControl.parse(control);
       }
       c.change(
         'Edit section ${s.name}',
@@ -637,8 +653,12 @@ Widget sectionSettingsPanel(
               x.id == s.id
                   ? x.copy(
                       name: v['name']!.trim(),
+                      format: format,
+                      sideGames: sideGames,
+                      doubleGames: doubleGames,
                       plannedRounds: rounds,
                       boardStart: board,
+                      timeControl: v['timeControl']!.trim(),
                     )
                   : x,
           ],
@@ -759,6 +779,7 @@ class _CombinePanelState extends State<CombinePanel> {
         TextField(
           key: const ValueKey('combine-reason'),
           controller: reason,
+          autofocus: true,
           decoration: const InputDecoration(
             labelText: 'Reason (needed once rounds are played)',
           ),
@@ -815,6 +836,7 @@ class _PrintPanelState extends State<PrintPanel> {
   late Event snapshot = widget.event;
   late Future<Uint8List> pdf = generate();
   int? approvedOldRevision;
+  bool printing = false;
   int? get currentRevision => widget.controller?.event?.revision;
   bool get stale =>
       currentRevision != null && currentRevision != snapshot.revision;
@@ -857,6 +879,25 @@ class _PrintPanelState extends State<PrintPanel> {
     );
   }
 
+  Future<void> printPreview({bool changePrinter = false}) async {
+    if (printing) return;
+    setState(() => printing = true);
+    try {
+      final bytes = await pdf;
+      if (!mounted || (stale && approvedOldRevision != currentRevision)) return;
+      await sendToPrinter(
+        context,
+        bytes,
+        snapshot.name,
+        changePrinter: changePrinter,
+      );
+    } catch (e) {
+      if (mounted) showFailure(context, e);
+    } finally {
+      if (mounted) setState(() => printing = false);
+    }
+  }
+
   void refresh() => setState(() {
     snapshot = widget.controller?.event ?? snapshot;
     approvedOldRevision = null;
@@ -869,28 +910,36 @@ class _PrintPanelState extends State<PrintPanel> {
         .where((s) => s.id == widget.sectionId)
         .firstOrNull;
     final what = switch (widget.kind) {
-      ReportKind.packet => 'Round packet',
-      ReportKind.pairings => 'Pairings',
+      ReportKind.sections ||
+      ReportKind.packet ||
+      ReportKind.pairings => 'Pairing sheets',
       ReportKind.standings => 'Standings',
       ReportKind.crosstable => 'Crosstable',
     };
-    final rounds =
-        snapshot.sections
-            .where((s) => widget.sectionId == null || s.id == widget.sectionId)
-            .map(
-              (s) =>
-                  widget.roundNumbers?[s.id] ??
-                  widget.roundNumber ??
-                  s.rounds.lastOrNull?.number,
-            )
-            .whereType<int>()
-            .where((n) => n > 0)
-            .toSet()
-            .toList()
-          ..sort();
-    final roundLabel = rounds.isEmpty
-        ? 'No posted round'
-        : 'Round${rounds.length == 1 ? '' : 's'} ${rounds.join(', ')}';
+    final pairingSheet =
+        widget.kind == ReportKind.sections ||
+        widget.kind == ReportKind.packet ||
+        widget.kind == ReportKind.pairings;
+    final scopedSections = snapshot.sections.where(
+      (s) =>
+          (widget.sectionId == null || s.id == widget.sectionId) &&
+          (widget.roundNumbers == null ||
+              widget.roundNumbers!.containsKey(s.id)),
+    );
+    String scopeLabel(Section s) {
+      if (pairingSheet && pairingFormat(s) != Format.swiss && !s.sideGames) {
+        return 'All rounds';
+      }
+      final number =
+          widget.roundNumbers?[s.id] ??
+          widget.roundNumber ??
+          s.rounds.lastOrNull?.number ??
+          0;
+      return number == 0 ? 'Before round 1' : 'Round $number';
+    }
+
+    final labels = scopedSections.map(scopeLabel).toSet();
+    final roundLabel = labels.length == 1 ? labels.single : 'Selected rounds';
     final canPrint = !stale || approvedOldRevision == currentRevision;
     return SidePanel(
       key: const ValueKey('print-panel'),
@@ -915,14 +964,28 @@ class _PrintPanelState extends State<PrintPanel> {
                           '$roundLabel · Revision ${snapshot.revision}',
                           key: const ValueKey('print-scope'),
                         ),
-                        if (widget.roundNumbers != null &&
-                            widget.roundNumbers!.values.toSet().length > 1)
-                          for (final s in snapshot.sections.where(
-                            (s) => widget.roundNumbers!.containsKey(s.id),
-                          ))
-                            Text(
-                              '${s.name}: ${widget.roundNumbers![s.id] == 0 ? "no posted round" : "round ${widget.roundNumbers![s.id]}"}',
+                        if (labels.length > 1)
+                          for (final s in scopedSections)
+                            Text('${s.name}: ${scopeLabel(s)}'),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            FilledButton.icon(
+                              key: const ValueKey('print-preview'),
+                              onPressed: canPrint && !printing
+                                  ? printPreview
+                                  : null,
+                              icon: const Icon(Icons.print_outlined),
+                              label: Text(printing ? 'Printing…' : 'Print'),
                             ),
+                            TextButton(
+                              onPressed: canPrint && !printing
+                                  ? () => printPreview(changePrinter: true)
+                                  : null,
+                              child: const Text('Choose printer…'),
+                            ),
+                          ],
+                        ),
                         if (widget.ceiling > 0)
                           Text('Prize class: Under ${widget.ceiling}'),
                         if (widget.forPrizes)
@@ -991,8 +1054,8 @@ class _PrintPanelState extends State<PrintPanel> {
                       canChangeOrientation: false,
                       canDebug: false,
                       allowSharing: false,
-                      allowPrinting: canPrint,
-                      useActions: canPrint,
+                      allowPrinting: false,
+                      useActions: false,
                       scrollViewDecoration: BoxDecoration(
                         color: Theme.of(
                           context,
@@ -1169,7 +1232,7 @@ class _LookupPanelState extends State<LookupPanel> {
           autofocus: true,
           style: const TextStyle(fontSize: 20),
           decoration: const InputDecoration(
-            hintText: 'Name, US Chess ID or #number',
+            labelText: 'Name, US Chess ID or #number',
             prefixIcon: Icon(Icons.search),
           ),
           onChanged: (_) => setState(() {}),
@@ -1239,5 +1302,84 @@ class _LookupPanelState extends State<LookupPanel> {
         ],
       ],
     );
+  }
+}
+
+/// First print chooses a device; subsequent prints use it directly.
+Future<void> sendToPrinter(
+  BuildContext context,
+  Uint8List bytes,
+  String name, {
+  bool changePrinter = false,
+}) async {
+  Object? preferenceError;
+  final success = await RememberedPrinting.shared.print(
+    bytes,
+    name,
+    changePrinter: changePrinter,
+    onPreferenceError: (error) => preferenceError = error,
+    choose: (printers) async {
+      if (!context.mounted) return null;
+      return showDialog<Printer>(
+        context: context,
+        animationStyle: AnimationStyle.noAnimation,
+        builder: (context) => SimpleDialog(
+          title: const Text('Choose printer'),
+          children: [
+            for (final printer in printers)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, printer),
+                child: Text(printer.name),
+              ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+  if (context.mounted && success && preferenceError != null) {
+    showFailure(
+      context,
+      const TournamentException(
+        'Sent to printer, but the printer preference could not be saved. Choose the printer again next time.',
+      ),
+    );
+  }
+}
+
+Future<void> printSheets(
+  BuildContext context,
+  Event event, {
+  String? sectionId,
+  int? roundNumber,
+  bool currentRoundOnly = false,
+  int ceiling = 0,
+  bool forPrizes = false,
+  ReportKind kind = ReportKind.sections,
+}) async {
+  try {
+    final font = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/Inter-Regular.ttf'),
+    );
+    final bold = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/Inter-SemiBold.ttf'),
+    );
+    final bytes = await reportPdf(
+      event,
+      kind,
+      sectionId: sectionId,
+      roundNumber: roundNumber,
+      currentRoundOnly: currentRoundOnly,
+      ceiling: ceiling,
+      forPrizes: forPrizes,
+      font: font,
+      bold: bold,
+    );
+    if (context.mounted) await sendToPrinter(context, bytes, event.name);
+  } catch (e) {
+    if (context.mounted) showFailure(context, e);
   }
 }

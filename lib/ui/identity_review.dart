@@ -9,16 +9,39 @@ import '../infrastructure/ratings_api.dart';
 const _secure = FlutterSecureStorage();
 const _keyName = 'uschess-v2';
 
-/// Fetches a member record, or null when no API key is set.
+/// Fetches a dated supplement using the public endpoint when no key is set.
 Future<MemberObservation?> fetchMember(
   TournamentController c,
   String memberId,
-) async {
-  final key = await _secure.read(key: _keyName);
-  if (key == null) return null;
+) => _fetchMember(c, memberId, membershipOnly: false);
+
+/// Membership does not require a published rating or a monthly supplement.
+Future<MemberObservation?> fetchMembership(
+  TournamentController c,
+  String memberId,
+) => _fetchMember(c, memberId, membershipOnly: true);
+
+Future<MemberObservation?> _fetchMember(
+  TournamentController c,
+  String memberId, {
+  required bool membershipOnly,
+}) async {
+  String? key;
+  try {
+    key = await _secure.read(key: _keyName);
+  } catch (_) {
+    /* Public lookup also works without a keychain. */
+  }
   final client = http.Client();
   try {
-    final observation = await RatingsApi(client).member(memberId, key);
+    final api = RatingsApi(client);
+    final observation = membershipOnly
+        ? await api.member(
+            memberId,
+            key ?? '',
+            publicAccess: (key ?? '').trim().isEmpty,
+          )
+        : await api.supplement(memberId, key: key ?? '');
     c.repository.writePreference(
       'member:$memberId',
       jsonEncode(observation.toJson()),
@@ -94,6 +117,74 @@ class _ApiKeyFieldState extends State<ApiKeyField> {
             ),
           ),
         ),
+    ],
+  );
+}
+
+Future<String> readRatingCategory() async {
+  try {
+    final value = await _secure.read(key: 'meow-rating-category');
+    return ['R', 'Q', 'B'].contains(value) ? value! : 'R';
+  } catch (_) {
+    return 'R';
+  }
+}
+
+/// Shared across events on this computer, alongside the operator's API key.
+class RatingSettings extends StatefulWidget {
+  const RatingSettings({super.key});
+  @override
+  State<RatingSettings> createState() => _RatingSettingsState();
+}
+
+class _RatingSettingsState extends State<RatingSettings> {
+  String category = 'R';
+  String? error;
+  @override
+  void initState() {
+    super.initState();
+    readRatingCategory().then((value) {
+      if (mounted) setState(() => category = value);
+    });
+  }
+
+  Future<void> save(String value) async {
+    try {
+      await _secure.write(key: 'meow-rating-category', value: value);
+      if (mounted) {
+        setState(() {
+          category = value;
+          error = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => error = 'Could not save this setting in the system keychain.',
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text('Rating defaults · all events'),
+      const SizedBox(height: 8),
+      DropdownButtonFormField<String>(
+        isExpanded: true,
+        key: ValueKey('rating-default-$category'),
+        initialValue: category,
+        decoration: const InputDecoration(labelText: 'Default rating category'),
+        items: const [
+          DropdownMenuItem(value: 'R', child: Text('Regular')),
+          DropdownMenuItem(value: 'Q', child: Text('Quick')),
+          DropdownMenuItem(value: 'B', child: Text('Blitz')),
+        ],
+        onChanged: (value) => save(value!),
+      ),
+      if (error != null) Text(error!),
     ],
   );
 }

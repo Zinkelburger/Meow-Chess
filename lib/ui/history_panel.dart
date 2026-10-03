@@ -6,40 +6,105 @@ import '../application/tournament_controller.dart';
 import '../domain/history.dart';
 import '../domain/model.dart';
 import 'dialogs.dart';
+import 'result_correction_dialog.dart';
 
-/// Moves through history at once. When that takes away play already
-/// recorded, a notice says what and offers the way back; nothing is lost,
-/// because the state being left stays in History. [move] receives whether
-/// that removal was accepted.
-void travel(
+final _travelling = <TournamentController>{};
+
+/// Review dependent operations before changing the live event. Single ordinary
+/// steps retain keyboard speed; restoring across operations needs confirmation.
+Future<void> travel(
   BuildContext context,
   TournamentController c,
   int? node,
   void Function(bool acceptLosses) move,
-) {
-  if (node == null) return;
+) async {
+  if (node == null || !_travelling.add(c)) return;
   try {
-    final from = c.graph.head;
+    final revision = c.event!.revision;
     final lost = c.lossesTo(node);
-    move(lost.isNotEmpty);
-    if (lost.isNotEmpty && from != null && context.mounted) {
-      showNotice(
-        context,
-        'Went back past recorded play: ${lost.join('; ')}.',
-        action: SnackBarAction(
-          label: 'Go forward',
-          onPressed: () {
-            try {
-              c.restore(from, acceptLosses: true);
-            } catch (e) {
-              if (context.mounted) showFailure(context, e);
-            }
-          },
+    final target = c.repository.snapshot(node);
+    final path = c.graph.pathTo(node);
+    final targetGames = {for (final game in target.games) game.id: game};
+    final dependentResult = c.event!.games.any(
+      (g) =>
+          targetGames[g.id] != null &&
+          targetGames[g.id]!.outcome != g.outcome &&
+          c.correctionHasDependencies(g.id),
+    );
+    if (lost.isNotEmpty ||
+        path.undo.length + path.apply.length > 1 ||
+        dependentResult) {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Review history change'),
+          scrollable: true,
+          content: SizedBox(
+            width: 580,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'This restores the whole event to the selected transaction. The version you leave remains saved in History.',
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Undo ${path.undo.length} · Apply ${path.apply.length} operations',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                if (dependentResult)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'An earlier result changes while later pairings remain. To choose how to handle those rounds, cancel and use Correct a result or Undo this result.',
+                    ),
+                  ),
+                for (final item in describeChanges(c.event!, target))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(item),
+                  ),
+                if (lost.isNotEmpty) ...[
+                  const Divider(),
+                  const Text(
+                    'Recorded play leaves the live event:',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  for (final item in lost) Text(item),
+                ],
+                const SizedBox(height: 12),
+                const Text(
+                  'Printed or shared copies stay unchanged. Replace any affected outputs after restoring.',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('confirm-history-change'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Restore event'),
+            ),
+          ],
         ),
       );
+      if (accepted != true || !context.mounted) return;
+      if (c.event!.revision != revision) {
+        throw const TournamentException(
+          'The event changed during review. Review this history change again.',
+        );
+      }
     }
+    move(lost.isNotEmpty);
   } catch (e) {
     if (context.mounted) showFailure(context, e);
+  } finally {
+    _travelling.remove(c);
   }
 }
 
@@ -207,13 +272,13 @@ class _HistoryPanelState extends State<HistoryPanel> {
                 const Spacer(),
                 IconButton(
                   tooltip: c.canUndo ? 'Undo ${c.undoLabel}' : 'At the start',
-                  icon: const Icon(Icons.undo, size: 19),
+                  icon: const Icon(Icons.arrow_back, size: 19),
                   onPressed: c.canUndo ? back : null,
                   visualDensity: VisualDensity.compact,
                 ),
                 IconButton(
                   tooltip: c.canRedo ? 'Redo ${c.redoLabel}' : 'Nothing ahead',
-                  icon: const Icon(Icons.redo, size: 19),
+                  icon: const Icon(Icons.arrow_forward, size: 19),
                   onPressed: c.canRedo ? forward : null,
                   visualDensity: VisualDensity.compact,
                 ),
@@ -231,7 +296,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Row(
               children: [
-                Expanded(child: Text('Select a step to review.', style: small)),
+                Expanded(child: Text('Review · live unchanged', style: small)),
                 const Tooltip(
                   message:
                       '← → undo and redo · ↑ ↓ review · Enter restores · Esc closes details or History',
@@ -403,9 +468,18 @@ class _HistoryPanelState extends State<HistoryPanel> {
 
   Widget _details(BuildContext context, int id, HistoryGraph graph) {
     final colors = Theme.of(context).colorScheme;
-    final items = step(id), path = graph.pathTo(id);
+    final path = graph.pathTo(id);
+    final parent = graph.nodes[id]!.parent;
+    List<String> items;
+    ({String gameId, Outcome outcome})? resultUndo;
     List<String> lost;
     try {
+      items = parent == null
+          ? []
+          : describeChanges(snapshot(parent), snapshot(id));
+      resultUndo = parent == null
+          ? null
+          : reversibleResult(snapshot(parent), snapshot(id), c.event!);
       lost = id == graph.head ? [] : playLost(c.event!, snapshot(id));
     } catch (_) {
       return const Padding(
@@ -484,7 +558,10 @@ class _HistoryPanelState extends State<HistoryPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (items.length > 1) ...[
+          label(
+            'Transaction #$id · ${historyTime(graph.nodes[id]!.timestamp)}',
+          ),
+          if (items.isNotEmpty) ...[
             for (final item in items)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
@@ -494,6 +571,22 @@ class _HistoryPanelState extends State<HistoryPanel> {
                 ),
               ),
           ],
+          if (resultUndo != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const ValueKey('history-undo-result'),
+                icon: const Icon(Icons.undo, size: 16),
+                label: const Text('Undo this result…'),
+                onPressed: () => reviewResultCorrection(
+                  context,
+                  c,
+                  resultUndo!.gameId,
+                  outcome: resultUndo.outcome,
+                  reason: 'Undo result from transaction #$id',
+                ),
+              ),
+            ),
           if (id == graph.head)
             Text(
               'You are here.',

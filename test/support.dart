@@ -22,3 +22,18 @@ TournamentController fixture({
   c.applyQuads(c.quadPreview(), c.event!.revision);
   return c;
 }
+
+// Legacy practice-file fixture; practice creation is no longer exposed.
+Future<void> markPracticeCopy(String path) async {
+  final repository = SqliteEventRepository(path);
+  try {
+    final event = repository.load()!;
+    repository.commit(
+      event.copy(practice: true, backupFolder: ''),
+      expectedRevision: event.revision,
+      action: 'Mark practice copy',
+    );
+  } finally {
+    repository.close();
+  }
+}

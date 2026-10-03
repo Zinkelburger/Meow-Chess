@@ -235,15 +235,15 @@ void main() {
       }
       c.post((await tester.runAsync(() => c.propose()))!);
       await mount(tester, workspace(c));
-      await tester.tap(find.text('Rounds').first);
+      await tester.tap(find.text('Pairings').first);
       await tester.pumpAndSettle();
       final game = c.event!.sections.single.rounds.last.games.last;
       await tester.ensureVisible(find.byKey(ValueKey('score-${game.id}-b')));
       await tester.tap(find.byKey(ValueKey('score-${game.id}-b')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Reports').first);
+      await tester.tap(find.text('Export').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Rounds').first);
+      await tester.tap(find.text('Pairings').first);
       await tester.pumpAndSettle();
       expect(
         FocusManager.instance.primaryFocus!.debugLabel,
@@ -258,14 +258,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('correct-round')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Reports').first);
+      await tester.tap(find.text('Export').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Rounds').first);
+      await tester.tap(find.text('Pairings').first);
       await tester.pumpAndSettle();
       final state = tester.state<ResultsViewState>(find.byType(ResultsView));
       expect(state.selectedRound, 1);
       expect(state.correcting, false);
-      state.printRound();
+      await tester.tap(find.byTooltip('Print preview…'));
       await tester.pump();
       final preview = tester.widget<PrintPanel>(find.byType(PrintPanel));
       expect(preview.roundNumber, 1);
@@ -292,14 +292,12 @@ void main() {
       addTearDown(c.dispose);
       c.savePlayer(c.event!.players.first.copy(memberId: ''));
       await mount(tester, workspace(c));
-      await tester.tap(find.text('Reports').first);
+      await tester.tap(find.text('Export').first);
       await tester.pumpAndSettle();
       final issues = find.byKey(
         const PageStorageKey('rating-preflight-details'),
       );
       await tester.ensureVisible(issues);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Review before creating the rating report.'));
       await tester.pumpAndSettle();
       final repair = find.byKey(const ValueKey('repair-player-p0-memberId'));
       await tester.ensureVisible(repair);
@@ -344,13 +342,13 @@ void main() {
     expect(find.byType(PlayerPanel), findsNothing);
     expect(find.byKey(const ValueKey('event-name')), findsOneWidget);
     expect(tester.takeException(), isNull);
-    await tester.ensureVisible(find.text('Rounds').first);
-    await tester.tap(find.text('Rounds').first);
+    await tester.ensureVisible(find.text('Pairings').first);
+    await tester.tap(find.text('Pairings').first);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byType(ResultsView), findsOneWidget);
-    await tester.ensureVisible(find.text('Reports').first);
-    await tester.tap(find.text('Reports').first);
+    await tester.ensureVisible(find.text('Export').first);
+    await tester.tap(find.text('Export').first);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.byType(ReportsView), findsOneWidget);

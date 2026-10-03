@@ -200,6 +200,8 @@ List<String> describeChanges(
     ('timeControl', 'Time control'),
     ('venue', 'Venue'),
     ('tdId', 'TD ID'),
+    ('assistantTdId', 'Assistant chief TD ID'),
+    ('otherTdIds', 'Other TD IDs'),
     ('affiliateId', 'Affiliate ID'),
     ('notes', 'Event notes'),
     ('submission', 'Submission notes'),
@@ -236,6 +238,8 @@ List<String> describeChanges(
     final edits = [
       if (o.name != p.name) 'renamed from ${o.name}',
       if (o.rating != p.rating) 'rating ${value(o.rating, p.rating)}',
+      if (o.membershipEvidence.toString() != p.membershipEvidence.toString())
+        'US Chess membership: ${p.membershipEvidence['expiration'] ?? 'date unavailable'} (${p.membershipEvidence['status'] ?? 'unknown'})',
       if (o.memberId != p.memberId)
         'US Chess ID ${value(o.memberId.isEmpty ? '(none)' : o.memberId, p.memberId.isEmpty ? '(none)' : p.memberId)}',
       if (o.checkedIn != p.checkedIn)
@@ -248,6 +252,8 @@ List<String> describeChanges(
       for (final id in o.avoid.difference(p.avoid))
         'may pair with ${_name(before, after, id)} again',
       if (o.notes != p.notes) 'notes ${_short(p.notes)}',
+      if (o.registrationNote != p.registrationNote)
+        'registration note ${_short(p.registrationNote)}',
       if (o.house != p.house)
         p.house ? 'marked house player' : 'no longer house player',
       for (final r in {...o.byes.keys, ...p.byes.keys}.toList()..sort())
@@ -389,4 +395,42 @@ List<String> playLost(Event from, Event to) {
     }
   }
   return structural || results > 1 ? out : const [];
+}
+
+/// A selective reversal is offered only for a transaction that changed one
+/// game's result. Pairing edits, imports, and reopen operations stay atomic.
+({String gameId, Outcome outcome})? reversibleResult(
+  Event before,
+  Event after,
+  Event current,
+) {
+  final oldGames = {for (final g in before.games) g.id: g};
+  final changed = after.games
+      .where((g) => oldGames[g.id]?.outcome != g.outcome)
+      .toList();
+  if (changed.length != 1) return null;
+  final g = changed.single, old = oldGames[changed.single.id];
+  if (old == null) return null;
+  final normalized = before.copy(
+    revision: after.revision,
+    sections: [
+      for (final s in before.sections)
+        s.copy(
+          rounds: [
+            for (final r in s.rounds)
+              r.copy(games: [for (final x in r.games) x.id == g.id ? g : x]),
+          ],
+        ),
+    ],
+  );
+  if (normalized.encode() != after.encode()) return null;
+  final live = current.games.where((x) => x.id == g.id).firstOrNull;
+  if (live == null ||
+      live.white != g.white ||
+      live.black != g.black ||
+      live.outcome != g.outcome ||
+      live.leg != g.leg) {
+    return null;
+  }
+  return (gameId: g.id, outcome: old.outcome);
 }

@@ -7,9 +7,7 @@ import 'package:meow_chess/ui/workspace.dart';
 import '../support.dart';
 
 void main() {
-  testWidgets('Ctrl+L and the toolbar open a large docked lookup', (
-    tester,
-  ) async {
+  testWidgets('Ctrl+L and Players open a large docked lookup', (tester) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -45,7 +43,7 @@ void main() {
     final answer = find.text('Board ${g.board} · White vs ${black.name}');
     expect(answer, findsOneWidget);
     expect(tester.getSize(answer).height, greaterThanOrEqualTo(24));
-    // The toolbar button closes it again.
+    // The Players button closes it again.
     await tester.tap(find.byTooltip('Find player (Ctrl+L)'));
     await tester.pump();
     expect(find.byKey(const ValueKey('lookup-panel')), findsNothing);

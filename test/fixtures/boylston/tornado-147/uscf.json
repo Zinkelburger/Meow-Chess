@@ -1,0 +1,944 @@
+{
+ "event": {
+  "name": "Tornado #147",
+  "startDate": "2026-04-18",
+  "endDate": "2026-04-18",
+  "status": "Rated"
+ },
+ "sections": [
+  {
+   "number": 1,
+   "name": "Open",
+   "roundCount": 4,
+   "playerCount": 16,
+   "ratingSystem": "D",
+   "format": "Swiss",
+   "timeControl": "G/60;d5",
+   "players": [
+    {
+     "memberId": "90000133",
+     "pairingNumber": 1,
+     "score": 2.5,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Draw",
+       "color": "White",
+       "opponentMemberId": "90000029"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000059"
+      },
+      {
+       "round": 3,
+       "outcome": "Draw",
+       "color": "White",
+       "opponentMemberId": "90000049"
+      },
+      {
+       "round": 4,
+       "outcome": "Draw",
+       "color": "Black",
+       "opponentMemberId": "90000047"
+      }
+     ]
+    },
+    {
+     "memberId": "90000103",
+     "pairingNumber": 2,
+     "score": 2.5,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000030"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000134"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000004"
+      },
+      {
+       "round": 4,
+       "outcome": "Draw",
+       "color": "Black",
+       "opponentMemberId": "90000029"
+      }
+     ]
+    },
+    {
+     "memberId": "90000004",
+     "pairingNumber": 3,
+     "score": 4,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000006"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000047"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000103"
+      },
+      {
+       "round": 4,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000049"
+      }
+     ]
+    },
+    {
+     "memberId": "90000049",
+     "pairingNumber": 4,
+     "score": 2.5,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000055"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000052"
+      },
+      {
+       "round": 3,
+       "outcome": "Draw",
+       "color": "Black",
+       "opponentMemberId": "90000133"
+      },
+      {
+       "round": 4,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000004"
+      }
+     ]
+    },
+    {
+     "memberId": "90000134",
+     "pairingNumber": 5,
+     "score": 1,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000136"
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000103"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000029"
+      },
+      {
+       "round": 4,
+       "outcome": "Unpaired",
+       "color": "Unknown",
+       "opponentMemberId": null
+      }
+     ]
+    },
+    {
+     "memberId": "90000047",
+     "pairingNumber": 6,
+     "score": 2.5,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000056"
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000004"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000136"
+      },
+      {
+       "round": 4,
+       "outcome": "Draw",
+       "color": "White",
+       "opponentMemberId": "90000133"
+      }
+     ]
+    },
+    {
+     "memberId": "90000052",
+     "pairingNumber": 7,
+     "score": 1.5,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000137"
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000049"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000059"
+      },
+      {
+       "round": 4,
+       "outcome": "ByeHalf",
+       "color": "Unknown",
+       "opponentMemberId": null
+      }
+     ]
+    },
+    {
+     "memberId": "90000029",
+     "pairingNumber": 8,
+     "score": 3,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Draw",
+       "color": "Black",
+       "opponentMemberId": "90000133"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000135"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000134"
+      },
+      {
+       "round": 4,
+       "outcome": "Draw",
+       "color": "White",
+       "opponentMemberId": "90000103"
+      }
+     ]
+    },
+    {
+     "memberId": "90000030",
+     "pairingNumber": 9,
+     "score": 1.5,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000103"
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000136"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000135"
+      },
+      {
+       "round": 4,
+       "outcome": "Draw",
+       "color": "White",
+       "opponentMemberId": "90000137"
+      }
+     ]
+    },
+    {
+     "memberId": "90000006",
+     "pairingNumber": 10,
+     "score": 2,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000004"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000056"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000137"
+      },
+      {
+       "round": 4,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000136"
+      }
+     ]
+    },
+    {
+     "memberId": "90000055",
+     "pairingNumber": 11,
+     "score": 1,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000049"
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000137"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000056"
+      },
+      {
+       "round": 4,
+       "outcome": "Unpaired",
+       "color": "Unknown",
+       "opponentMemberId": null
+      }
+     ]
+    },
+    {
+     "memberId": "90000135",
+     "pairingNumber": 12,
+     "score": 0.5,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "ByeHalf",
+       "color": "Unknown",
+       "opponentMemberId": null
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000029"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000030"
+      },
+      {
+       "round": 4,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000056"
+      }
+     ]
+    },
+    {
+     "memberId": "90000136",
+     "pairingNumber": 13,
+     "score": 1,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000134"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000030"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000047"
+      },
+      {
+       "round": 4,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000006"
+      }
+     ]
+    },
+    {
+     "memberId": "90000056",
+     "pairingNumber": 14,
+     "score": 1,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000047"
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000006"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000055"
+      },
+      {
+       "round": 4,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000135"
+      }
+     ]
+    },
+    {
+     "memberId": "90000137",
+     "pairingNumber": 15,
+     "score": 2.5,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000052"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000055"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000006"
+      },
+      {
+       "round": 4,
+       "outcome": "Draw",
+       "color": "Black",
+       "opponentMemberId": "90000030"
+      }
+     ]
+    },
+    {
+     "memberId": "90000059",
+     "pairingNumber": 16,
+     "score": 2,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "ByeFull",
+       "color": "Unknown",
+       "opponentMemberId": null
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000133"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000052"
+      },
+      {
+       "round": 4,
+       "outcome": "Unpaired",
+       "color": "Unknown",
+       "opponentMemberId": null
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "name": "U1800",
+   "roundCount": 4,
+   "playerCount": 12,
+   "ratingSystem": "D",
+   "format": "Swiss",
+   "timeControl": "G/60;d5",
+   "players": [
+    {
+     "memberId": "90000138",
+     "pairingNumber": 1,
+     "score": 3,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000141"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000063"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000001"
+      },
+      {
+       "round": 4,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000139"
+      }
+     ]
+    },
+    {
+     "memberId": "90000139",
+     "pairingNumber": 2,
+     "score": 2,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000066"
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000001"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000036"
+      },
+      {
+       "round": 4,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000138"
+      }
+     ]
+    },
+    {
+     "memberId": "90000001",
+     "pairingNumber": 3,
+     "score": 4,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000142"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000139"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000138"
+      },
+      {
+       "round": 4,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000141"
+      }
+     ]
+    },
+    {
+     "memberId": "90000063",
+     "pairingNumber": 4,
+     "score": 2,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000034"
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000138"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000141"
+      },
+      {
+       "round": 4,
+       "outcome": "ByeFull",
+       "color": "Unknown",
+       "opponentMemberId": null
+      }
+     ]
+    },
+    {
+     "memberId": "90000140",
+     "pairingNumber": 5,
+     "score": 2,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000143"
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000036"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000034"
+      },
+      {
+       "round": 4,
+       "outcome": "Unpaired",
+       "color": "Unknown",
+       "opponentMemberId": null
+      }
+     ]
+    },
+    {
+     "memberId": "90000141",
+     "pairingNumber": 6,
+     "score": 2,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000138"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000037"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000063"
+      },
+      {
+       "round": 4,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000001"
+      }
+     ]
+    },
+    {
+     "memberId": "90000066",
+     "pairingNumber": 7,
+     "score": 1,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000139"
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000142"
+      },
+      {
+       "round": 3,
+       "outcome": "Win",
+       "color": "Black",
+       "opponentMemberId": "90000037"
+      },
+      {
+       "round": 4,
+       "outcome": "Unpaired",
+       "color": "Unknown",
+       "opponentMemberId": null
+      }
+     ]
+    },
+    {
+     "memberId": "90000036",
+     "pairingNumber": 8,
+     "score": 2.5,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "ByeHalf",
+       "color": "Unknown",
+       "opponentMemberId": null
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000140"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000139"
+      },
+      {
+       "round": 4,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000142"
+      }
+     ]
+    },
+    {
+     "memberId": "90000142",
+     "pairingNumber": 9,
+     "score": 2,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000001"
+      },
+      {
+       "round": 2,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000066"
+      },
+      {
+       "round": 3,
+       "outcome": "ByeFull",
+       "color": "Unknown",
+       "opponentMemberId": null
+      },
+      {
+       "round": 4,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000036"
+      }
+     ]
+    },
+    {
+     "memberId": "90000037",
+     "pairingNumber": 10,
+     "score": 0.5,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "ByeHalf",
+       "color": "Unknown",
+       "opponentMemberId": null
+      },
+      {
+       "round": 2,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000141"
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000066"
+      },
+      {
+       "round": 4,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000034"
+      }
+     ]
+    },
+    {
+     "memberId": "90000034",
+     "pairingNumber": 11,
+     "score": 2,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "White",
+       "opponentMemberId": "90000063"
+      },
+      {
+       "round": 2,
+       "outcome": "ByeFull",
+       "color": "Unknown",
+       "opponentMemberId": null
+      },
+      {
+       "round": 3,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000140"
+      },
+      {
+       "round": 4,
+       "outcome": "Win",
+       "color": "White",
+       "opponentMemberId": "90000037"
+      }
+     ]
+    },
+    {
+     "memberId": "90000143",
+     "pairingNumber": 12,
+     "score": 0,
+     "rounds": [
+      {
+       "round": 1,
+       "outcome": "Loss",
+       "color": "Black",
+       "opponentMemberId": "90000140"
+      },
+      {
+       "round": 2,
+       "outcome": "Unpaired",
+       "color": "Unknown",
+       "opponentMemberId": null
+      },
+      {
+       "round": 3,
+       "outcome": "Unpaired",
+       "color": "Unknown",
+       "opponentMemberId": null
+      },
+      {
+       "round": 4,
+       "outcome": "Unpaired",
+       "color": "Unknown",
+       "opponentMemberId": null
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "officials": [
+  {
+   "memberId": "90000006",
+   "office": "Assistant",
+   "officeType": "Chief",
+   "sectionNumber": null
+  },
+  {
+   "memberId": "90000001",
+   "office": "Director",
+   "officeType": "Chief",
+   "sectionNumber": null
+  },
+  {
+   "memberId": "90000001",
+   "office": "Director",
+   "officeType": "Chief",
+   "sectionNumber": 2
+  },
+  {
+   "memberId": "90000006",
+   "office": "Assistant",
+   "officeType": "Chief",
+   "sectionNumber": 1
+  },
+  {
+   "memberId": "90000006",
+   "office": "Assistant",
+   "officeType": "Chief",
+   "sectionNumber": 2
+  },
+  {
+   "memberId": "90000001",
+   "office": "Director",
+   "officeType": "Chief",
+   "sectionNumber": 1
+  },
+  {
+   "memberId": "90000133",
+   "office": "Assistant",
+   "officeType": "Floor",
+   "sectionNumber": 1
+  }
+ ]
+}

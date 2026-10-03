@@ -19,6 +19,7 @@ dependencies:
   http: ^1.6.0
   flutter_secure_storage: ^10.0.0
   window_manager: ^0.5.2
+  html: ^0.15.7
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -29,6 +30,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon/meow_chess.png
+    - assets/icon/meow_chess_master.png
     - assets/fonts/Inter-Regular.ttf
     - assets/fonts/Inter-SemiBold.ttf
     - assets/fonts/LICENSE-Inter.txt

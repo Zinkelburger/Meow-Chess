@@ -21,6 +21,8 @@ abstract interface class EventRepository {
   List<Json> history();
   String? readPreference(String key);
   void writePreference(String key, String value);
-  void backup(String destination);
+
+  /// [replaceExisting] is reserved for user-confirmed native Save dialogs.
+  void backup(String destination, {bool replaceExisting = false});
   void close();
 }

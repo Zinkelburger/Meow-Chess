@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
@@ -35,146 +36,168 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('player details use the reserved right column in both views', (
-    tester,
-  ) async {
-    final c = fixture();
-    addTearDown(c.dispose);
-    c.post((await tester.runAsync(() => c.propose()))!);
-    await mount(tester, c);
-    final player = c.event!.players.first;
-    final rosterRow = find.byKey(ValueKey('player-${player.id}'));
-    final before = tester.getRect(rosterRow);
-    await doubleClick(
-      tester,
-      find.descendant(
-        of: rosterRow,
-        matching: find.text(player.name, findRichText: true),
-      ),
-    );
-    final details = find.byKey(const ValueKey('player-details-area'));
-    expect(tester.getRect(rosterRow), before);
-    expect(tester.getTopLeft(details).dx, greaterThanOrEqualTo(before.right));
-    expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
-    await tester.tap(find.text('Rounds').first);
-    await tester.pumpAndSettle();
-    final game = c.event!.sections.first.rounds.single.games.first;
-    final board = find.byKey(ValueKey('game-${game.id}'));
-    final boardBefore = tester.getRect(board);
-    await doubleClick(
-      tester,
-      find.byKey(ValueKey('round-player-${game.id}-${game.white}')),
-    );
-    expect(tester.getTopLeft(board), boardBefore.topLeft);
-    expect(tester.getSize(board).width, boardBefore.width);
-    expect(
-      tester.getTopLeft(details).dx,
-      greaterThanOrEqualTo(boardBefore.right),
-    );
-    expect(find.byKey(const ValueKey('section-sidebar')), findsOneWidget);
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const ValueKey('panel-name')))
-          .controller!
-          .text,
-      c.event!.player(game.white).name,
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('panel-name')),
-      'Edited name',
-    );
-    await tester.pump();
-    await tester.ensureVisible(find.text('Save'));
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-    await doubleClick(
-      tester,
-      find.byKey(ValueKey('round-player-${game.id}-${game.black}')),
-    );
-    expect(c.event!.player(game.white).name, 'Edited name');
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const ValueKey('panel-name')))
-          .controller!
-          .text,
-      c.event!.player(game.black).name,
-    );
-    expect(c.event!.games.every((g) => g.outcome == Outcome.unreported), true);
-    await tester.tap(find.byTooltip('Close (Esc)'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('panel-name')), findsNothing);
-    expect(tester.getTopLeft(board), boardBefore.topLeft);
-    expect(tester.getSize(board).width, boardBefore.width);
-    tester.view.physicalSize = const Size(1100, 900);
-    await tester.pumpAndSettle();
-    await doubleClick(
-      tester,
-      find.byKey(ValueKey('round-player-${game.id}-${game.white}')),
-    );
-    expect(tester.getRect(details).right, lessThanOrEqualTo(1100));
-    expect(
-      find.byKey(const ValueKey('panel-name')).hitTestable(),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
-  });
-
-  for (final width in [1100.0, 1400.0]) {
-    testWidgets('side panels keep tables still at width $width', (
-      tester,
-    ) async {
+  testWidgets(
+    'player details fit beside standings and preserve result boards',
+    (tester) async {
       final c = fixture();
       addTearDown(c.dispose);
       c.post((await tester.runAsync(() => c.propose()))!);
       await mount(tester, c);
-      tester.view.physicalSize = Size(width, 900);
-      await tester.pumpAndSettle();
       final player = c.event!.players.first;
-      final game = c.event!.games.first;
-      for (final rounds in [false, true]) {
-        if (rounds) {
-          await tester.tap(find.text('Rounds').first);
-          await tester.pumpAndSettle();
-        }
-        final row = find.byKey(
-          ValueKey(rounds ? 'game-${game.id}' : 'player-${player.id}'),
-        );
-        final before = tester.getRect(row);
-        await doubleClick(
-          tester,
-          rounds
-              ? find.byKey(ValueKey('round-player-${game.id}-${game.white}'))
-              : find.descendant(
-                  of: row,
-                  matching: find.text(player.name, findRichText: true),
-                ),
-        );
-        expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
-        expect(tester.getRect(row), before);
-        // Replacing the embedded editor with workspace tools must use the
-        // same space, including tools wider than the player editor.
-        for (final target in [
-          find.byTooltip('Keyboard shortcuts (F1)'),
-          find.byKey(const ValueKey('event-details')),
-          find.byTooltip('History (Ctrl+H)'),
-          find.byTooltip('Find player (Ctrl+L)'),
-        ]) {
-          await tester.tap(target);
-          await tester.pumpAndSettle();
-          expect(tester.getRect(row), before);
-          expect(find.byKey(const ValueKey('panel-name')), findsNothing);
-          final historyClose = find.byTooltip('Close history (Ctrl+H)');
-          await tester.tap(
-            historyClose.evaluate().isNotEmpty
-                ? historyClose
-                : find.byTooltip('Close (Esc)'),
+      final rosterRow = find.byKey(ValueKey('player-${player.id}'));
+      await doubleClick(
+        tester,
+        find.descendant(
+          of: rosterRow,
+          matching: find.text(player.name, findRichText: true),
+        ),
+      );
+      final details = find.byKey(const ValueKey('player-details-area'));
+      expect(
+        tester.getRect(rosterRow).right,
+        lessThanOrEqualTo(tester.getTopLeft(details).dx),
+      );
+      expect(tester.getRect(rosterRow).width, greaterThan(0));
+      expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
+      await tester.tap(find.text('Pairings').first);
+      await tester.pumpAndSettle();
+      final game = c.event!.sections.first.rounds.single.games.first;
+      final board = find.byKey(ValueKey('game-${game.id}'));
+      final boardBefore = tester.getRect(board);
+      await doubleClick(
+        tester,
+        find.byKey(ValueKey('round-player-${game.id}-${game.white}')),
+      );
+      expect(tester.getTopLeft(board), boardBefore.topLeft);
+      expect(tester.getSize(board).width, boardBefore.width);
+      expect(
+        tester.getTopLeft(details).dx,
+        greaterThanOrEqualTo(boardBefore.right),
+      );
+      expect(find.byKey(const ValueKey('section-tabs')), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('panel-name')))
+            .controller!
+            .text,
+        c.event!.player(game.white).name,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('panel-name')),
+        'Edited name',
+      );
+      await tester.pump();
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      await doubleClick(
+        tester,
+        find.byKey(ValueKey('round-player-${game.id}-${game.black}')),
+      );
+      expect(c.event!.player(game.white).name, 'Edited name');
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('panel-name')))
+            .controller!
+            .text,
+        c.event!.player(game.black).name,
+      );
+      expect(
+        c.event!.games.every((g) => g.outcome == Outcome.unreported),
+        true,
+      );
+      await tester.tap(find.byTooltip('Close (Esc)'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('panel-name')), findsNothing);
+      expect(tester.getTopLeft(board), boardBefore.topLeft);
+      expect(tester.getSize(board).width, boardBefore.width);
+      tester.view.physicalSize = const Size(1100, 900);
+      await tester.pumpAndSettle();
+      await doubleClick(
+        tester,
+        find.byKey(ValueKey('round-player-${game.id}-${game.white}')),
+      );
+      expect(tester.getRect(details).right, lessThanOrEqualTo(1100));
+      expect(
+        find.byKey(const ValueKey('panel-name')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final width in [1100.0, 1400.0]) {
+    testWidgets(
+      'side panels preserve result boards and roster access at width $width',
+      (tester) async {
+        final c = fixture();
+        addTearDown(c.dispose);
+        c.post((await tester.runAsync(() => c.propose()))!);
+        await mount(tester, c);
+        tester.view.physicalSize = Size(width, 900);
+        await tester.pumpAndSettle();
+        final player = c.event!.players.first;
+        final game = c.event!.games.first;
+        for (final rounds in [false, true]) {
+          if (rounds) {
+            await tester.tap(find.text('Pairings').first);
+            await tester.pumpAndSettle();
+          }
+          final row = find.byKey(
+            ValueKey(rounds ? 'game-${game.id}' : 'player-${player.id}'),
           );
-          await tester.pumpAndSettle();
-          expect(tester.getRect(row), before);
-          expect(tester.takeException(), isNull);
+          final before = tester.getRect(row);
+          await doubleClick(
+            tester,
+            rounds
+                ? find.byKey(ValueKey('round-player-${game.id}-${game.white}'))
+                : find.descendant(
+                    of: row,
+                    matching: find.text(player.name, findRichText: true),
+                  ),
+          );
+          expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
+          if (rounds) {
+            expect(tester.getRect(row), before);
+          } else {
+            expect(
+              tester
+                  .getRect(find.byKey(const ValueKey('standings-pane')))
+                  .right,
+              lessThanOrEqualTo(
+                tester
+                    .getTopLeft(
+                      find.byKey(const ValueKey('player-details-area')),
+                    )
+                    .dx,
+              ),
+            );
+          }
+          // Replacing the embedded editor with workspace tools must use the
+          // same space, including tools wider than the player editor.
+          for (final target in [
+            find.byTooltip('Keyboard shortcuts (F1)'),
+            find.byKey(const ValueKey('event-details')),
+            find.byTooltip('History (Ctrl+H)'),
+            if (!rounds) find.byTooltip('Find player (Ctrl+L)'),
+          ]) {
+            await tester.tap(target);
+            await tester.pumpAndSettle();
+            if (rounds) expect(tester.getRect(row), before);
+            expect(find.byKey(const ValueKey('panel-name')), findsNothing);
+            final historyClose = find.byTooltip('Close history (Ctrl+H)');
+            await tester.tap(
+              historyClose.evaluate().isNotEmpty
+                  ? historyClose
+                  : find.byTooltip('Close (Esc)'),
+            );
+            await tester.pumpAndSettle();
+            expect(tester.getRect(row), before);
+            expect(tester.takeException(), isNull);
+          }
         }
-      }
-    });
+      },
+    );
   }
 
   testWidgets('an empty event opens on Players with file import first', (
@@ -185,19 +208,101 @@ void main() {
     addTearDown(c.dispose);
     await mount(tester, c);
     expect(find.text('Import file…'), findsOneWidget);
-    expect(find.text('Paste from spreadsheet'), findsOneWidget);
+    expect(find.text('Paste'), findsOneWidget);
     expect(find.text('Overview'), findsNothing);
-    // Nothing to post yet, and the button says why beside it.
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const ValueKey('pair-next-round')))
-          .onPressed,
-      isNull,
+    // Registration actions have equal visual weight; posting follows registration.
+    for (final label in ['Import file…', 'Paste', 'Add one player']) {
+      expect(find.widgetWithText(OutlinedButton, label), findsOneWidget);
+    }
+    expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
+  });
+
+  testWidgets('entry panels focus the first field and support Tab and Enter', (
+    tester,
+  ) async {
+    final c = TournamentController(SqliteEventRepository(':memory:'))
+      ..create('Club night');
+    addTearDown(c.dispose);
+    await mount(tester, c);
+
+    void expectFocused(String key) {
+      final editable = tester.widget<EditableText>(
+        find.descendant(
+          of: find.byKey(ValueKey(key)),
+          matching: find.byType(EditableText),
+        ),
+      );
+      expect(editable.focusNode.hasFocus, true, reason: key);
+    }
+
+    await tester.tap(find.text('Add one player'));
+    await tester.pumpAndSettle();
+    expectFocused('panel-name');
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(text: 'Keyboard Player'),
     );
-    expect(
-      find.text('Create sections on the Players page first.'),
-      findsOneWidget,
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expectFocused('panel-memberId');
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(text: '12345678'),
     );
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expectFocused('panel-rating');
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(text: '1500'),
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(c.event!.players.single.name, 'Keyboard Player');
+    expect(c.event!.players.single.memberId, '12345678');
+    expect(c.event!.players.single.rating, 1500);
+    expectFocused('panel-name');
+
+    // Switching panels claims focus even while the previous field has it.
+    await tester.tap(find.byKey(const ValueKey('event-details')));
+    await tester.pumpAndSettle();
+    expectFocused('event-name');
+    await tester.tap(find.byTooltip('Close (Esc)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add player'));
+    await tester.pumpAndSettle();
+    expectFocused('panel-name');
+    await tester.tap(find.byKey(const ValueKey('player-tools')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Paste'));
+    await tester.pumpAndSettle();
+    expectFocused('paste-roster');
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(text: 'Name,Rating\nPasted Player,1200'),
+    );
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('confirm-roster-import')), findsOneWidget);
+    expect(c.event!.players.length, 1);
+    await tester.tap(find.byTooltip('Close (Esc)'));
+    await tester.pumpAndSettle();
+    expectFocused('paste-roster');
+    await tester.tap(find.byTooltip('Close (Esc)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create sections…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('type-swiss')));
+    await tester.pumpAndSettle();
+    expectFocused('field-name');
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(text: 'Open'),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expectFocused('field-rounds');
+    tester.testTextInput.updateEditingValue(const TextEditingValue(text: '3'));
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(c.event!.sections.single.name, 'Open');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('players without sections are offered a tournament type', (
@@ -216,10 +321,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('type-quad')));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Create 2 sections'));
     await tester.tap(find.text('Create 2 sections'));
     await tester.pumpAndSettle();
     expect(c.event!.sections.map((s) => s.name), ['Quad 1', 'Quad 2']);
-    expect(find.text('Post round 1 · 2 sections'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
+    await tester.tap(find.text('Pairings').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Create pairings · Round 1 · 2 sections'), findsOneWidget);
     // Players need no check-in to be paired.
     await tester.tap(find.byKey(const ValueKey('pair-next-round')));
     // Pairing runs in an isolate, outside the fake test clock.
@@ -233,7 +342,7 @@ void main() {
     expect(c.event!.games, hasLength(4));
   });
 
-  testWidgets('ticked players move between sections in one click', (
+  testWidgets('ticked players move between sections after confirmation', (
     tester,
   ) async {
     final c = fixture();
@@ -264,6 +373,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(ValueKey('move-to-${quad1.id}')));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Move').last);
+    await tester.pumpAndSettle();
     await tester.tap(
       find.descendant(
         of: find.byKey(ValueKey('player-${quad1.players.first}')),
@@ -273,6 +384,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(ValueKey('move-to-${quad2.id}')));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Move').last);
+    await tester.pumpAndSettle();
     final [a, b] = c.event!.sections;
     expect(a.players, [...quad1.players.skip(1), quad2.players.first]);
     expect(b.players, [...quad2.players.skip(1), quad1.players.first]);
@@ -281,13 +394,13 @@ void main() {
     expect(find.textContaining('selected'), findsNothing);
   });
   testWidgets(
-    'Rounds opens one section; reports have their own scope and no pairing toolbar',
+    'views keep their section scope; reports have no pairing toolbar',
     (tester) async {
       final c = fixture();
       addTearDown(c.dispose);
       c.post((await tester.runAsync(() => c.propose()))!);
       await mount(tester, c);
-      await tester.tap(find.text('Rounds'));
+      await tester.tap(find.text('Pairings'));
       await tester.pumpAndSettle();
       expect(
         find.byKey(
@@ -303,100 +416,119 @@ void main() {
             'game-${c.event!.sections.last.rounds.single.games.first.id}',
           ),
         ),
-        findsNothing,
+        findsOneWidget,
       );
-      await tester.tap(find.text('Reports'));
+      await tester.tap(find.text('Export'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
       // The sidebar stays, and choosing a section scopes the printouts.
       await tester.tap(find.byKey(const ValueKey('section-chip-all')));
       await tester.pumpAndSettle();
-      expect(find.text('Print · All sections'), findsOneWidget);
+      expect(
+        find.text('Final standings & printouts · All sections'),
+        findsOneWidget,
+      );
       final last = c.event!.sections.last;
       await tester.tap(find.byKey(ValueKey('section-chip-${last.id}')));
       await tester.pumpAndSettle();
-      expect(find.text('Print · ${last.name}'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets(
-    'Ctrl+J jumps by section name or number and survives a page change',
-    (tester) async {
-      final c = fixture();
-      addTearDown(c.dispose);
-      for (var n = 3; n <= 24; n++) {
-        c.addSection('Quad $n', Format.quad, 3);
-      }
-      await mount(tester, c);
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      await tester.pumpAndSettle();
-      final search = find.byKey(const ValueKey('section-search'));
-      expect(tester.widget<TextField>(search).focusNode!.hasFocus, true);
-      await tester.enterText(search, 'quad24');
-      await tester.pumpAndSettle();
       expect(
-        find.byKey(ValueKey('section-chip-${c.event!.sections.last.id}')),
+        find.text('Final standings & printouts · ${last.name}'),
         findsOneWidget,
       );
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
-      expect(
-        c.repository.readPreference('view'),
-        '${c.event!.sections.last.id}|players',
-      );
-      await tester.tap(find.text('Rounds').first);
-      await tester.pumpAndSettle();
-      expect(
-        c.repository.readPreference('view'),
-        '${c.event!.sections.last.id}|results',
-      );
-      await tester.enterText(search, 'section2');
-      await tester.pumpAndSettle();
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pumpAndSettle();
-      expect(
-        c.repository.readPreference('view'),
-        '${c.event!.sections[1].id}|results',
-      );
       expect(tester.takeException(), isNull);
     },
   );
 
+  testWidgets('All sections stays visible when scrolling many section tabs', (
+    tester,
+  ) async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    for (var n = 3; n <= 24; n++) {
+      c.addSection('Quad $n', Format.quad, 3);
+    }
+    await mount(tester, c);
+    expect(find.byKey(const ValueKey('section-search')), findsNothing);
+    final all = find.byKey(const ValueKey('section-chip-all'));
+    final position = tester.getRect(all);
+    final last = find.byKey(
+      ValueKey('section-chip-${c.event!.sections.last.id}'),
+    );
+    await tester.ensureVisible(last);
+    await tester.pumpAndSettle();
+    await tester.tap(last);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(all), position);
+    await tester.tap(all);
+    await tester.pumpAndSettle();
+    expect(c.repository.readPreference('view'), '|players');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
-    'jump shortcut from Reports retains search focus over result autofocus',
+    'New Section creates immediately and settings support side games',
     (tester) async {
       final c = fixture();
       addTearDown(c.dispose);
-      c.post((await tester.runAsync(() => c.propose()))!);
       await mount(tester, c);
-      await tester.tap(find.text('Reports').first);
+      final count = c.event!.sections.length;
+      await tester.tap(find.byKey(const ValueKey('new-section')));
       await tester.pumpAndSettle();
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-      await tester.pumpAndSettle();
+      expect(c.event!.sections.length, count + 1);
+      final created = c.event!.sections.last;
+      expect(created.name, 'Section 1');
+      expect(created.players, isEmpty);
+      expect(created.sideGames, false);
       expect(
-        tester
-            .widget<TextField>(find.byKey(const ValueKey('section-search')))
-            .focusNode!
-            .hasFocus,
-        true,
+        find.byKey(ValueKey('section-settings-${created.id}')),
+        findsOneWidget,
       );
       await tester.enterText(
-        find.byKey(const ValueKey('section-search')),
-        'quad2',
+        find.byKey(const ValueKey('field-name')),
+        'Extra games',
       );
+      await tester.tap(find.byKey(const ValueKey('field-sideGames')));
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
-      await tester.testTextInput.receiveAction(TextInputAction.done);
+      expect(c.event!.sections.last.name, 'Extra games');
+      expect(c.event!.sections.last.sideGames, true);
+      await tester.tap(find.text('Pairings').first);
       await tester.pumpAndSettle();
-      // Reports keeps its sidebar, so jumping stays on Reports.
-      expect(
-        c.repository.readPreference('view'),
-        '${c.event!.sections.last.id}|reports',
-      );
+      await tester.tap(find.byKey(const ValueKey('pair-side-game')));
+      await tester.pumpAndSettle();
+      expect(find.text('Pair a side game'), findsWidgets);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('new-section')));
+      await tester.pumpAndSettle();
+      expect(c.event!.sections.last.name, 'Section 1');
+      expect(c.event!.sections.last.sideGames, false);
+      expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('section context menu deletes unplayed sections with undo', (
+    tester,
+  ) async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    await mount(tester, c);
+    final first = c.event!.sections.first;
+    await tester.tap(
+      find.byKey(ValueKey('section-chip-${first.id}')),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete section'));
+    await tester.pumpAndSettle();
+    expect(c.event!.sections.any((s) => s.id == first.id), false);
+    expect(c.event!.players.length, 8);
+    expect(find.byKey(const ValueKey('section-chip-all')), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('undo')));
+    await tester.pumpAndSettle();
+    expect(c.event!.sections.first.id, first.id);
+    expect(tester.takeException(), isNull);
+  });
 }

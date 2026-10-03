@@ -184,7 +184,7 @@ void main() {
 
   test('points are conserved: games award two halves, byes their value', () {
     final rng = Random(3);
-    var e = field(13, rounds: 4);
+    var e = field(13, rounds: 4).copy(useTiebreaks: true);
     for (var r = 0; r < 4; r++) {
       e = withRound(
         e,

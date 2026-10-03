@@ -1,10 +1,15 @@
+import 'player_actions.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
 import '../application/tournament_controller.dart';
+import 'rating_refresh.dart';
+import 'identity_review.dart' show fetchMember, readRatingCategory;
 import '../domain/model.dart';
+import '../infrastructure/roster_import.dart' show ImportRow;
 import 'dialogs.dart';
 import 'desktop_window.dart';
 import 'event_panel.dart';
@@ -14,8 +19,10 @@ import '../infrastructure/reports.dart' show ReportKind;
 import 'players_view.dart';
 import 'results_view.dart';
 import 'reports_view.dart';
-import 'theme.dart';
 import 'workspace_actions.dart';
+import 'update_panels.dart';
+import 'help_panel.dart';
+import 'side_game_panel.dart';
 
 enum TaskView { players, results, reports }
 
@@ -25,11 +32,15 @@ class Workspace extends StatefulWidget {
     required this.path,
     required this.onClose,
     required this.onTheme,
+    this.ratingLookup,
+    this.rosterLoader,
     super.key,
   });
   final TournamentController controller;
   final String path;
   final VoidCallback onClose, onTheme;
+  final RatingLookup? ratingLookup;
+  final Future<List<ImportRow>> Function(String)? rosterLoader;
   @override
   State<Workspace> createState() => _WorkspaceState();
 }
@@ -42,8 +53,8 @@ class _WorkspaceState extends State<Workspace> {
 
   /// Event details, backups and copies, docked at the right.
   bool eventOpen = false;
-  final sectionSearch = TextEditingController();
-  final sectionFocus = FocusNode(debugLabel: 'section-search');
+  final sectionScroll = ScrollController();
+  (Size, double)? sectionViewport;
   final workspaceFocus = FocusNode(debugLabel: 'workspace');
   final sectionKeys = <String, GlobalKey>{};
   final eventPanel = GlobalKey<EventPanelState>();
@@ -51,12 +62,17 @@ class _WorkspaceState extends State<Workspace> {
   /// New sections, section settings, combine and print, docked at the right.
   late final dock = DockController(tournament: c);
   final resultsKeys = <String, GlobalKey<ResultsViewState>>{};
+  late final ratingRefresh = RatingRefresh(
+    c,
+    lookup: widget.ratingLookup ?? fetchMember,
+  );
   Timer? clock;
   TournamentController get c => widget.controller;
   @override
   void initState() {
     super.initState();
     c.addListener(refresh);
+    ratingRefresh.addListener(refresh);
     c.workspaceState.addListener(refresh);
     dock.addListener(dockChanged);
     final saved = c.workspaceState.read('view');
@@ -79,8 +95,10 @@ class _WorkspaceState extends State<Workspace> {
   @override
   void dispose() {
     clock?.cancel();
-    sectionSearch.dispose();
-    sectionFocus.dispose();
+    ratingRefresh
+      ..removeListener(refresh)
+      ..dispose();
+    sectionScroll.dispose();
     workspaceFocus.dispose();
     c.removeListener(refresh);
     c.workspaceState.removeListener(refresh);
@@ -94,16 +112,20 @@ class _WorkspaceState extends State<Workspace> {
     if (mounted) setState(() {});
   }
 
+  Future<void> startRatingRefresh() async {
+    dock.close();
+    pickSection(null, next: TaskView.players);
+    if (ratingRefresh.active) return;
+    if (c.event!.players.isEmpty) return;
+    final category = await readRatingCategory();
+    if (!mounted || ratingRefresh.active) return;
+    await ratingRefresh.fetch(ratingCategory: category);
+  }
+
   void go(TaskView next) {
     if (view != next) dock.close();
     setState(() {
       view = next;
-      if (next == TaskView.results && sectionId == null) {
-        sectionId = c.event!.sections
-            .where((s) => s.rounds.isNotEmpty)
-            .firstOrNull
-            ?.id;
-      }
     });
     remember();
   }
@@ -115,35 +137,80 @@ class _WorkspaceState extends State<Workspace> {
       if (next != null) view = next;
     });
     remember();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final target = sectionKeys[id ?? 'all']?.currentContext;
-      if (target != null && target.mounted) {
-        Scrollable.ensureVisible(
-          target,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-        );
-        Scrollable.ensureVisible(
-          target,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
-        );
-      }
-    });
+    revealSection();
   }
 
-  void jumpToSection() {
-    // Run after the destination page's initial result focus has settled.
-    WidgetsBinding.instance.endOfFrame.then((_) {
-      if (!mounted) return;
-      sectionFocus.requestFocus();
-      sectionSearch.selection = TextSelection(
-        baseOffset: 0,
-        extentOffset: sectionSearch.text.length,
+  void revealSection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || sectionId == null) return;
+      final target = sectionKeys[sectionId]?.currentContext;
+      if (target == null || !target.mounted) return;
+      Scrollable.ensureVisible(
+        target,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+      Scrollable.ensureVisible(
+        target,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
       );
     });
   }
 
   void remember() {
     c.workspaceState.write('view', '${sectionId ?? ''}|${view.name}');
+  }
+
+  void newSection() {
+    try {
+      var number = 1;
+      final names = c.event!.sections.map((s) => s.name).toSet();
+      while (names.contains('Section $number')) {
+        number++;
+      }
+      c.addSection('Section $number', Format.swiss, 3, assignUnassigned: false);
+      pickSection(c.event!.sections.last.id, next: TaskView.players);
+      sectionSettings();
+    } catch (e) {
+      showFailure(context, e);
+    }
+  }
+
+  void refreshRoster() => dock.show(
+    'web-roster',
+    WebRosterPanel(
+      controller: c,
+      loader: widget.rosterLoader,
+      onClose: dock.close,
+      onImported: (refreshRatings) {
+        dock.close();
+        if (refreshRatings) {
+          ratingRefresh.discard();
+          startRatingRefresh();
+        }
+      },
+    ),
+  );
+
+  void pairSideGame(String id) => dock.show(
+    'side-game',
+    SideGamePanel(
+      controller: c,
+      sectionId: id,
+      onClose: dock.close,
+      onPaired: (id) {
+        dock.close();
+        pickSection(id, next: TaskView.results);
+      },
+    ),
+  );
+
+  void removeSection(String id) {
+    try {
+      c.removeSection(id);
+      if (sectionId == id) pickSection(null);
+    } catch (e) {
+      showFailure(context, e);
+    }
   }
 
   void addSections() => dock.show(
@@ -164,7 +231,7 @@ class _WorkspaceState extends State<Workspace> {
     if (pairing) return;
     setState(() => pairing = true);
     try {
-      final batch = await c.propose(sectionId: sectionId);
+      final batch = await c.propose(onlyReady: true);
       if (!mounted) return;
       if (batch.rounds.isEmpty) {
         throw TournamentException(
@@ -173,27 +240,22 @@ class _WorkspaceState extends State<Workspace> {
               : batch.issues.values.join('\n'),
         );
       }
-      final swiss = batch.rounds.values.any(
-        (r) => r.policy == 'score-swiss-pilot-v1',
-      );
-      // The Swiss caveat is said once per event, not on every post.
-      final caveat =
-          swiss && c.repository.readPreference('swiss-caveat') == null;
       final notes = [
         ...batch.issues.entries.map(
           (e) =>
               '${c.event!.sections.firstWhere((s) => s.id == e.key).name}: ${e.value}',
         ),
-        if (caveat)
-          'Swiss pairings are not yet certified. Check the boards before play; Edit pairings can swap players.',
       ];
       // Post straight away; anything worth checking is fixed afterwards
       // with Edit pairings or Undo post.
       c.post(batch);
-      if (caveat) c.repository.writePreference('swiss-caveat', 'shown');
       if (!mounted) return;
       setState(() => postNotes = notes);
-      go(TaskView.results);
+      if (sectionId == null || batch.rounds.containsKey(sectionId)) {
+        go(TaskView.results);
+      } else {
+        pickSection(null, next: TaskView.results);
+      }
     } catch (e) {
       if (mounted) showFailure(context, e);
     } finally {
@@ -219,7 +281,7 @@ class _WorkspaceState extends State<Workspace> {
     ),
   );
 
-  /// Ctrl+L or the toolbar: the Lookup panel, toggled.
+  /// Ctrl+L or the Players page: the Lookup panel, toggled.
   void lookup() => dock.id == 'lookup'
       ? dock.close()
       : dock.show(
@@ -275,16 +337,11 @@ class _WorkspaceState extends State<Workspace> {
       resultsKeys[sectionId ?? 'all']?.currentState?.printRound();
       return;
     }
-    final options = c.workspaceState.readMap(
-      'players-view-${sectionId ?? 'all'}',
-    );
-    showPrint(
+    printSheets(
       context,
       c.event!,
       sectionId: sectionId,
-      kind: view == TaskView.players ? ReportKind.standings : ReportKind.packet,
-      ceiling: view == TaskView.players ? options['ceiling'] as int? ?? 0 : 0,
-      forPrizes: view == TaskView.players && options['prizes'] == true,
+      kind: view == TaskView.players ? ReportKind.sections : ReportKind.packet,
     );
   }
 
@@ -303,17 +360,17 @@ class _WorkspaceState extends State<Workspace> {
               for (final (keys, action) in const [
                 ('1 / W', 'This player wins'),
                 ('0 / L', 'This player loses'),
-                ('5 / D', 'Draw'),
+                ('D', 'Draw (½ on the sheet)'),
                 ('F, then 1 or 0', 'Forfeit result'),
                 ('+ / −', 'Forfeit win / loss'),
                 ('X', 'Double forfeit'),
                 ('Delete', 'Clear the result'),
                 ('↑ / ↓', 'Previous / next board'),
                 ('← / →', 'Other player'),
-                ('M', 'Result menu'),
+                ('P / ?', 'Still playing / disputed'),
+                ('A', 'Temporary pairing assumption'),
                 ('Tab, then Enter', 'Open the focused player'),
                 ('Ctrl+L', 'Find a player'),
-                ('Ctrl+J', 'Find a section'),
                 ('Ctrl+P', 'Print this view'),
                 ('Ctrl+Z', 'Undo'),
                 ('Ctrl+Shift+Z / Ctrl+Y', 'Redo'),
@@ -338,6 +395,10 @@ class _WorkspaceState extends State<Workspace> {
         key: ValueKey('players-${section?.id}'),
         controller: c,
         sectionId: section?.id,
+        ratingRefresh: ratingRefresh,
+        onLookup: lookup,
+        onRefreshRoster: refreshRoster,
+        onRefreshRatings: startRatingRefresh,
         onAddSections: e.sections.any((s) => s.rounds.isNotEmpty)
             ? null
             : addSections,
@@ -356,7 +417,14 @@ class _WorkspaceState extends State<Workspace> {
           controller: c,
           sectionId: section?.id,
           onResults: (id) => pickSection(id, next: TaskView.results),
-          onStandings: () => go(TaskView.players),
+          onStandings: () {
+            go(TaskView.results);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                resultsKeys[sectionId ?? 'all']?.currentState?.showCrosstable();
+              }
+            });
+          },
           onBackups: showBackups,
         ),
       ),
@@ -365,8 +433,6 @@ class _WorkspaceState extends State<Workspace> {
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): dock.close,
-        const SingleActivator(LogicalKeyboardKey.keyJ, control: true):
-            jumpToSection,
         const SingleActivator(LogicalKeyboardKey.keyL, control: true): lookup,
         const SingleActivator(LogicalKeyboardKey.keyP, control: true):
             printCurrent,
@@ -408,8 +474,10 @@ class _WorkspaceState extends State<Workspace> {
                           child: Row(
                             children: [
                               ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 260,
+                                constraints: BoxConstraints(
+                                  maxWidth: constraints.maxWidth < 1100
+                                      ? 160
+                                      : 260,
                                 ),
                                 child: Tooltip(
                                   message: 'Event details',
@@ -445,13 +513,6 @@ class _WorkspaceState extends State<Workspace> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 24),
-                              for (final (task, label) in [
-                                (TaskView.players, 'Players'),
-                                (TaskView.results, 'Rounds'),
-                                (TaskView.reports, 'Reports'),
-                              ])
-                                _tab(label, view == task, () => go(task)),
                             ],
                           ),
                         );
@@ -459,10 +520,18 @@ class _WorkspaceState extends State<Workspace> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             _barIcon(
-                              Icons.person_search_outlined,
-                              'Find player (Ctrl+L)',
-                              lookup,
-                              selected: dock.id == 'lookup',
+                              Icons.help_outline,
+                              'Help articles',
+                              () => dock.id == 'help'
+                                  ? dock.close()
+                                  : dock.show(
+                                      'help',
+                                      HelpPanel(
+                                        controller: c,
+                                        onClose: dock.close,
+                                      ),
+                                    ),
+                              selected: dock.id == 'help',
                             ),
                             _barIcon(
                               Icons.keyboard_outlined,
@@ -470,35 +539,37 @@ class _WorkspaceState extends State<Workspace> {
                               keyboardHelp,
                               selected: dock.id == 'keyboard-help',
                             ),
-                            _undoButton(context),
+                            _toolbarDivider(),
                             _barIcon(
-                              Icons.chevron_right,
+                              Icons.arrow_back,
+                              c.canUndo
+                                  ? 'Undo ${c.undoLabel} (Ctrl+Z)'
+                                  : 'Nothing to undo',
+                              c.canUndo ? undo : null,
+                              key: const ValueKey('undo'),
+                            ),
+                            _barIcon(
+                              Icons.arrow_forward,
                               c.canRedo
-                                  ? 'Forward: redo ${c.redoLabel} (Ctrl+Shift+Z)'
+                                  ? 'Redo ${c.redoLabel} (Ctrl+Shift+Z)'
                                   : 'Nothing to redo',
                               c.canRedo ? redo : null,
                             ),
                             _barIcon(
-                              Icons.account_tree_outlined,
+                              Icons.history,
                               historyOpen
                                   ? 'Hide history (Ctrl+H)'
                                   : 'History (Ctrl+H)',
                               toggleHistory,
                               selected: historyOpen,
                             ),
+                            _toolbarDivider(),
                             _barIcon(
                               dark
                                   ? Icons.light_mode_outlined
                                   : Icons.dark_mode_outlined,
                               dark ? 'Light mode' : 'Dark mode',
                               widget.onTheme,
-                            ),
-                            SizedBox(
-                              height: 24,
-                              child: VerticalDivider(
-                                width: 17,
-                                color: colors.outlineVariant,
-                              ),
                             ),
                             _barIcon(
                               Icons.home_outlined,
@@ -509,7 +580,7 @@ class _WorkspaceState extends State<Workspace> {
                         );
                         if (constraints.maxWidth /
                                 MediaQuery.textScalerOf(context).scale(1) <
-                            1000) {
+                            640) {
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -532,11 +603,62 @@ class _WorkspaceState extends State<Workspace> {
                     ),
                   ),
                   if (e.practice) _practiceBanner(context),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: LayoutBuilder(
+                      builder: (context, layout) {
+                        final pages = Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: [
+                            for (final (task, label) in [
+                              (TaskView.players, 'Players'),
+                              (TaskView.results, 'Pairings'),
+                              (TaskView.reports, 'Export'),
+                            ])
+                              _tab(label, view == task, () => go(task)),
+                          ],
+                        );
+                        final action = view != TaskView.results
+                            ? const SizedBox.shrink()
+                            : _postControl(context, e, section);
+                        if (layout.maxWidth /
+                                MediaQuery.textScalerOf(context).scale(1) <
+                            1050) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              pages,
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: action,
+                              ),
+                            ],
+                          );
+                        }
+                        return Row(
+                          children: [
+                            pages,
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: action,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  _sectionTabs(context),
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _sectionSidebar(context),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -550,47 +672,6 @@ class _WorkspaceState extends State<Workspace> {
                                       child: const Text('Retry'),
                                     ),
                                   ],
-                                ),
-                              if (view != TaskView.reports)
-                                Container(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    24,
-                                    12,
-                                    24,
-                                    12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    border: Border(
-                                      bottom: BorderSide(
-                                        color: colors.outlineVariant,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          section?.name ?? 'All sections',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Flexible(
-                                        flex: 3,
-                                        child: _postControl(
-                                          context,
-                                          e,
-                                          section,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
                                 ),
                               if (postNotes.isNotEmpty) _postNotes(context),
                               Expanded(
@@ -678,30 +759,13 @@ class _WorkspaceState extends State<Workspace> {
     );
   }
 
-  /// Back, named: "Undo Result, board 3" in words, not only on hover.
-  Widget _undoButton(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    if (!c.canUndo) {
-      return _barIcon(Icons.undo, 'Nothing to undo', null);
-    }
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 240),
-      child: Tooltip(
-        message: 'Undo ${c.undoLabel} (Ctrl+Z)',
-        child: TextButton.icon(
-          key: const ValueKey('undo'),
-          onPressed: undo,
-          icon: const Icon(Icons.undo, size: 18),
-          style: TextButton.styleFrom(
-            foregroundColor: colors.onSurface,
-            minimumSize: const Size(0, 32),
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-          ),
-          label: Text('Undo ${c.undoLabel}', overflow: TextOverflow.ellipsis),
-        ),
-      ),
-    );
-  }
+  Widget _toolbarDivider() => SizedBox(
+    height: 20,
+    child: VerticalDivider(
+      width: 17,
+      color: Theme.of(context).colorScheme.outlineVariant,
+    ),
+  );
 
   /// A practice copy looks different at a glance, so nobody runs the real
   /// event in it by mistake.
@@ -820,7 +884,18 @@ class _WorkspaceState extends State<Workspace> {
   /// gives way to the event-complete state.
   Widget _postControl(BuildContext context, Event e, Section? section) {
     final colors = Theme.of(context).colorScheme;
-    final state = postState(e, section);
+    if (section?.sideGames == true) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: FilledButton.icon(
+          key: const ValueKey('pair-side-game'),
+          onPressed: () => pairSideGame(section!.id),
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('Pair a side game'),
+        ),
+      );
+    }
+    final state = postState(e, null);
     final muted = TextStyle(color: colors.onSurfaceVariant);
     if (state.complete) {
       return Row(
@@ -831,9 +906,7 @@ class _WorkspaceState extends State<Workspace> {
           Flexible(
             child: Text(
               key: const ValueKey('event-complete'),
-              section == null
-                  ? 'All rounds played'
-                  : 'All ${section.plannedRounds} rounds played',
+              'All rounds played',
               style: const TextStyle(fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis,
             ),
@@ -841,7 +914,7 @@ class _WorkspaceState extends State<Workspace> {
           const SizedBox(width: 16),
           OutlinedButton(
             onPressed: () => go(TaskView.reports),
-            child: const Text('Final reports'),
+            child: const Text('Finish & export'),
           ),
         ],
       );
@@ -849,7 +922,10 @@ class _WorkspaceState extends State<Workspace> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (state.why != null)
+        if (state.why != null &&
+            (state.label != null ||
+                e.sections.isEmpty ||
+                e.sections.every((s) => s.players.isEmpty)))
           Flexible(
             child: Padding(
               padding: const EdgeInsets.only(right: 12),
@@ -863,18 +939,19 @@ class _WorkspaceState extends State<Workspace> {
               ),
             ),
           ),
-        Flexible(
-          child: FilledButton.icon(
-            key: const ValueKey('pair-next-round'),
-            onPressed: pairing || state.label == null ? null : pair,
-            icon: const Icon(Icons.arrow_forward, size: 18),
-            iconAlignment: IconAlignment.end,
-            label: Text(
-              pairing ? 'Posting…' : state.label ?? 'Post next round',
-              overflow: TextOverflow.ellipsis,
+        if (state.label != null)
+          Flexible(
+            child: FilledButton.icon(
+              key: const ValueKey('pair-next-round'),
+              onPressed: pairing || state.label == null ? null : pair,
+              icon: const Icon(Icons.arrow_forward, size: 18),
+              iconAlignment: IconAlignment.end,
+              label: Text(
+                pairing ? 'Creating pairings…' : state.label!,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -924,147 +1001,73 @@ class _WorkspaceState extends State<Workspace> {
     );
   }
 
-  Widget _sectionSidebar(BuildContext context) {
+  Widget _sectionTabs(BuildContext context) {
+    final viewport = (
+      MediaQuery.sizeOf(context),
+      MediaQuery.textScalerOf(context).scale(1),
+    );
+    if (sectionViewport != viewport) {
+      sectionViewport = viewport;
+      revealSection();
+    }
     final e = c.event!, colors = Theme.of(context).colorScheme;
-    final q = sectionSearch.text.toLowerCase().replaceAll(' ', '');
-    String normalized(String name) => name.toLowerCase().replaceAll(' ', '');
-    bool exact((int, Section) entry) =>
-        normalized(entry.$2.name) == q || 'section${entry.$1 + 1}' == q;
-    final matches =
-        e.sections.indexed
-            .where(
-              (entry) =>
-                  normalized(entry.$2.name).contains(q) ||
-                  'section${entry.$1 + 1}'.contains(q),
-            )
-            .toList()
-          ..sort(
-            (a, b) => exact(a) == exact(b)
-                ? a.$1.compareTo(b.$1)
-                : exact(a)
-                ? -1
-                : 1,
-          );
     return Container(
-      key: const ValueKey('section-sidebar'),
-      width: 208,
+      key: const ValueKey('section-tabs'),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLowest,
-        border: Border(right: BorderSide(color: colors.outlineVariant)),
+        color: colors.surfaceContainerLow,
+        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Sections',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                MenuAnchor(
-                  builder: (context, menu, child) => IconButton(
-                    tooltip: 'Manage sections',
-                    icon: const Icon(Icons.more_horiz, size: 20),
-                    onPressed: () => menu.isOpen ? menu.close() : menu.open(),
-                  ),
-                  menuChildren: [
-                    MenuItemButton(
-                      leadingIcon: const Icon(Icons.add, size: 18),
-                      onPressed: addSections,
-                      child: const Text('New sections…'),
-                    ),
-                    if (e.sections.any((s) => s.id == sectionId)) ...[
-                      MenuItemButton(
-                        onPressed: sectionSettings,
-                        child: const Text('Section settings…'),
-                      ),
-                      MenuItemButton(
-                        onPressed: combine,
-                        child: const Text('Combine sections…'),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: Tooltip(
-              message: 'Jump to a section (Ctrl+J)',
-              child: TextField(
-                key: const ValueKey('section-search'),
-                controller: sectionSearch,
-                focusNode: sectionFocus,
-                decoration: InputDecoration(
-                  hintText: 'Jump to section',
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  prefixIconConstraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: controlHeight,
-                  ),
-                  suffixIconConstraints: const BoxConstraints(
-                    minWidth: 32,
-                    minHeight: controlHeight,
-                  ),
-                  suffixIcon: q.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear section search',
-                          icon: const Icon(Icons.close, size: 16),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(
-                            width: 28,
-                            height: 28,
-                          ),
-                          onPressed: () => setState(sectionSearch.clear),
-                        ),
-                ),
-                onChanged: (_) => setState(() {}),
-                onSubmitted: (_) {
-                  if (matches.isNotEmpty) {
-                    pickSection(matches.first.$2.id);
-                    sectionFocus.unfocus();
-                    setState(sectionSearch.clear);
-                  }
-                },
-              ),
-            ),
-          ),
+          _sectionLink('All sections', null, '${e.players.length} players'),
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Column(
-                children: [
-                  if (q.isEmpty)
-                    _sectionLink(
-                      'All sections',
-                      null,
-                      '${e.players.length} players',
-                    ),
-                  for (final (_, s) in matches)
-                    _sectionLink(
-                      s.name,
-                      s.id,
-                      s.rounds.isEmpty
-                          ? '${s.players.length} players · Not paired'
-                          : 'Round ${s.rounds.length} · ${s.rounds.last.complete ? 'Complete' : '${s.rounds.last.games.where((g) => !g.outcome.resolved).length} missing'}',
-                    ),
-                  if (matches.isEmpty && q.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        'No matching sections',
-                        style: TextStyle(color: colors.onSurfaceVariant),
-                      ),
-                    ),
-                ],
+            child: Listener(
+              onPointerSignal: (event) {
+                if (event is PointerScrollEvent && sectionScroll.hasClients) {
+                  GestureBinding.instance.pointerSignalResolver.register(
+                    event,
+                    (_) {
+                      sectionScroll.jumpTo(
+                        (sectionScroll.offset +
+                                event.scrollDelta.dy +
+                                event.scrollDelta.dx)
+                            .clamp(0, sectionScroll.position.maxScrollExtent),
+                      );
+                    },
+                  );
+                }
+              },
+              child: Scrollbar(
+                controller: sectionScroll,
+                thumbVisibility: true,
+                child: SingleChildScrollView(
+                  controller: sectionScroll,
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final s in e.sections)
+                        _sectionLink(
+                          s.name,
+                          s.id,
+                          s.sideGames
+                              ? '${s.players.length} players · Side games'
+                              : s.rounds.isEmpty
+                              ? '${s.players.length} players'
+                              : 'Round ${s.rounds.length} · ${s.rounds.last.complete ? 'Complete' : '${s.rounds.last.games.where((g) => !g.outcome.resolved).length} missing'}',
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
+          ),
+          const SizedBox(width: 12),
+          OutlinedButton.icon(
+            key: const ValueKey('new-section'),
+            onPressed: newSection,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('New Section'),
           ),
         ],
       ),
@@ -1076,37 +1079,168 @@ class _WorkspaceState extends State<Workspace> {
     final active =
         sectionId == id ||
         (id == null && !c.event!.sections.any((s) => s.id == sectionId));
-    return Padding(
+    final section = c.event!.sections.where((s) => s.id == id).firstOrNull;
+    Widget tab() => Container(
       key: sectionKeys.putIfAbsent(id ?? 'all', GlobalKey.new),
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Semantics(
-        selected: active,
-        child: Material(
-          color: active ? colors.surfaceContainerHigh : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          child: ListTile(
-            key: ValueKey('section-chip-${id ?? 'all'}'),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 4,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(6),
-            ),
-            title: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-            subtitle: Text(
-              subtitle,
-              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
-            ),
-            onTap: () => pickSection(id),
+      decoration: BoxDecoration(
+        color: active ? colors.surface : null,
+        border: Border(
+          bottom: BorderSide(
+            color: active ? colors.onSurface : Colors.transparent,
+            width: 2,
           ),
         ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            selected: active,
+            child: TextButton(
+              key: ValueKey('section-chip-${id ?? 'all'}'),
+              onPressed: () => pickSection(id),
+              style: TextButton.styleFrom(
+                foregroundColor: colors.onSurface,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                shape: const RoundedRectangleBorder(),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    return Builder(
+      builder: (context) => GestureDetector(
+        onSecondaryTapDown: (details) async {
+          final action = await contextMenu<String>(
+            context,
+            details.globalPosition,
+            [
+              const PopupMenuItem(
+                value: 'print',
+                child: Text('Print section sheets'),
+              ),
+              const PopupMenuItem(
+                value: 'preview',
+                child: Text('Preview section sheets…'),
+              ),
+              if (section != null) ...[
+                const PopupMenuDivider(),
+                const PopupMenuItem(value: 'move', child: Text('Move player…')),
+                const PopupMenuItem(
+                  value: 'swap',
+                  child: Text('Swap players…'),
+                ),
+                const PopupMenuItem(
+                  value: 'withdraw',
+                  child: Text('Withdraw / reinstate player…'),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'settings',
+                  child: Text('Rename / section settings…'),
+                ),
+                if (section.sideGames)
+                  const PopupMenuItem(
+                    value: 'side-game',
+                    child: Text('Pair a side game…'),
+                  ),
+                const PopupMenuItem(
+                  value: 'combine',
+                  child: Text('Combine sections…'),
+                ),
+                const PopupMenuItem(
+                  value: 'help',
+                  child: Text('How these pairings work'),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'delete',
+                  enabled: section.rounds.isEmpty,
+                  child: Text(
+                    section.rounds.isEmpty
+                        ? 'Delete section'
+                        : 'Delete unavailable after pairings',
+                  ),
+                ),
+              ],
+            ],
+          );
+          if (!mounted || !context.mounted || action == null) return;
+          switch (action) {
+            case 'print':
+              printSheets(
+                context,
+                c.event!,
+                sectionId: id,
+                kind: ReportKind.sections,
+              );
+            case 'preview':
+              showPrint(
+                context,
+                c.event!,
+                sectionId: id,
+                kind: ReportKind.sections,
+              );
+            case 'move':
+            case 'swap':
+            case 'withdraw':
+              showPlayerOperation(
+                context,
+                c,
+                PlayerOperation.values.byName(action),
+                sectionId: id,
+              );
+            case 'settings':
+              pickSection(id);
+              sectionSettings();
+            case 'side-game':
+              pickSection(id);
+              pairSideGame(id!);
+            case 'combine':
+              pickSection(id);
+              combine();
+            case 'help':
+              dock.show(
+                'help',
+                HelpPanel(
+                  controller: c,
+                  onClose: dock.close,
+                  articleId: section!.format == Format.quad
+                      ? 'quads'
+                      : section.format == Format.swiss
+                      ? 'swiss'
+                      : 'round-robin',
+                ),
+              );
+            case 'delete':
+              removeSection(id!);
+          }
+        },
+        child: tab(),
       ),
     );
   }
@@ -1139,9 +1273,11 @@ class _WorkspaceState extends State<Workspace> {
     String tooltip,
     VoidCallback? action, {
     bool selected = false,
+    Key? key,
   }) {
     final colors = Theme.of(context).colorScheme;
     return IconButton(
+      key: key,
       icon: Icon(icon, size: 20),
       tooltip: tooltip,
       onPressed: action,
@@ -1164,7 +1300,9 @@ class _WorkspaceState extends State<Workspace> {
   Event e,
   Section? section,
 ) {
-  final scope = section == null ? e.sections : [section];
+  final scope = section == null
+      ? e.sections.where((s) => !s.sideGames).toList()
+      : [section];
   if (scope.isEmpty) {
     return (
       label: null,
@@ -1193,7 +1331,7 @@ class _WorkspaceState extends State<Workspace> {
     return (
       label: null,
       why:
-          'Last round posted · $missing ${missing == 1 ? 'result' : 'results'} still to enter.',
+          'Final pairings created · $missing ${missing == 1 ? 'result' : 'results'} still to enter.',
       complete: false,
     );
   }
@@ -1213,8 +1351,8 @@ class _WorkspaceState extends State<Workspace> {
   if (ready.isEmpty) return (label: null, why: why, complete: false);
   final numbers = ready.map((s) => s.rounds.length + 1).toSet();
   final round = numbers.length == 1
-      ? 'Post round ${numbers.single}'
-      : 'Post next rounds';
+      ? 'Create pairings · Round ${numbers.single}'
+      : 'Create pairings';
   final label = section == null && (ready.length > 1 || e.sections.length > 1)
       ? '$round · ${ready.length} ${ready.length == 1 ? 'section' : 'sections'}'
       : round;

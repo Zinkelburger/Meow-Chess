@@ -36,19 +36,23 @@ void registerTeamWorkflowTests() {
       );
       await tester.pumpAndSettle();
       // Import through the actual UI, with only the native file picker omitted.
-      await tester.tap(find.text('Paste from spreadsheet'));
+      await tester.tap(find.text('Paste'));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('paste-roster')),
         'Name,Rating,US Chess ID\n${List.generate(6, (i) => 'Sibling $i,${1800 - i * 50},${12000000 + i}').join('\n')}',
       );
-      await tester.tap(find.text('Import').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Review import'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirm-roster-import')));
       await tester.pumpAndSettle();
       expect(c.event!.players, hasLength(6));
       await tester.tap(find.text('Create sections…'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('type-swiss')));
       await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('field-name')), 'Open');
       await tester.enterText(find.byKey(const ValueKey('field-rounds')), '3');
       await tester.ensureVisible(find.byKey(const ValueKey('create-sections')));
       await tester.pumpAndSettle();
@@ -82,6 +86,8 @@ void registerTeamWorkflowTests() {
       await tester.pumpAndSettle();
       expect(c.event!.player(first).avoid, {sibling});
       expect(c.event!.player(sibling).avoid, {first});
+      await tester.tap(find.text('Pairings').first);
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('pair-next-round')));
       await tester.pumpAndSettle();
       final games = c.event!.sections.single.rounds.single.games;
@@ -92,7 +98,7 @@ void registerTeamWorkflowTests() {
       );
       await tester.tap(find.byKey(ValueKey('game-${games.first.id}')));
       for (var i = 0; i < games.length; i++) {
-        await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
         await tester.pumpAndSettle();
       }
       expect(c.event!.games.every((g) => g.outcome == Outcome.draw), true);

@@ -43,6 +43,7 @@ Supporting plans:
 | [Boylston event survey](research/notes/BOYLSTON.md) | Actual event formats, import evidence, scope implications |
 | [SwissSys / ChessRoster](research/notes/SWISSSYS.md) | Feature map, interoperability, and a practical quad setup guide |
 | [US Chess reporting](research/notes/US_CHESS_REPORTING.md) | The three DBF files, authoritative specification, unresolved contradictions |
+| [DBF compatibility tests](docs/DBF_COMPATIBILITY.md) | Fragile mock importer, mixed-round export, setup and remaining limits |
 | [US Chess ratings API](research/notes/US_CHESS_API.md) | Public OpenAPI, live probes, identity review, latest-rating limitations |
 | [Pairing and bughouse](docs/PAIRING.md) | US Chess pairing, quads, team distinctions, experimental skill estimates |
 | [Architecture](docs/ARCHITECTURE.md) | Dart domain, SQLite transactions, commands, adapters, recovery |
@@ -61,8 +62,59 @@ tournament modification was performed.
 With Flutter installed, run `flutter pub get`, then `flutter run -d linux`
 (or `-d windows` / `-d macos` on the corresponding host). On this workstation,
 use `scripts/ci.sh build` for a bounded Linux release build; the executable is
-`build/linux/x64/release/bundle/meow_chess`. Start with **Try a practice event**
-for 22 synthetic entrants in four quads and a six-player Swiss.
+`build/linux/x64/release/bundle/meow_chess`. Start with **New tournament** to create an event, then add or import players.
+
+Choose a section tab, then switch between **Players & standings** and
+**Pairings & results**. Both views keep the selected section. Click a score cell in either view, then type **1/W** for a win, **0/L** for
+a loss, or **D** for a draw. Results display as **1**, **0**, and **½**.
+Typing saves and advances; mouse clicks only focus cells. Historical corrections
+retain their review step.
+**Create pairings** pairs every ready section with one click; sections waiting
+for results are left alone. There is no separate start-round step.
+
+Right-click a player or section tab for **Move**, **Swap**, and **Withdraw**.
+The quad setup preview only displays the rating groups. **Print section sheets**
+prints one plain result sheet per quad with all round-robin pairings, including
+future rounds. Swiss sections print only the selected posted round. Sheets use
+**Board | Result | White | Black | Result**, with blank result boxes for handwriting
+and unused space left blank. Each section starts on a fresh page; large Swiss
+sections continue onto additional pages as needed. The first print asks for a printer; later prints use the saved device.
+Use **Print preview…** or **Export** to preview sheets and choose another printer.
+Systems without direct printing support use the operating system's print dialog.
+
+Use **Export** to wrap up the tournament. Review checks across all sections and
+follow the repair links to resolve missing results or report inconsistencies.
+**Generate DBF files** becomes available once blocking issues are resolved;
+optional checks remain available for review. Final standings, crosstables,
+printouts, backup status, and submission notes are also available here.
+
+On **Pairings & results**, choose a round number or **Show all rounds** to find an earlier
+game. Choose **Correct a result**, or click a result cell in **Players & standings**, to review
+a correction. The review shows score changes and later rounds: keep their pairings,
+or reopen an unstarted round and all rounds after it. Recorded play and section
+transfers prevent automatic reopening. Reopened rounds are paired again through
+the normal pairing review. The previous version remains in **History**, where a
+single-result transaction also offers **Undo this result** without reversing
+unrelated edits. Restoring multiple transactions previews the whole-event changes
+before confirmation.
+
+**Import file…** opens a CSV/TSV/text file for review before adding players.
+Choose the delimiter and header setting, then map your columns to name, rating,
+and USCF ID (with optional split names, club/team, and state). The preview updates
+as you change settings. Invalid rows must be fixed or explicitly skipped;
+**Paste** uses the same review flow. Imports can be undone.
+
+**Refresh from URL** accepts Boylston event or entry-list links. For other clubs,
+paste a page containing a Name, Rating and USCF ID table, then review and confirm
+the players. Clubs can contribute their own URL rules and parsers; see
+[adding a club website](docs/CLUB_ROSTER_ADAPTERS.md).
+
+On **Players**, **Show unofficial rating estimates** is off by default. Enable
+it to see approximate Regular ratings and changes as results are entered or
+corrected between rounds. This just-for-fun preview assumes 50 prior rated games,
+uses starting ratings and completed games in each section, and omits personal
+floors and provisional formulas. It never changes pairing ratings or exports.
+See [calculation details and limits](docs/RATING_PREVIEW.md).
 
 Linux build prerequisites include GTK 3, CMake, Ninja, C++ tooling and libsecret
 development headers (`libsecret-1-dev` on Debian/Ubuntu, `libsecret-devel` on Fedora).
@@ -90,8 +142,10 @@ without asking and `=0` never asks, for scripted installs. The icon is
 [meow_chess_master.png](assets/icon/meow_chess_master.png); `tools/make_icons.sh` regenerates every
 platform size from it.
 
-The logo appears in the welcome screen and tournament toolbar. Window controls,
-movement and resizing use the operating system’s standard window decorations.
+The logo appears on the welcome screen and as the desktop app icon. The tournament
+toolbar starts with the editable event title. Window controls, movement and
+resizing use the operating system’s standard window decorations; whether an icon
+appears in the title bar depends on the desktop environment.
 
 For a local checkout on KDE/Wayland, build the app and run
 `python3 tools/install_linux_launcher.py`. This installs the menu entry and icon

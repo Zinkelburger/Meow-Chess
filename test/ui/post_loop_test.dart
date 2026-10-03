@@ -39,6 +39,8 @@ Future<void> mount(WidgetTester tester, TournamentController c) async {
 }
 
 Future<void> post(WidgetTester tester, TournamentController c) async {
+  await tester.tap(find.text('Pairings').first);
+  await tester.pumpAndSettle();
   final before = c.event!.revision;
   await tester.tap(find.byKey(const ValueKey('pair-next-round')));
   await tester.runAsync(() async {
@@ -54,15 +56,18 @@ void main() {
     final c = fixture();
     addTearDown(c.dispose);
     final [q1, q2] = c.event!.sections;
-    expect(postState(c.event!, null).label, 'Post round 1 · 2 sections');
-    expect(postState(c.event!, q1).label, 'Post round 1');
+    expect(
+      postState(c.event!, null).label,
+      'Create pairings · Round 1 · 2 sections',
+    );
+    expect(postState(c.event!, q1).label, 'Create pairings · Round 1');
     c.post(await c.propose());
     // One section's results are in, the other's are not.
     for (final g in c.event!.sections.first.rounds.last.games) {
       c.recordResult(g.id, Outcome.whiteWin);
     }
     final both = postState(c.event!, null);
-    expect(both.label, 'Post round 2 · 1 section');
+    expect(both.label, 'Create pairings · Round 2 · 1 section');
     expect(both.why, '${q2.name} waits for 2 results.');
     final held = postState(c.event!, c.event!.sections.last);
     expect(held.label, isNull);
@@ -76,6 +81,32 @@ void main() {
     expect(postState(c.event!, null).complete, true);
   });
 
+  testWidgets(
+    'creating pairings from one section creates every ready section once',
+    (tester) async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      await mount(tester, c);
+      final first = c.event!.sections.first.id;
+      await tester.tap(find.byKey(ValueKey('section-chip-$first')));
+      await tester.pumpAndSettle();
+      await post(tester, c);
+      expect(c.event!.sections.map((s) => s.rounds.length), [1, 1]);
+      expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
+      expect(find.byKey(const ValueKey('post-notes')), findsNothing);
+      final waitingRevision = c.event!.sections.last.rounds.single.revision;
+      for (final g in c.event!.sections.first.rounds.single.games) {
+        c.recordResult(g.id, Outcome.draw);
+      }
+      await tester.pump();
+      await post(tester, c);
+      expect(c.event!.sections.map((s) => s.rounds.length), [2, 1]);
+      expect(c.event!.sections.last.rounds.single.revision, waitingRevision);
+      expect(find.byKey(const ValueKey('post-notes')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
   testWidgets('event complete replaces the post button', (tester) async {
     final c = fixture();
     addTearDown(c.dispose);
@@ -88,15 +119,17 @@ void main() {
       finishAll(c);
     }
     await mount(tester, c);
+    await tester.tap(find.text('Pairings').first);
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
     expect(find.byKey(const ValueKey('event-complete')), findsOneWidget);
-    await tester.tap(find.text('Final reports'));
+    await tester.tap(find.text('Finish & export'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('report-scope')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('the Swiss caveat is shown once and stays until dismissed', (
+  testWidgets('Swiss rounds post without a certification notice', (
     tester,
   ) async {
     final c = TournamentController(SqliteEventRepository(':memory:'))
@@ -109,13 +142,8 @@ void main() {
     c.addSection('Open', Format.swiss, 3);
     await mount(tester, c);
     await post(tester, c);
-    expect(find.byKey(const ValueKey('post-notes')), findsOneWidget);
-    expect(find.textContaining('not yet certified'), findsOneWidget);
-    // Still there long after a snackbar would have gone.
-    await tester.pump(const Duration(seconds: 30));
-    expect(find.textContaining('not yet certified'), findsOneWidget);
-    await tester.tap(find.byTooltip('Dismiss'));
-    await tester.pump();
+    expect(c.event!.sections.single.rounds, hasLength(1));
+    expect(find.textContaining('not yet certified'), findsNothing);
     expect(find.byKey(const ValueKey('post-notes')), findsNothing);
     finishAll(c);
     await tester.pump();

@@ -38,11 +38,13 @@ Secondary strengths that support that position: keyboard-speed results, walk-up 
 - Shipped (1.0.0): event library and workspace, roster import, identity review, quads and individual Swiss/round-robin sections, keyboard results entry, standings and crosstables, reports and printing, history tree with undo/redo and restore, US Chess DBF export. `docs/IMPLEMENTATION.md` is the authority on what is built and tested.
 - Unverified: US Chess federation acceptance of exports and full Swiss pairing-priority conformance. Never claim either.
 - Planned scope (team standings, bughouse, online events, leagues, accelerated pairings, FIDE) lives in `docs/PRODUCT_PLAN.md` and `docs/FULL_FEATURE_MAP.md`; it is not shipped.
+- New events use the normal creation flow; no practice-event or practice-copy creation. Legacy practice files retain their identity and reporting restrictions.
+- Empty inputs have labels, without example placeholders or suggested values; preserve saved user values and drafts.
 - No attendance/check-in workflow: pair all eligible registered players. Record no-shows as forfeits and offer withdrawal; do not require an arrival flag before pairing. This is the user’s explicit direction.
 - Out of scope: cloud registration, payments, SMS, multi-TD editing, club management.
-- No modal pop-ups. Edits happen inline or in a docked side panel beside the table. Result shortcuts apply immediately with undo; forms use explicit Save/Add and preserve partial drafts on Close/Escape. Toasts with Undo and native OS file pickers are fine.
-- TD vocabulary is binding (K22): **Post** a round, never "publish"; **Share online** is the network action; use wall sheet, pairing number, house player, bye, withdraw.
-- Keyboard contract: result shortcuts (1/0/5, W/L/D) commit immediately and advance; shortcuts never fire while a text field has focus. See `docs/RESULT_ENTRY.md` and `docs/TD_EXPERIENCE.md`.
+- No modal pop-ups. Edits happen inline or in a docked side panel beside the table. Result shortcuts apply immediately with undo; forms use explicit Save/Add and preserve partial drafts on Close/Escape. Keep success feedback and follow-up actions inline, with Undo available in the toolbar and History. Snackbars are for errors only; native OS file pickers are fine.
+- TD vocabulary is binding (K22): **Create pairings** for ready sections, never "publish"; **Share online** is the network action; use wall sheet, pairing number, house player, bye, withdraw.
+- Keyboard contract: typed result shortcuts (1/W, 0/L, D only for draws) commit immediately and advance; shortcuts never fire while a text field has focus. See `docs/RESULT_ENTRY.md` and `docs/TD_EXPERIENCE.md`.
 - Every screen survives being abandoned: half-done forms, imports and result sequences persist across navigation and restart.
 - Never jump the TD's screen because background work finished; preserve section, view, scroll and selection.
 
@@ -56,7 +58,7 @@ Secondary strengths that support that position: keyboard-speed results, walk-up 
 ## Evidence on Hand
 
 - Product and TD research: `docs/` (TD day, experience spec, operations, results entry, requirements with usability gates K01–K23) and `research/` (Boylston event survey, SwissSys archive and coverage ledger, TD duties, US Chess reporting and API notes).
-- Real-format demo data: the in-app **Try a practice event** (22 synthetic entrants, four quads and a six-player Swiss), `samples/sample_players.csv`, `research/examples/quad-crosstable.txt`.
+- Real-format demo data: the test-only `test/demo.dart` fixture (22 synthetic entrants, four quads and a six-player Swiss), `samples/sample_players.csv`, `research/examples/quad-crosstable.txt`.
 - Screenshots of the current app: `artifacts/*.png` (workspace, results, standings, reports, history, branding) and `artifacts/round-packet.pdf`.
 - Absent, and must not be fabricated: observed rehearsals with working TDs, testimonials, user counts, federation acceptance of exports, and any claim of SwissSys parity beyond what `docs/IMPLEMENTATION.md` records as tested.
 
@@ -64,8 +66,8 @@ Secondary strengths that support that position: keyboard-speed results, walk-up 
 
 1. **Simpler than SwissSys for the common case.** Quads and an ordinary Swiss should be obvious; advanced options are disclosed, never a prerequisite.
 2. **Never lose the TD's place or trust.** Save durably before saying Saved, preserve original input, treat posted pairings as revisions, and make every mistake undoable.
-3. **Act, then let them fix it.** The default path is the batch path; do the work immediately and offer undo instead of asking for confirmation.
-4. **Speak TD and put time on screen.** Use the TD's words, show the round clock, and explain a pairing or validation problem at the board or player where it matters.
+3. **Review consequential changes.** Imports, rating updates and section transfers show proposed changes and require confirmation. Fast result entry remains immediate with undo.
+4. **Speak TD and put time on screen.** Use the TD's words, show the round and result count, and explain a pairing or validation problem at the board or player where it matters.
 5. **Useful before charming.** Every element earns its place by helping a TD under pressure.
 
 ## Accessibility & Inclusion

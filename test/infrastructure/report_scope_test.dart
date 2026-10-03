@@ -6,6 +6,34 @@ import '../support.dart';
 
 void main() {
   test(
+    'current pairings print only the latest posted round in a quad',
+    () async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      expect(
+        reportPairingRounds(c.event!.sections.single, currentRoundOnly: true),
+        isEmpty,
+      );
+      c.post(await c.propose());
+      for (final game in c.event!.games) {
+        c.recordResult(game.id, Outcome.draw);
+      }
+      c.post(await c.propose());
+      final section = c.event!.sections.single;
+      expect(reportPairingRounds(section).map((r) => r.number), [1, 2, 3]);
+      expect(reportPairingRounds(section, currentRoundOnly: true), [
+        section.rounds.last,
+      ]);
+      final bytes = await reportPdf(
+        c.event!,
+        ReportKind.pairings,
+        currentRoundOnly: true,
+      );
+      expect(bytes, isNotEmpty);
+    },
+  );
+
+  test(
     'historical scope excludes later rounds and points, retaining revision',
     () async {
       final c = fixture(count: 4);
@@ -81,7 +109,10 @@ void main() {
       addTearDown(c.dispose);
       c.savePlayer(c.event!.players.first.copy(memberId: ''));
       final issues = ratingIssues(c.event!);
-      expect(issues.map((i) => i.message), ratingPreflight(c.event!));
+      expect(
+        issues.where((i) => i.blocking).map((i) => i.message),
+        ratingPreflight(c.event!),
+      );
       final actions = issues.expand((i) => i.repairs);
       expect(
         actions.any(

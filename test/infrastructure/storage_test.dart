@@ -5,7 +5,6 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
-import 'package:meow_chess/ui/workspace_actions.dart';
 import '../support.dart';
 
 void main() {
@@ -248,6 +247,110 @@ void main() {
     addTearDown(copy.close);
     expect(copy.load()!.encode(), c.event!.encode());
   });
+  test(
+    'confirmed save replaces a closed event with the complete new event',
+    () {
+      final target = p.join(directory.path, 'existing.meow');
+      final old = fixture(path: target);
+      final oldId = old.event!.id;
+      old.dispose();
+      final fresh = TournamentController(SqliteEventRepository(':memory:'));
+      addTearDown(fresh.dispose);
+      fresh.create('Replacement tournament');
+      fresh.repository.backup(target, replaceExisting: true);
+      final reopened = SqliteEventRepository(target);
+      addTearDown(reopened.close);
+      expect(reopened.load()!.encode(), fresh.event!.encode());
+      expect(reopened.load()!.id, isNot(oldId));
+      expect(reopened.history(), hasLength(1));
+      expect(
+        directory.listSync().where((f) => f.path.endsWith('.partial')),
+        isEmpty,
+      );
+    },
+  );
+
+  test('confirmed save can replace a non-database file', () {
+    final target = p.join(directory.path, 'existing.meow');
+    File(target).writeAsStringSync('old contents');
+    final c = fixture();
+    addTearDown(c.dispose);
+    c.repository.backup(target, replaceExisting: true);
+    final reopened = SqliteEventRepository(target);
+    addTearDown(reopened.close);
+    expect(reopened.load()!.encode(), c.event!.encode());
+  });
+
+  test(
+    'replacement recovers harmless journals left by read-only inspection',
+    () {
+      final target = p.join(directory.path, 'inspected.meow');
+      final previous = fixture(path: target);
+      previous.dispose();
+      final inspection = sqlite3.open(target, mode: OpenMode.readOnly);
+      inspection.select('SELECT * FROM event');
+      inspection.close();
+      expect(File('$target-wal').existsSync(), true);
+      final fresh = fixture();
+      addTearDown(fresh.dispose);
+      fresh.repository.backup(target, replaceExisting: true);
+      final reopened = SqliteEventRepository(target);
+      addTearDown(reopened.close);
+      expect(reopened.load()!.encode(), fresh.event!.encode());
+    },
+  );
+
+  test('replacement refuses an active reader even when its WAL is empty', () {
+    final target = p.join(directory.path, 'read-open.meow');
+    final previous = fixture(path: target);
+    previous.dispose();
+    final reader = sqlite3.open(target, mode: OpenMode.readOnly);
+    addTearDown(reader.close);
+    reader.execute('BEGIN');
+    final expected = reader.select('SELECT data FROM event').first['data'];
+    expect(File('$target-wal').lengthSync(), 0);
+    final fresh = fixture();
+    addTearDown(fresh.dispose);
+    expect(
+      () => fresh.repository.backup(target, replaceExisting: true),
+      throwsA(isA<TournamentException>()),
+    );
+    expect(reader.select('SELECT data FROM event').first['data'], expected);
+  });
+
+  test('replacement refuses the source and another live event', () {
+    final source = p.join(directory.path, 'source.meow');
+    final target = p.join(directory.path, 'open.meow');
+    final c = fixture(path: source);
+    final other = fixture(path: target);
+    addTearDown(c.dispose);
+    addTearDown(other.dispose);
+    final before = other.event!.encode();
+    for (final destination in [source, target]) {
+      expect(
+        () => c.repository.backup(destination, replaceExisting: true),
+        throwsA(isA<TournamentException>()),
+      );
+    }
+    expect(other.repository.load()!.encode(), before);
+    other.change('Rename', other.event!.copy(name: 'Still writable'));
+    expect(other.event!.name, 'Still writable');
+  });
+
+  test('replacement preserves unrecovered database journals', () {
+    final target = p.join(directory.path, 'recovery.meow');
+    final c = fixture();
+    addTearDown(c.dispose);
+    File(target).writeAsStringSync('original');
+    final journal = File('$target-wal')..writeAsStringSync('recovery data');
+    expect(
+      () => c.repository.backup(target, replaceExisting: true),
+      throwsA(isA<TournamentException>()),
+    );
+    expect(File(target).readAsStringSync(), 'original');
+    expect(journal.readAsStringSync(), 'recovery data');
+  });
+
   test('a non-database file is refused and left byte-for-byte intact', () {
     final path = p.join(directory.path, 'notes.meow');
     File(path).writeAsStringSync('Round 1 pairings, not a database\n' * 200);

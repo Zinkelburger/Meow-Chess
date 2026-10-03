@@ -170,11 +170,11 @@ components:
 
 **Creative North Star: "The Wall Sheet"**
 
-Meow-Chess looks like the paper a tournament director tapes to the wall, set on a warm desk. The page is a warm off-white paper (dark: a near-black warm charcoal), tables sit on white sheets, and everything that matters during a round (board numbers, scores, the round line) is set big enough to read from standing height. Chrome is quiet: a pale shelf toolbar, a narrow section rail, a status bar that states what was saved. One deep blue carries action; everything else is warm grey.
+Meow-Chess looks like the paper a tournament director tapes to the wall, set on a warm desk. The page is a warm off-white paper (dark: a near-black warm charcoal), tables sit on white sheets, and everything that matters during a round (board numbers, scores, the round line) is set big enough to read from standing height. Chrome is quiet: a pale shelf toolbar, a horizontal section tab strip, a status bar that states what was saved. One deep blue carries action; everything else is warm grey.
 
 The system is an Operate tool, dense where a TD scans and large where a TD or a player has to read at a glance. Change is instant: no ripples, no fades, no slide-ins. Depth comes from borders and surface steps, never shadows. Work happens in place, in the table or in one docked panel on the right, and every edit applies immediately with undo behind it. Paper is a real output, so the screen borrows paper's habits: tabular figures, ruled rows, plain headings.
 
-Cat personality stops at the logo in the toolbar and the `.meow` file extension. Nothing inside a workflow is themed.
+Cat personality stops at the welcome-screen logo, desktop app icon and the `.meow` file extension. Nothing inside a workflow is themed.
 
 **Key Characteristics:**
 - Warm-paper neutrals with one deep-blue accent; amber reserved for practice mode.
@@ -189,7 +189,7 @@ Cat personality stops at the logo in the toolbar and the `.meow` file extension.
 Warm, low-chroma paper greys with a single deep ink-blue for action, defined as explicit light and dark pairs over a seed-derived Material scheme.
 
 ### Primary
-- **Ledger Blue** (light `primary`, dark `primary-dark`): filled buttons ("Post round 2", Save), outlined and text button labels, link text in the status bar, checked checkboxes, and the 2px focused border on text fields and score boxes. It is the seed of the whole scheme. On it, `on-primary` / `on-primary-dark`.
+- **Ledger Blue** (light `primary`, dark `primary-dark`): filled buttons ("Create pairings", Save), outlined and text button labels, link text in the status bar, checked checkboxes, and the 2px focused border on text fields and score boxes. It is the seed of the whole scheme. On it, `on-primary` / `on-primary-dark`.
 
 ### Secondary
 - **Seed Secondary Container** (Material `secondaryContainer`, seed-derived, no override): the "good" StatusPill and the pairing-swap banner. Used for positive or in-progress-editing states, always with a text label.
@@ -204,7 +204,7 @@ Warm, low-chroma paper greys with a single deep ink-blue for action, defined as 
 - **Step** (`step` / `step-dark`): selection (section rail item, selected chip and segment), read-only banner, post notes, neutral StatusPill.
 - **Ruling Grey** (`rule` / `rule-dark`): outlines of fields, outlined buttons, chips, segments, checkboxes, score boxes. Chosen for at least 3:1 against every surface.
 - **Hairline** (`hairline` / `hairline-dark`): decorative dividers, card and panel borders, board-row rules (at 50%), toolbar and status-bar edges. Never the only edge of an interactive control.
-- **Ink Inverse** (`ink-inverse` / `ink-inverse-dark`): inverse surfaces (SnackBar notices).
+- **Ink Inverse** (`ink-inverse` / `ink-inverse-dark`): inverse surfaces.
 - Text uses the seed-derived `onSurface` and `onSurfaceVariant` (muted facts, captions, subtitles). Errors use the seed-derived `error` / `errorContainer`.
 
 ### Named Rules
@@ -223,7 +223,7 @@ Warm, low-chroma paper greys with a single deep ink-blue for action, defined as 
 
 ### Hierarchy
 - **Headline** (600, 26px, 1.2): the Rounds wall-sheet title ("Round 1 of 3") and the player name in the lookup panel.
-- **Headline facts** (400, 18px, tabular, muted): the facts run beside the round title ("Posted 23:39 · All 2 in").
+- **Headline facts** (400, 18px, tabular, muted): the facts run beside the round title ("All 2 in").
 - **Lookup answer** (400, 24px, 1.25): "Board 2 · White vs Jamie Patel", readable by a player facing the screen.
 - **Score mark** (600, 20px, 1.15): ½ / 1 / 0 inside score boxes.
 - **Board number** (600, 19px, tabular): the first column of every board row.
@@ -240,7 +240,9 @@ Warm, low-chroma paper greys with a single deep ink-blue for action, defined as 
 
 ## Layout
 
-A desktop workspace: a 48px-minimum toolbar (logo, event name, view tabs Players / Rounds / Reports, history and lookup toggles), an optional practice banner, a left section rail (sections with a one-line status subtitle, "Jump to section" field, Ctrl+J hint), the main view, an optional right-hand dock, and a status bar (Saved time, backup folder, revision, counts, file path).
+A desktop workspace: a 48px-minimum toolbar (editable event name, Players / Rounds / Reports, Refresh from URL / Refresh from USCF, then Help / Keyboard, Undo / Redo / History, Theme / Home). Refresh actions use labeled buttons on wide screens and accessible icon buttons at laptop widths; USCF uses the conventional ♔ glyph. Normal 960px windows retain one toolbar row; enlarged text can use a second row. A legacy practice banner appears only in existing practice files.
+
+The section strip contains navigation only: a permanently pinned All sections tab, horizontally scrolling 15px section labels with 12px status subtitles, and a separate outlined New Section action. Selected tabs use a neutral surface and bottom rule. Right-click a section tab for player moves, swaps, withdrawals, printing, rename/settings, combine, and delete (unplayed sections only). Context menus open instantly; tabs have no visible Actions button. New Section creates an empty Swiss section immediately and opens its right-hand settings, including Side games (off by default). Before play, the Players view offers Create sections for unassigned players, including rating-based quad grouping. Create pairings is one global action for all ready sections; side-game sections offer Pair a side game there. The main view, optional right-hand dock, and saved-status bar complete the workspace.
 
 Spacing snaps to 4 / 8 / 12 / 16 / 24, with 32 / 40 / 48 for larger separations. The page gutter is 24px; the round header pads 16px top and 8px bottom inside it. Board rows are 52px minimum with 16px horizontal padding; score boxes 64px wide. Side panels sit 24px from the right edge.
 
@@ -265,12 +267,13 @@ Small, tight corners. Buttons, chips, segmented buttons, score boxes, StatusPill
 ### Buttons
 Plain and immediate.
 - **Shape:** gently squared (4px), 36px tall, 12px horizontal padding, Inter Medium 14px.
-- **Filled:** Ledger Blue with white label; one per region, for the next step (Post round, Save).
+- **Filled:** Ledger Blue with white label; one per region, for the next step (Create pairings, Save).
 - **Outlined:** white sheet fill, Ruling Grey border, blue label (Print packet, Final reports, Missing only).
 - **Text / Icon:** no fill; toolbar icons and inline actions.
 - **Hover / Focus:** colour changes instantly (zero animation, no ripple). Keyboard focus draws a 2px ring in `onSurface` (dark on light paper, light on dark), so it shows on filled buttons too.
 
 ### View tabs
+Player lookup lives in Players and remains available globally with Ctrl+L. Shortcut reference lives behind the keyboard icon; Rounds does not show a permanent hotkey legend. Undo and Redo use straight arrows with action names in accessible tooltips.
 The toolbar's Players / Rounds / Reports switch. The selected tab inverts: `onSurface` fill with `surface` text. Unselected tabs are plain text.
 
 ### Chips and Segmented buttons
@@ -278,6 +281,7 @@ The toolbar's Players / Rounds / Reports switch. The selected tab inverts: `onSu
 - **State:** selected is the Step surface; focus is the 2px `onSurface` ring. No animation.
 
 ### Inputs / Fields
+- Empty fields have labels and no example placeholders. Saved values and drafts are restored. Searches are compact: 160px section search and 220px player/board search, at the standard 36px control height.
 - **Style:** white sheet fill, Ruling Grey border, 6px corners, 8px by 12px padding, dense.
 - **Focus:** 2px Ledger Blue border.
 - **Error:** the problem stays beside the field in the panel, never in a dialog.
@@ -301,7 +305,7 @@ Full-width-in-gutter strips with an icon and words, 4px corners: read-only round
 White sheet, hairline border, square corners, title row (15px SemiBold) with a close button; Esc closes. 360px for details and short forms; 480px for print and the player lookup, whose answer runs at 26px / 24px so it reads from standing height.
 
 ### Status bar and messages
-The bottom bar states the save in words ("Event saved 23:39"), at 12px muted. Notices are SnackBars that last 8s with a close button and an Undo action when one applies. Errors are a persistent red SnackBar with an icon and close button that never times out. All appear without animation.
+The bottom bar states the save in words ("Event saved 23:39"), at 12px muted. Successful actions use quiet inline text beside the affected content or control, without overlays or timeouts. File confirmations include a selectable path; report status distinguishes the exported revision from newer changes. Import and rating summaries sit above Players with Undo and dismiss controls and clear when the event changes. Skip redundant confirmations when the updated content is sufficient. Withdrawal actions belong beside forfeiting players and remain available while relevant. Undo stays in the toolbar and History. SnackBars are reserved for errors: persistent red, with an icon, copy action and close button, and no timeout. All changes appear without animation.
 
 ### StatusPill and EmptyState
 StatusPill: 12px text, 4px by 8px padding, 4px corners, Step (neutral) or secondaryContainer (good), always a word, never a dot. EmptyState: centred 40px muted icon, title, body, optional action, max 440px wide.
@@ -318,7 +322,7 @@ StatusPill: 12px text, 4px by 8px padding, 4px corners, Step (neutral) or second
 - **Do** separate surfaces with borders and surface steps (paper, shelf, step, white sheet).
 
 ### Don't:
-- **Don't** open modal dialogs or pop-ups for edits, confirmations or previews. Native OS file pickers and SnackBars with Undo are the only exceptions.
+- **Don't** open modal dialogs or pop-ups for edits, confirmations or previews. Native OS file pickers and persistent error SnackBars are the only exceptions.
 - **Don't** put information only in a hover or tooltip; it must be on screen or reachable by keyboard.
 - **Don't** convey status by colour alone.
 - **Don't** say "publish"; a round is Posted.
@@ -335,3 +339,34 @@ The older "V2 dark tokens" in `docs/TD_EXPERIENCE.md` are superseded by this fil
 Forms keep partial and invalid input as local drafts, separate from audited event revisions. Save/Add applies the form; Close/Escape preserves it; Discard draft restores the committed record. A failed draft write is visible and retryable. The event save indicator never promises draft durability. Results restore the last board, side, search and scroll per section; historical rounds reopen read-only and newly posted rounds reset the view.
 
 Print previews name their sections, rounds and event revision. They retain their scope while refreshed; event changes disable printing until the TD refreshes or explicitly chooses the older revision. Prize-class filters carry into printed standings. Report blockers link to their repair fields, and the finish-event checklist distinguishes exported revisions, backups and manually recorded submission notes from external acceptance.
+
+### Reviewed external changes
+
+Website imports, rating updates and player transfers use explicit before/after confirmation in the dock or selection bar. Existing-player website changes start unchecked; missing website entries stay local. Registration ratings are labelled self-reported. Help opens searchable offline articles in the same dock, with contextual pairing explanations. These deliberate confirmation steps supersede the general immediate-edit guidance for these workflows.
+
+### Players and Pairings workflow (October 3 update)
+
+The top navigation separates **Players**, **Pairings**, and **Reports**, retaining
+the selected section. Players is the roster setup view: names, ratings, USCF
+expiry, registration edits, and section assignment. Its compact **Player tools**
+menu holds Refresh from URL, Refresh from USCF, Check memberships, import/paste,
+and optional rating estimates and IDs. These actions do not live in the global
+toolbar. Players has no round columns, scores, standings, or create-pairings action.
+
+Pairings owns creating rounds, editing boards, entering results, and the
+**Boards / Crosstable** switch. The crosstable shows rank, rounds, and points;
+prize filters, BH/SB columns, and a permanent result-key legend are omitted.
+Membership and optional rating estimates remain in Players. The roster keeps
+Name, Rating and USCF expiry in a compact, content-width table instead of
+stretching the name column across the window. Optional columns extend the table;
+both tables scroll when necessary. The same right-hand details column remains
+reserved while closed so opening a player card never reflows the table; it does
+not hold a duplicate pairings list.
+
+Pairings are created in one step for all ready sections; waiting sections keep
+their games. Setup quad previews are read-only. Move, Swap and Withdraw remain
+explicit roster actions. Result entry is typing only: 1/W wins, 0/L loses, and D
+draws. Score cells display 1, 0 or ½ and update the opponent atomically. Crosstable
+rows stay in place during entry. Corrections to dependent rounds retain their
+review. Printer icons use the last selected printer, with a picker on first use
+and preview/settings still available.

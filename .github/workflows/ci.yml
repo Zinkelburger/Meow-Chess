@@ -55,10 +55,14 @@ jobs:
         run: python -c "from pathlib import Path; Path('artifacts').mkdir(exist_ok=True)"
       - name: Unit and widget tests
         run: flutter test --concurrency=2 --reporter expanded --file-reporter json:artifacts/unit-tests.json
-      - name: Independently validate US Chess export fixtures
-        run: python scripts/verify_dbf.py artifacts/dbf-contract
-      - name: DBF validator negative controls
-        run: python scripts/test_dbf_validator.py artifacts/dbf-contract
+      - name: Independently validate DBFs and exercise fragile mock importer
+        run: python scripts/check_exports.py --validate-only
+      - name: MCP tools and Boylston reports replayed against US Chess rated records
+        if: runner.os == 'Linux'
+        run: |
+          dart build cli --target=tools/tournament_mcp.dart --output=build/tournament-cli
+          python scripts/test_tournament_mcp.py
+          python scripts/test_boylston_replay.py
       - name: Abrupt process termination and SQLite recovery
         run: python scripts/verify_recovery.py
       - name: Linux desktop tournament day

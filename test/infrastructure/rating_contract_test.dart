@@ -97,6 +97,67 @@ Event exportFixture() {
   );
 }
 
+/// Two double-game blitz rounds with legs, both bye sizes and every TD field.
+Event doubleBlitz() {
+  final players = [
+    for (var i = 0; i < 4; i++)
+      Player(
+        id: 'p$i',
+        name: 'Given$i Family$i',
+        memberId: '${223456 + i}'.padLeft(8, '0'),
+        rating: 1500 - i * 50,
+        state: 'MA',
+      ),
+  ];
+  Game g(String id, String w, String b, int leg, Outcome o) =>
+      Game(id: id, white: w, black: b, board: 1, leg: leg, outcome: o);
+  return Event(
+    id: 'double-blitz',
+    name: 'Synthetic double blitz',
+    date: '2024-02-28',
+    timeControl: 'G/5;d0',
+    tdId: '00123456',
+    assistantTdId: '00123457',
+    otherTdIds: '00123458, 00123459',
+    affiliateId: 'A6012345',
+    city: 'Boston',
+    state: 'MA',
+    zip: '02116',
+    players: players,
+    sections: [
+      Section(
+        id: 's0',
+        name: 'Open',
+        plannedRounds: 2,
+        doubleGames: true,
+        players: [for (final p in players) p.id],
+        rounds: [
+          Round(
+            number: 1,
+            games: [
+              g('a', 'p0', 'p1', 1, Outcome.whiteWin),
+              g('b', 'p1', 'p0', 2, Outcome.blackWin),
+              g('c', 'p2', 'p3', 1, Outcome.draw),
+              g('d', 'p3', 'p2', 2, Outcome.whiteWin),
+            ],
+          ),
+          Round(
+            number: 2,
+            games: [
+              g('e', 'p0', 'p2', 1, Outcome.draw),
+              g('f', 'p2', 'p0', 2, Outcome.whiteWin),
+            ],
+            byes: const [
+              ByeAward('p1', 4, 'Allocated', allocated: true),
+              ByeAward('p3', 2, 'Requested'),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
 /// A minimal independent reader: field layout and trimmed values per record.
 (List<(String, String, int)>, List<Map<String, String>>) readDbf(
   Uint8List bytes,
@@ -161,15 +222,18 @@ void main() {
     final (hFields, header) = readDbf(files['THEXPORT.DBF']!);
     final (sFields, sections) = readDbf(files['TSEXPORT.DBF']!);
     final (dFields, details) = readDbf(files['TDEXPORT.DBF']!);
+    // Every field is character type, dates included, as in every SwissSys
+    // report US Chess has accepted (test/fixtures/boylston).
     expect(hFields, [
       ('H_FORMAT', 'C', 5), ('H_PROGRAM', 'C', 10), ('H_EVENT_ID', 'C', 12),
-      ('H_NAME', 'C', 35), ('H_TOT_SECT', 'C', 2), ('H_BEG_DATE', 'D', 8),
-      ('H_END_DATE', 'D', 8), ('H_AFF_ID', 'C', 8), ('H_CITY', 'C', 21),
+      ('H_NAME', 'C', 35), ('H_TOT_SECT', 'C', 2), ('H_BEG_DATE', 'C', 8),
+      ('H_END_DATE', 'C', 8), ('H_AFF_ID', 'C', 8), ('H_CITY', 'C', 21),
       ('H_STATE', 'C', 2), ('H_ZIPCODE', 'C', 10), ('H_COUNTRY', 'C', 21),
       ('H_SENDCROS', 'C', 1), ('H_CTD_ID', 'C', 8), ('H_ATD_ID', 'C', 8),
-      // 254, not the 255 in 2C: the dBase III limit for character fields.
-      ('H_OTHER_TD', 'C', 254),
+      // The published US Chess 2C width; retain character type, not memo.
+      ('H_OTHER_TD', 'C', 255),
     ]);
+    expect([...sFields, ...dFields].map((f) => f.$2).toSet(), {'C'});
     expect(sFields.map((f) => f.$1), [
       'S_EVENT_ID',
       'S_SEC_NUM',
@@ -203,7 +267,7 @@ void main() {
     expect(header.single, {
       'H_FORMAT': '2C',
       'H_PROGRAM': 'MEOW $appVersion',
-      'H_EVENT_ID': 'MEOW',
+      'H_EVENT_ID': '',
       'H_NAME': 'Synthetic export contract',
       'H_TOT_SECT': '2',
       'H_BEG_DATE': '20240228',
@@ -219,12 +283,13 @@ void main() {
       'H_OTHER_TD': '',
     });
     expect(sections.first, {
-      'S_EVENT_ID': 'MEOW',
+      'S_EVENT_ID': '',
       'S_SEC_NUM': '1',
       'S_SEC_NAME': 'Section 0',
       // G/60 d/5 is 65 minutes: dual rated under rule 5C.
       'S_R_SYSTEM': 'D',
-      'S_TIMECTL': 'Game/60 d/5',
+      // The spelling US Chess stores for every rated section.
+      'S_TIMECTL': 'G/60;d5',
       'S_CTD_ID': '00123456',
       'S_ATD_ID': '',
       'S_TRN_TYPE': 'S',
@@ -244,6 +309,7 @@ void main() {
       ('FAMILY3, GIVEN3', 'NH'),
     ]);
     expect(details.first['D_RATING'], '0');
+    expect(details.map((d) => d['D_EVENT_ID']).toSet(), {''});
     for (final d in details) {
       for (final MapEntry(:key, :value) in d.entries) {
         if (key.startsWith('D_RND')) {
@@ -304,6 +370,13 @@ void main() {
       expect(TimeControl.parse(unratable).category, isNull, reason: unratable);
     }
     expect(RatingCategory.blitz.code, isNull);
+    // Blitz goes out as the D that US Chess accepted and rated as blitz.
+    expect(RatingCategory.values.map((c) => c.reportSystemCode), [
+      'R',
+      'D',
+      'Q',
+      'D',
+    ]);
     expect(RatingCategory.values.map((c) => c.code).whereType<String>(), [
       'R',
       'D',
@@ -331,6 +404,28 @@ void main() {
     for (final MapEntry(:key, :value) in forms.entries) {
       expect(TimeControl.parse(key).reportText, value, reason: key);
     }
+    // What S_TIMECTL carries: the form US Chess stores for rated sections,
+    // including the compact spellings SwissSys sent and US Chess accepted.
+    const canonical = {
+      'G/60 d/5': 'G/60;d5',
+      'G60; d5': 'G/60;d5',
+      'G/60;d5': 'G/60;d5',
+      'G90d5': 'G/90;d5',
+      'G/60d5': 'G/60;d5',
+      'G45+5': 'G/45;+5',
+      'G90;+5': 'G/90;+5',
+      'G/65; d10': 'G/65;d10',
+      'G/5;d0': 'G/5;d0',
+      'G/5': 'G/5;d0',
+      'Game/45': 'G/45;d0',
+      'G/90 inc/30': 'G/90;+30',
+      '40/90, SD/30 d/5': '40/90,SD/30;d5',
+      '40/80, SD/30 inc/30': '40/80,SD/30;+30',
+      '40/120, 20/60, SD/30 d/5': '40/120,20/60,SD/30;d5',
+    };
+    for (final MapEntry(:key, :value) in canonical.entries) {
+      expect(TimeControl.parse(key).uscfText, value, reason: key);
+    }
     for (final invalid in [
       '',
       'banana',
@@ -341,7 +436,7 @@ void main() {
       '40/90',
       'G/0',
       'G/60 d/5 extra',
-      'G/60d5',
+      'G/60d',
       'G/1000',
     ]) {
       expect(
@@ -419,11 +514,9 @@ void main() {
       'bad ZIP': (event.copy(zip: '0211'), 'ZIP'),
       'zero ZIP': (event.copy(zip: '00000'), 'ZIP'),
       'bad level': (event.copy(level: 'X'), 'event type'),
-      'blitz': (event.copy(timeControl: 'G/5 d/0'), 'Blitz'),
       'unratable': (event.copy(timeControl: 'G/3'), 'not ratable'),
       'unparseable': (event.copy(timeControl: 'Game in 60'), 'Time control'),
       'long section': (section0((s) => s.copy(name: 'x' * 31)), 'Section name'),
-      'double games': (section0((s) => s.copy(doubleGames: true)), 'Double'),
       'unfinished': (
         section0((s) => s.copy(rounds: s.rounds.take(11).toList())),
         'Complete all',
@@ -444,10 +537,15 @@ void main() {
         ),
         'is entered for',
       ),
-      'no state': (
-        withPlayer(event, 4, (p) => p.copy(state: '')),
-        'State missing',
+      'overlong state': (
+        withPlayer(event, 4, (p) => p.copy(state: 'MAS')),
+        'two letters',
       ),
+      'bad assistant TD': (
+        event.copy(assistantTdId: '1234'),
+        'assistant chief TD',
+      ),
+      'bad other TD': (event.copy(otherTdIds: '12345678, 99'), 'Other TDs'),
       'unspellable player': (
         withPlayer(event, 5, (p) => p.copy(name: '李 小龙')),
         'Name on rating report',
@@ -641,4 +739,86 @@ void main() {
       expect(obstruction.readAsStringSync(), 'preserve');
     },
   );
+
+  group('Boylston findings', () {
+    test(
+      'double-game blitz is reported game by game, as US Chess rates it',
+      () {
+        // Rated Friday Night Blitz (202604280273): six double rounds at G/5;d0
+        // were rated as twelve blitz rounds.
+        final event = doubleBlitz();
+        expect(ratingPreflight(event, today: today), isEmpty);
+        final files = ratingPackage(event, today: today);
+        final (_, sections) = readDbf(files['TSEXPORT.DBF']!);
+        final (dFields, details) = readDbf(files['TDEXPORT.DBF']!);
+        expect(sections.single['S_TOT_RNDS'], '4');
+        expect(sections.single['S_TRN_TYPE'], 'S');
+        expect(sections.single['S_R_SYSTEM'], 'D');
+        expect(sections.single['S_TIMECTL'], 'G/5;d0');
+        expect(dFields.skip(7).map((f) => f.$1), [
+          'D_RND01',
+          'D_RND02',
+          'D_RND03',
+          'D_RND04',
+        ]);
+        List<String> cells(Map<String, String> d) => [
+          for (var i = 1; i <= 4; i++) d['D_RND0$i']!,
+        ];
+        expect(details.map(cells), [
+          ['W2W', 'W2B', 'D3W', 'L3B'],
+          ['L1B', 'L1W', 'B0', 'B0'],
+          ['D4W', 'L4B', 'D1B', 'W1W'],
+          ['D3B', 'W3W', 'H0', 'H0'],
+        ]);
+        expect(
+          ratingManifest(event, files)['sections'].single['category'],
+          'blitz',
+        );
+      },
+    );
+
+    test('assistant and other TDs are credited in the report', () {
+      final files = ratingPackage(doubleBlitz(), today: today);
+      final (_, header) = readDbf(files['THEXPORT.DBF']!);
+      final (_, sections) = readDbf(files['TSEXPORT.DBF']!);
+      expect(header.single['H_ATD_ID'], '00123457');
+      expect(header.single['H_OTHER_TD'], '00123458,00123459');
+      expect(sections.single['S_CTD_ID'], '00123456');
+      expect(sections.single['S_ATD_ID'], '00123457');
+    });
+
+    test('a missing state is advice, not a blocker', () {
+      final event = withPlayer(exportFixture(), 4, (p) => p.copy(state: ''));
+      expect(ratingPreflight(event, today: today), isEmpty);
+      final advice = ratingIssues(
+        event,
+        today: today,
+      ).where((i) => !i.blocking);
+      expect(advice.single.message, contains('State missing'));
+      final (_, details) = readDbf(
+        ratingPackage(event, today: today)['TDEXPORT.DBF']!,
+      );
+      expect(details[4]['D_STATE'], '');
+    });
+
+    test('a bad inherited time control is reported once, naming sections', () {
+      final event = exportFixture();
+      final inherited = event.copy(timeControl: 'Game in 60');
+      final messages = ratingPreflight(
+        inherited,
+        today: today,
+      ).where((m) => m.contains('Game in 60')).toList();
+      expect(messages, hasLength(1));
+      final override = event.copy(
+        sections: [
+          event.sections.first.copy(timeControl: 'G/3'),
+          event.sections.last,
+        ],
+      );
+      expect(
+        ratingPreflight(override, today: today).join('\n'),
+        contains('G/3 (Section 0) is not ratable'),
+      );
+    });
+  });
 }

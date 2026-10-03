@@ -11,7 +11,8 @@ import 'publish_file.dart';
 /// protect acknowledged results; snapshots are produced by SQLite, never raw WAL copies.
 class SqliteEventRepository implements EventRepository {
   SqliteEventRepository(String path)
-    : _created = path == ':memory:' || !File(path).existsSync(),
+    : _path = path,
+      _created = path == ':memory:' || !File(path).existsSync(),
       _db = sqlite3.open(path) {
     try {
       _db.execute('PRAGMA foreign_keys = ON');
@@ -88,6 +89,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     }
   }
   final bool _created;
+  final String _path;
 
   /// SQLite may already have rolled back (for example after a failed COMMIT on
   /// a full disk); a second ROLLBACK would then mask the original error.
@@ -381,11 +383,12 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
   /// The copy is built and checked under a temporary sibling name, so a crash
   /// never leaves a partial file under the requested name.
   @override
-  void backup(String destination) {
+  void backup(String destination, {bool replaceExisting = false}) {
     const exists = TournamentException(
       'Choose a new backup filename; existing copies are never overwritten.',
     );
-    if (File(destination).existsSync()) throw exists;
+    if (!replaceExisting && File(destination).existsSync()) throw exists;
+    if (replaceExisting) _checkReplacement(destination);
     Directory(p.dirname(destination)).createSync(recursive: true);
     final staging = File(
       '$destination.$pid-${DateTime.now().microsecondsSinceEpoch}.partial',
@@ -408,10 +411,16 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
         handle.closeSync();
       }
       try {
-        publishFile(staging.path, destination);
+        if (replaceExisting) _checkReplacement(destination);
+        publishFile(
+          staging.path,
+          destination,
+          replaceExisting: replaceExisting,
+        );
       } on FileSystemException {
-        if (FileSystemEntity.typeSync(destination, followLinks: false) !=
-            FileSystemEntityType.notFound) {
+        if (!replaceExisting &&
+            FileSystemEntity.typeSync(destination, followLinks: false) !=
+                FileSystemEntityType.notFound) {
           throw exists;
         }
         rethrow;
@@ -419,6 +428,68 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     } finally {
       if (staging.existsSync()) staging.deleteSync();
     }
+  }
+
+  void _checkReplacement(String destination) {
+    if (_path != ':memory:' &&
+        (p.equals(p.absolute(_path), p.absolute(destination)) ||
+            (File(destination).existsSync() &&
+                FileSystemEntity.identicalSync(_path, destination)))) {
+      throw const TournamentException(
+        'This is the open event file. Choose another location for the copy.',
+      );
+    }
+    // Replacing a database underneath a live writer or an unrecovered WAL
+    // would detach its contents from its journal. Never remove those journals.
+    final resolved = File(destination).existsSync()
+        ? File(destination).resolveSymbolicLinksSync()
+        : destination;
+    bool hasJournals() => ['-wal', '-shm', '-journal'].any(
+      (suffix) =>
+          FileSystemEntity.typeSync('$resolved$suffix', followLinks: false) !=
+          FileSystemEntityType.notFound,
+    );
+    if (!hasJournals()) return;
+    const unavailable = TournamentException(
+      'This event may be open or awaiting recovery. Open and close it before replacing it.',
+    );
+    // Only clean up an empty WAL left by inspection. Nonempty recovery data
+    // must be recovered through opening the event before attempting Replace.
+    final wal = File('$resolved-wal');
+    if (FileSystemEntity.typeSync('$resolved-journal', followLinks: false) !=
+            FileSystemEntityType.notFound ||
+        (wal.existsSync() && wal.lengthSync() != 0) ||
+        !File(resolved).existsSync()) {
+      throw unavailable;
+    }
+    final handle = File(resolved).openSync();
+    try {
+      if (String.fromCharCodes(handle.readSync(16)) !=
+          'SQLite format 3\u0000') {
+        throw unavailable;
+      }
+    } finally {
+      handle.closeSync();
+    }
+    // Let SQLite manage its own journals. Switching out of WAL requires an
+    // exclusive lock, so a live writer or reader prevents replacement.
+    Database? check;
+    try {
+      check = sqlite3.open(resolved, mode: OpenMode.readWrite);
+      check.execute('PRAGMA busy_timeout = 1000');
+      check.execute('BEGIN EXCLUSIVE');
+      check.select('SELECT name FROM sqlite_master LIMIT 1');
+      check.execute('COMMIT');
+      if (check.select('PRAGMA journal_mode = DELETE').first.values.first !=
+          'delete') {
+        throw unavailable;
+      }
+    } on SqliteException {
+      throw unavailable;
+    } finally {
+      check?.close();
+    }
+    if (hasJournals()) throw unavailable;
   }
 
   @override

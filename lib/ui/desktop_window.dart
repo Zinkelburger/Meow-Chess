@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
-import 'brand.dart';
-
 Future<void> initializeDesktopWindow() async {
   await windowManager.ensureInitialized();
   await windowManager.setMinimumSize(const Size(960, 600));
@@ -24,13 +22,7 @@ class WorkspaceToolbar extends StatelessWidget {
         color: colors.surfaceContainerLow,
         border: Border(bottom: BorderSide(color: colors.outlineVariant)),
       ),
-      child: Row(
-        children: [
-          const Tooltip(message: 'Meow Chess', child: MeowLogo()),
-          const SizedBox(width: 12),
-          Expanded(child: child),
-        ],
-      ),
+      child: child,
     );
   }
 }

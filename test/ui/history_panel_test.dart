@@ -45,11 +45,16 @@ void main() {
     expect(find.text('Quad 1 round 1: 2 results'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('history-restore')));
     await tester.pumpAndSettle();
-    // No confirmation: the panel already showed what is affected, and the
-    // notice offers the way back.
+    expect(c.graph.head, isNot(paired));
+    expect(find.text('Review history change'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(c.event!.games.first.outcome, Outcome.whiteWin);
+    await tester.tap(find.byKey(const ValueKey('history-restore')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('confirm-history-change')));
+    await tester.pumpAndSettle();
     expect(c.graph.head, paired);
-    expect(find.textContaining('Went back past recorded play'), findsOneWidget);
-    expect(find.text('Go forward'), findsOneWidget);
     expect(c.event!.games.every((g) => g.outcome == Outcome.unreported), true);
 
     // Ctrl+Shift+Z steps forward along the line just left.
@@ -116,6 +121,9 @@ void main() {
       expect(find.text('THIS STEP'), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('history-restore')));
+      await tester.pumpAndSettle();
+      expect(c.graph.head, current);
+      await tester.tap(find.byKey(const ValueKey('confirm-history-change')));
       await tester.pumpAndSettle();
       expect(c.graph.head, tip);
       expect(c.event!.player('p0').byes[3], 1);

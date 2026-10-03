@@ -12,6 +12,10 @@ final class NativeFileRequests {
   final MethodChannel _channel;
   bool _disposed = false;
 
+  /// Reveals a file in the desktop's file manager without opening the event.
+  Future<void> reveal(String path) =>
+      _channel.invokeMethod<void>('reveal', path);
+
   Future<void> start() async {
     _channel.setMethodCallHandler((call) async {
       if (call.method != 'open') throw MissingPluginException(call.method);

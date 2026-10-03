@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:meow_chess/main.dart';
+import 'package:meow_chess/application/tournament_controller.dart';
+import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/ui/brand.dart';
 import 'package:meow_chess/ui/desktop_window.dart';
 
@@ -50,10 +52,21 @@ void main() {
     expect(find.byType(WorkspaceToolbar), findsNothing);
     expect(find.byType(MeowLogo), findsOneWidget);
     await screenshot('branding-welcome');
-    await tester.tap(find.text('Try a practice event'));
+    expect(find.text('Try a practice event'), findsNothing);
+    final eventPath = '${directory.path}/club.meow';
+    final event = TournamentController(SqliteEventRepository(eventPath));
+    event.create('Saturday at the club');
+    event.dispose();
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: screenshotKey,
+        child: MeowApp(dataDirectory: directory, initialPath: eventPath),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(WorkspaceToolbar), findsOneWidget);
-    expect(find.byType(MeowLogo), findsOneWidget);
+    expect(find.byType(MeowLogo), findsNothing);
     expect(find.text('Saturday at the club'), findsWidgets);
     await screenshot('branding-workspace');
     await tester.tap(find.byTooltip('Dark mode'));

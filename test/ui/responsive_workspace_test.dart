@@ -66,7 +66,7 @@ void main() {
                   .height,
               lessThan(70),
             );
-            for (final page in ['Rounds', 'Reports', 'Players']) {
+            for (final page in ['Pairings', 'Export', 'Players']) {
               await click(find.text(page).first);
             }
           case 'event draft':
@@ -92,9 +92,13 @@ void main() {
             await tester.pumpAndSettle();
             expect(find.byKey(const ValueKey('history-graph')), findsNothing);
           case 'new sections':
-            await click(find.byTooltip('Manage sections'));
-            await click(find.text('New sections…'));
-            await click(find.byKey(const ValueKey('type-swiss')));
+            await click(find.byKey(const ValueKey('new-section')));
+            final created = c.event!.sections.last;
+            expect(created.players, isEmpty);
+            expect(
+              find.byKey(ValueKey('section-settings-${created.id}')),
+              findsOneWidget,
+            );
           case 'backups':
             await click(find.byKey(const ValueKey('status-backup')));
             expect(find.text('Choose folder…'), findsOneWidget);
@@ -136,17 +140,23 @@ void main() {
             );
             await click(find.text('Player 00', findRichText: true).first);
             final bye = find.byKey(const ValueKey('panel-bye-2'));
-            await click(find.descendant(of: bye, matching: find.text('½ pt')));
+            await click(find.descendant(of: bye, matching: find.text('1/2')));
             expect(c.event!.player('p0').byes[2], 1);
           case 'report draft':
-            await click(find.text('Reports').first);
+            await click(find.text('Export').first);
             await tester.scrollUntilVisible(
               find.byKey(const ValueKey('report-city')),
               200,
-              scrollable: find.descendant(
-                of: find.byType(ReportsView),
-                matching: find.byType(Scrollable),
-              ),
+              scrollable: find
+                  .descendant(
+                    of: find.byType(ReportsView),
+                    matching: find.byWidgetPredicate(
+                      (widget) =>
+                          widget is Scrollable &&
+                          widget.axisDirection == AxisDirection.down,
+                    ),
+                  )
+                  .first,
             );
             await tester.enterText(
               find.byKey(const ValueKey('report-city')),
@@ -166,7 +176,7 @@ void main() {
               c.post((await tester.runAsync(() => c.propose()))!);
             }
             await tester.pumpAndSettle();
-            await click(find.text('Rounds').first);
+            await click(find.text('Pairings').first);
             await click(
               find.descendant(
                 of: find.byKey(const ValueKey('round-selector')),

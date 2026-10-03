@@ -33,6 +33,23 @@ void main() {
     expect(source.readAsStringSync(), 'complete');
   });
 
+  test('explicit replacement publishes the complete file over the old one', () {
+    File(destination).writeAsStringSync('previous contents');
+    publishFile(source.path, destination, replaceExisting: true);
+    expect(File(destination).readAsStringSync(), 'complete');
+    expect(source.existsSync(), false);
+  });
+
+  test('failed replacement preserves the staged file and directory', () {
+    Directory(destination).createSync();
+    expect(
+      () => publishFile(source.path, destination, replaceExisting: true),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(Directory(destination).existsSync(), true);
+    expect(source.readAsStringSync(), 'complete');
+  });
+
   test('publication preserves an existing directory', () {
     Directory(destination).createSync();
     expect(

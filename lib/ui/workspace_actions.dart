@@ -1,7 +1,8 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import '../application/tournament_controller.dart';
-import '../infrastructure/sqlite_event_repository.dart';
+import '../application/diagnostics.dart';
+import '../infrastructure/save_location.dart';
 import 'dialogs.dart';
 
 /// Event-level actions shared by the toolbar and the event panel.
@@ -33,45 +34,31 @@ class WorkspaceActions {
     }
   }
 
-  Future<void> saveCopy({bool practice = false}) async {
+  Future<String?> saveCopy() async {
+    String? destination;
     try {
-      final location = await getSaveLocation(
-        suggestedName: practice
-            ? 'practice.meow'
-            : 'event-r${c.event!.revision}.meow',
+      final location = await chooseSaveLocation(
+        suggestedName: 'event-r${c.event!.revision}.meow',
       );
-      if (location == null) return;
-      c.repository.backup(location.path);
-      if (practice) {
-        // Opening a separate connection is safe: this is an independent snapshot.
-        await _markPractice(location.path);
-      }
-      if (context.mounted) {
-        showNotice(
-          context,
-          '${practice ? 'Practice copy' : 'Copy'} saved to ${location.path}',
-        );
-      }
-    } catch (e) {
+      if (location == null) return null;
+      destination = location.path;
+      c.repository.backup(location.path, replaceExisting: true);
+      Diagnostics.record(
+        'save event copy',
+        'succeeded',
+        context: {'path': destination},
+      );
+      return location.path;
+    } catch (e, stack) {
+      Diagnostics.record(
+        'save event copy',
+        'failed',
+        error: e,
+        stack: stack,
+        context: {'path': ?destination},
+      );
       if (context.mounted) showFailure(context, e);
+      return null;
     }
-  }
-
-  Future<void> _markPractice(String path) async {
-    await markPracticeCopy(path);
-  }
-}
-
-Future<void> markPracticeCopy(String path) async {
-  final repository = SqliteEventRepository(path);
-  try {
-    final event = repository.load()!;
-    repository.commit(
-      event.copy(practice: true, backupFolder: ''),
-      expectedRevision: event.revision,
-      action: 'Mark practice copy',
-    );
-  } finally {
-    repository.close();
   }
 }

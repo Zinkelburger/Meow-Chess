@@ -56,15 +56,23 @@ class Player {
     this.team = '',
     Set<String> avoid = const {},
     this.notes = '',
+    this.registrationNote = '',
     this.source = '',
     Map<int, int> byes = const {},
     this.personId,
     this.house = false,
     this.state = '',
     this.reportName = '',
-  }) : byes = Map.unmodifiable(byes),
+    Json ratingEvidence = const {},
+    Json membershipEvidence = const {},
+  }) : membershipEvidence = Map.unmodifiable(membershipEvidence),
+       ratingEvidence = Map.unmodifiable(ratingEvidence),
+       byes = Map.unmodifiable(byes),
        avoid = Set.unmodifiable(avoid);
   final String id, name, memberId, club, team, notes, source;
+
+  /// Free-form registration text from the roster source, separate from private notes.
+  final String registrationNote;
 
   /// Two-letter state for the rating report; empty when unknown.
   final String state;
@@ -72,6 +80,10 @@ class Player {
   /// The name as US Chess should receive it (`LAST, FIRST`); empty to derive
   /// it from [name].
   final String reportName;
+  final Json ratingEvidence;
+
+  /// Membership observations are independent of pairing ratings.
+  final Json membershipEvidence;
   final Set<String> avoid;
   final String? personId;
   final int rating;
@@ -87,10 +99,13 @@ class Player {
     String? team,
     Set<String>? avoid,
     String? notes,
+    String? registrationNote,
     Map<int, int>? byes,
     bool? house,
     String? state,
     String? reportName,
+    Json? ratingEvidence,
+    Json? membershipEvidence,
   }) => Player(
     id: id,
     personId: personId,
@@ -103,11 +118,16 @@ class Player {
     team: team ?? this.team,
     avoid: avoid ?? this.avoid,
     notes: notes ?? this.notes,
+    registrationNote: registrationNote ?? this.registrationNote,
     source: source,
     byes: byes ?? this.byes,
     house: house ?? this.house,
     state: state ?? this.state,
     reportName: reportName ?? this.reportName,
+    ratingEvidence: ratingEvidence ?? this.ratingEvidence,
+    membershipEvidence: memberId != null && memberId != this.memberId
+        ? const {}
+        : membershipEvidence ?? this.membershipEvidence,
   );
   Json toJson() => {
     'id': id,
@@ -121,11 +141,14 @@ class Player {
     'team': team,
     'avoid': avoid.toList()..sort(),
     'notes': notes,
+    'registrationNote': registrationNote,
     'source': source,
     'house': house,
     'byes': byes.map((k, v) => MapEntry('$k', v)),
     'state': state,
     'reportName': reportName,
+    'ratingEvidence': ratingEvidence,
+    'membershipEvidence': membershipEvidence,
   };
   factory Player.fromJson(Json j) => Player(
     id: j['id'],
@@ -139,11 +162,20 @@ class Player {
     team: j['team'] ?? '',
     avoid: Set<String>.from(j['avoid'] ?? const []),
     notes: j['notes'],
+    registrationNote: j['registrationNote'] ?? '',
     source: j['source'],
     house: j['house'] ?? false,
     byes: (j['byes'] as Map).map((k, v) => MapEntry(int.parse(k), v as int)),
     state: j['state'] ?? '',
     reportName: j['reportName'] ?? '',
+    ratingEvidence: Map<String, dynamic>.from(j['ratingEvidence'] ?? {}),
+    membershipEvidence: Map<String, dynamic>.from(
+      j['membershipEvidence'] ??
+          (j['ratingEvidence'] is Map &&
+                  (j['ratingEvidence'] as Map).containsKey('expiration')
+              ? j['ratingEvidence']
+              : const {}),
+    ),
   );
 }
 
@@ -305,9 +337,17 @@ class Section {
     this.doubleGames = false,
     List<Round> rounds = const [],
     this.ratingCeiling = 0,
+    this.timeControl = '',
+    this.sideGames = false,
   }) : players = List.unmodifiable(players),
        rounds = List.unmodifiable(rounds);
   final String id, name;
+
+  /// Empty inherits the event default. Ladders may use different controls.
+  final String timeControl;
+  final bool sideGames;
+  String effectiveTimeControl(Event event) =>
+      timeControl.isEmpty ? event.timeControl : timeControl;
   final List<String> players;
   final Format format;
   final int plannedRounds, boardStart, ratingCeiling;
@@ -324,6 +364,8 @@ class Section {
     bool? doubleGames,
     List<Round>? rounds,
     int? ratingCeiling,
+    String? timeControl,
+    bool? sideGames,
   }) => Section(
     id: id,
     name: name ?? this.name,
@@ -334,6 +376,8 @@ class Section {
     doubleGames: doubleGames ?? this.doubleGames,
     rounds: rounds ?? this.rounds,
     ratingCeiling: ratingCeiling ?? this.ratingCeiling,
+    timeControl: timeControl ?? this.timeControl,
+    sideGames: sideGames ?? this.sideGames,
   );
   Json toJson() => {
     'id': id,
@@ -345,6 +389,8 @@ class Section {
     'doubleGames': doubleGames,
     'rounds': rounds.map((r) => r.toJson()).toList(),
     'ratingCeiling': ratingCeiling,
+    'timeControl': timeControl,
+    'sideGames': sideGames,
   };
   factory Section.fromJson(Json j) => Section(
     id: j['id'],
@@ -356,6 +402,8 @@ class Section {
     doubleGames: j['doubleGames'],
     rounds: (j['rounds'] as List).map((r) => Round.fromJson(r)).toList(),
     ratingCeiling: j['ratingCeiling'] ?? 0,
+    timeControl: j['timeControl'] ?? '',
+    sideGames: j['sideGames'] ?? false,
   );
 }
 
@@ -368,6 +416,8 @@ class Event {
     this.timeControl = 'G/65 d10',
     this.venue = '',
     this.tdId = '',
+    this.assistantTdId = '',
+    this.otherTdIds = '',
     this.affiliateId = '',
     this.practice = false,
     this.backupFolder = '',
@@ -377,14 +427,17 @@ class Event {
     List<Json> transitions = const [],
     this.notes = '',
     this.submission = '',
+    Json rosterSource = const {},
     this.endDate = '',
     this.city = '',
     this.state = '',
     this.zip = '',
     this.level = 'N',
+    this.useTiebreaks = false,
     this.policy =
-        'Requested byes: ½ point before the round is posted. Standings: points, then Buchholz, then Sonneborn–Berger.',
-  }) : players = List.unmodifiable(players),
+        'Requested byes: ½ point before the round is posted. Equal scores share a place unless tie-break rankings are enabled.',
+  }) : rosterSource = Map.unmodifiable(rosterSource),
+       players = List.unmodifiable(players),
        sections = List.unmodifiable(sections),
        transitions = List.unmodifiable(
          transitions.map((t) => Map<String, dynamic>.unmodifiable(t)),
@@ -404,16 +457,26 @@ class Event {
   /// Last day of a multi-day event; empty for a one-day event.
   final String endDate;
 
+  /// Assistant chief TD's US Chess ID (`H_ATD_ID`/`S_ATD_ID`) and the other
+  /// TDs who worked the event, comma separated (`H_OTHER_TD`). US Chess
+  /// credits them as event officials from the report.
+  final String assistantTdId, otherTdIds;
+
   /// Rating report location and 2C section type (`S_SCH_LVL`).
   final String city, state, zip, level;
   String get lastDate => endDate.isEmpty ? date : endDate;
   final int revision;
   final int? lastBackupRevision;
   final bool practice;
+  final bool useTiebreaks;
+  final Json rosterSource;
   final List<Player> players;
   final List<Section> sections;
   final List<Json> transitions;
-  Player player(String id) => players.firstWhere((p) => p.id == id);
+  Player player(String id) => players.firstWhere(
+    (p) => p.id == id,
+    orElse: () => throw TournamentException('No player has the ID "$id".'),
+  );
   Section? sectionOf(String id) =>
       sections.where((s) => s.players.contains(id)).firstOrNull;
   Iterable<Game> get games =>
@@ -424,6 +487,8 @@ class Event {
     String? timeControl,
     String? venue,
     String? tdId,
+    String? assistantTdId,
+    String? otherTdIds,
     String? affiliateId,
     int? revision,
     bool? practice,
@@ -434,12 +499,14 @@ class Event {
     List<Json>? transitions,
     String? notes,
     String? submission,
+    Json? rosterSource,
     String? policy,
     String? endDate,
     String? city,
     String? state,
     String? zip,
     String? level,
+    bool? useTiebreaks,
   }) => Event(
     id: id,
     name: name ?? this.name,
@@ -447,6 +514,8 @@ class Event {
     timeControl: timeControl ?? this.timeControl,
     venue: venue ?? this.venue,
     tdId: tdId ?? this.tdId,
+    assistantTdId: assistantTdId ?? this.assistantTdId,
+    otherTdIds: otherTdIds ?? this.otherTdIds,
     affiliateId: affiliateId ?? this.affiliateId,
     revision: revision ?? this.revision,
     practice: practice ?? this.practice,
@@ -459,12 +528,14 @@ class Event {
     transitions: transitions ?? this.transitions,
     notes: notes ?? this.notes,
     submission: submission ?? this.submission,
+    rosterSource: rosterSource ?? this.rosterSource,
     policy: policy ?? this.policy,
     endDate: endDate ?? this.endDate,
     city: city ?? this.city,
     state: state ?? this.state,
     zip: zip ?? this.zip,
     level: level ?? this.level,
+    useTiebreaks: useTiebreaks ?? this.useTiebreaks,
   );
   Json toJson() => {
     'id': id,
@@ -473,6 +544,8 @@ class Event {
     'timeControl': timeControl,
     'venue': venue,
     'tdId': tdId,
+    'assistantTdId': assistantTdId,
+    'otherTdIds': otherTdIds,
     'affiliateId': affiliateId,
     'revision': revision,
     'practice': practice,
@@ -483,20 +556,25 @@ class Event {
     'transitions': transitions,
     'notes': notes,
     'submission': submission,
+    'rosterSource': rosterSource,
     'policy': policy,
     'endDate': endDate,
     'city': city,
     'state': state,
     'zip': zip,
     'level': level,
+    'useTiebreaks': useTiebreaks,
   };
   factory Event.fromJson(Json j) => Event(
     id: j['id'],
     name: j['name'],
     date: j['date'],
+    useTiebreaks: j['useTiebreaks'] ?? false,
     timeControl: j['timeControl'],
     venue: j['venue'],
     tdId: j['tdId'],
+    assistantTdId: j['assistantTdId'] ?? '',
+    otherTdIds: j['otherTdIds'] ?? '',
     affiliateId: j['affiliateId'],
     revision: j['revision'],
     practice: j['practice'],
@@ -507,6 +585,7 @@ class Event {
     transitions: List<Json>.from(j['transitions']),
     notes: j['notes'] ?? '',
     submission: j['submission'] ?? '',
+    rosterSource: Map<String, dynamic>.from(j['rosterSource'] ?? {}),
     policy: j['policy'] ?? '',
     endDate: j['endDate'] ?? '',
     city: j['city'] ?? '',
@@ -578,6 +657,7 @@ void validateEvent(Event e) {
   final liveBoards = <int>{};
   final livePeople = <String>{};
   for (final s in e.sections) {
+    final sectionPeople = <String>{};
     require(
       s.name.trim().isNotEmpty && s.plannedRounds > 0 && s.boardStart > 0,
       'Invalid section settings.',
@@ -586,6 +666,10 @@ void validateEvent(Event e) {
       require(
         ids.contains(id) && assigned.add(id),
         'An entry belongs to more than one active section.',
+      );
+      require(
+        sectionPeople.add(e.player(id).personId ?? id),
+        'A person cannot have two entries in the same section.',
       );
     }
     final latest = s.rounds.lastOrNull;
@@ -597,7 +681,10 @@ void validateEvent(Event e) {
           'Two active sections reserve the same board.',
         );
       }
-      final people = latest.games.expand((g) => [g.white, g.black]).toSet();
+      final people = latest.games
+          .where((g) => !g.outcome.resolved)
+          .expand((g) => [g.white, g.black])
+          .toSet();
       for (final id in people) {
         require(ids.contains(id), 'Unknown player in an active round.');
         require(
@@ -639,7 +726,7 @@ void validateEvent(Event e) {
           ids.contains(b.player) &&
               participants.add('${b.player}/1') &&
               b.points >= 0 &&
-              b.points <= 2,
+              b.points <= (s.doubleGames ? 4 : 2),
           'A bye conflicts with a game or another bye.',
         );
       }

@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'application/diagnostics.dart';
+import 'infrastructure/diagnostic_log.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -8,9 +10,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'application/failures.dart';
 import 'application/tournament_controller.dart';
-import 'application/demo.dart';
 import 'infrastructure/native_file_requests.dart';
 import 'infrastructure/sqlite_event_repository.dart';
+import 'infrastructure/save_location.dart';
 import 'ui/brand.dart';
 import 'ui/desktop_window.dart';
 import 'ui/dialogs.dart';
@@ -19,12 +21,36 @@ import 'ui/workspace.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDesktopWindow();
   final configured = Platform.environment['MEOW_DATA_DIR'];
   final directory = configured == null
       ? await getApplicationSupportDirectory()
       : Directory(configured);
   await directory.create(recursive: true);
+  DiagnosticLog.initialize(directory);
+  final previousFlutterError = FlutterError.onError;
+  FlutterError.onError = (details) {
+    Diagnostics.record(
+      'flutter',
+      'failed',
+      error: details.exception,
+      stack: details.stack,
+      context: {
+        'library': details.library,
+        'context': details.context?.toDescription(),
+      },
+    );
+    previousFlutterError?.call(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    Diagnostics.record(
+      'unhandled async operation',
+      'failed',
+      error: error,
+      stack: stack,
+    );
+    return true;
+  };
+  await initializeDesktopWindow();
   LicenseRegistry.addLicense(() async* {
     for (final font in ['Inter', 'SourceCodePro']) {
       yield LicenseEntryWithLineBreaks([
@@ -53,6 +79,8 @@ class _MeowAppState extends State<MeowApp> {
   bool light = true;
   List<String> recent = [];
   final navigator = GlobalKey<NavigatorState>();
+  final welcomeLogo = GlobalKey();
+  bool launchComplete = false;
   late final files = NativeFileRequests(open: openFromDesktop);
   File get library => File(p.join(widget.dataDirectory.path, 'library.json'));
 
@@ -111,20 +139,15 @@ class _MeowAppState extends State<MeowApp> {
     super.dispose();
   }
 
-  void open(String filename, {String? name, bool demo = false}) {
+  void open(String filename) {
     TournamentController? next;
     try {
-      if (name == null && !demo && !File(filename).existsSync()) {
+      if (!File(filename).existsSync()) {
         throw const FileSystemException('Event file not found');
       }
       next = TournamentController(SqliteEventRepository(filename));
-      if (demo) {
-        populatePractice(next);
-      } else if (next.event == null) {
-        if (name == null) {
-          throw const FormatException('This file has no Meow-Chess event.');
-        }
-        next.create(name);
+      if (next.event == null) {
+        throw const FormatException('This file has no Meow-Chess event.');
       }
       controller?.dispose();
       controller = next;
@@ -135,14 +158,15 @@ class _MeowAppState extends State<MeowApp> {
         ...recent.where((x) => x != filename),
       ].take(12).toList();
       library.writeAsStringSync(jsonEncode(recent), flush: true);
-    } catch (e) {
+    } catch (e, stack) {
+      Diagnostics.record('open event', 'failed', error: e, stack: stack);
       if (next != controller) next?.dispose();
       error = 'Could not open this event. ${plainMessage(e)}';
     }
     if (mounted) setState(() {});
   }
 
-  /// The new event's name, typed in place on the welcome screen.
+  /// The new event's name, entered below the welcome screen actions.
   bool naming = false;
   final newName = TextEditingController();
 
@@ -152,19 +176,39 @@ class _MeowAppState extends State<MeowApp> {
       setState(() => error = 'Enter the event name.');
       return;
     }
-    final location = await getSaveLocation(
-      suggestedName: '${_fileStem(name)}.meow',
-    );
-    if (location != null) {
-      if (File(location.path).existsSync()) {
-        if (context.mounted) {
-          showFailure(context, 'That file already exists. Pick a new name.');
-        }
-        return;
+    String? destination;
+    try {
+      final location = await chooseSaveLocation(
+        suggestedName: '${_fileStem(name)}.meow',
+      );
+      if (location == null || !context.mounted) return;
+      destination = location.path;
+      // Build a fresh event independently: opening the chosen file first would
+      // load its previous tournament instead of honoring Replace.
+      final fresh = TournamentController(SqliteEventRepository(':memory:'));
+      try {
+        fresh.create(name);
+        fresh.repository.backup(location.path, replaceExisting: true);
+        Diagnostics.record(
+          'create event file',
+          'succeeded',
+          context: {'path': destination},
+        );
+      } finally {
+        fresh.dispose();
       }
       newName.clear();
       naming = false;
-      open(location.path, name: name);
+      open(location.path);
+    } catch (e, stack) {
+      Diagnostics.record(
+        'create event file',
+        'failed',
+        error: e,
+        stack: stack,
+        context: {'path': ?destination},
+      );
+      if (context.mounted) showFailure(context, e);
     }
   }
 
@@ -193,6 +237,20 @@ class _MeowAppState extends State<MeowApp> {
     } catch (_) {}
   }
 
+  Future<void> reveal(BuildContext context, String filename) async {
+    try {
+      await files.reveal(File(filename).absolute.path);
+    } catch (e, stack) {
+      Diagnostics.record('reveal event file', 'failed', error: e, stack: stack);
+      if (context.mounted) {
+        showFailure(
+          context,
+          'Could not show this file in the file explorer. ${plainMessage(e)}',
+        );
+      }
+    }
+  }
+
   Future<void> choose() async {
     final file = await openFile(
       acceptedTypeGroups: [
@@ -202,13 +260,6 @@ class _MeowAppState extends State<MeowApp> {
     if (file != null) open(file.path);
   }
 
-  void practice() => open(
-    p.join(
-      widget.dataDirectory.path,
-      'practice-${DateTime.now().microsecondsSinceEpoch}.meow',
-    ),
-    demo: true,
-  );
   void close() {
     controller?.dispose();
     setState(() {
@@ -227,6 +278,11 @@ class _MeowAppState extends State<MeowApp> {
     themeAnimationStyle: AnimationStyle.noAnimation,
     darkTheme: meowTheme(Brightness.dark),
     themeMode: light ? ThemeMode.light : ThemeMode.dark,
+    builder: (context, child) => LogoEntrance(
+      targetKey: welcomeLogo,
+      onComplete: () => setState(() => launchComplete = true),
+      child: child!,
+    ),
     home: controller != null
         ? Workspace(
             key: ValueKey(path),
@@ -240,39 +296,39 @@ class _MeowAppState extends State<MeowApp> {
               body: SafeArea(
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 920),
+                    constraints: const BoxConstraints(maxWidth: 1120),
                     child: ListView(
                       padding: const EdgeInsets.all(40),
-                      shrinkWrap: true,
                       children: [
-                        Row(
+                        WelcomeBrandHeader(
+                          logoKey: welcomeLogo,
+                          showLogo: launchComplete,
+                          light: light,
+                          onTheme: toggleTheme,
+                        ),
+                        const SizedBox(height: 32),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
                           children: [
-                            const MeowLogo(size: 88),
-                            const SizedBox(width: 24),
-                            Text(
-                              'Meow Chess',
-                              style: Theme.of(context).textTheme.headlineSmall,
+                            FilledButton.icon(
+                              onPressed: () => setState(() {
+                                naming = true;
+                                error = null;
+                              }),
+                              icon: const Icon(Icons.add),
+                              label: const Text('New tournament'),
                             ),
-                            const Spacer(),
-                            IconButton(
-                              onPressed: toggleTheme,
-                              tooltip: light ? 'Dark mode' : 'Light mode',
-                              icon: Icon(
-                                light
-                                    ? Icons.dark_mode_outlined
-                                    : Icons.light_mode_outlined,
-                              ),
+                            OutlinedButton.icon(
+                              onPressed: choose,
+                              icon: const Icon(Icons.folder_open),
+                              label: const Text('Open event'),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 32),
-                        const Text(
-                          'Run Swiss and quad chess tournaments, saved on this computer. No internet needed.',
-                        ),
-                        const SizedBox(height: 24),
                         if (naming)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.only(top: 12),
                             child: Wrap(
                               spacing: 12,
                               runSpacing: 12,
@@ -304,31 +360,6 @@ class _MeowAppState extends State<MeowApp> {
                               ],
                             ),
                           ),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            if (!naming)
-                              FilledButton.icon(
-                                onPressed: () => setState(() {
-                                  naming = true;
-                                  error = null;
-                                }),
-                                icon: const Icon(Icons.add),
-                                label: const Text('New tournament'),
-                              ),
-                            OutlinedButton.icon(
-                              onPressed: choose,
-                              icon: const Icon(Icons.folder_open),
-                              label: const Text('Open event'),
-                            ),
-                            TextButton.icon(
-                              onPressed: practice,
-                              icon: const Icon(Icons.science_outlined),
-                              label: const Text('Try a practice event'),
-                            ),
-                          ],
-                        ),
                         if (error != null)
                           Padding(
                             padding: const EdgeInsets.only(top: 24),
@@ -358,20 +389,29 @@ class _MeowAppState extends State<MeowApp> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                trailing: IconButton(
-                                  tooltip: 'Remove from recent events',
-                                  icon: const Icon(Icons.close, size: 18),
-                                  onPressed: () => forget(filename),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'View in file explorer',
+                                      icon: const Icon(
+                                        Icons.folder_open_outlined,
+                                        size: 18,
+                                      ),
+                                      onPressed: () =>
+                                          reveal(context, filename),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Remove from recent events',
+                                      icon: const Icon(Icons.close, size: 18),
+                                      onPressed: () => forget(filename),
+                                    ),
+                                  ],
                                 ),
                                 onTap: () => open(filename),
                               ),
                             ),
                         ],
-                        const SizedBox(height: 32),
-                        const Text(
-                          'Test version: Swiss pairings and rating reports are not yet certified.',
-                          style: TextStyle(fontSize: 12),
-                        ),
                       ],
                     ),
                   ),

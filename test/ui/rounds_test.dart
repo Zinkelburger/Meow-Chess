@@ -54,7 +54,7 @@ TournamentController swiss() {
 }
 
 void main() {
-  testWidgets('the round line names the round, its clock and the count in', (
+  testWidgets('pairings are ready for results without a separate start step', (
     tester,
   ) async {
     final c = fixture();
@@ -63,37 +63,22 @@ void main() {
     final s = c.event!.sections.first;
     await mount(tester, c, sectionId: s.id);
     expect(roundLine(tester), contains('Round 1 of ${s.plannedRounds}'));
-    expect(roundLine(tester), contains('Posted '));
-    expect(roundLine(tester), contains('Not started'));
+    expect(roundLine(tester), isNot(contains('Posted')));
+    expect(roundLine(tester), isNot(contains('Started')));
+    expect(roundLine(tester), isNot(contains('Not started')));
     expect(roundLine(tester), contains('0 of 2 in'));
-    // Posting is the last change, so it can be taken back from here.
-    expect(find.byKey(const ValueKey('undo-post')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('start-round')));
-    await tester.pump();
-    expect(c.event!.sections.first.rounds.last.startedAt, isNotNull);
-    expect(roundLine(tester), contains('Started '));
     expect(find.byKey(const ValueKey('start-round')), findsNothing);
     expect(find.byKey(const ValueKey('undo-post')), findsNothing);
-    expect(find.byKey(const ValueKey('print-round')), findsOneWidget);
-    await tester.pumpWidget(const SizedBox());
-  });
-
-  testWidgets('Start round in All sections starts every section at once', (
-    tester,
-  ) async {
-    final c = fixture();
-    addTearDown(c.dispose);
-    c.post((await tester.runAsync(() => c.propose()))!);
-    final before = c.event!.revision;
-    await mount(tester, c);
-    expect(find.text('Start round · 2 sections'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('start-round')));
+    final g = s.rounds.last.games.first;
+    await tester.tap(find.byKey(ValueKey('score-${g.id}-w')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
     await tester.pump();
     expect(
-      c.event!.sections.every((s) => s.rounds.last.startedAt != null),
-      true,
+      c.event!.games.firstWhere((x) => x.id == g.id).outcome,
+      Outcome.whiteWin,
     );
-    expect(c.event!.revision, before + 1);
+    expect(roundLine(tester), contains('1 of 2 in'));
+    expect(find.byKey(const ValueKey('undo-post')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -147,8 +132,9 @@ void main() {
         find.byKey(const ValueKey('result-reason')),
         'Scoresheet signed the other way',
       );
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pump();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('apply-correction')));
+      await tester.pumpAndSettle();
       expect(
         c.event!.sections.first.rounds.first.games.first.outcome,
         Outcome.blackWin,

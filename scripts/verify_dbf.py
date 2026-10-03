@@ -3,7 +3,10 @@
 
 Field contracts transcribed from the US Chess 2C specification (September 2025
 character-field correction), https://secure2.uschess.org/TD_Affil/fileformat.php.
-H_OTHER_TD is 254 wide, not 2C's 255: the dBase III character-field maximum.
+H_OTHER_TD follows 2C's 255-byte character field, not a memo field. Every
+field, dates included, is character type with blank event IDs, as in every
+SwissSys report US Chess accepted (test/fixtures/boylston). S_TIMECTL uses the
+spelling US Chess stores for rated sections (G/60;d5, 40/90,SD/30;+30).
 Rating systems are re-derived from S_TIMECTL with rule 5C (Official Rules of
 Chess, 7th edition): total = all control minutes + delay/increment seconds.
 The optional expected-event.json compares every result with the source event,
@@ -21,7 +24,7 @@ from dbfread import DBF
 HEADER = [('H_FORMAT', 5), ('H_PROGRAM', 10), ('H_EVENT_ID', 12), ('H_NAME', 35),
           ('H_TOT_SECT', 2), ('H_BEG_DATE', 8), ('H_END_DATE', 8), ('H_AFF_ID', 8),
           ('H_CITY', 21), ('H_STATE', 2), ('H_ZIPCODE', 10), ('H_COUNTRY', 21),
-          ('H_SENDCROS', 1), ('H_CTD_ID', 8), ('H_ATD_ID', 8), ('H_OTHER_TD', 254)]
+          ('H_SENDCROS', 1), ('H_CTD_ID', 8), ('H_ATD_ID', 8), ('H_OTHER_TD', 255)]
 SECTION = [('S_EVENT_ID', 12), ('S_SEC_NUM', 2), ('S_SEC_NAME', 30), ('S_R_SYSTEM', 1),
            ('S_TIMECTL', 40), ('S_CTD_ID', 8), ('S_ATD_ID', 8), ('S_TRN_TYPE', 1),
            ('S_TOT_RNDS', 2), ('S_LST_PAIR', 4), ('S_BEG_DATE', 8), ('S_END_DATE', 8),
@@ -29,20 +32,24 @@ SECTION = [('S_EVENT_ID', 12), ('S_SEC_NUM', 2), ('S_SEC_NAME', 30), ('S_R_SYSTE
 STATES = set('''AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN
 MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY
 PR VI GU AS MP AA AE AP'''.split())
-TIMECTL = re.compile(r'^(Game/(\d+)|((\d+/\d+, )+SD/\d+))( (d|inc)/(\d+))?$')
+TIMECTL = re.compile(r'^(G/(\d+)|((\d+/\d+,)+SD/\d+));(d|\+)(\d+)$')
+MEMBER = re.compile(r'\d{8}')
 
 
 def rating_system(timectl):
     match = TIMECTL.match(timectl)
     assert match, ('S_TIMECTL form', timectl)
     minutes = [int(m) for m in re.findall(r'/(\d+)', match.group(1))]
-    total = sum(minutes) + int(match.group(7) or 0)
+    total = sum(minutes) + int(match.group(6))
+    if total <= 10:
+        # Blitz has no 2C letter; US Chess rated SwissSys's D by time control.
+        assert total >= 5 and minutes[0] >= 3, ('not ratable', timectl)
+        return 'D'
     assert minutes[0] >= 5, ('primary time', timectl)
     if total > 65:
         return 'R'
     if total >= 30:
         return 'D'
-    assert total > 10, ('not R/D/Q', timectl)
     return 'Q'
 
 
@@ -64,7 +71,7 @@ DETAIL = [('D_EVENT_ID', 12), ('D_SEC_NUM', 2), ('D_PAIR_NUM', 4), ('D_MEM_ID', 
 def decode(folder, filename, fields):
     path = folder / filename
     table = DBF(str(path), encoding='ascii', load=True)
-    contract = [(name, 'D' if name.endswith('_DATE') else 'C', width) for name, width in fields]
+    contract = [(name, 'C', width) for name, width in fields]
     assert [(f.name, f.type, f.length) for f in table.fields] == contract, filename
     raw = path.read_bytes()
     count, header_size, record_size = struct.unpack_from('<IHH', raw, 4)
@@ -97,23 +104,29 @@ def verify(folder):
     assert h['H_STATE'] in STATES and h['H_COUNTRY'] == 'USA'
     assert re.fullmatch(r'\d{5}(-\d{4})?', h['H_ZIPCODE'])
     assert h['H_CITY'] and h['H_NAME'] and h['H_SENDCROS'] in 'TAN'
+    for field in ('H_BEG_DATE', 'H_END_DATE'):
+        datetime.datetime.strptime(h[field], '%Y%m%d')
     assert h['H_BEG_DATE'] <= h['H_END_DATE']
+    assert h['H_EVENT_ID'] == '', 'Event IDs are left for US Chess to assign'
+    assert h['H_ATD_ID'] == '' or (MEMBER.fullmatch(h['H_ATD_ID']) and h['H_ATD_ID'] != '0' * 8)
+    others = h['H_OTHER_TD'].split(',') if h['H_OTHER_TD'] else []
+    assert all(MEMBER.fullmatch(x) and x != '0' * 8 for x in others), h['H_OTHER_TD']
     rounds = {int(row['S_TOT_RNDS']) for row in sections}
-    assert len(rounds) == 1
-    count = rounds.pop()
-    assert 1 <= count <= 32
+    assert all(1 <= n <= 32 for n in rounds)
+    count = max(rounds)
     details = decode(folder, 'TDEXPORT.DBF', DETAIL + [(f'D_RND{n:02}', 7) for n in range(1, count + 1)])
     by_section = {r['S_SEC_NUM']: r for r in sections}
     assert len(by_section) == len(sections)
     players = {(r['D_SEC_NUM'], r['D_PAIR_NUM']): r for r in details}
     assert len(players) == len(details)
     for row in sections:
-        assert row['S_TRN_TYPE'] == 'S' and row['S_R_SYSTEM'] in ('R', 'D', 'Q')
+        assert row['S_TRN_TYPE'] in ('S', 'R') and row['S_R_SYSTEM'] in ('R', 'D', 'Q')
         assert row['S_R_SYSTEM'] == rating_system(row['S_TIMECTL']), 'Rule 5C'
         assert row['S_SCH_LVL'] in ('N', 'S', 'P', 'J')
         assert (row['S_GR_PRIX'], row['S_GP_PTS'], row['S_FIDE']) == ('N', '0', 'N')
         assert (row['S_BEG_DATE'], row['S_END_DATE']) == (h['H_BEG_DATE'], h['H_END_DATE'])
         assert row['S_EVENT_ID'] == h['H_EVENT_ID'] and row['S_SEC_NAME']
+        assert (row['S_CTD_ID'], row['S_ATD_ID']) == (h['H_CTD_ID'], h['H_ATD_ID'])
         entries = [r for r in details if r['D_SEC_NUM'] == row['S_SEC_NUM']]
         assert len(entries) == int(row['S_LST_PAIR'])
         assert {int(r['D_PAIR_NUM']) for r in entries} == set(range(1, len(entries) + 1))
@@ -127,12 +140,16 @@ def verify(folder):
         assert len(row['D_MEM_ID']) == 8 and row['D_MEM_ID'].isdigit()
         assert row['D_MEM_ID'] != '0' * 8, 'Placeholder member ID'
         assert re.fullmatch(r"[A-Z0-9 ,.'-]+", row['D_NAME']), row['D_NAME']
-        assert re.fullmatch(r'[A-Z]{2}', row['D_STATE']), 'Player state'
+        # US Chess accepts a blank state and keeps the member record's.
+        assert row['D_STATE'] == '' or re.fullmatch(r'[A-Z]{2}', row['D_STATE']), 'Player state'
         assert 0 <= int(row['D_RATING']) <= 4000
         for number in range(1, count + 1):
             field = f'D_RND{number:02}'
             code = row[field]
             assert code, (row, field)
+            if number > int(section['S_TOT_RNDS']):
+                assert code == 'U0', ('Unused round must be U0', row, field)
+                continue
             if code[0] in reciprocal:
                 assert code[-1] in 'WB'
                 assert code[1:-1] != row['D_PAIR_NUM'], 'Self opponent'
@@ -148,8 +165,10 @@ def verify(folder):
         assert header[0]['H_NAME'] == event['name']
         assert header[0]['H_CTD_ID'] == event['tdId']
         assert header[0]['H_AFF_ID'] == event['affiliateId']
-        assert h['H_BEG_DATE'] == datetime.date.fromisoformat(event['date'])
-        assert h['H_END_DATE'] == datetime.date.fromisoformat(event.get('endDate') or event['date'])
+        assert h['H_BEG_DATE'] == event['date'].replace('-', '')
+        assert h['H_END_DATE'] == (event.get('endDate') or event['date']).replace('-', '')
+        assert h['H_ATD_ID'] == event.get('assistantTdId', '')
+        assert others == re.findall(r'\d{8}', event.get('otherTdIds', ''))
         assert (h['H_CITY'], h['H_STATE'], h['H_ZIPCODE']) == (event['city'], event['state'], event['zip'])
         assert len(sections) == len(event['sections'])
         # Explicit outcome oracle; independent of Dart score/played getters.
@@ -160,28 +179,41 @@ def verify(folder):
             exported = by_section[str(index)]
             assert exported['S_SEC_NAME'] == section['name']
             # Same numbers in the same order as the TD entered, in 2C notation.
-            assert re.findall(r'\d+', exported['S_TIMECTL']) == re.findall(r'\d+', event['timeControl'])
+            # Same numbers in the same order; US Chess appends d0 when none.
+            source = re.findall(r'\d+', section.get('timeControl') or event['timeControl'])
+            written = re.findall(r'\d+', exported['S_TIMECTL'])
+            assert written in (source, source + ['0']), (written, source)
             assert exported['S_SCH_LVL'] == event.get('level', 'N')
-            assert int(exported['S_TOT_RNDS']) == len(section['rounds'])
+            round_robin = section.get('format', 'swiss') != 'swiss' and not section.get('doubleGames')
+            assert exported['S_TRN_TYPE'] == ('R' if round_robin else 'S')
+            double = section.get('doubleGames', False)
+            assert int(exported['S_TOT_RNDS']) == len(section['rounds']) * (2 if double else 1)
             for pid, number in numbers.items():
                 row = players[(str(index), number)]
                 assert row['D_MEM_ID'] == people[pid]['memberId']
                 assert row['D_NAME'] == report_name(people[pid]), row['D_NAME']
                 assert row['D_STATE'] == people[pid]['state']
                 assert row['D_RATING'] == str(people[pid]['rating'])
+                column = 0
                 for rnd in section['rounds']:
-                    game = next((g for g in rnd['games'] if pid in (g['white'], g['black'])), None)
-                    if game:
-                        white = game['white'] == pid
-                        code = outcomes[game['outcome']][0 if white else 1]
-                        suffix = numbers[game['black'] if white else game['white']] + ('W' if white else 'B') if code in 'WDL' else '0'
-                        value = code + suffix
-                    else:
-                        bye = next(b for b in rnd['byes'] if b['player'] == pid)
-                        value = {0: 'U0', 1: 'H0', 2: 'B0'}[bye['points']]
-                    assert row[f'D_RND{rnd["number"]:02}'] == value, (pid, rnd['number'], value)
+                    bye = next((b['points'] for b in rnd['byes'] if b['player'] == pid), 0)
+                    # Each game of a double round is its own reported round;
+                    # a double-round bye is shared between the two games.
+                    legs = [(1, (bye + 1) // 2), (2, bye - (bye + 1) // 2)] if double else [(None, bye)]
+                    for leg, points in legs:
+                        column += 1
+                        game = next((g for g in rnd['games'] if pid in (g['white'], g['black'])
+                                     and (leg is None or g.get('leg', 1) == leg)), None)
+                        if game:
+                            white = game['white'] == pid
+                            code = outcomes[game['outcome']][0 if white else 1]
+                            suffix = numbers[game['black'] if white else game['white']] + ('W' if white else 'B') if code in 'WDL' else '0'
+                            value = code + suffix
+                        else:
+                            value = {0: 'U0', 1: 'H0', 2: 'B0'}[points]
+                        assert row[f'D_RND{column:02}'] == value, (pid, rnd['number'], leg, value)
         print('PASS: every exported ID, rating and result agrees with the source event.')
-    print(f'PASS: independent 2C schema, padding and reciprocal results: {len(sections)} sections, {len(details)} entrants, {count} rounds.')
+    print(f'PASS: independent 2C schema, padding and reciprocal results: {len(sections)} sections, {len(details)} entrants, {count} physical round columns.')
 
 
 if __name__ == '__main__':

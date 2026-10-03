@@ -72,8 +72,8 @@ List<Standing> standings(
   rows.sort((a, b) {
     for (final c in [
       b.points.compareTo(a.points),
-      b.buchholz.compareTo(a.buchholz),
-      b.sonneborn.compareTo(a.sonneborn),
+      if (event.useTiebreaks || forPairing) b.buchholz.compareTo(a.buchholz),
+      if (event.useTiebreaks || forPairing) b.sonneborn.compareTo(a.sonneborn),
       a.player.name.compareTo(b.player.name),
       a.player.id.compareTo(b.player.id),
     ]) {
@@ -87,8 +87,9 @@ List<Standing> standings(
     final row = rows[i];
     if (i > 0 &&
         (row.points != rows[i - 1].points ||
-            row.buchholz != rows[i - 1].buchholz ||
-            row.sonneborn != rows[i - 1].sonneborn)) {
+            ((event.useTiebreaks || forPairing) &&
+                (row.buchholz != rows[i - 1].buchholz ||
+                    row.sonneborn != rows[i - 1].sonneborn)))) {
       rank = i + 1;
     }
     ranked.add(

@@ -16,8 +16,17 @@ enum RatingCategory {
 
   const RatingCategory(this.code, this.label);
 
-  /// The 2C `S_R_SYSTEM` code. 2C defines none for Blitz.
+  /// The rule 5C category letter. 2C defines none for Blitz; see
+  /// [reportSystemCode] for what the report file carries.
   final String? code;
+
+  /// The 2C `S_R_SYSTEM` value. US Chess derives the category from
+  /// `S_TIMECTL`, not from this letter: SwissSys sends `R` for dual events and
+  /// `D` for blitz, and both were rated by time control (Fall Equinox Swiss
+  /// 202609190383 rated dual; Rated Friday Night Blitz 202604280273 rated
+  /// blitz from `D`). 2C lists only R/D/Q, so Blitz uses the `D` that was
+  /// accepted rather than an untested `B`.
+  String get reportSystemCode => code ?? 'D';
   final String label;
 }
 
@@ -74,7 +83,8 @@ class TimeControl {
         stages.add((int.parse(m[1]!), int.parse(m[2]!)));
       } else if (!done &&
           (m = _suddenDeath.matchAsPrefix(s, at)) != null &&
-          boundary(m!.end)) {
+          // SwissSys also writes the compact `G90d5`.
+          (boundary(m!.end) || _delay.matchAsPrefix(s, m.end) != null)) {
         stages.add((null, int.parse(m[1]!)));
       } else if (done &&
           kind == null &&
@@ -128,6 +138,19 @@ class TimeControl {
               moves == null ? 'SD/$minutes' : '$moves/$minutes',
           ].join(', ');
     return bonusKind == null ? base : '$base $bonusKind/$bonusSeconds';
+  }
+
+  /// The spelling US Chess itself stores for every rated section (`G/60;d5`,
+  /// `G/90;+30`, `40/90,SD/30;d5`; `;d0` when there is no delay). Written to
+  /// `S_TIMECTL` so the rating system reads its own canonical form back.
+  String get uscfText {
+    final base = stages.length == 1
+        ? 'G/${stages.single.$2}'
+        : [
+            for (final (moves, minutes) in stages)
+              moves == null ? 'SD/$minutes' : '$moves/$minutes',
+          ].join(',');
+    return '$base;${bonusKind == 'inc' ? '+' : 'd'}$bonusSeconds';
   }
 }
 
@@ -354,6 +377,24 @@ bool isStateCode(String s) => RegExp(r'^[A-Z]{2}$').hasMatch(s);
 
 /// Eight digits; `00000000` is the 2C placeholder for "ID unavailable".
 bool isMemberId(String s) => RegExp(r'^\d{8}$').hasMatch(s) && s != '00000000';
+
+/// Why [value] cannot be the comma-separated `H_OTHER_TD` list, or null.
+String? otherTdProblem(String value) {
+  if (value.trim().isEmpty) return null;
+  final ids = otherTdList(value);
+  if (ids.any((id) => !isMemberId(id))) {
+    return 'Other TDs must be eight-digit US Chess IDs separated by commas.';
+  }
+  if (ids.join(',').length > 255) {
+    return 'The other TDs list is longer than the report allows (255 characters).';
+  }
+  return null;
+}
+
+List<String> otherTdList(String value) => [
+  for (final id in value.split(RegExp(r'[\s,;]+')))
+    if (id.isNotEmpty) id,
+];
 
 /// US Chess affiliate IDs are the letter A and seven digits, e.g. A6051416.
 bool isAffiliateId(String s) => RegExp(r'^A\d{7}$').hasMatch(s);

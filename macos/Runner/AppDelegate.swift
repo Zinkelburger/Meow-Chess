@@ -19,6 +19,19 @@ class AppDelegate: FlutterAppDelegate {
     fileChannel = channel
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self = self else { result(nil); return }
+      if call.method == "reveal" {
+        guard let path = call.arguments as? String, !path.isEmpty else {
+          result(FlutterError(code: "invalid_path", message: "A file path is required.", details: nil))
+          return
+        }
+        guard FileManager.default.fileExists(atPath: path) else {
+          result(FlutterError(code: "reveal_failed", message: "The file could not be found.", details: nil))
+          return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+        result(nil)
+        return
+      }
       guard call.method == "ready" else {
         result(FlutterMethodNotImplemented)
         return

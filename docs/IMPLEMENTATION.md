@@ -16,7 +16,7 @@ Linux runners. The tested scope and remaining gates below must accompany any dem
 - `lib/infrastructure`: relational SQLite persistence, import parser, PDF/CSV/text
   renderers, strict 2C DBF encoder and injectable authenticated ratings adapter.
 - `lib/ui`: event library/workspace, player roster by section with standings
-  and read-only round results, Rounds page score boxes, reports, event side panel, identity review and reusable form/confirmation controls.
+  and reviewable round results, Rounds page score boxes, reports, event side panel, identity review and reusable form/confirmation controls.
 
 Each event is a `.meow` SQLite database. Event metadata, entrants, membership,
 sections, rounds, games and byes have separate tables. One writer holds the file;
@@ -36,7 +36,19 @@ Backups use SQLite `VACUUM INTO` followed by an integrity check. A secondary cop
 recovers its explicitly recorded revision, not later edits saved only on the first
 laptop. Copying a live main database file without its WAL is unsupported. Use Save
 independent copy, Back up now, or close the app before ordinary file copying.
+New tournament and Save independent copy honor the native save dialog's Replace
+confirmation; Linux explicitly enables GTK's overwrite prompt. Replacement
+publishes a verified snapshot atomically and refuses active event files or files
+with pending recovery data. SQLite cleans up empty WAL files left by read-only
+inspection after acquiring the required locks. Automatic backups still never replace existing files.
 API keys use the OS credential store and never enter event files or reports.
+
+## Website rosters, rating refresh and help (2026-10-03)
+
+See [workflow details and limits](ROSTER_AND_HELP.md) for reviewed URL imports,
+public monthly-supplement lookup, confirmed moves and atomic quad swaps, horizontal
+section tabs and searchable offline help. Registration ratings remain self-reported;
+latest/unofficial ratings are explicitly unavailable.
 
 ## Available workflows
 
@@ -47,7 +59,10 @@ partition and individual Swiss/RR sections; score-Swiss proposals in a backgroun
 isolate; batch posting with revision guards; separate actual round start with
 explicitly assumed finish estimates; manual unstarted pairing edits; Swiss-Sys style per-player score boxes on the Rounds page (1/0/5, W/L/D aliases,
 +/− forfeits; the opponent's box fills in) with repeat suppression and advance after commit; forfeit shortcuts and optional withdrawal; historical
-corrections with reasons; separate TD-authorized temporary pairing assumptions;
+corrections with reasons and a later-round impact review; all-round browsing;
+entry-cell correction and selective history result undo; atomic reopening of an
+explicitly confirmed unstarted round suffix, guarded against recorded play and
+section transfers; separate TD-authorized temporary pairing assumptions;
 undo/history; current rounds across sections; class-filtered standings, early RR
 withdrawal prize projection and crosstable; PDF packet preview/printing, CSV and
 strict ASCII export;
@@ -134,9 +149,9 @@ Names go out as `LAST, FIRST` in capitals with accents folded to ASCII; a
 per-player "Name on rating report" overrides the derivation, and a US Chess
 lookup can fill it and the player's state. City, state, ZIP and event type
 (`S_SCH_LVL`) are saved with the event on the Reports page; multi-day events
-have a last day. Affiliate IDs must be `A` + seven digits. `H_OTHER_TD` is 254
-wide rather than 2C's 255, the dBase III character-field limit; it is always
-empty. The preflight in `dbf_export.dart` lists every problem before any file
+have a last day. Affiliate IDs must be `A` + seven digits. `H_OTHER_TD` is a
+255-byte character field as specified by US Chess 2C; it is always empty.
+The preflight in `dbf_export.dart` lists every problem before any file
 is written; see `research/notes/US_CHESS_REPORTING.md` for sources.
 
 ## Still required before the planned first release

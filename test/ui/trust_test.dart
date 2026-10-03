@@ -89,19 +89,26 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('undo names its step in words', (tester) async {
-    final c = fixture();
-    addTearDown(c.dispose);
-    c.post((await tester.runAsync(() => c.propose()))!);
-    final g = c.event!.games.first;
-    c.recordResult(g.id, Outcome.draw);
-    await mount(tester, c);
-    expect(find.text('Undo Result, board ${g.board}'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('undo')));
-    await tester.pumpAndSettle();
-    expect(c.event!.games.first.outcome, Outcome.unreported);
-    await tester.pumpWidget(const SizedBox());
-  });
+  testWidgets(
+    'icon-only undo names its step in the tooltip and restores results',
+    (tester) async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      c.post((await tester.runAsync(() => c.propose()))!);
+      final g = c.event!.games.first;
+      c.recordResult(g.id, Outcome.draw);
+      await mount(tester, c);
+      expect(find.text('Undo Result, board ${g.board}'), findsNothing);
+      expect(
+        find.byTooltip('Undo Result, board ${g.board} (Ctrl+Z)'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('undo')));
+      await tester.pumpAndSettle();
+      expect(c.event!.games.first.outcome, Outcome.unreported);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('Tab to a name on Rounds, then Enter opens player details', (
     tester,
@@ -110,7 +117,7 @@ void main() {
     addTearDown(c.dispose);
     c.post((await tester.runAsync(() => c.propose()))!);
     await mount(tester, c);
-    await tester.tap(find.text('Rounds').first);
+    await tester.tap(find.text('Pairings').first);
     await tester.pumpAndSettle();
     final g = c.event!.sections.first.rounds.last.games.first;
     await tester.tap(find.byKey(ValueKey('score-${g.id}-w')));
@@ -138,7 +145,7 @@ void main() {
     await mount(tester, c);
     await tester.tap(find.byTooltip('History (Ctrl+H)'));
     await tester.pumpAndSettle();
-    for (final page in ['Players', 'Rounds', 'Reports']) {
+    for (final page in ['Players', 'Pairings', 'Export']) {
       await tester.tap(find.text(page).first);
       await tester.pumpAndSettle();
       for (final (text, size) in textSizes(tester)) {
@@ -152,6 +159,8 @@ void main() {
     final directory = Directory.systemTemp.createTempSync('meow-settings-');
     addTearDown(() => directory.deleteSync(recursive: true));
     await tester.pumpWidget(MeowApp(dataDirectory: directory));
+    // Let the welcome intro finish so its overlay no longer covers the header.
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Dark mode'));
     await tester.pump();
     expect(

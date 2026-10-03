@@ -29,10 +29,12 @@ class EventPanelState extends State<EventPanel> {
   static const _fields = [
     ('name', 'Event name', 1),
     ('date', 'Date (YYYY-MM-DD)', 1),
-    ('endDate', 'Last day, if multi-day (YYYY-MM-DD)', 1),
+    ('endDate', 'Last day (optional)', 1),
     ('time', 'Time control', 1),
     ('venue', 'Venue or city', 1),
     ('td', 'Chief TD US Chess ID', 1),
+    ('atd', 'Assistant chief TD US Chess ID', 1),
+    ('otherTds', 'Other TDs\' US Chess IDs, comma separated', 1),
     ('affiliate', 'Affiliate ID', 1),
     ('policy', 'Announced conditions', 3),
     ('notes', 'Private TD notes', 4),
@@ -54,6 +56,8 @@ class EventPanelState extends State<EventPanel> {
       'time': e.timeControl,
       'venue': e.venue,
       'td': e.tdId,
+      'atd': e.assistantTdId,
+      'otherTds': e.otherTdIds,
       'affiliate': e.affiliateId,
       'policy': e.policy,
       'notes': e.notes,
@@ -76,7 +80,7 @@ class EventPanelState extends State<EventPanel> {
     super.initState();
     load();
     draft = FormDraft(c.workspaceState, 'draft-event', text, stored);
-    if (widget.initialField case final field?) focusField(field);
+    focusField(widget.initialField ?? 'name');
   }
 
   @override
@@ -128,6 +132,18 @@ class EventPanelState extends State<EventPanel> {
           'The chief TD\'s US Chess ID has eight digits.',
         );
       }
+      final atd = v['atd']!.trim(),
+          others = otherTdList(v['otherTds']!).join(', ');
+      if (atd != c.event!.assistantTdId && atd.isNotEmpty && !isMemberId(atd)) {
+        throw const TournamentException(
+          'The assistant chief TD\'s US Chess ID has eight digits.',
+        );
+      }
+      if (others != c.event!.otherTdIds) {
+        if (otherTdProblem(others) case final problem?) {
+          throw TournamentException(problem);
+        }
+      }
       if (affiliate != c.event!.affiliateId &&
           affiliate.isNotEmpty &&
           !isAffiliateId(affiliate)) {
@@ -144,6 +160,8 @@ class EventPanelState extends State<EventPanel> {
           timeControl: v['time'],
           venue: v['venue'],
           tdId: td,
+          assistantTdId: atd,
+          otherTdIds: others,
           affiliateId: affiliate,
           policy: v['policy'],
           notes: v['notes'],
@@ -195,7 +213,11 @@ class EventPanelState extends State<EventPanel> {
                 () => FocusNode(debugLabel: key),
               ),
               maxLines: lines,
-              decoration: InputDecoration(labelText: label),
+              decoration: InputDecoration(
+                labelText: label,
+                hintText: key == 'endDate' ? 'YYYY-MM-DD' : null,
+                alignLabelWithHint: lines > 1,
+              ),
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => commit(),
             ),
@@ -220,8 +242,32 @@ class EventPanelState extends State<EventPanel> {
               ),
             ],
           ),
-        heading('US Chess API key'),
-        Text('Only needed to look up US Chess IDs online.', style: muted),
+        heading('Standings'),
+        SwitchListTile(
+          key: const ValueKey('event-use-tiebreaks'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Tie-breaks'),
+          value: c.event!.useTiebreaks,
+          onChanged: (value) {
+            FocusScope.of(context).unfocus();
+            try {
+              c.change(
+                'Change standings ranking',
+                c.event!.copy(useTiebreaks: value),
+              );
+              setState(() {});
+            } catch (e) {
+              setState(() => error = plainMessage(e));
+            }
+          },
+        ),
+        heading('Data sources'),
+        const RatingSettings(),
+        const SizedBox(height: 24),
+        Text(
+          'US Chess API key (optional). Without a key, try the public service. Public access may change.',
+          style: muted,
+        ),
         const SizedBox(height: 8),
         const ApiKeyField(),
       ],
@@ -230,7 +276,7 @@ class EventPanelState extends State<EventPanel> {
 }
 
 /// Backups and copies of the event file, opened from the status bar.
-class BackupsPanel extends StatelessWidget {
+class BackupsPanel extends StatefulWidget {
   const BackupsPanel({
     required this.controller,
     required this.onClose,
@@ -240,8 +286,18 @@ class BackupsPanel extends StatelessWidget {
   final VoidCallback onClose;
 
   @override
+  State<BackupsPanel> createState() => _BackupsPanelState();
+}
+
+class _BackupsPanelState extends State<BackupsPanel> {
+  String? savedCopy;
+  bool savingCopy = false;
+
+  @override
   Widget build(BuildContext context) {
-    final c = controller, e = c.event!, colors = Theme.of(context).colorScheme;
+    final c = widget.controller,
+        e = c.event!,
+        colors = Theme.of(context).colorScheme;
     final actions = WorkspaceActions(context, c);
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
     final last = c.repository.readPreference('lastBackup')?.split('|');
@@ -251,7 +307,7 @@ class BackupsPanel extends StatelessWidget {
     );
     return SidePanel(
       title: 'Backups',
-      onClose: onClose,
+      onClose: widget.onClose,
       children: [
         Text(
           'Changes save as you work. A backup folder gets a full copy after each posted round; a USB stick is ideal.',
@@ -302,17 +358,31 @@ class BackupsPanel extends StatelessWidget {
           ],
         ),
         heading('Copies'),
+        if (savedCopy != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Semantics(
+              liveRegion: true,
+              child: SelectableText('Copy saved to $savedCopy', style: muted),
+            ),
+          ),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: [
             OutlinedButton(
-              onPressed: actions.saveCopy,
-              child: const Text('Save copy…'),
-            ),
-            OutlinedButton(
-              onPressed: () => actions.saveCopy(practice: true),
-              child: const Text('Save practice copy…'),
+              onPressed: savingCopy
+                  ? null
+                  : () async {
+                      setState(() => savingCopy = true);
+                      final path = await actions.saveCopy();
+                      if (!mounted) return;
+                      setState(() {
+                        savingCopy = false;
+                        if (path != null) savedCopy = path;
+                      });
+                    },
+              child: Text(savingCopy ? 'Saving copy…' : 'Save copy…'),
             ),
           ],
         ),

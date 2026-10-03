@@ -45,7 +45,7 @@ $env:MEOW_EXPORT_FIXTURES = '1'
 $env:MEOW_CHESS_DESKTOP_SETUP = '0'
 flutter test --concurrency=2
 python -m pip install dbfread==2.0.7
-python scripts/verify_dbf.py artifacts/dbf-contract
+python scripts/check_exports.py --validate-only
 python scripts/verify_recovery.py
 foreach ($target in Get-ChildItem integration_test/*_test.dart) {
     flutter test $target.FullName -d windows
@@ -53,11 +53,28 @@ foreach ($target in Get-ChildItem integration_test/*_test.dart) {
 }
 ```
 
+On Linux, CI also builds the MCP server and replays real club reports:
+
+```bash
+dart build cli --target=tools/tournament_mcp.dart --output=build/tournament-cli
+python3 scripts/test_tournament_mcp.py
+python3 scripts/test_boylston_replay.py
+```
+
+`test_boylston_replay.py` rebuilds each anonymized report in
+`test/fixtures/boylston/` through the MCP tools, exports it, and fails on any
+difference from the accepted SwissSys report that has no stated reason, or any
+result that disagrees with what US Chess rated where SwissSys's own report did
+not.
+
 ## Coverage and boundaries
+
+See [DBF compatibility setup and fragile importer](DBF_COMPATIBILITY.md) for the
+eight-package export matrix, independent byte reader and corruption tests.
 
 | Concern | Automated evidence | Remaining qualification |
 |---|---|---|
-| US Chess 2C exports | Independent dbfread schema/width/type/padding checks; every source result, name, state, date and location compared against exported values; rating system re-derived from `S_TIMECTL` under rule 5C, including every rulebook example; two sections, 12 rounds, multi-day dates, leading-zero IDs, accented names, wins/draws/losses/forfeits and full/half/zero byes; each preflight rule has a failing case; negative controls reject corrupt schemas, IDs, reciprocal-but-wrong results, a contradicting rating system, a blank state and a wrong name | Current accepted files and authorized TD/provider draft validation. This is format regression coverage, not an acceptance certificate. |
+| US Chess 2C exports | Independent dbfread and fixed-offset mock readers; source-event oracle; eight synthetic packages covering 1–32 rounds, mixed counts, side games, quads, 1,000 players, leading-zero IDs, text limits and every supported outcome; 51 mock tests plus seven source/schema corruption controls. Full Fall Equinox reconstruction matches 19 entries / 70 active result cells. | Live MUIR acceptance remains unverified. Blitz and double-game output remain unsupported. Local format and semantic checks do not certify portal acceptance. |
 | Swiss pairings | Seeded multi-round simulations, no duplicate assignment or played-opponent repeats, bye fairness, color handling, withdrawals, reproducibility, stale proposals and explicit impossible-constraint failure | Full US Chess priority/exception conformance remains a pilot limitation; experienced TD review is still required. |
 | Teams and sibling requests | UI assignment and do-not-pair action, legal alternative opponent, four-round persistence, backup, invalid/stale mutations rejected; team names alone do not change pairings | Team names are roster labels for mixed-doubles partners. Fixed-board team tournaments and team scoring are not implemented. |
 | Tournament day | Native app library create/close/reopen; roster paste, section creation, pairing, keyboard scoring, PDF, dark/light screenshots and independent backup | File-picker/print-driver UI, actual physical printers and OS double-click forwarding need separate native/manual qualification. |
@@ -130,3 +147,22 @@ The workflow target was rerun after the final keyboard-focus correction and
 passed. Inspected light/dark captures include large-text player drafts, event
 drafts, History and Reports. Windows qualification and installer checks run
 separately in the tag-triggered release workflow.
+
+## Website roster, ratings and Help checks (2026-10-03)
+
+The full 225-test unit/widget suite passed. A further regression test verified
+that an unchanged website source preserves manual corrections and that manually
+changing a verified rating clears its old supplement attribution. Analysis and
+architecture/whitespace lint passed. Native Linux rehearsal
+`integration_test/roster_help_test.dart` passed with light/dark captures at 1280×720,
+200% text, and a 960×600 update panel. The existing responsive suite also exercises
+history, section management, forms and navigation at large text.
+
+Live read-only smoke check: the new web adapter parsed all 24 entrants from
+Boylston entry list 1563, and the new public-rating adapter returned a dated
+2026-10-01 supplement for the first ID. No real event file was imported or altered.
+Fixtures use synthetic players. Authenticated v2 access, guaranteed future public
+access, and live/unofficial rating freshness remain unverified.
+
+Artifacts: `artifacts/roster-horizontal-tabs.png`, `roster-quad-help.png`,
+`roster-help-dark-200.png`, and `roster-update-small.png`.

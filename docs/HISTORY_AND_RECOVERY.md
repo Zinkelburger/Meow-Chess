@@ -1,6 +1,13 @@
 # History, undo and reopening an earlier round
 
-Status: proposed first-release contract, September 29, 2026 UTC. No app implemented.
+Status: target contract, originally September 29, 2026 UTC. The implementation now
+has durable version history, reviewed whole-event restores, and direct earlier-result
+corrections with a choice to retain later pairings or reopen a confirmed unstarted
+suffix. History can selectively undo single-result transactions. General selected-change
+recovery, planning continuations and promotion checks below remain target behavior;
+see [implementation status](IMPLEMENTATION.md) and the
+[implemented correction review](RESULT_ENTRY.md#implemented-correction-review-october-3-2026).
+
 This makes capability-map P07/P08/U03 concrete. It strengthens the earlier bounded
 undo proposal: a short in-memory undo stack or audit descriptions alone cannot
 satisfy the user's requirement to go back without losing subsequent work.

@@ -103,14 +103,16 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(c.event!.players.first.name, 'Player 00');
-      await click(find.text('Rounds').first);
+      await click(find.text('Pairings').first);
       final game = c.event!.games.first;
       await click(find.byKey(ValueKey('score-${game.id}-b')));
       await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
       await tester.pumpAndSettle();
       expect(c.event!.games.first.outcome, Outcome.blackWin);
       await capture('workflow-results-200');
-      await click(find.byTooltip('Find player (Ctrl+L)'));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
       await tester.enterText(find.byKey(const ValueKey('lookup-query')), '#1');
       await tester.pumpAndSettle();
       expect(find.byType(LookupPanel), findsOneWidget);
@@ -141,7 +143,7 @@ void main() {
       await capture('workflow-print-refreshed');
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
-      await click(find.text('Reports').first);
+      await click(find.text('Export').first);
       await capture('workflow-reports');
       dark.value = true;
       scale.value = 2;

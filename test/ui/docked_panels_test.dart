@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,8 +43,18 @@ Future<void> mountView(WidgetTester tester, Widget Function() child) async {
   await tester.pump();
 }
 
+void expectFieldFocus(WidgetTester tester, String key) {
+  final field = tester.widget<EditableText>(
+    find.descendant(
+      of: find.byKey(ValueKey(key)),
+      matching: find.byType(EditableText),
+    ),
+  );
+  expect(field.focusNode.hasFocus, true, reason: key);
+}
+
 void main() {
-  testWidgets('quads are previewed in the side panel and two clicks swap', (
+  testWidgets('quad preview clicks do not change rating groups', (
     tester,
   ) async {
     final c = TournamentController(SqliteEventRepository(':memory:'))
@@ -59,7 +70,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('type-quad')));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
-    // p3 tops nothing in Quad 1; p4 leads Quad 2. Swap them.
+    // Clicking the read-only preview cannot exchange players.
     await tester.ensureVisible(find.byKey(const ValueKey('quad-player-p3')));
     await tester.tap(find.byKey(const ValueKey('quad-player-p3')));
     await tester.pump();
@@ -69,11 +80,57 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('create-sections')));
     await tester.tap(find.byKey(const ValueKey('create-sections')));
     await tester.pumpAndSettle();
-    expect(c.event!.sections.first.players, ['p0', 'p1', 'p2', 'p4']);
-    expect(c.event!.sections.last.players, ['p3', 'p5', 'p6', 'p7']);
+    expect(c.event!.sections.first.players, ['p0', 'p1', 'p2', 'p3']);
+    expect(c.event!.sections.last.players, ['p4', 'p5', 'p6', 'p7']);
     // The panel closes once the sections exist.
     expect(find.byKey(const ValueKey('type-quad')), findsNothing);
   });
+
+  testWidgets(
+    'right-click player and section menus offer explicit roster actions',
+    (tester) async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      await mountWorkspace(tester, c);
+      final first = c.event!.sections.first;
+      final revision = c.event!.revision;
+      expect(find.byTooltip('Actions for ${first.name}'), findsNothing);
+      await tester.tap(
+        find.byKey(const ValueKey('player-p0')),
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pump();
+      expect(find.text('Move to section…'), findsOneWidget);
+      expect(find.text('Withdraw player…'), findsOneWidget);
+      await tester.tap(find.text('Swap with player…'));
+      await tester.pumpAndSettle();
+      expect(c.event!.revision, revision);
+      await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Player 04 · Quad 2').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('apply-player-operation')));
+      await tester.pumpAndSettle();
+      expect(c.event!.sections.first.players, ['p4', 'p1', 'p2', 'p3']);
+      expect(c.event!.sections.last.players, ['p0', 'p5', 'p6', 'p7']);
+      await tester.tap(
+        find.byKey(ValueKey('section-chip-${first.id}')),
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pump();
+      expect(find.text('Print section sheets'), findsNWidgets(2));
+      await tester.tap(find.text('Withdraw / reinstate player…'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Player 04').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('apply-player-operation')));
+      await tester.pumpAndSettle();
+      expect(c.event!.player('p4').withdrawn, true);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('section settings and combine dock beside the page', (
     tester,
@@ -84,11 +141,15 @@ void main() {
     await mountWorkspace(tester, c);
     await tester.tap(find.byKey(ValueKey('section-chip-${q1.id}')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Manage sections'));
+    await tester.tap(
+      find.byKey(ValueKey('section-chip-${q1.id}')),
+      buttons: kSecondaryMouseButton,
+    );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Section settings…'));
+    await tester.tap(find.text('Rename / section settings…'));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
+    expectFieldFocus(tester, 'field-name');
     await tester.enterText(find.byKey(const ValueKey('field-name')), 'Top');
     await tester.enterText(find.byKey(const ValueKey('field-rounds')), '0');
     await tester.tap(find.text('Save'));
@@ -102,10 +163,14 @@ void main() {
     expect(c.event!.sections.first.name, 'Top');
     expect(find.byKey(const ValueKey('field-name')), findsNothing);
 
-    await tester.tap(find.byTooltip('Manage sections'));
+    await tester.tap(
+      find.byKey(ValueKey('section-chip-${q1.id}')),
+      buttons: kSecondaryMouseButton,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Combine sections…'));
     await tester.pumpAndSettle();
+    expectFieldFocus(tester, 'combine-reason');
     await tester.tap(find.byKey(ValueKey('combine-into-${q2.id}')));
     await tester.pump();
     await tester.tap(find.text('Combine'));
@@ -172,11 +237,11 @@ void main() {
         builder: (_, _) => ResultsView(controller: c, sectionId: id),
       ),
     );
-    await tester.tap(find.byTooltip('Enter or clear result (M)').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Assume a result for pairing only…'));
+    await tester.tap(find.byKey(ValueKey('score-${g.id}-w')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
+    expectFieldFocus(tester, 'field-reason');
     await tester.enterText(
       find.byKey(const ValueKey('field-reason')),
       'Long endgame',
@@ -190,16 +255,14 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('Print packet docks the preview instead of a dialog', (
-    tester,
-  ) async {
+  testWidgets('Print preview docks beside the boards', (tester) async {
     final c = fixture();
     addTearDown(c.dispose);
     c.post((await tester.runAsync(() => c.propose()))!);
     await mountWorkspace(tester, c);
-    await tester.tap(find.text('Rounds').first);
+    await tester.tap(find.text('Pairings').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('print-round')));
+    await tester.tap(find.byTooltip('Print preview…'));
     await tester.pump();
     expect(find.byKey(const ValueKey('print-panel')), findsOneWidget);
     expect(find.byType(Dialog), findsNothing);
@@ -226,6 +289,7 @@ void main() {
     await tester.ensureVisible(notes);
     await tester.enterText(notes, 'Uploaded Oct 1, ref 12345');
     await tester.pump();
+    await tester.ensureVisible(find.text('Save').last);
     await tester.ensureVisible(find.text('Save').last);
     await tester.tap(find.text('Save').last);
     await tester.pump();

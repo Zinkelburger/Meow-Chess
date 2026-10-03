@@ -1,3 +1,6 @@
+import 'result_keys.dart';
+import 'player_actions.dart';
+import '../infrastructure/reports.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,9 +9,16 @@ import 'package:flutter/services.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import 'dialogs.dart';
-import 'history_panel.dart' show historyTime, travel;
+import 'result_correction_dialog.dart';
 import 'players_view.dart'
-    show boardRange, halves, PlayerPanel, PlayerPanelState, PlayerDetailsLayout;
+    show
+        boardRange,
+        halves,
+        PlayerPanel,
+        PlayerPanelState,
+        PlayerDetailsLayout,
+        PlayersView,
+        detailsColumnWidth;
 import 'panels.dart';
 import 'theme.dart';
 
@@ -49,13 +59,19 @@ Map<String, int> scoresBefore(Section s, int number) {
   return scores;
 }
 
-/// Rounds page, laid out like the wall sheet: a round line with its clock,
-/// then one row per board with a score box either side. Typing 1, 0 or 5 in
+/// Pairings and results, laid out like the wall sheet: round and result count,
+/// then one row per board with a score box either side. Typing 1/W, 0/L or D in
 /// one player's box fills in the other. Earlier rounds open read-only.
 class ResultsView extends StatefulWidget {
-  const ResultsView({required this.controller, this.sectionId, super.key});
+  const ResultsView({
+    required this.controller,
+    this.sectionId,
+    this.roundAction,
+    super.key,
+  });
   final TournamentController controller;
   final String? sectionId;
+  final Widget? roundAction;
   @override
   State<ResultsView> createState() => ResultsViewState();
 }
@@ -81,16 +97,18 @@ class ResultsViewState extends State<ResultsView> {
 
   final scroll = ScrollController();
   final jump = TextEditingController();
-  final reason = TextEditingController();
 
   /// Score boxes by '$gameId-w' / '$gameId-b'.
   final boxes = <String, FocusNode>{};
-  final menus = <String, MenuController>{};
   bool missingOnly = false, forfeit = false, busy = false;
 
   /// An earlier round on screen; null shows each section's current round.
   /// Restored read-only; a newly posted round resets the selection.
   int? selectedRound;
+  bool showAllRounds = false;
+  bool crosstable = false;
+
+  void showCrosstable() => setState(() => crosstable = true);
 
   /// Whether results in an earlier round may be changed.
   bool correcting = false;
@@ -106,9 +124,6 @@ class ResultsViewState extends State<ResultsView> {
   String? assumeFor;
   String roundSignature = '';
 
-  /// A result waiting for a reason, because later rounds are paired:
-  /// (game, outcome, typed in White's box).
-  (String, Outcome, bool)? pending;
   String get preference => 'results-${widget.sectionId ?? 'all'}';
   String get panelOwner => 'results-panel-${widget.sectionId ?? 'all'}';
   String? activeBox;
@@ -120,27 +135,15 @@ class ResultsViewState extends State<ResultsView> {
     roundSignature = signature();
     final saved = c.workspaceState.readMap(preference);
     missingOnly = saved['missingOnly'] == true;
+    crosstable = saved['crosstable'] == true;
     if (saved['signature'] == roundSignature) {
       selectedRound = saved['round'] as int?;
+      showAllRounds = saved['allRounds'] == true;
       jump.text = saved['search'] as String? ?? '';
       activeBox = saved['box'] as String?;
-      reason.text = saved['reason'] as String? ?? '';
-      final edit = saved['pending'] as List?;
-      if (edit != null &&
-          edit.length == 3 &&
-          edit[0] is String &&
-          edit[2] is bool) {
-        final outcome = Outcome.values
-            .where((v) => v.name == edit[1])
-            .firstOrNull;
-        if (outcome != null) {
-          pending = (edit[0] as String, outcome, edit[2] as bool);
-        }
-      }
     }
     ready = true;
     jump.addListener(remember);
-    reason.addListener(remember);
     scroll.addListener(remember);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -168,11 +171,12 @@ class ResultsViewState extends State<ResultsView> {
     remember();
   }
 
-  void printRound() => showPrint(
+  void printRound() => printSheets(
     context,
     c.event!,
     sectionId: widget.sectionId,
     roundNumber: selectedRound,
+    kind: crosstable ? ReportKind.standings : ReportKind.packet,
   );
 
   Iterable<Section> get sections => c.event!.sections.where(
@@ -189,11 +193,11 @@ class ResultsViewState extends State<ResultsView> {
     // A round was posted or undone: go back to the current round.
     if (roundSignature.isNotEmpty && next != roundSignature) {
       selectedRound = null;
+      showAllRounds = false;
+      crosstable = false;
       correcting = nudged = forfeit = false;
-      pending = null;
       activeBox = null;
       jump.clear();
-      reason.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (scroll.hasClients) scroll.jumpTo(0);
@@ -213,7 +217,6 @@ class ResultsViewState extends State<ResultsView> {
     }
     scroll.dispose();
     jump.dispose();
-    reason.dispose();
     super.dispose();
   }
 
@@ -236,6 +239,9 @@ class ResultsViewState extends State<ResultsView> {
       ? s.rounds.lastOrNull
       : s.rounds.where((r) => r.number == selectedRound).firstOrNull;
 
+  Iterable<Round> shownRounds(Section s) =>
+      showAllRounds ? s.rounds : [?shownRound(s)];
+
   /// An earlier round, whose results change only while correcting.
   bool past(BoardRow row) => row.round.number < row.section.rounds.length;
   bool locked(BoardRow row) => past(row) && !correcting;
@@ -243,14 +249,15 @@ class ResultsViewState extends State<ResultsView> {
   List<BoardRow> rows() {
     final result = <BoardRow>[];
     for (final s in sections) {
-      final r = shownRound(s);
-      if (r != null) {
+      for (final r in shownRounds(s)) {
         for (final g in r.games) {
           result.add(BoardRow(s, r, g));
         }
       }
     }
     result.sort((a, b) {
+      final round = a.round.number.compareTo(b.round.number);
+      if (round != 0) return round;
       final board = a.game.board.compareTo(b.game.board);
       return board != 0 ? board : a.game.leg.compareTo(b.game.leg);
     });
@@ -281,15 +288,13 @@ class ResultsViewState extends State<ResultsView> {
     if (!ready) return;
     c.workspaceState.writeMap(preference, {
       'missingOnly': missingOnly,
+      'crosstable': crosstable,
       'signature': roundSignature,
       'round': selectedRound,
+      'allRounds': showAllRounds,
       'search': jump.text,
       'box': activeBox,
       'scroll': scroll.hasClients ? scroll.offset : 0,
-      'reason': reason.text,
-      'pending': pending == null
-          ? null
-          : [pending!.$1, pending!.$2.name, pending!.$3],
     });
   }
 
@@ -344,9 +349,12 @@ class ResultsViewState extends State<ResultsView> {
     }
   }
 
-  /// Records [outcome]. If later rounds are paired a reason is asked for
-  /// inline first.
-  void enter(BoardRow row, Outcome outcome, {required bool white}) {
+  /// Later rounds require a review before anything is committed.
+  Future<void> enter(
+    BoardRow row,
+    Outcome outcome, {
+    required bool white,
+  }) async {
     if (busy) return;
     if (locked(row)) {
       setState(() => nudged = true);
@@ -357,7 +365,21 @@ class ResultsViewState extends State<ResultsView> {
       return;
     }
     if (c.correctionHasDependencies(row.game.id)) {
-      setState(() => pending = (row.game.id, outcome, white));
+      busy = true;
+      try {
+        final saved = await reviewResultCorrection(
+          context,
+          c,
+          row.game.id,
+          outcome: outcome,
+        );
+        if (mounted && saved) {
+          setState(() => forfeit = false);
+          focusBox(row.game.id, white);
+        }
+      } finally {
+        busy = false;
+      }
       return;
     }
     save(row, outcome, white: white);
@@ -375,11 +397,6 @@ class ResultsViewState extends State<ResultsView> {
       if (!mounted) return;
       setState(() => forfeit = false);
       advance(row.game.id, white);
-      if (outcome == Outcome.whiteForfeit || outcome == Outcome.blackForfeit) {
-        offerWithdraw(
-          outcome == Outcome.whiteForfeit ? row.game.black : row.game.white,
-        );
-      }
     } catch (e) {
       if (mounted) showFailure(context, e);
     } finally {
@@ -387,63 +404,14 @@ class ResultsViewState extends State<ResultsView> {
     }
   }
 
-  void savePending() {
-    final (id, outcome, white) = pending!;
-    final row = rows().where((r) => r.game.id == id).firstOrNull;
-    if (row == null || locked(row)) return;
-    if (reason.text.trim().isEmpty) {
-      showFailure(context, 'Give a reason for changing this result.');
-      return;
-    }
-    final why = reason.text.trim();
-    setState(() => pending = null);
-    reason.clear();
-    save(row, outcome, white: white, why: why);
-  }
-
-  void cancelPending() {
-    final white = pending?.$3 ?? true, id = pending?.$1;
-    setState(() => pending = null);
-    reason.clear();
-    if (id != null) focusBox(id, white);
-  }
-
-  void offerWithdraw(String absent) {
-    final p = c.event!.player(absent);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${p.name}: withdraw from future rounds?'),
-        action: SnackBarAction(
-          label: 'Withdraw',
-          onPressed: () {
-            try {
-              c.savePlayer(c.event!.player(absent).copy(withdrawn: true));
-            } catch (e) {
-              if (mounted) showFailure(context, e);
-            }
-          },
-        ),
-      ),
-      snackBarAnimationStyle: AnimationStyle.noAnimation,
-    );
-  }
-
   /// Shows round [n], or the current round when [n] is the latest.
   void pickRound(int? n, int latest) {
     setState(() {
       selectedRound = n == latest ? null : n;
+      showAllRounds = false;
       correcting = nudged = forfeit = false;
-      pending = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => focusFirst());
-  }
-
-  void startRounds(List<String> ids) {
-    try {
-      c.startRounds(ids);
-    } catch (e) {
-      showFailure(context, e);
-    }
   }
 
   KeyEventResult onKey(BoardRow row, bool white, KeyEvent event) {
@@ -486,57 +454,14 @@ class ResultsViewState extends State<ResultsView> {
           setState(() => forfeit = true);
         }
         return KeyEventResult.handled;
-      case LogicalKeyboardKey.keyM:
-        if (locked(row)) {
-          setState(() => nudged = true);
-        } else {
-          menus[g.id]?.open();
-        }
+      case LogicalKeyboardKey.keyA:
+        if (!locked(row) && !g.outcome.resolved) assume(g.id);
         return KeyEventResult.handled;
       case LogicalKeyboardKey.delete || LogicalKeyboardKey.backspace:
         enter(row, Outcome.unreported, white: white);
         return KeyEventResult.handled;
     }
-    // Wins and losses are for the player whose box this is.
-    final mine = white ? Outcome.whiteWin : Outcome.blackWin,
-        theirs = white ? Outcome.blackWin : Outcome.whiteWin,
-        mineF = white ? Outcome.whiteForfeit : Outcome.blackForfeit,
-        theirsF = white ? Outcome.blackForfeit : Outcome.whiteForfeit;
-    final ch = event.character;
-    final Outcome? outcome;
-    if (ch == '+' || key == LogicalKeyboardKey.numpadAdd) {
-      outcome = mineF;
-    } else if (ch == '-' || key == LogicalKeyboardKey.numpadSubtract) {
-      outcome = theirsF;
-    } else if (ch == '½' ||
-        [
-          LogicalKeyboardKey.digit5,
-          LogicalKeyboardKey.numpad5,
-          LogicalKeyboardKey.keyD,
-          LogicalKeyboardKey.equal,
-          LogicalKeyboardKey.period,
-          LogicalKeyboardKey.numpadDecimal,
-        ].contains(key)) {
-      // A forfeit has no draw; the forfeit line already says what to press.
-      if (forfeit) return KeyEventResult.handled;
-      outcome = Outcome.draw;
-    } else if ([
-      LogicalKeyboardKey.digit1,
-      LogicalKeyboardKey.numpad1,
-      LogicalKeyboardKey.keyW,
-    ].contains(key)) {
-      outcome = forfeit ? mineF : mine;
-    } else if ([
-      LogicalKeyboardKey.digit0,
-      LogicalKeyboardKey.numpad0,
-      LogicalKeyboardKey.keyL,
-    ].contains(key)) {
-      outcome = forfeit ? theirsF : theirs;
-    } else if (key == LogicalKeyboardKey.keyX) {
-      outcome = Outcome.doubleForfeit;
-    } else {
-      outcome = null;
-    }
+    final outcome = resultFromKey(event, white: white, forfeit: forfeit);
     if (outcome == null) return KeyEventResult.ignored;
     enter(row, outcome, white: white);
     return KeyEventResult.handled;
@@ -621,14 +546,11 @@ class ResultsViewState extends State<ResultsView> {
     }
     final shown = [
       for (final s in sections)
-        if (shownRound(s) case final r?) (s, r),
+        for (final r in shownRounds(s)) (s, r),
     ];
     final all = rows(), visible = visibleRows();
     final viewingPast = shown.any((x) => x.$2.number < x.$1.rounds.length);
     final latest = roundNumbers.lastOrNull;
-    final pendingRow = pending == null
-        ? null
-        : all.where((r) => r.game.id == pending!.$1).firstOrNull;
     final player = e.players.where((p) => p.id == openPlayerId).firstOrNull;
     if (assumeFor != null && !all.any((r) => r.game.id == assumeFor)) {
       assumeFor = null;
@@ -638,7 +560,7 @@ class ResultsViewState extends State<ResultsView> {
       swapping = false;
       swapPick = null;
     }
-    return PlayerDetailsLayout(
+    final boards = PlayerDetailsLayout(
       panel:
           Dock.maybeOf(context) != null &&
               Dock.maybeOf(context)!.id != panelOwner
@@ -663,29 +585,31 @@ class ResultsViewState extends State<ResultsView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (widget.roundAction != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: widget.roundAction!,
+                        ),
+                      ),
                     if (shown.isNotEmpty) ...[
                       _roundLine(context, shown, all, roundNumbers),
                       _strip(context, shown, viewingPast),
                     ],
                     if (viewingPast) _pastBanner(context, shown),
                     if (swapping) _swapBanner(context, shown.single.$2),
-                    _legend(context),
-                    if (pending case (
-                      _,
-                      final outcome,
-                      _,
-                    ) when pendingRow != null && !locked(pendingRow))
-                      _reasonBar(context, pendingRow, outcome),
+                    if (forfeit) _forfeitPrompt(context),
                   ],
                 ),
               ),
             ),
-            Expanded(
+            Flexible(
               child: roundNumbers.isEmpty
                   ? const EmptyState(
                       icon: Icons.grid_view_outlined,
                       title: 'No rounds yet',
-                      body: 'Post round 1 to see the boards here.',
+                      body: 'Create pairings to see the boards here.',
                     )
                   : visible.isEmpty && !shown.any((x) => x.$2.byes.isNotEmpty)
                   ? EmptyState(
@@ -705,9 +629,61 @@ class ResultsViewState extends State<ResultsView> {
         ),
       ),
     );
+    return LayoutBuilder(
+      builder: (context, layout) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: layout.maxWidth - detailsColumnWidth(layout.maxWidth),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final (value, label) in [
+                    (false, 'Boards'),
+                    (true, 'Crosstable'),
+                  ])
+                    ChoiceChip(
+                      key: ValueKey(value ? 'show-crosstable' : 'show-boards'),
+                      label: Text(label),
+                      selected: crosstable == value,
+                      showCheckmark: false,
+                      onSelected: (_) {
+                        FocusManager.instance.primaryFocus?.unfocus();
+                        Dock.maybeOf(context)?.close();
+                        setState(() {
+                          crosstable = value;
+                          openPlayerId = null;
+                        });
+                        if (!value) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) focusFirst();
+                          });
+                        }
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: crosstable
+                ? PlayersView(
+                    key: ValueKey('crosstable-${widget.sectionId}'),
+                    controller: c,
+                    sectionId: widget.sectionId,
+                    standingsOnly: true,
+                  )
+                : boards,
+          ),
+        ],
+      ),
+    );
   }
 
-  /// "Round 2 of 3 · Posted 11:02 · Started 11:15 · 7 of 11 in", in the
+  /// "Round 2 of 3 · 7 of 11 in", in the
   /// size of a wall-sheet heading.
   Widget _roundLine(
     BuildContext context,
@@ -718,29 +694,15 @@ class ResultsViewState extends State<ResultsView> {
     final colors = Theme.of(context).colorScheme;
     final numbers = shown.map((x) => x.$2.number).toSet().toList()..sort();
     final planned = shown.map((x) => x.$1.plannedRounds).reduce(math.max);
-    final title = numbers.length == 1
+    final title = showAllRounds
+        ? 'All rounds'
+        : numbers.length == 1
         ? 'Round ${numbers.single} of $planned'
         : 'Rounds ${numbers.first}–${numbers.last}';
-    final posted = [
-      for (final (_, r) in shown)
-        if (r.postedAt != null) r.postedAt!,
-    ]..sort();
-    final started = [
-      for (final (_, r) in shown)
-        if (r.startedAt != null) r.startedAt!,
-    ]..sort();
     final done = all.where((r) => r.game.outcome.resolved).length;
     final complete = shown.every((x) => x.$2.complete);
     final facts = [
-      if (posted.isNotEmpty) 'Posted ${historyTime(posted.last)}',
-      if (started.length == shown.length)
-        'Started ${historyTime(started.first)}'
-      else if (complete)
-        null
-      else if (started.isEmpty)
-        'Not started'
-      else
-        '${started.length} of ${shown.length} sections started',
+      if (showAllRounds) '${numbers.length} rounds',
       complete ? 'All ${all.length} in' : '$done of ${all.length} in',
     ].nonNulls;
     final tabular = const [FontFeature.tabularFigures()];
@@ -778,33 +740,42 @@ class ResultsViewState extends State<ResultsView> {
             ),
           ),
           if (roundNumbers.length > 1)
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   'Show round',
                   style: TextStyle(color: colors.onSurfaceVariant),
                 ),
                 const SizedBox(width: 8),
-                SegmentedButton<int>(
+                Wrap(
                   key: const ValueKey('round-selector'),
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  segments: [
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
                     for (final n in roundNumbers)
-                      ButtonSegment(
-                        value: n,
+                      ChoiceChip(
                         label: Text('$n'),
-                        tooltip: n == roundNumbers.last
-                            ? 'Round $n (current)'
-                            : 'Round $n (read-only)',
+                        showCheckmark: false,
+                        selected:
+                            !showAllRounds &&
+                            (selectedRound ?? roundNumbers.last) == n,
+                        onSelected: (_) => pickRound(n, roundNumbers.last),
                       ),
+                    ChoiceChip(
+                      key: const ValueKey('all-rounds'),
+                      label: const Text('Show all rounds'),
+                      showCheckmark: false,
+                      selected: showAllRounds,
+                      onSelected: (_) => setState(() {
+                        showAllRounds = true;
+                        selectedRound = null;
+                        correcting = nudged = forfeit = false;
+                      }),
+                    ),
                   ],
-                  selected: {selectedRound ?? roundNumbers.last},
-                  onSelectionChanged: (v) =>
-                      pickRound(v.single, roundNumbers.last),
                 ),
               ],
             ),
@@ -813,30 +784,22 @@ class ResultsViewState extends State<ResultsView> {
     );
   }
 
-  /// Find, filter, and what to do with the posted round: print it, start
-  /// the clock, fix the pairings, or take the post back.
+  /// Find boards, filter missing results, edit pairings, and print.
   Widget _strip(
     BuildContext context,
     List<(Section, Round)> shown,
     bool viewingPast,
   ) {
-    final waiting = viewingPast
-        ? const <String>[]
-        : [
-            for (final (s, r) in shown)
-              if (r.startedAt == null && !r.complete) s.id,
-          ];
     final single = widget.sectionId == null ? null : shown.singleOrNull;
     final editable = !viewingPast && single != null && !single.$2.hasPlay;
-    final justPosted =
-        !viewingPast && (c.undoLabel?.startsWith('Post ') ?? false);
     final search = SizedBox(
-      width: 240,
+      width: 220 * MediaQuery.textScalerOf(context).scale(1),
       child: TextField(
         key: const ValueKey('board-search'),
         controller: jump,
         decoration: InputDecoration(
-          hintText: 'Find player or board',
+          labelText: 'Find player or board',
+          floatingLabelBehavior: FloatingLabelBehavior.never,
           prefixIcon: const Icon(Icons.search, size: 20),
           prefixIconConstraints: const BoxConstraints(
             minWidth: 36,
@@ -891,33 +854,24 @@ class ResultsViewState extends State<ResultsView> {
             }),
             child: const Text('Edit pairings'),
           ),
-        if (justPosted)
-          TextButton(
-            key: const ValueKey('undo-post'),
-            onPressed: () => travel(
-              context,
-              c,
-              c.graph.back,
-              (accept) => c.undo(acceptLosses: accept),
-            ),
-            child: const Text('Undo post'),
-          ),
+        IconButton(
+          tooltip: 'Print preview…',
+          onPressed: showAllRounds
+              ? null
+              : () => showPrint(
+                  context,
+                  c.event!,
+                  sectionId: widget.sectionId,
+                  roundNumber: selectedRound,
+                ),
+          icon: const Icon(Icons.preview_outlined, size: 18),
+        ),
         OutlinedButton.icon(
           key: const ValueKey('print-round'),
-          onPressed: printRound,
+          onPressed: showAllRounds ? null : printRound,
           icon: const Icon(Icons.print_outlined, size: 18),
           label: const Text('Print packet'),
         ),
-        if (waiting.isNotEmpty)
-          FilledButton.tonal(
-            key: const ValueKey('start-round'),
-            onPressed: () => startRounds(waiting),
-            child: Text(
-              waiting.length == 1 || widget.sectionId != null
-                  ? 'Start round'
-                  : 'Start round · ${waiting.length} sections',
-            ),
-          ),
       ],
     );
     return Padding(
@@ -982,9 +936,11 @@ class ResultsViewState extends State<ResultsView> {
           const SizedBox(width: 8),
           Text(
             correcting
-                ? 'Correcting round $number. Each change asks for a reason.'
+                ? '${showAllRounds ? 'Correcting earlier rounds' : 'Correcting round $number'}. Review each change before saving.'
                 : nudged
                 ? 'Round $number is read-only. Choose Correct a result to change it.'
+                : showAllRounds
+                ? 'Earlier rounds are read-only. Choose Correct a result to edit.'
                 : 'Round $number is read-only. Round $current is current.',
             style: TextStyle(
               color: foreground,
@@ -1053,86 +1009,19 @@ class ResultsViewState extends State<ResultsView> {
     );
   }
 
-  /// Every key a score box understands, so nothing has to be remembered.
-  Widget _legend(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    if (forfeit) {
-      return Container(
-        width: double.infinity,
-        margin: const EdgeInsets.fromLTRB(24, 0, 24, 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: colors.errorContainer,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          'Forfeit: 1 if this player won, 0 if they lost. Esc cancels.',
-          style: TextStyle(color: colors.onErrorContainer),
-        ),
-      );
-    }
-    final key = TextStyle(fontWeight: FontWeight.w600, color: colors.onSurface);
-    final keys = [
-      ('1', 'win'),
-      ('0', 'loss'),
-      ('5', 'draw'),
-      ('F', 'forfeit'),
-      ('Del', 'clear'),
-      ('F1', 'all keys'),
-    ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
-      child: Text.rich(
-        key: const ValueKey('result-keys'),
-        TextSpan(
-          style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
-          children: [
-            for (final (i, (k, what)) in keys.indexed) ...[
-              if (i > 0) const TextSpan(text: '   '),
-              TextSpan(text: k, style: key),
-              TextSpan(text: ' $what'),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _reasonBar(BuildContext context, BoardRow row, Outcome outcome) {
+  Widget _forfeitPrompt(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      margin: const EdgeInsets.fromLTRB(24, 4, 24, 4),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(24, 0, 24, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        border: Border.all(color: colors.outlineVariant),
+        color: colors.errorContainer,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text(
-            'Board ${row.game.board}, round ${row.round.number} → ${outcome == Outcome.unreported ? 'no result' : outcome.label}. Later rounds are already paired and stay as they are. Reason:',
-          ),
-          SizedBox(
-            width: 260,
-            child: CallbackShortcuts(
-              bindings: {
-                const SingleActivator(LogicalKeyboardKey.escape): cancelPending,
-              },
-              child: TextField(
-                key: const ValueKey('result-reason'),
-                controller: reason,
-                autofocus: true,
-                onSubmitted: (_) => savePending(),
-              ),
-            ),
-          ),
-          FilledButton(onPressed: savePending, child: const Text('Save')),
-          TextButton(onPressed: cancelPending, child: const Text('Cancel')),
-        ],
+      child: Text(
+        'Forfeit: 1 if this player won, 0 if they lost. Esc cancels.',
+        style: TextStyle(color: colors.onErrorContainer),
       ),
     );
   }
@@ -1146,26 +1035,29 @@ class ResultsViewState extends State<ResultsView> {
   ) {
     final colors = Theme.of(context).colorScheme;
     final e = c.event!;
-    final bySection = <String, List<BoardRow>>{};
+    final bySection = <(String, int), List<BoardRow>>{};
     for (final r in visible) {
-      bySection.putIfAbsent(r.section.id, () => []).add(r);
+      bySection.putIfAbsent((r.section.id, r.round.number), () => []).add(r);
     }
     int firstBoard((Section, Round) x) =>
         x.$2.games.map((g) => g.board).fold(1 << 30, math.min);
     final ordered = [...shown]
-      ..sort((a, b) => firstBoard(a).compareTo(firstBoard(b)));
+      ..sort((a, b) {
+        final round = a.$2.number.compareTo(b.$2.number);
+        return round != 0 ? round : firstBoard(a).compareTo(firstBoard(b));
+      });
     final items = <Widget>[];
     for (final (s, r) in ordered) {
-      final boards = bySection[s.id] ?? const <BoardRow>[];
+      final boards = bySection[(s.id, r.number)] ?? const <BoardRow>[];
       final byes = missingOnly
           ? const <ByeAward>[]
           : r.byes.where((b) => named(e.player(b.player))).toList();
       if (boards.isEmpty && byes.isEmpty) continue;
-      if (widget.sectionId == null) {
+      if (widget.sectionId == null || showAllRounds) {
         items.add(_sectionRow(context, s, r));
       }
       for (final b in byes) {
-        items.add(_bye(context, b));
+        items.add(_bye(context, b, r.number));
       }
       // Swiss boards fall into score groups once anyone has a score.
       final before = s.format == Format.swiss && r.number > 1
@@ -1186,7 +1078,11 @@ class ResultsViewState extends State<ResultsView> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = math.max(720.0, constraints.maxWidth);
+        // Keep player names and inline actions readable at enlarged text sizes.
+        final width = math.max(
+          560 * MediaQuery.textScalerOf(context).scale(14) / 14,
+          constraints.maxWidth,
+        );
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SizedBox(
@@ -1198,21 +1094,32 @@ class ResultsViewState extends State<ResultsView> {
                   color: colors.surfaceContainerLowest,
                   border: Border.all(color: colors.outlineVariant),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _columns(context),
-                    Expanded(
-                      child: SingleChildScrollView(
+                child:
+                    constraints.maxHeight <
+                        MediaQuery.textScalerOf(context).scale(150)
+                    ? SingleChildScrollView(
                         controller: scroll,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: items,
+                          children: [_columns(context), ...items],
                         ),
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _columns(context),
+                          Flexible(
+                            child: SingleChildScrollView(
+                              controller: scroll,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: items,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               ),
             ),
           ),
@@ -1221,7 +1128,7 @@ class ResultsViewState extends State<ResultsView> {
     );
   }
 
-  static const _board = 72.0, _more = 44.0, _row = 52.0;
+  static const _board = 72.0, _row = 52.0;
   double scoreWidth(BuildContext context) =>
       math.max(64, MediaQuery.textScalerOf(context).scale(48));
 
@@ -1252,7 +1159,6 @@ class ResultsViewState extends State<ResultsView> {
               width: scoreWidth(context),
               child: Text('Score', textAlign: TextAlign.center),
             ),
-            SizedBox(width: _more),
           ],
         ),
       ),
@@ -1278,10 +1184,6 @@ class ResultsViewState extends State<ResultsView> {
               text: [
                 '   Round ${r.number} of ${s.plannedRounds}',
                 boardRange(s),
-                if (r.startedAt != null)
-                  'started ${historyTime(r.startedAt!)}'
-                else if (r.number == s.rounds.length && !r.complete)
-                  'not started',
               ].join(' · '),
               style: TextStyle(color: colors.onSurfaceVariant),
             ),
@@ -1308,11 +1210,11 @@ class ResultsViewState extends State<ResultsView> {
   }
 
   /// A bye, listed before the boards like on the wall sheet.
-  Widget _bye(BuildContext context, ByeAward b) {
+  Widget _bye(BuildContext context, ByeAward b, int round) {
     final colors = Theme.of(context).colorScheme;
     final p = c.event!.player(b.player);
     return Container(
-      key: ValueKey('bye-${p.id}'),
+      key: ValueKey(showAllRounds ? 'bye-${p.id}-$round' : 'bye-${p.id}'),
       constraints: const BoxConstraints(minHeight: _row),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
@@ -1350,7 +1252,11 @@ class ResultsViewState extends State<ResultsView> {
                     alignment: PlaceholderAlignment.baseline,
                     baseline: TextBaseline.alphabetic,
                     child: InkWell(
-                      key: ValueKey('bye-player-${p.id}'),
+                      key: ValueKey(
+                        showAllRounds
+                            ? 'bye-player-${p.id}-$round'
+                            : 'bye-player-${p.id}',
+                      ),
                       onTap: () => showPlayer(p.id),
                       child: Text(p.name, style: const TextStyle(fontSize: 18)),
                     ),
@@ -1428,7 +1334,7 @@ class ResultsViewState extends State<ResultsView> {
           ),
         );
       }
-      return Tooltip(
+      final playerLink = Tooltip(
         message: '${p.name} · Double-click or press Enter for player details',
         child: CallbackShortcuts(
           bindings: {
@@ -1442,15 +1348,46 @@ class ResultsViewState extends State<ResultsView> {
             hint: 'Opens player details',
             child: InkWell(
               key: ValueKey('round-player-${g.id}-${p.id}'),
+              onSecondaryTapDown: (details) =>
+                  showPlayerMenu(context, c, p.id, details.globalPosition),
               onDoubleTap: () => showPlayer(p.id),
               child: label,
             ),
           ),
         ),
       );
+      final forfeited =
+          g.outcome == Outcome.doubleForfeit ||
+          (p.id == g.white && g.outcome == Outcome.blackForfeit) ||
+          (p.id == g.black && g.outcome == Outcome.whiteForfeit);
+      if (!forfeited || past(row)) return playerLink;
+      return Column(
+        crossAxisAlignment: right
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          playerLink,
+          if (p.withdrawn)
+            Text(
+              'Withdrawn',
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            )
+          else
+            TextButton(
+              key: ValueKey('withdraw-${g.id}-${p.id}'),
+              onPressed: () {
+                try {
+                  c.savePlayer(c.event!.player(p.id).copy(withdrawn: true));
+                } catch (error) {
+                  if (mounted) showFailure(context, error);
+                }
+              },
+              child: const Text('Withdraw from future rounds'),
+            ),
+        ],
+      );
     }
 
-    final menu = menus.putIfAbsent(g.id, MenuController.new);
     return GestureDetector(
       key: ValueKey('game-${g.id}'),
       behavior: HitTestBehavior.opaque,
@@ -1489,57 +1426,6 @@ class ResultsViewState extends State<ResultsView> {
               Expanded(child: name(black, right: true)),
               const SizedBox(width: 12),
               _scoreBox(context, row, white: false),
-              SizedBox(
-                width: _more,
-                child: MenuAnchor(
-                  controller: menu,
-                  style: const MenuStyle(visualDensity: VisualDensity.compact),
-                  menuChildren: [
-                    for (final (outcome, label) in [
-                      (Outcome.whiteWin, 'White wins · 1–0'),
-                      (Outcome.draw, 'Draw · ½–½'),
-                      (Outcome.blackWin, 'Black wins · 0–1'),
-                    ])
-                      MenuItemButton(
-                        onPressed: lock
-                            ? null
-                            : () => enter(row, outcome, white: true),
-                        child: Text(label),
-                      ),
-                    const Divider(),
-                    for (final (outcome, label) in [
-                      (Outcome.whiteForfeit, 'White wins by forfeit'),
-                      (Outcome.blackForfeit, 'Black wins by forfeit'),
-                      (Outcome.doubleForfeit, 'Double forfeit'),
-                      (Outcome.unfinished, 'Still playing'),
-                      (Outcome.disputed, 'Disputed'),
-                      (Outcome.unreported, 'Clear result'),
-                    ])
-                      MenuItemButton(
-                        onPressed: lock
-                            ? null
-                            : () => enter(row, outcome, white: true),
-                        child: Text(label),
-                      ),
-                    const Divider(height: 8),
-                    MenuItemButton(
-                      onPressed: lock || g.outcome.resolved
-                          ? null
-                          : () => assume(g.id),
-                      child: const Text('Assume a result for pairing only…'),
-                    ),
-                  ],
-                  // Tab goes box to box, never to this button.
-                  child: ExcludeFocus(
-                    child: IconButton(
-                      tooltip: 'Enter or clear result (M)',
-                      icon: const Icon(Icons.more_horiz, size: 18),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => menu.isOpen ? menu.close() : menu.open(),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),

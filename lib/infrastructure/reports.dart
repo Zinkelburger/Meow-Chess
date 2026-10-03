@@ -5,9 +5,10 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../domain/model.dart';
+import '../domain/pairing.dart';
 import '../domain/standings.dart';
 
-enum ReportKind { packet, pairings, standings, crosstable }
+enum ReportKind { packet, pairings, standings, crosstable, sections }
 
 String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
   final lines = <String>['${e.name} | ${e.date} | revision ${e.revision}', ''];
@@ -117,10 +118,73 @@ String _quarters(int n) {
   return whole == 0 && part.isNotEmpty ? part : '$whole$part';
 }
 
-/// Sorts a wall list by surname, as players look for themselves.
-String _surnameKey(String name) {
-  final parts = name.trim().split(RegExp(r'\s+'));
-  return [parts.last, ...parts.take(parts.length - 1)].join(' ').toLowerCase();
+/// Paper schedules never post rounds or change the tournament. Preserve edited
+/// posted pairings; fill the remaining round-robin rounds from the fixed draw.
+/// Swiss sheets contain only the selected (or latest posted) round.
+List<Round> reportPairingRounds(
+  Section section, {
+  int? roundNumber,
+  bool currentRoundOnly = false,
+}) {
+  if (currentRoundOnly ||
+      pairingFormat(section) == Format.swiss ||
+      section.sideGames) {
+    if (roundNumber == null) {
+      return [if (section.rounds.isNotEmpty) section.rounds.last];
+    }
+    if (roundNumber == 0) return [];
+    final round = section.rounds
+        .where((r) => r.number == roundNumber)
+        .firstOrNull;
+    if (round == null) {
+      throw TournamentException('Round $roundNumber is no longer available.');
+    }
+    return [round];
+  }
+  final schedule = roundRobinSchedule(
+    section.players,
+    quad: section.format == Format.quad,
+    colorLot: quadColorLot(section),
+  );
+  return [
+    for (final (index, pairs) in schedule.take(section.plannedRounds).indexed)
+      section.rounds.where((r) => r.number == index + 1).firstOrNull ??
+          (() {
+            final games = <Game>[];
+            final byes = <ByeAward>[];
+            var board = section.boardStart;
+            for (final (white, black) in pairs) {
+              if (white == null || black == null) {
+                final player = white ?? black;
+                if (player != null) {
+                  byes.add(ByeAward(player, 0, 'Round-robin sit-out'));
+                }
+                continue;
+              }
+              games.add(
+                Game(
+                  id: 'paper-${section.id}-$index-$board-1',
+                  white: white,
+                  black: black,
+                  board: board,
+                ),
+              );
+              if (section.doubleGames) {
+                games.add(
+                  Game(
+                    id: 'paper-${section.id}-$index-$board-2',
+                    white: black,
+                    black: white,
+                    board: board,
+                    leg: 2,
+                  ),
+                );
+              }
+              board++;
+            }
+            return Round(number: index + 1, games: games, byes: byes);
+          })(),
+  ];
 }
 
 /// An explicit historical scope never silently substitutes the latest round.
@@ -164,8 +228,9 @@ List<Standing> reportStandings(
         final r = rows[i];
         if (i > 0 &&
             (r.points != rows[i - 1].points ||
-                r.buchholz != rows[i - 1].buchholz ||
-                r.sonneborn != rows[i - 1].sonneborn)) {
+                (event.useTiebreaks &&
+                    (r.buchholz != rows[i - 1].buchholz ||
+                        r.sonneborn != rows[i - 1].sonneborn)))) {
           rank = i + 1;
         }
         return Standing(
@@ -187,6 +252,7 @@ Future<Uint8List> reportPdf(
   bool a4 = false,
   int? roundNumber,
   Map<String, int>? roundNumbers,
+  bool currentRoundOnly = false,
   int ceiling = 0,
   bool forPrizes = false,
   pw.Font? font,
@@ -203,6 +269,7 @@ Future<Uint8List> reportPdf(
     eventThroughRound(source, roundNumber, sectionId: sectionId);
   }
   final doc = pw.Document();
+  var sectionCount = 0;
   for (final scope in source.sections.where(
     (s) =>
         s.players.isNotEmpty &&
@@ -213,11 +280,11 @@ Future<Uint8List> reportPdf(
             roundNumber == 0 ||
             s.rounds.any((r) => r.number == roundNumber)),
   )) {
+    sectionCount++;
     final number = roundNumbers?[scope.id] ?? roundNumber;
     e = eventThroughRound(source, number, sectionId: scope.id);
     final s = e.sections.firstWhere((s) => s.id == scope.id);
     final table = reportStandings(e, s, ceiling: ceiling, forPrizes: forPrizes);
-    final current = s.rounds.lastOrNull;
     final widgets = <pw.Widget>[];
     void title(String text) => widgets.add(
       pw.Padding(
@@ -238,59 +305,94 @@ Future<Uint8List> reportPdf(
         cellPadding: const pw.EdgeInsets.all(6),
       ),
     );
-    if (kind == ReportKind.pairings || kind == ReportKind.packet) {
-      title('Round ${current?.number ?? 1} · ${e.timeControl}');
-      if (current == null) {
-        widgets.add(pw.Text('No pairings posted.'));
-      } else {
-        for (final b in current.byes) {
-          widgets.add(
-            pw.Text(
-              '${e.player(b.player).name}: ${b.reason} (${_halves(b.points)})',
+    if (kind == ReportKind.sections ||
+        kind == ReportKind.pairings ||
+        kind == ReportKind.packet) {
+      // Use the full section for fixed schedules, even when printing from the
+      // round-one screen. Swiss still honors the frozen selected round.
+      final rounds = reportPairingRounds(
+        scope,
+        roundNumber: number,
+        currentRoundOnly: currentRoundOnly,
+      );
+      if (rounds.isEmpty) {
+        title('Pairings');
+        widgets.add(pw.Text('Pairings have not been created yet.'));
+      }
+      for (final round in rounds) {
+        widgets.add(pw.NewPage(freeSpace: 100));
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 12, bottom: 5),
+            child: pw.Text(
+              'Round ${round.number}',
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
             ),
-          );
-        }
-        grid(
-          ['Board', 'White', 'Result', 'Black'],
-          [
-            for (final g in current.games)
-              [
-                '${g.board}${s.doubleGames ? ' / ${g.leg}' : ''}',
-                e.player(g.white).name,
-                g.outcome.resolved ? g.outcome.label : '________',
-                e.player(g.black).name,
-              ],
-          ],
+          ),
         );
-        if (kind == ReportKind.packet) {
-          title('Alphabetical pairings');
-          final games = current.games;
-          final entries = [
-            for (final g in games)
-              (
-                e.player(g.white).name,
-                '${g.board}',
-                'White',
-                e.player(g.black).name,
-              ),
-            for (final g in games)
-              (
-                e.player(g.black).name,
-                '${g.board}',
-                'Black',
-                e.player(g.white).name,
-              ),
-          ]..sort((a, b) => _surnameKey(a.$1).compareTo(_surnameKey(b.$1)));
-          grid(
-            ['Player', 'Board', 'Color', 'Opponent'],
-            [
-              for (final r in entries) [r.$1, r.$2, r.$3, r.$4],
+        widgets.add(
+          pw.TableHelper.fromTextArray(
+            headers: ['Board', 'Result', 'White', 'Black', 'Result'],
+            data: [
+              for (final g in round.games)
+                [
+                  '${g.board}${scope.doubleGames ? ' / ${g.leg}' : ''}',
+                  '',
+                  source.player(g.white).name,
+                  source.player(g.black).name,
+                  '',
+                ],
             ],
+            tableWidth: pw.TableWidth.max,
+            columnWidths: {
+              0: const pw.FixedColumnWidth(38),
+              1: const pw.FixedColumnWidth(42),
+              2: const pw.FlexColumnWidth(),
+              3: const pw.FlexColumnWidth(),
+              4: const pw.FixedColumnWidth(42),
+            },
+            cellAlignments: {
+              0: pw.Alignment.center,
+              1: pw.Alignment.center,
+              2: pw.Alignment.centerLeft,
+              3: pw.Alignment.centerLeft,
+              4: pw.Alignment.center,
+            },
+            headerAlignments: {
+              0: pw.Alignment.center,
+              1: pw.Alignment.center,
+              2: pw.Alignment.centerLeft,
+              3: pw.Alignment.centerLeft,
+              4: pw.Alignment.center,
+            },
+            border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
+            cellStyle: const pw.TextStyle(fontSize: 11),
+            headerStyle: pw.TextStyle(
+              fontSize: 10,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellPadding: const pw.EdgeInsets.symmetric(
+              horizontal: 5,
+              vertical: 7,
+            ),
+            headerPadding: const pw.EdgeInsets.all(5),
+            cellHeight: 30,
+          ),
+        );
+        for (final bye in round.byes) {
+          widgets.add(
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(top: 5),
+              child: pw.Text(
+                '${source.player(bye.player).name}: ${bye.allocated ? 'Bye' : bye.reason} (${_halves(bye.points)})',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+            ),
           );
         }
       }
     }
-    if (kind == ReportKind.standings || kind == ReportKind.packet) {
+    if (kind == ReportKind.standings) {
       title(
         'Standings${ceiling == 0 ? '' : ' · Under $ceiling'}${forPrizes ? ' · Excluding early round-robin withdrawals' : ''}',
       );
@@ -364,7 +466,7 @@ Future<Uint8List> reportPdf(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(
-              'Revision ${e.revision} · ${e.timeControl}',
+              'Revision ${e.revision} · ${s.effectiveTimeControl(e)}',
               style: const pw.TextStyle(fontSize: 9),
             ),
             pw.Text(
@@ -375,6 +477,11 @@ Future<Uint8List> reportPdf(
         ),
         build: (_) => widgets,
       ),
+    );
+  }
+  if (sectionCount == 0) {
+    throw const TournamentException(
+      'There are no players in the selected sections to print.',
     );
   }
   return doc.save();

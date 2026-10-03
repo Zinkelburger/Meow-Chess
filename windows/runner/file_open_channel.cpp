@@ -1,6 +1,10 @@
 #include "file_open_channel.h"
 
 #include <flutter/standard_method_codec.h>
+#include <windows.h>
+#include <shlobj.h>
+
+#include "utils.h"
 
 namespace {
 
@@ -23,6 +27,28 @@ void FileOpenChannel::Attach(flutter::BinaryMessenger* messenger) {
       [this](const flutter::MethodCall<flutter::EncodableValue>& call,
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
                  result) {
+        if (call.method_name() == "reveal") {
+          const auto* path = call.arguments()
+              ? std::get_if<std::string>(call.arguments()) : nullptr;
+          if (!path || path->empty()) {
+            result->Error("invalid_path", "A file path is required.");
+            return;
+          }
+          const auto wide_path = Utf16FromUtf8(*path);
+          PIDLIST_ABSOLUTE item = nullptr;
+          HRESULT status = SHParseDisplayName(wide_path.c_str(), nullptr,
+                                               &item, 0, nullptr);
+          if (SUCCEEDED(status)) {
+            status = SHOpenFolderAndSelectItems(item, 0, nullptr, 0);
+          }
+          CoTaskMemFree(item);
+          if (FAILED(status)) {
+            result->Error("reveal_failed", "Could not show the file in File Explorer.");
+          } else {
+            result->Success();
+          }
+          return;
+        }
         if (call.method_name() != "ready") {
           result->NotImplemented();
           return;

@@ -6,7 +6,6 @@ import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/history.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
-import 'package:meow_chess/ui/workspace_actions.dart';
 import '../support.dart';
 
 TournamentController blank() {

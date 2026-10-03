@@ -10,6 +10,8 @@ MemberObservation observation(String id, String name) => MemberObservation(
   name: name,
   retrievedAt: '2026-09-30',
   ratings: {'Regular': 1800},
+  expiration: '2027-12-31',
+  status: 'Active',
 );
 
 void main() {
@@ -49,6 +51,11 @@ void main() {
     await pending;
     await tester.pump();
     expect(key.currentState!.member, isNotNull);
+    expect(
+      c.repository.load()!.players[0].membershipEvidence['expiration'],
+      '2027-12-31',
+    );
+    expect(c.event!.players[0].rating, 2000);
     final useName = tester.widget<ActionChip>(
       find.widgetWithText(ActionChip, 'Use name Updated Name'),
     );
@@ -100,6 +107,7 @@ void main() {
     );
     await first;
     expect(key.currentState!.member, isNull);
+    expect(c.event!.players[0].membershipEvidence, isEmpty);
     expect(key.currentState!.looking, true);
     requests[1].complete(
       observation(c.event!.players[1].memberId, 'Right Player'),

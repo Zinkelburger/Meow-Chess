@@ -10,85 +10,149 @@ class ImportRow {
   final String? error;
 }
 
-List<ImportRow> parseRoster(String source) {
-  final text = source.replaceFirst('\uFEFF', '');
-  final rows = Csv(dynamicTyping: false).decode(text);
-  if (rows.isEmpty) return [];
-  final header = rows.first
-      .map(
-        (v) => v.toString().trim().toLowerCase().replaceAll(
-          RegExp(r'[^a-z0-9]'),
-          '',
-        ),
-      )
-      .toList();
-  int column(List<String> names) => header.indexWhere(names.contains);
-  var nameIndex = column(['name', 'player', 'playername', 'fullname']);
-  final first = column(['first', 'firstname']),
-      last = column(['last', 'lastname']);
-  final hasHeader = nameIndex >= 0 || first >= 0 || last >= 0;
-  if (!hasHeader) nameIndex = 0;
-  final idIndex = column(['id', 'uscf', 'uscfid', 'uschessid', 'memberid']);
-  final ratingIndex = column(['rating', 'rtg', 'uscf rating', 'pairingrating']);
-  final clubIndex = column(['club', 'team']);
-  final stateIndex = hasHeader ? column(['state', 'st']) : -1;
-  final result = <ImportRow>[];
-  for (final (offset, row) in rows.skip(hasHeader ? 1 : 0).indexed) {
-    if (row.every((v) => v.toString().trim().isEmpty)) continue;
-    String value(int index) =>
-        index >= 0 && index < row.length ? row[index].toString().trim() : '';
-    final name = nameIndex >= 0
-        ? value(nameIndex)
-        : '${value(first)} ${value(last)}'.trim();
-    final member = value(
-      hasHeader
-          ? idIndex
-          : row.length > 1
-          ? 1
-          : -1,
-    );
-    final rawRating = value(
-      hasHeader
-          ? ratingIndex
-          : row.length > 2
-          ? 2
-          : -1,
-    );
-    final rating =
-        rawRating.isEmpty ||
-            rawRating.toLowerCase() == 'unrated' ||
-            rawRating.toLowerCase() == 'unr'
-        ? 0
-        : int.tryParse(rawRating);
-    final state = value(stateIndex).toUpperCase();
-    final error = name.isEmpty
-        ? 'Missing name'
-        : member.isNotEmpty && !RegExp(r'^\d{8}$').hasMatch(member)
-        ? 'US Chess ID must be eight digits'
-        : rating == null || rating < 0 || rating > 4000
-        ? 'Rating must be 0–4000; assign provisional values explicitly'
-        : state.isNotEmpty && !RegExp(r'^[A-Z]{2}$').hasMatch(state)
-        ? 'State must be two letters'
-        : null;
-    final raw = Csv().encode([row]);
-    result.add(
-      ImportRow(
-        offset + (hasHeader ? 2 : 1),
-        raw,
-        error != null
-            ? null
-            : Player(
-                id: const Uuid().v4(),
-                name: name,
-                memberId: member,
-                rating: rating!,
-                club: value(clubIndex),
-                state: state,
-                source: raw,
-              ),
-        error,
-      ),
-    );
+enum RosterField {
+  name,
+  firstName,
+  lastName,
+  rating,
+  memberId,
+  club,
+  state,
+  registrationNote,
+}
+
+/// Decoded cells are kept as strings so IDs retain their leading zeroes.
+class RosterTable {
+  RosterTable(String source, {String? delimiter})
+    : rows = Csv(
+        dynamicTyping: false,
+        skipEmptyLines: false,
+        autoDetect: delimiter == null,
+        fieldDelimiter: delimiter ?? ',',
+      ).decode(source.replaceFirst(RegExp(r'^\uFEFF'), ''));
+
+  final List<List<dynamic>> rows;
+
+  int get columnCount =>
+      rows.fold(0, (n, row) => row.length > n ? row.length : n);
+
+  static const aliases = {
+    RosterField.name: ['name', 'player', 'playername', 'fullname'],
+    RosterField.firstName: ['first', 'firstname', 'givenname'],
+    RosterField.lastName: ['last', 'lastname', 'surname', 'familyname'],
+    RosterField.memberId: ['id', 'uscf', 'uscfid', 'uschessid', 'memberid'],
+    RosterField.rating: ['rating', 'rtg', 'uscfrating', 'pairingrating'],
+    RosterField.club: ['club', 'team'],
+    RosterField.state: ['state', 'st'],
+    // Boylston labels its free-form registration note column "Byes".
+    // Keep it as text; it must never automatically assign requested byes.
+    RosterField.registrationNote: [
+      'note',
+      'notes',
+      'registrationnote',
+      'registrationnotes',
+      'byes',
+    ],
+  };
+
+  Map<RosterField, int> get headerColumns {
+    if (rows.isEmpty) return {};
+    final header = rows.first
+        .map(
+          (v) => v.toString().trim().toLowerCase().replaceAll(
+            RegExp(r'[^a-z0-9]'),
+            '',
+          ),
+        )
+        .toList();
+    return {
+      for (final field in RosterField.values)
+        if (header.indexWhere(aliases[field]!.contains) case final index
+            when index >= 0)
+          field: index,
+    };
   }
-  return result;
+
+  bool get suggestsHeader => headerColumns.isNotEmpty;
+
+  Map<RosterField, int> suggestColumns(bool hasHeader) => hasHeader
+      ? headerColumns
+      : {
+          if (columnCount > 0) RosterField.name: 0,
+          if (columnCount > 1) RosterField.memberId: 1,
+          if (columnCount > 2) RosterField.rating: 2,
+        };
+
+  List<ImportRow> interpret({
+    required bool hasHeader,
+    required Map<RosterField, int> columns,
+  }) {
+    final result = <ImportRow>[];
+    for (final (offset, row) in rows.skip(hasHeader ? 1 : 0).indexed) {
+      if (row.every((v) => v.toString().trim().isEmpty)) continue;
+      String value(RosterField field) {
+        final index = columns[field] ?? -1;
+        return index >= 0 && index < row.length
+            ? row[index].toString().trim()
+            : '';
+      }
+
+      final name = columns.containsKey(RosterField.name)
+          ? value(RosterField.name)
+          : '${value(RosterField.firstName)} ${value(RosterField.lastName)}'
+                .trim();
+      final member = value(RosterField.memberId);
+      final rawRating = value(RosterField.rating);
+      final rating =
+          rawRating.isEmpty ||
+              ['unrated', 'unr'].contains(rawRating.toLowerCase())
+          ? 0
+          : int.tryParse(rawRating);
+      final state = value(RosterField.state).toUpperCase();
+      final error = name.isEmpty
+          ? 'Missing name'
+          : member.isNotEmpty && !RegExp(r'^\d{8}$').hasMatch(member)
+          ? 'US Chess ID must be eight digits'
+          : rating == null || rating < 0 || rating > 4000
+          ? 'Rating must be 0–4000; assign provisional values explicitly'
+          : state.isNotEmpty && !RegExp(r'^[A-Z]{2}$').hasMatch(state)
+          ? 'State must be two letters'
+          : null;
+      final raw = Csv().encode([row]);
+      result.add(
+        ImportRow(
+          offset + (hasHeader ? 2 : 1),
+          raw,
+          error != null
+              ? null
+              : Player(
+                  id: const Uuid().v4(),
+                  name: name,
+                  memberId: member,
+                  rating: rating!,
+                  club: value(RosterField.club),
+                  state: state,
+                  registrationNote: value(RosterField.registrationNote),
+                  source: raw,
+                ),
+          error,
+        ),
+      );
+    }
+    return result;
+  }
+}
+
+List<ImportRow> parseRoster(
+  String source, {
+  String? delimiter,
+  bool? hasHeader,
+  Map<RosterField, int>? columns,
+}) {
+  final table = RosterTable(source, delimiter: delimiter);
+  final header = hasHeader ?? table.suggestsHeader;
+  return table.interpret(
+    hasHeader: header,
+    columns: columns ?? table.suggestColumns(header),
+  );
 }

@@ -1,8 +1,10 @@
 # Results entry: a first-class TD work surface
 
 User requirement: type results into a large table and continue directly into the
-next cell. Default numeric shortcuts are **1 = win, 0 = loss, 5 = draw**, as
-explicitly selected by the user; W/L/D are equivalent shortcuts. This is an interaction contract, not an implemented interface.
+next cell. Result entry is typing only: **1 or W = win, 0 or L = loss, D = draw**.
+The sheet displays 1, 0, or ½. D is the only draw shortcut; 5, =, decimal,
+and fraction aliases are not accepted. Clicking a cell focuses it without choosing a result.
+This applies to both Players & standings and Pairings & results.
 US Chess's result collection/posting duty motivates the workflow (rules 15H/28O);
 US Chess does not prescribe these keystrokes. See [duty evidence](../research/notes/TD_DUTIES.md).
 This contract supersedes the earlier proposal requiring Enter/Tab for numeric input.
@@ -42,11 +44,8 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 | D or d | Draw | Save and advance immediately |
 | 1 | Win for labelled player | Save and advance immediately; no Enter needed |
 | 0 | Loss for labelled player | Save and advance immediately; no Enter needed |
-| 5 | Draw | Save a half-point draw and advance immediately; never store five points |
-| ½ / = | Additional draw aliases | Save and advance immediately |
 | F then 1/W or 0/L | Forfeit win / forfeit loss for labelled player | Save as an unplayed forfeit and advance; legend shows the pending modifier; Escape cancels it |
 | X | Double forfeit | Save both sides unplayed and advance |
-| M or context-menu key | Outcome menu | Byes, unfinished, disputed and other labelled outcomes; keyboard-accessible |
 | Arrow keys | Navigate cells | No result created by moving focus |
 | Enter on blank | Skip unknown game | Leave unreported and advance |
 | Shift+Enter | Previous result cell | Move backward; an explicit text editor commits only a valid complete value |
@@ -56,9 +55,9 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 | Delete on selected saved result | Clear result deliberately | Restore unreported state with history/undo; review dependencies if necessary |
 | Undo | Revert latest applicable change | Restore both opponents and focus to that game; review historical dependencies |
 
-Show a persistent compact legend: **1 Win · 0 Loss · 5 Draw · F+1/F+0 Forfeit · W/L/D also work**.
+Show a persistent compact legend: **1 / W win · 0 / L loss · D draw**.
 Support both the number row and numpad. These keys are commands, not decimal text
-entry: 5 stores/displays a draw (½ or 0.5), not five points. There is no Enter/Tab
+entry: D stores/displays a draw (½). There is no Enter/Tab
 requirement, typing-speed timeout or automatic mode inference for these shortcuts.
 The focused-cell context always states whose result is being entered.
 
@@ -154,8 +153,8 @@ outcome through an explicit action, not overwrite a derived total accidentally.
 | Fixture | Must hold |
 |---|---|
 | W, L, D sequence across three missing games | Correct reciprocal outcomes; one advancement per released key |
-| 1, 0, 5 sequence without Enter | Win/loss/draw on three games; reciprocal results correct; one advancement each |
-| Numpad 1, 0, 5 and number-row equivalents | Identical behavior; draw stores half a point, never five |
+| 1, 0, D sequence without Enter | Win/loss/draw on three games; reciprocal results correct; one advancement each |
+| Numpad 1, 0 and W/L/D | Identical behavior; draw stores half a point, never five |
 | Decimal 0.5 through explicit text/paste path, if offered | Parse full value before commit; do not dispatch individual shortcut events |
 | Hold W; deliver duplicate event | At most one game entered for one physical key press |
 | Enter on blank, invalid value, Escape | No invented loss; invalid input stays; cancel restores |
@@ -164,15 +163,15 @@ outcome through an explicit action, not overwrite a derived total accidentally.
 | Score changes would alter standings sort | Entry order stays fixed until deliberate resort |
 | Change a completed game after later round | Explicit impact review; historical games preserved |
 | Storage error or app crash at commit boundary | No one-sided score; no false saved acknowledgement |
-| Five released keys 1, 0, 5, W, D at 100 ms intervals with 300 ms writes | Five intended stable game IDs receive exactly those results in order; pending/saved status truthful |
+| Five released keys 1, 0, D, W, D at 100 ms intervals with 300 ms writes | Five intended stable game IDs receive exactly those results in order; pending/saved status truthful |
 | Fail the third write in that sequence; change filter or request navigation | First two durable; remaining inputs identifiable and not silently applied elsewhere |
-| Open historical round and type 1/0/5 before enabling correction | No result changed; visible browse/correction distinction |
+| Open historical round and type 1/0/D before enabling correction | No result changed; visible browse/correction distinction |
 | Interrupt for event-wide player edit, then return | Same result cursor/context; Undo clearly identifies its target |
 | Tab/Shift+Tab from grid and invalid text editor | Grid can be left; Escape cancels invalid edit without trapping focus |
 | Type W/0.5 into player-name/search fields | No results changed |
 | Double-game match with split wins | Two actual games retained; not converted to draws |
 | Keyboard/screen reader at 200% text | Names/perspective announced, focus visible, grid escapable |
-| TD reads “0.5” in the score column and types 0 then 5 | Named typo fixture: the legend and perspective line are tested against it; two Undo actions restore the two independently committed boards; each Undo restores both opponents of one game. Never infer a grouped mistake from valid keystrokes |
+| TD reads “0.5” in the score column and types 0 then 5 | Named typo fixture: the legend and perspective line are tested against it; 0 records a loss and advances; 5 does nothing. One Undo restores both opponents of the changed game. Never infer a grouped mistake from valid keystrokes |
 | F then 1, then X on the next board | Forfeit win and double forfeit recorded as unplayed; rating export excludes both; withdraw offer shown once |
 | Event-wide grid across five sections | Global board order; each section's standings update; no cross-section reciprocal error |
 | Entry abandoned mid-sequence, app restarted | Cursor position and Missing-only filter restored; no result invented (K14) |
@@ -180,3 +179,33 @@ outcome through an explicit action, not overwrite a derived total accidentally.
 Rehearsal target: 20 mixed results, two intentional blanks and one corrected typo,
 without mouse use or incorrect records. Measure time and error rate with working
 TDs. No prototype speed or usability result is being claimed yet.
+
+
+## Implemented correction review (October 3, 2026)
+
+Rounds offers individual numbered rounds and **Show all rounds**, grouped by
+round and section. Earlier rounds remain read-only until **Correct a result** is
+selected. Entry result cells open the same review directly; a double-game cell
+first asks which game to correct. Ordinary latest-round keyboard entry remains
+immediate.
+
+The review identifies the section, round, board, colors and game leg, and shows
+old/new outcomes and each player's score contribution. Later rounds default to
+**Keep pairings and results**. **Reopen from round N** selects the entire suffix;
+changing that boundary updates the preview. Reopening requires both no recorded
+play in that suffix and an explicit check that no games have actually started.
+Later section transfers disable automatic reopening and disclose linked sections.
+The correction reason and reopening choice commit in one revision. New pairings
+are generated and reviewed separately; a stale review cannot commit.
+
+History transaction details show before/after values. A transaction that changed
+only one game's result offers **Undo this result** if that exact game still has
+the recorded outcome. This creates a reviewed correction against current data,
+preserving later roster edits and other results. Compound transactions remain
+atomic. Whole-event restores across multiple transactions or recorded-play losses
+show an impact review first; cancelling changes nothing. Prior versions stay in
+the persistent graph. Printed and exported files need replacement after a change.
+
+Covered by `test/application/result_correction_test.dart`,
+`test/ui/result_correction_test.dart`, and the native rehearsal in
+`integration_test/result_correction_test.dart`.
