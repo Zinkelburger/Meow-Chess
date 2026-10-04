@@ -218,10 +218,39 @@ void main() {
       final replaced = c.event!.sections.single.rounds.single;
       expect(replaced.revision, 2);
       expect(replaced.games.first.white, r.games[0].black);
+      expect(replaced.games.first.id, isNot(r.games.first.id));
+      expect(replaced.games.last.id, r.games.last.id);
+      expectUnchanged(
+        c,
+        () => expect(
+          () => c.recordResult(r.games.first.id, Outcome.whiteWin),
+          refuses('no longer exists'),
+        ),
+      );
       c.recordResult(replaced.games.first.id, Outcome.draw);
       expect(
         () => c.replacePairing(s.id, 1, r.games, 'Too late'),
         refuses('has started'),
+      );
+    });
+
+    test('replacement preserves an unresolved pairing assumption', () async {
+      final c = fixture(count: 4, format: Format.swiss);
+      addTearDown(c.dispose);
+      c.post(await c.propose());
+      final section = c.event!.sections.single;
+      final game = section.rounds.single.games.first;
+      c.setPairingAssumption(game.id, Outcome.whiteWin, 'Still playing');
+      final round = c.event!.sections.single.rounds.single;
+      expectUnchanged(
+        c,
+        () => expect(
+          () => c.replacePairing(section.id, 1, [
+            round.games.first.copy(white: game.black, black: game.white),
+            round.games.last,
+          ], 'Reverse colors'),
+          refuses('pairing assumption'),
+        ),
       );
     });
 

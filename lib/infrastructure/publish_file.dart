@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 
-/// Atomically publishes a complete sibling file, exclusively by default.
+/// Atomically publishes a complete file or directory, exclusively by default.
 /// Fail closed on unsupported filesystems: ordinary rename can destroy a backup.
 void publishFile(
   String source,
@@ -84,6 +84,14 @@ void publishFile(
       OSError('Atomic rename failed', error),
     );
   });
+}
+
+/// Publishes a flat package whose component files have already been flushed.
+/// Persisting file contents alone does not persist their names in the package;
+/// sync those entries before making the complete package visible to its caller.
+void publishDirectory(String source, String destination) {
+  syncDirectory(source);
+  publishFile(source, destination);
 }
 
 /// Persists directory entries on POSIX, separately from the file's contents.

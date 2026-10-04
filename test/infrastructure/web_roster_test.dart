@@ -26,6 +26,30 @@ class ExampleClubSource extends HtmlTableRosterSource {
 }
 
 void main() {
+  test(
+    'a roster review cannot be applied to another event at the same revision',
+    () {
+      final first = fixture(count: 4), second = fixture(count: 4);
+      addTearDown(first.dispose);
+      addTearDown(second.dispose);
+      expect(first.event!.revision, second.event!.revision);
+      final review = RosterReview(
+        first.event!,
+        url,
+        parseRoster('Name,USCF ID,Rating\nNew Player,99887766,1200'),
+      );
+      expect(
+        () => review.apply(
+          second.event!,
+          review.changes.map((r) => r.key).toSet(),
+        ),
+        throwsA(isA<TournamentException>()),
+      );
+      expect(second.event!.players, hasLength(4));
+      expect(second.event!.rosterSource, isEmpty);
+    },
+  );
+
   test('October Quads roster confirms, saves, reloads and refreshes', () {
     final dir = Directory.systemTemp.createTempSync('meow-web-roster-');
     addTearDown(() => dir.deleteSync(recursive: true));

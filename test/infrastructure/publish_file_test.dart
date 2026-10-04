@@ -80,6 +80,33 @@ void main() {
     expect(source.existsSync(), true);
   });
 
+  test('publishes a complete package without replacing a concurrent export', () {
+    final package = Directory(p.join(directory.path, 'package.partial'))
+      ..createSync();
+    File(
+      p.join(package.path, 'results.txt'),
+    ).writeAsStringSync('complete', flush: true);
+    // An empty directory appearing after preflight must also survive. Ordinary
+    // POSIX rename would silently replace it with this package.
+    Directory(destination).createSync();
+    expect(
+      () => publishDirectory(package.path, destination),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(Directory(destination).listSync(), isEmpty);
+    expect(
+      File(p.join(package.path, 'results.txt')).readAsStringSync(),
+      'complete',
+    );
+    Directory(destination).deleteSync();
+    publishDirectory(package.path, destination);
+    expect(
+      File(p.join(destination, 'results.txt')).readAsStringSync(),
+      'complete',
+    );
+    expect(package.existsSync(), false);
+  });
+
   test('publication preserves a dangling symlink', () {
     final missing = p.join(directory.path, 'missing');
     Link(destination).createSync(missing);

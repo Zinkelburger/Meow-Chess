@@ -9,6 +9,7 @@ import '../domain/model.dart';
 import '../domain/standings.dart';
 import '../domain/us_chess.dart';
 import 'dbf_export.dart';
+import 'publish_file.dart';
 import 'reports.dart';
 import 'sqlite_event_repository.dart';
 
@@ -715,7 +716,7 @@ class TournamentTools {
         }
         // Write into a hidden sibling and rename, so a failure part way never
         // leaves a half-written package under the requested name.
-        Directory(p.dirname(directory.path)).createSync(recursive: true);
+        createDirectoryDurably(p.dirname(directory.path));
         final staging = Directory(
           p.dirname(directory.path),
         ).createTempSync('.${p.basename(directory.path)}.partial-');
@@ -730,7 +731,7 @@ class TournamentTools {
               p.join(staging.path, entry.key),
             ).writeAsBytesSync(entry.value, flush: true);
           }
-          staging.renameSync(directory.path);
+          publishDirectory(staging.path, directory.path);
         } catch (_) {
           if (staging.existsSync()) staging.deleteSync(recursive: true);
           rethrow;

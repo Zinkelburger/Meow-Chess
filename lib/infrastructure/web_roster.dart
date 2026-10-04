@@ -81,7 +81,8 @@ class RosterChange {
 /// A proposal against one event revision. Never infers identity from a name.
 class RosterReview {
   RosterReview(Event event, this.url, this.rows)
-    : revision = event.revision,
+    : eventId = event.id,
+      revision = event.revision,
       fetchedAt = DateTime.now().toUtc().toIso8601String() {
     final players = rows.map((r) => r.player).whereType<Player>().toList();
     for (final p in players) {
@@ -136,12 +137,13 @@ class RosterReview {
         .toList();
   }
   final int revision;
+  final String eventId;
   final String url, fetchedAt;
   final List<ImportRow> rows;
   final changes = <RosterChange>[];
   late final List<Player> missing;
   Event apply(Event event, Set<String> selected) {
-    if (event.revision != revision) {
+    if (event.id != eventId || event.revision != revision) {
       throw const TournamentException(
         'The event changed. Fetch and review the entry list again.',
       );

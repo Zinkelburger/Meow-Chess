@@ -1070,6 +1070,11 @@ class TournamentControllerCore extends ChangeNotifier {
         'This round has started. Preserve its participants and correct results separately.',
       );
     }
+    if (r.games.any((g) => g.pairingAssumption != null)) {
+      throw const TournamentException(
+        'This round has a pairing assumption. Preserve its participants and review the result separately.',
+      );
+    }
     if (reason.trim().isEmpty) {
       throw const TournamentException(
         'Record why the posted pairing is changing.',
@@ -1083,6 +1088,20 @@ class TournamentControllerCore extends ChangeNotifier {
       );
     }
     checkPairingRequests(e, games);
+    final previous = {for (final game in r.games) game.id: game};
+    final replacements = [
+      for (final game in games)
+        // A saved editor identifies a game, not a physical board. Reusing its
+        // ID for different participants or colors would let a stale editor
+        // record a result against the replacement matchup.
+        if (previous[game.id] case final old?
+            when old.white != game.white ||
+                old.black != game.black ||
+                old.leg != game.leg)
+          game.copy(id: newId())
+        else
+          game,
+    ];
     change(
       'Replace round $number pairings',
       e.copy(
@@ -1095,7 +1114,7 @@ class TournamentControllerCore extends ChangeNotifier {
                           .map(
                             (r) => r.number == number
                                 ? r.copy(
-                                    games: games,
+                                    games: replacements,
                                     revision: r.revision + 1,
                                     note: reason,
                                   )

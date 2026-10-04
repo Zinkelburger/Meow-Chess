@@ -2,6 +2,9 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/ui/rating_refresh.dart';
 import 'package:meow_chess/infrastructure/ratings_api.dart';
+import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
+import 'package:meow_chess/application/tournament_controller.dart';
+import 'package:meow_chess/domain/model.dart';
 import '../support.dart';
 
 MemberObservation observation(String id, int? rating) => MemberObservation(
@@ -13,7 +16,68 @@ MemberObservation observation(String id, int? rating) => MemberObservation(
   state: 'NH',
 );
 
+class FailingMembershipRepository extends SqliteEventRepository {
+  FailingMembershipRepository() : super(':memory:');
+  bool failWrites = false;
+
+  @override
+  Event commit(
+    Event next, {
+    required int expectedRevision,
+    required String action,
+  }) {
+    if (failWrites) throw const TournamentException('Disk is full.');
+    return super.commit(
+      next,
+      expectedRevision: expectedRevision,
+      action: action,
+    );
+  }
+}
+
 void main() {
+  test(
+    'membership save failures remain visible and retry retains completed lookups',
+    () async {
+      final repository = FailingMembershipRepository();
+      final c = TournamentController(repository)..create('Ratings');
+      addTearDown(c.dispose);
+      c.importPlayers([
+        Player(id: 'p', name: 'Player', memberId: '12000000', rating: 1000),
+      ]);
+      var requests = 0;
+      final draft = RatingRefresh(
+        c,
+        lookup: (id) async {
+          requests++;
+          return observation(id, 1500);
+        },
+      );
+      addTearDown(draft.dispose);
+      repository.failWrites = true;
+      await draft.fetch();
+      expect(draft.busy, false);
+      expect(draft.notice, contains('Disk is full'));
+      expect(draft.observations, hasLength(1));
+      expect(c.event!.player('p').membershipEvidence, isEmpty);
+
+      // Retry cannot replace the draft until its completed checks are saved.
+      await draft.fetch();
+      expect(requests, 1);
+      expect(draft.observations, hasLength(1));
+      expect(() => draft.stop(), returnsNormally);
+      expect(draft.notice, contains('Disk is full'));
+      expect(draft.apply, throwsA(isA<TournamentException>()));
+      expect(c.event!.player('p').rating, 1000);
+
+      repository.failWrites = false;
+      draft.stop();
+      expect(c.event!.player('p').membershipEvidence['id'], '12000000');
+      expect(draft.apply(), 1);
+      expect(c.event!.player('p').rating, 1500);
+    },
+  );
+
   test(
     'review skips missing IDs and unrated, applies only approvals, supports undo',
     () async {

@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
+import 'publish_file.dart';
 
 class DbfField {
   const DbfField(this.name, this.width, {this.type = 'C'});
@@ -619,7 +620,7 @@ Future<String> writeRatingPackage(Event e, String parent) async {
   // OS-created unique directories keep simultaneous exports from sharing
   // staging files, even on clocks with coarse timestamp resolution.
   final root = Directory(parent);
-  await root.create(recursive: true);
+  createDirectoryDurably(root.path);
   final staging = await root.createTemp('.meow-r${e.revision}.partial-');
   final suffix = p.basename(staging.path).split('.partial-').last;
   final name = 'meow-r${e.revision}-$suffix';
@@ -634,7 +635,7 @@ Future<String> writeRatingPackage(Event e, String parent) async {
       flush: true,
     );
     final target = p.join(parent, name);
-    await staging.rename(target);
+    publishDirectory(staging.path, target);
     return target;
   } catch (_) {
     if (await staging.exists()) await staging.delete(recursive: true);

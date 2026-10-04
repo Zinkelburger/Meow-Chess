@@ -35,6 +35,18 @@ class RatingRefresh extends ChangeNotifier {
     _unrecorded.clear();
   }
 
+  void _saveFailed(Object error, StackTrace stack) {
+    notice =
+        'Could not save membership checks. ${plainMessage(error)} '
+        'Completed lookups are retained; retry refresh to save them.';
+    Diagnostics.record(
+      'save rating refresh memberships',
+      'failed',
+      error: error,
+      stack: stack,
+    );
+  }
+
   Player? original(String id) =>
       snapshot?.players.where((p) => p.id == id).firstOrNull;
 
@@ -99,7 +111,13 @@ class RatingRefresh extends ChangeNotifier {
   }
 
   Future<void> fetch({String? ratingCategory}) async {
-    _recordMemberships();
+    try {
+      _recordMemberships();
+    } catch (error, stack) {
+      _saveFailed(error, stack);
+      notifyListeners();
+      return;
+    }
     final generation = ++_generation;
     final event = controller.event!;
     _unrecordedEvent = event.id;
@@ -165,6 +183,8 @@ class RatingRefresh extends ChangeNotifier {
         notice =
             'No USCF IDs to look up. Nothing changed. Add IDs in player details if you want ratings later.';
       }
+    } catch (error, stack) {
+      if (current()) _saveFailed(error, stack);
     } finally {
       if (current()) {
         busy = false;
@@ -180,6 +200,8 @@ class RatingRefresh extends ChangeNotifier {
         'Stopped. You can review completed lookups or keep current ratings.';
     try {
       _recordMemberships();
+    } catch (error, stack) {
+      _saveFailed(error, stack);
     } finally {
       notifyListeners();
     }
@@ -193,6 +215,7 @@ class RatingRefresh extends ChangeNotifier {
     }
     final ids = approved.map((p) => p.id).toSet();
     if (ids.isEmpty) return 0;
+    _recordMemberships();
     controller.applyReviewedRatings(
       snapshot: snapshot!,
       observations: observations,

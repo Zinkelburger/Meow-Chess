@@ -206,13 +206,27 @@ void main() {
     expect(round.revision, 2);
     expect(round.games[0].black, b.white);
     expect(round.games[1].white, a.black);
+    expect(round.games.map((g) => g.id), isNot(contains(a.id)));
+    expect(round.games.map((g) => g.id), isNot(contains(b.id)));
     expect(round.note, contains('Swapped'));
+    final saved = c.event!.encode();
+    expect(
+      () => c.recordResult(a.id, Outcome.whiteWin),
+      throwsA(isA<TournamentException>()),
+    );
+    expect(c.event!.encode(), saved);
     // Two on one board swap colours.
-    await tester.tap(find.byKey(ValueKey('round-player-${a.id}-${a.white}')));
-    await tester.tap(find.byKey(ValueKey('round-player-${a.id}-${b.white}')));
+    final replacement = round.games.first;
+    await tester.tap(
+      find.byKey(ValueKey('round-player-${replacement.id}-${a.white}')),
+    );
+    await tester.tap(
+      find.byKey(ValueKey('round-player-${replacement.id}-${b.white}')),
+    );
     await tester.pump();
     final again = c.event!.sections.first.rounds.last.games.first;
     expect((again.white, again.black), (b.white, a.white));
+    expect(again.id, isNot(replacement.id));
     c.undo();
     await tester.pump();
     expect(c.event!.sections.first.rounds.last.games.first.white, a.white);

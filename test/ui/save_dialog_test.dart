@@ -59,7 +59,10 @@ void main() {
     final log = diagnostics.join('\n');
     expect(log, contains('ERROR create event file — failed'));
     expect(log, contains('path: $destination'));
-    expect(log, contains('This event may be open or awaiting recovery.'));
+    expect(
+      log,
+      contains('This is an open event file or a database recovery file.'),
+    );
     expect(log, contains('Stack trace:'));
     expect(log, isNot(contains('create event file — succeeded')));
     expect(find.byTooltip('Copy error message'), findsOneWidget);

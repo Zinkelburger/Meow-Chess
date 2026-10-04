@@ -434,6 +434,13 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     const exists = TournamentException(
       'Choose a new backup filename; existing copies are never overwritten.',
     );
+    final name = p.basename(destination).toLowerCase();
+    if (ownsPath(destination) ||
+        ['-wal', '-shm', '-journal'].any(name.endsWith)) {
+      throw const TournamentException(
+        'This is an open event file or a database recovery file. Choose another location for the copy.',
+      );
+    }
     if (!replaceExisting && File(destination).existsSync()) throw exists;
     createDirectoryDurably(p.dirname(destination));
     final staging = File(
@@ -484,14 +491,6 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
   /// Keep SQLite ownership until POSIX publication; a preflight check alone
   /// leaves a window in which another process can acquire the old database.
   void _replace(String destination, void Function() publish) {
-    if (_path != ':memory:' &&
-        (p.equals(p.absolute(_path), p.absolute(destination)) ||
-            (File(destination).existsSync() &&
-                FileSystemEntity.identicalSync(_path, destination)))) {
-      throw const TournamentException(
-        'This is the open event file. Choose another location for the copy.',
-      );
-    }
     final resolved = File(destination).existsSync()
         ? File(destination).resolveSymbolicLinksSync()
         : destination;

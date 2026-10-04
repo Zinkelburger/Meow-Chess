@@ -424,6 +424,57 @@ void main() {
     expect(journal.readAsStringSync(), 'recovery data');
   });
 
+  test('backup cannot replace live recovery files or their aliases', () {
+    final path = p.join(directory.path, 'event.meow');
+    final owner = fixture(path: path);
+    final expected = owner.event!.encode();
+    final copy = fixture();
+    addTearDown(copy.dispose);
+    for (final suffix in ['-wal', '-shm', '-journal']) {
+      final recovery = '$path$suffix';
+      final before = FileSystemEntity.typeSync(recovery, followLinks: false);
+      for (final writer in [owner, copy]) {
+        expect(
+          () => writer.repository.backup(recovery, replaceExisting: true),
+          throwsA(isA<TournamentException>()),
+        );
+      }
+      expect(FileSystemEntity.typeSync(recovery, followLinks: false), before);
+    }
+    if (!Platform.isWindows) {
+      final alias = p.join(directory.path, 'wal-alias.meow');
+      Link(alias).createSync('$path-wal');
+      expect(
+        () => copy.repository.backup(alias, replaceExisting: true),
+        throwsA(isA<TournamentException>()),
+      );
+      expect(Link(alias).targetSync(), '$path-wal');
+    }
+    // Do not read recovery files through raw handles while SQLite owns them:
+    // closing such a handle can release the process's POSIX database locks.
+    owner.dispose();
+    final reopened = SqliteEventRepository(path);
+    try {
+      expect(reopened.load()!.encode(), expected);
+    } finally {
+      reopened.close();
+    }
+  });
+
+  test('backup refuses recovery filenames even without an open owner', () {
+    final c = fixture();
+    addTearDown(c.dispose);
+    for (final suffix in ['-wal', '-shm', '-journal']) {
+      final recovery = File(p.join(directory.path, 'closed.meow$suffix'))
+        ..writeAsStringSync('Recovery data');
+      expect(
+        () => c.repository.backup(recovery.path, replaceExisting: true),
+        throwsA(isA<TournamentException>()),
+      );
+      expect(recovery.readAsStringSync(), 'Recovery data');
+    }
+  });
+
   test('a non-database file is refused and left byte-for-byte intact', () {
     final path = p.join(directory.path, 'notes.meow');
     File(path).writeAsStringSync('Round 1 pairings, not a database\n' * 200);
