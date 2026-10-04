@@ -13,7 +13,7 @@ import 'drafts.dart';
 import 'theme.dart';
 import '../infrastructure/member_directory.dart';
 import 'member_identity_lookup.dart';
-import '../infrastructure/ratings_api.dart';
+import '../domain/member_observation.dart';
 
 import 'side_panel.dart';
 import 'player_format.dart';

@@ -35,10 +35,10 @@ MUIR yet: do one authorized draft upload before relying on it.
 
 The earlier Boylston rehearsal's “not ready” conclusion combined export feature
 gaps, missing source information and wider application qualification. It did not
-mean that the app could not write DBFs. Blitz and double-game export still need
-implementation/verification; missing required metadata and inconsistent source
-results still block the relevant reports. Mixed rounds are now supported. (Blitz
-and double games were added afterwards; see the update above.)
+mean that the app could not write DBFs. Mixed-round-count, blitz and double-game
+exports are now implemented and covered by the replays above. Missing required
+metadata and inconsistent source results still block the relevant reports;
+acceptance of a newly generated Meow package by MUIR remains unverified.
 
 ## Run the complete check
 

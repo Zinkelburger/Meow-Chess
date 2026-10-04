@@ -134,43 +134,45 @@ proximity, upper/lower-half preference, non-repeat opponents, color balance and
 lowest eligible non-repeat bye. It is **not a qualified US Chess Swiss engine**.
 Never promote the pilot to that claim without the rule-linked fixtures in DELIVERY.
 
-The DBF writer follows the archived 2C field layout and 2025 character-field
-correction. Packages are explicitly **unverified validation packages**, not accepted
-rating reports. Only completed, same-round-count, single-game sections without
-post-play transitions are enabled. All three files publish as a new directory with
-a manifest; unsupported encodings fail rather than fabricate data. Practice events
-cannot export rating packages, including after undo.
+The DBF writer uses the 2C field layout and mappings checked against archived
+US Chess-accepted club reports and their rated records. Packages remain locally
+validated exports: no newly generated Meow package has been accepted by MUIR.
+Completed sections can have different round counts. Double-game rounds expand
+to two reported rounds, including blitz; post-play transfer reporting attribution
+still requires qualification. All three files publish as a new directory with a
+manifest. Practice events cannot export rating packages, including after undo.
 
-The rating system is derived from the event time control under rule 5C (total
-= every control's minutes + delay/increment seconds; Regular > 65, Dual 30–65,
-Quick 11–29, Blitz 5–10), not chosen by hand. 2C has no Blitz code, so Blitz is
-blocked. `S_TIMECTL` is written as `Game/60 d/5` or `40/90, SD/30 inc/30`.
-Names go out as `LAST, FIRST` in capitals with accents folded to ASCII; a
-per-player "Name on rating report" overrides the derivation, and a US Chess
-lookup can fill it and the player's state. City, state, ZIP and event type
-(`S_SCH_LVL`) are saved with the event on the Reports page; multi-day events
-have a last day. Affiliate IDs must be `A` + seven digits. `H_OTHER_TD` is a
-255-byte character field as specified by US Chess 2C; it is always empty.
-The preflight in `dbf_export.dart` lists every problem before any file
-is written; see `research/notes/US_CHESS_REPORTING.md` for sources.
+The rating system is derived from each section's effective time control under
+rule 5C. `S_TIMECTL` uses canonical forms such as `G/60;d5` and `40/90,SD/30;+30`.
+Blitz uses the `D` field value present in accepted club reports; those rated records
+show that MUIR distinguishes it using the time control. Names are folded to ASCII
+in `LAST, FIRST` form, with a per-player rating-report override. Chief, assistant
+and other TD IDs are exported. Missing player state produces advice rather than
+blocking the package. The preflight lists blocking issues before publication.
+See [DBF compatibility](DBF_COMPATIBILITY.md) for fixtures, deliberate differences
+from source reports and the remaining portal-validation boundary.
 
-## Still required before the planned first release
+## Remaining qualification and product work
 
 - Qualified US Chess pairing policy and adversarial TD-reviewed event replays.
-- Accepted current DBF fixtures, external portal validation, Blitz/double-game and
-  mixed-round-count mappings, and post-play transfer reporting attribution.
-- Authenticated provider success/expiry/latest-rating evidence; batch rating review,
-  name search and explicit per-category frozen rating observations.
+- Live portal validation of a Meow-generated package and post-play transfer
+  reporting attribution. Archived accepted reports and rated-record replays are
+  covered by automated tests.
+- Live authenticated provider success/expiry and latest-rating qualification.
+  Batch review, name search and category-specific supplement evidence are
+  implemented; mocked provider contracts do not establish future live access.
 - Broader rule-specific withdrawal and transfer prize policies, comprehensive
   eligibility rules and automated prize allocation. Configurable tie-break orders,
   eligibility overrides, templates, structured ruling/appeal records, explicit
   effective-round withdrawal and late-entry scoring also remain release work.
-- All-round reciprocal player matrix, human screen-reader evaluation and large-field
-  performance qualification. Import has header inference, not a custom column-mapping
+- Human screen-reader evaluation and large-field performance qualification.
+  Import has header inference, not a custom column-mapping
   editor. Prize-class filtering is available on screen and in printed standings;
   automated prize allocation remains separate unfinished work.
-- Windows/macOS native build, printing, signing and recovery qualification; real
-  printer testing on each OS and working-TD usability rehearsal.
+- Full macOS workflow and sandbox qualification, signing/notarization, real printer
+  testing on each OS and working-TD usability rehearsal. Linux/Windows native
+  workflows and recovery, Windows installer launch, and macOS artifact publication
+  have automated gates described in [TESTING.md](TESTING.md).
 - Later tranches: team matches, bughouse, native SwissSys interchange, FIDE and hosted
   services. They remain in the product plan and are not represented by empty screens.
 

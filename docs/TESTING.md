@@ -88,6 +88,30 @@ difference from the accepted SwissSys report that has no stated reason, or any
 result that disagrees with what US Chess rated where SwissSys's own report did
 not.
 
+## 1.2.0 pre-release verification — October 4, 2026
+
+[CI run 37179195816](https://github.com/Zinkelburger/Meow-Chess/actions/runs/37179195816)
+passed on Ubuntu 22.04, Windows Server 2022 and Windows Server 2025, with the
+separate macOS artifact-publication job also passing. Linux ran all 447
+unit/widget tests; Windows ran 444 and skipped three POSIX-specific file tests.
+Each desktop job passed 13 native scenarios across 11 test targets, 89
+mock-importer tests, eight MCP protocol tests and abrupt-termination recovery.
+Linux also passed seven archived club-report replays. The reports and screenshots
+are attached to that run, including rating review and draft editing at 200% text.
+
+[Windows installer preflight](https://github.com/Zinkelburger/Meow-Chess/actions/runs/37178886735)
+installed the 1.2.0 build, verified file associations and bundled runtime DLLs,
+and launched and closed its native window. Local Linux release and RPM builds
+passed; the release executable also opened and closed its native window using
+an isolated Unicode data directory. A fresh MCP build reported version 1.2.0
+and completed synthetic quad, Swiss and double-game export rehearsals.
+
+The pre-release runs exposed and corrected platform-dependent test paths,
+implicit Python text encodings and outdated native rehearsal assumptions.
+Analysis and architecture/version checks passed after the final import and
+documentation cleanup. The tag-triggered release workflow repeats the full gate
+on the published commit before producing the downloads.
+
 ## Coverage and boundaries
 
 See [DBF compatibility setup and fragile importer](DBF_COMPATIBILITY.md) for the
@@ -95,7 +119,7 @@ eight-package export matrix, independent byte reader and corruption tests.
 
 | Concern | Automated evidence | Remaining qualification |
 |---|---|---|
-| US Chess 2C exports | Independent dbfread and fixed-offset mock readers; source-event oracle; eight synthetic packages covering 1–32 rounds, mixed counts, side games, quads, 1,000 players, leading-zero IDs, text limits and every supported outcome; 51 mock tests plus seven source/schema corruption controls. Full Fall Equinox reconstruction matches 19 entries / 70 active result cells. | Live MUIR acceptance remains unverified. Blitz and double-game output remain unsupported. Local format and semantic checks do not certify portal acceptance. |
+| US Chess 2C exports | Independent dbfread and fixed-offset mock readers; source-event oracle; eight synthetic packages covering 1–32 rounds, mixed counts, side games, quads, 1,000 players, leading-zero IDs, text limits and every supported outcome; 89 mock-importer tests plus source/schema corruption controls; seven club-report replays compare exports with rated records, including blitz and double-game expansion. | Live MUIR acceptance remains unverified. Local format and semantic checks, including comparisons with previously accepted reports, do not certify portal acceptance. |
 | Swiss pairings | Seeded multi-round simulations, no duplicate assignment or played-opponent repeats, bye fairness, color handling, withdrawals, reproducibility, stale proposals and explicit impossible-constraint failure | Full US Chess priority/exception conformance remains a pilot limitation; experienced TD review is still required. |
 | Teams and sibling requests | UI assignment and do-not-pair action, legal alternative opponent, four-round persistence, backup, invalid/stale mutations rejected; team names alone do not change pairings | Team names are roster labels for mixed-doubles partners. Fixed-board team tournaments and team scoring are not implemented. |
 | Tournament day | Native app library create/close/reopen; roster paste, section creation, pairing, keyboard scoring, PDF, dark/light screenshots and independent backup | File-picker/print-driver UI, actual physical printers and OS double-click forwarding need separate native/manual qualification. |

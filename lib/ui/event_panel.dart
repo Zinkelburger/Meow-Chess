@@ -6,7 +6,7 @@ import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
-import '../infrastructure/ratings_api.dart';
+import '../domain/member_observation.dart';
 import 'history_panel.dart' show historyTime;
 import '../infrastructure/member_directory.dart';
 import 'member_identity_lookup.dart';

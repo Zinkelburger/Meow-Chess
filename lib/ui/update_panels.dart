@@ -11,7 +11,7 @@ import '../domain/membership.dart';
 import 'membership_style.dart';
 import '../infrastructure/roster_import.dart';
 import '../infrastructure/web_roster.dart';
-import '../infrastructure/ratings_api.dart';
+import '../domain/member_observation.dart';
 import '../infrastructure/member_directory.dart';
 import 'side_panel.dart';
 
