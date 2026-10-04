@@ -56,7 +56,7 @@ def html_tables(folder):
     for path in sorted(folder.glob('*.html')):
         if not path.stat().st_size:
             continue
-        soup = BeautifulSoup(path.read_text(errors='replace'), 'html.parser')
+        soup = BeautifulSoup(path.read_text(errors='replace', encoding='utf-8'), 'html.parser')
         for table in soup.find_all('table'):
             heading = table.find_previous('h3').get_text(' ', strip=True)
             section_name = heading.split(': ', 1)[1].split(' (Standings', 1)[0].strip()
@@ -70,13 +70,13 @@ def html_tables(folder):
 
 
 def check_wallcharts(folder, exported):
-    event = json.loads((exported / 'event.json').read_text())
+    event = json.loads((exported / 'event.json').read_text(encoding='utf-8'))
     result = []
     values = {'whiteWin': (2, 0), 'draw': (1, 1), 'blackWin': (0, 2), 'whiteForfeit': (2, 0), 'blackForfeit': (0, 2)}
     for path in sorted(folder.glob('*.html')):
         if not path.stat().st_size:
             continue
-        soup = BeautifulSoup(path.read_text(errors='replace'), 'html.parser')
+        soup = BeautifulSoup(path.read_text(errors='replace', encoding='utf-8'), 'html.parser')
         for table in soup.find_all('table'):
             heading = table.find_previous('h3').get_text(' ', strip=True)
             if 'Wall Chart' not in heading:
@@ -194,7 +194,7 @@ def rehearse(folder, output):
     report = {'event': folder.name, 'sources': [], 'warnings': [], 'sections': [], 'htmlComparisons': []}
     slug = re.sub(r'[^a-z0-9]+', '-', folder.name.lower()).strip('-')
     log_path = output / f'{slug}-mcp.jsonl'
-    with log_path.open('w') as log:
+    with log_path.open('w', encoding='utf-8') as log:
         client = Client(output, log)
         try:
             date = h['H_BEG_DATE']
@@ -393,7 +393,7 @@ def main():
         except Exception as error:
             report['events'].append({'event': folder.name, 'failed': str(error)})
             print(' FAILED', error, flush=True)
-        (args.output / 'comparison.json').write_text(json.dumps(report, indent=2))
+        (args.output / 'comparison.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(args.output / 'comparison.json')
 
 

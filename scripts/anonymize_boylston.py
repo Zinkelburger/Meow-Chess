@@ -172,7 +172,7 @@ def main(argv):
     if len(argv) != 4:
         sys.exit(__doc__)
     source, uscf_path, out = Path(argv[1]), Path(argv[2]), Path(argv[3])
-    uscf = json.loads(uscf_path.read_text())
+    uscf = json.loads(uscf_path.read_text(encoding='utf-8'))
     ids = Identities()
     packages = {}
     # DBFs first (all events), then the rated record, so mapping order is stable.
@@ -184,7 +184,7 @@ def main(argv):
         for table, raw in packages[name].items():
             (target / f'{table}.DBF').write_bytes(raw)
         reduced = reduce_uscf(uscf[name], ids)
-        (target / 'uscf.json').write_text(json.dumps(reduced, indent=1) + '\n')
+        (target / 'uscf.json').write_text(json.dumps(reduced, indent=1) + '\n', encoding='utf-8')
     print(f'{len(EVENTS)} events, {len(ids.ids)} member IDs mapped -> {out}')
 
 

@@ -297,7 +297,7 @@ class BoylstonReplay(unittest.TestCase):
 
 def make_test(folder):
     def test(self):
-        rated = json.loads((folder / 'uscf.json').read_text())
+        rated = json.loads((folder / 'uscf.json').read_text(encoding='utf-8'))
         with tempfile.TemporaryDirectory(prefix='meow-boylston-') as temp:
             export, notes = replay(folder, Path(temp))
             problems, explained = compare_with_swisssys(folder, export, notes)

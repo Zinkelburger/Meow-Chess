@@ -44,7 +44,7 @@ ROUND_COUNT_EXCEPTIONS = {('springfestival', 3): 'side game: rated with 5 rounds
 
 
 def rated(event):
-    return json.loads((FIXTURES / event / 'uscf.json').read_text())
+    return json.loads((FIXTURES / event / 'uscf.json').read_text(encoding='utf-8'))
 
 
 def pairs(event):
@@ -176,14 +176,14 @@ class FixtureTests(unittest.TestCase):
             folder = copy_base(temp)
             header_cell(folder, 'H_FORMAT', '1A')
             result = subprocess.run([sys.executable, '-O', str(ROOT / 'scripts/mock_uscf_importer.py'),
-                                     str(folder)], capture_output=True, text=True)
+                                     str(folder)], capture_output=True, text=True, encoding='utf-8')
             self.assertEqual(result.returncode, 1)
             self.assertEqual(result.stdout, '')
             self.assertIn('H_FORMAT: unsupported format', result.stderr)
 
     def test_cli_success_emits_parseable_import(self):
         result = subprocess.run([sys.executable, str(ROOT / 'scripts/mock_uscf_importer.py'),
-                                 str(BASE)], capture_output=True, text=True, check=True)
+                                 str(BASE)], capture_output=True, text=True, check=True, encoding='utf-8')
         self.assertEqual(json.loads(result.stdout)['status'], 'mock-imported')
 
 
@@ -197,7 +197,7 @@ class MeowPackageTests(unittest.TestCase):
         for folder in folders:
             with self.subTest(package=folder.name):
                 result = import_package(folder)
-                source = json.loads((folder / 'expected-event.json').read_text())
+                source = json.loads((folder / 'expected-event.json').read_text(encoding='utf-8'))
                 people = {p['id']: p for p in source['players']}
                 self.assertEqual(len(result['sections']), len(source['sections']))
                 for imported, section in zip(result['sections'], source['sections']):

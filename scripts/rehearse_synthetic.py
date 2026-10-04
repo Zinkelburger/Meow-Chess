@@ -10,7 +10,7 @@ def main():
     root = Path(sys.argv[1]).resolve()
     root.mkdir(parents=True, exist_ok=False)
     summaries = []
-    with (root / 'mcp-transcript.jsonl').open('w') as log:
+    with (root / 'mcp-transcript.jsonl').open('w', encoding='utf-8') as log:
         c = Client(root, log)
         try:
             for label, count, double in [('quad', 4, False), ('swiss', 7, False), ('double', 5, True)]:
@@ -42,7 +42,7 @@ def main():
                 c.call('close_event')
         finally:
             c.close()
-    (root / 'summary.json').write_text(json.dumps(summaries, indent=2))
+    (root / 'summary.json').write_text(json.dumps(summaries, indent=2), encoding='utf-8')
     print(json.dumps(summaries, indent=2))
 
 
