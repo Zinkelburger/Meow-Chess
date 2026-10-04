@@ -9,6 +9,21 @@ import '../infrastructure/ratings_api.dart';
 const _secure = FlutterSecureStorage();
 const _keyName = 'uschess-v2';
 
+Future<List<MemberObservation>> searchMembers(String name) async {
+  String? key;
+  try {
+    key = await _secure.read(key: _keyName);
+  } catch (_) {
+    /* Public lookup also works without a keychain. */
+  }
+  final client = http.Client();
+  try {
+    return await RatingsApi(client).search(name, key: key ?? '');
+  } finally {
+    client.close();
+  }
+}
+
 /// Fetches a dated supplement using the public endpoint when no key is set.
 Future<MemberObservation?> fetchMember(
   TournamentController c,

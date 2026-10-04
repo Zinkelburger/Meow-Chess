@@ -11,6 +11,7 @@ import '../test/demo.dart';
 import 'package:meow_chess/main.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
+import 'package:meow_chess/domain/pairing.dart' show hasFixedQuadSchedule;
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/infrastructure/reports.dart';
 import 'package:meow_chess/ui/theme.dart';
@@ -58,7 +59,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
   testWidgets(
-    'native tournament day: post, keyboard score, print PDF, reopen and recover backup',
+    'native tournament day: mixed quad and Swiss schedules, keyboard score, print PDF and recover',
     (tester) async {
       final directory = Directory.systemTemp.createTempSync('meow-native-');
       final path = '${directory.path}/practice.meow';
@@ -107,8 +108,33 @@ void main() {
       await screenshot('players');
       await tester.tap(find.text('Pairings').first);
       await tester.pumpAndSettle();
+      final quads = c.event!.sections.where(hasFixedQuadSchedule).toList();
+      final swiss = c.event!.sections
+          .where((s) => !hasFixedQuadSchedule(s))
+          .toList();
+      expect(quads, hasLength(4));
+      expect(swiss, hasLength(1));
+      expect(c.event!.games, isEmpty);
+      expect(
+        c.pairingEvent.sections
+            .where(hasFixedQuadSchedule)
+            .every((s) => s.rounds.length == 3),
+        true,
+      );
+      // Only the six-player remainder needs posting; each quad already has its
+      // complete schedule on screen, without persisted results or a post step.
       await tester.tap(find.byKey(const ValueKey('pair-next-round')));
       await tester.pumpAndSettle();
+      expect(
+        c.event!.sections
+            .where(hasFixedQuadSchedule)
+            .every((s) => s.rounds.isEmpty),
+        true,
+      );
+      expect(
+        c.event!.sections.firstWhere((s) => s.id == swiss.single.id).rounds,
+        hasLength(1),
+      );
       for (var round = 0; round < 3; round++) {
         for (final section in c.event!.sections) {
           final sectionTile = find.byKey(
@@ -118,20 +144,33 @@ void main() {
           await tester.pumpAndSettle();
           await tester.tap(sectionTile);
           await tester.pumpAndSettle();
-          final games = c.event!.sections
-              .firstWhere((s) => s.id == section.id)
-              .rounds
-              .last
+          final displayed = c.pairingEvent.sections.firstWhere(
+            (s) => s.id == section.id,
+          );
+          if (hasFixedQuadSchedule(section)) {
+            expect(displayed.rounds, hasLength(3));
+            expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
+          }
+          final games = displayed.rounds
+              .firstWhere((r) => r.number == round + 1)
               .games;
-          await tester.tap(find.byKey(ValueKey('game-${games.first.id}')));
-          await tester.pump();
-          for (var i = 0; i < games.length; i++) {
+          for (final game in games) {
+            // Select the intended round explicitly: quads show future rounds
+            // too, and keyboard advance may move into the next one.
+            final score = find.byKey(ValueKey('score-${game.id}-w'));
+            await tester.ensureVisible(score);
+            await tester.pumpAndSettle();
+            await tester.tap(score);
             await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
             await tester.pumpAndSettle();
+            expect(
+              c.event!.games.firstWhere((g) => g.id == game.id).outcome,
+              Outcome.draw,
+            );
           }
           if (round == 0 && section.id == c.event!.sections.first.id) {
             await screenshot('results-section');
-            await tester.tap(find.byTooltip('Print preview…'));
+            await tester.tap(find.byKey(const ValueKey('print-round')));
             await tester.pumpAndSettle(const Duration(seconds: 1));
             expect(find.byKey(const ValueKey('print-panel')), findsOneWidget);
             await screenshot('print-docked');
@@ -153,12 +192,23 @@ void main() {
             await tester.pumpAndSettle();
           }
         }
-        expect(
-          c.event!.sections.every(
-            (s) => s.rounds.length == round + 1 && s.rounds.last.complete,
-          ),
-          true,
-        );
+        for (final section in c.event!.sections) {
+          expect(
+            section.rounds.firstWhere((r) => r.number == round + 1).complete,
+            true,
+          );
+          expect(
+            c.pairingEvent.sections
+                .firstWhere((s) => s.id == section.id)
+                .rounds
+                .where((r) => r.number > round + 1)
+                .expand((r) => r.games)
+                .every((g) => g.outcome == Outcome.unreported),
+            true,
+            reason:
+                'Entering round ${round + 1} must not score a future quad round',
+          );
+        }
         final allSections = find.byKey(const ValueKey('section-chip-all'));
         await tester.ensureVisible(allSections);
         await tester.pumpAndSettle();
@@ -174,6 +224,8 @@ void main() {
       }
       expect(c.event!.games.length, 33);
       expect(c.event!.games.every((g) => g.outcome == Outcome.draw), true);
+      expect(find.byKey(const ValueKey('event-complete')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
       await tester.tap(find.text('Players').first);
       await tester.pumpAndSettle();
       await screenshot('standings');

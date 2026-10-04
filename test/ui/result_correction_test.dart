@@ -43,7 +43,7 @@ void main() {
   testWidgets('all rounds groups boards correctly and cancel changes nothing', (
     tester,
   ) async {
-    final c = fixture();
+    final c = fixture(format: Format.swiss);
     addTearDown(c.dispose);
     await prepare(tester, c);
     final section = c.event!.sections.first;
@@ -98,7 +98,7 @@ void main() {
   testWidgets(
     'reopening from correction requires explicit unstarted confirmation',
     (tester) async {
-      final c = fixture();
+      final c = fixture(format: Format.swiss);
       addTearDown(c.dispose);
       await prepare(tester, c);
       final game = c.event!.games.first;
@@ -151,7 +151,7 @@ void main() {
   testWidgets(
     'entry result opens a review; result keys do not write behind it',
     (tester) async {
-      final c = fixture();
+      final c = fixture(format: Format.swiss);
       addTearDown(c.dispose);
       await prepare(tester, c);
       final game = c.event!.games.first;
@@ -193,7 +193,7 @@ void main() {
   testWidgets(
     'history reverses a selected result without undoing later player edits',
     (tester) async {
-      final c = fixture();
+      final c = fixture(format: Format.swiss);
       addTearDown(c.dispose);
       c.post((await tester.runAsync(() => c.propose()))!);
       final game = c.event!.games.first;
@@ -221,7 +221,7 @@ void main() {
   testWidgets('correction review fits narrow windows at double text size', (
     tester,
   ) async {
-    final c = fixture();
+    final c = fixture(format: Format.swiss);
     addTearDown(c.dispose);
     await prepare(tester, c);
     tester.view.physicalSize = const Size(680, 650);

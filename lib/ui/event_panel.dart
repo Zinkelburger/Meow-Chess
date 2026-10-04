@@ -4,8 +4,10 @@ import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
+import '../infrastructure/ratings_api.dart';
 import 'history_panel.dart' show historyTime;
 import 'identity_review.dart';
+import 'member_identity_lookup.dart';
 import 'players_view.dart' show SidePanel;
 import 'drafts.dart';
 import 'workspace_actions.dart';
@@ -16,11 +18,16 @@ class EventPanel extends StatefulWidget {
     required this.controller,
     required this.onClose,
     this.initialField,
+    this.identityLookup = fetchMembership,
+    this.memberSearch = searchMembers,
     super.key,
   });
   final TournamentController controller;
   final VoidCallback onClose;
   final String? initialField;
+  final Future<MemberObservation?> Function(TournamentController, String)
+  identityLookup;
+  final Future<List<MemberObservation>> Function(String) memberSearch;
   @override
   State<EventPanel> createState() => EventPanelState();
 }
@@ -64,11 +71,8 @@ class EventPanelState extends State<EventPanel> {
     };
   }
 
-  /// Values last shown, to tell outside changes (undo) from typing.
-  Map<String, String> shown = const {};
-
   void load() {
-    shown = stored;
+    final shown = stored;
     for (final e in text.entries) {
       e.value.text = shown[e.key]!;
     }
@@ -86,11 +90,7 @@ class EventPanelState extends State<EventPanel> {
   @override
   void didUpdateWidget(EventPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Follow outside changes unless the user is mid-edit.
-    if (mapEquals(values, shown) && !mapEquals(shown, stored)) {
-      draft.reset(stored);
-      load();
-    }
+    draft.reconcile(stored);
   }
 
   @override
@@ -107,7 +107,20 @@ class EventPanelState extends State<EventPanel> {
 
   /// Saves pending edits. Returns false and shows why if invalid.
   bool commit() {
-    if (!dirty) return true;
+    draft.reconcile(stored);
+    final conflicts = draft.conflicts(stored);
+    if (conflicts.isNotEmpty) {
+      final names = _fields
+          .where((field) => conflicts.contains(field.$1))
+          .map((field) => field.$2)
+          .join(', ');
+      setState(
+        () => error =
+            '$names changed elsewhere. Discard this draft to load the saved values, then re-enter your changes.',
+      );
+      return false;
+    }
+    if (!draft.dirty) return true;
     final v = values;
     try {
       if (v['name']!.trim().isEmpty) {
@@ -202,7 +215,7 @@ class EventPanelState extends State<EventPanel> {
       onClose: widget.onClose,
       children: [
         DraftStatus(draft: draft),
-        for (final (key, label, lines) in _fields)
+        for (final (key, label, lines) in _fields) ...[
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 8),
             child: TextField(
@@ -215,13 +228,28 @@ class EventPanelState extends State<EventPanel> {
               maxLines: lines,
               decoration: InputDecoration(
                 labelText: label,
-                hintText: key == 'endDate' ? 'YYYY-MM-DD' : null,
+                hintText: key == 'endDate'
+                    ? 'YYYY-MM-DD'
+                    : key == 'td' || key == 'atd'
+                    ? 'ID or name to search'
+                    : null,
                 alignLabelWithHint: lines > 1,
               ),
               onChanged: (_) => setState(() {}),
               onSubmitted: (_) => commit(),
             ),
           ),
+          if (key == 'td' || key == 'atd')
+            MemberIdentityLookup(
+              key: ValueKey('event-identity-$key'),
+              id: text[key]!,
+              lookup: (id) => widget.identityLookup(c, id),
+              search: widget.memberSearch,
+              onSelected: (member) => setState(() {
+                text[key]!.text = member.id;
+              }),
+            ),
+        ],
         if (error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),

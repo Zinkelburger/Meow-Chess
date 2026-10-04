@@ -235,6 +235,91 @@ void main() {
     ]);
   });
 
+  test('restore preview includes ranking and report identity changes', () {
+    final c = fixture();
+    addTearDown(c.dispose);
+    final before = c.event!;
+    final after = before.copy(
+      useTiebreaks: true,
+      endDate: '2099-12-31',
+      city: 'Boston',
+      state: 'MA',
+      zip: '02110',
+      level: 'S',
+      players: [
+        before.players.first.copy(state: 'NY', reportName: 'PLAYER, NEW'),
+        ...before.players.skip(1),
+      ],
+    );
+    final changes = describeChanges(before, after).join('\n');
+    for (final detail in [
+      'Tie-break rankings enabled',
+      'End date',
+      'Boston',
+      'MA',
+      '02110',
+      'Rating report section type',
+      'NY',
+      'PLAYER, NEW',
+    ]) {
+      expect(changes, contains(detail));
+    }
+  });
+
+  test(
+    'restore preview includes pairing assumptions, notes and schedule',
+    () async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      c.post(await c.propose());
+      final before = c.event!;
+      final section = before.sections.first;
+      final round = section.rounds.first;
+      final after = before.copy(
+        sections: [
+          section.copy(
+            timeControl: 'G/90',
+            sideGames: true,
+            quadPairings: [
+              [0, 1, 2, 3],
+              [0, 2, 1, 3],
+              [0, 3, 1, 2],
+            ],
+            players: section.players.reversed.toList(),
+            rounds: [
+              round.copy(
+                games: [
+                  round.games.first.copy(
+                    pairingAssumption: Outcome.draw,
+                    pairingReason: 'Director ruling',
+                    note: 'Reviewed',
+                  ),
+                  ...round.games.skip(1),
+                ],
+              ),
+            ],
+          ),
+          ...before.sections.skip(1),
+        ],
+      );
+      final changes = describeChanges(before, after).join('\n');
+      for (final detail in [
+        'G/90',
+        'side games',
+        'quad pairing schedule',
+        'player order',
+        'pairing assumption',
+        'Director ruling',
+        'Reviewed',
+      ]) {
+        expect(changes, contains(detail));
+      }
+      final restored = describeChanges(after, before).join('\n');
+      expect(restored, contains('note (empty)'));
+      expect(restored, contains('pairing assumption'));
+    },
+  );
+
   test('the graph and its forward line survive reopening', () {
     final dir = Directory.systemTemp.createTempSync('meow-history-');
     addTearDown(() => dir.deleteSync(recursive: true));

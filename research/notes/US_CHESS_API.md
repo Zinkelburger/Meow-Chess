@@ -1,5 +1,17 @@
 # US Chess ratings and identity API
 
+## Name lookup implementation — October 3, 2026
+
+The current v1 OpenAPI and live anonymous `GET /api/v1/members` were checked
+again. `Fuzzy` accepts a full name; `Offset=0&Size=10` bounds the candidate list.
+The app now exposes this search for player IDs and chief/assistant TD IDs.
+The same documented query is used on v2 when an operator supplies a key; the
+authenticated search is covered by contract tests, not a live keyed probe.
+Exact-ID checks distinguish a 404 from service failures and suggest name matches
+for missing records or a different official name. Candidate selection edits the
+draft ID only; the operator still saves it, and pairing ratings do not change.
+Late results and stale selection buttons are invalidated when the input changes.
+
 ## There is a real public specification
 
 The [official Swagger UI](https://ratings-api.uschess.org/swagger/index.html)

@@ -10,18 +10,22 @@ import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
 import '../infrastructure/reports.dart';
+import '../infrastructure/ratings_api.dart';
 import '../infrastructure/save_location.dart';
+import '../infrastructure/artifact_file.dart';
 import '../infrastructure/dbf_export.dart';
 import 'dialogs.dart';
 import 'panels.dart';
 import 'drafts.dart';
 import 'event_panel.dart';
 import 'players_view.dart';
+import 'identity_review.dart';
+import 'rating_refresh.dart';
 
 Future<void> saveArtifact(String name, Uint8List bytes) async {
   final location = await chooseSaveLocation(suggestedName: name);
   if (location != null) {
-    await XFile.fromData(bytes, name: name).saveTo(location.path);
+    writeArtifact(location.path, bytes);
   }
 }
 
@@ -32,12 +36,14 @@ class ReportsView extends StatefulWidget {
     this.onResults,
     this.onStandings,
     this.onBackups,
+    this.memberLookup = fetchMembership,
     super.key,
   });
   final TournamentController controller;
   final String? sectionId;
   final ValueChanged<String?>? onResults;
   final VoidCallback? onStandings, onBackups;
+  final RatingLookup memberLookup;
   @override
   State<ReportsView> createState() => _ReportsViewState();
 }
@@ -46,6 +52,8 @@ class _ReportsViewState extends State<ReportsView> {
   String? scope;
   final detailsKey = GlobalKey<ReportDetailsState>();
   final scroll = ScrollController();
+  bool fetchingStates = false;
+  String? stateNotice;
   TournamentController get controller => widget.controller;
   @override
   void initState() {
@@ -244,6 +252,68 @@ class _ReportsViewState extends State<ReportsView> {
         if (e.player(id).state.isEmpty) e.player(id),
   ];
 
+  Future<void> _fetchStates() async {
+    final c = controller, event = controller.event!;
+    final players = _stateless(event);
+    final lookups = players.where((p) => p.memberId.isNotEmpty).length;
+    final byId = <String, MemberObservation>{};
+    // Saved together at the end, as one revision and one undo step.
+    final found = <String, Json>{};
+    final failures = <String>[];
+    bool current() => mounted && controller == c && c.event?.id == event.id;
+    setState(() {
+      fetchingStates = true;
+      stateNotice = null;
+    });
+    for (final player in players) {
+      if (!current()) break;
+      if (player.memberId.isEmpty) continue;
+      try {
+        final member =
+            byId[player.memberId] ??
+            await widget.memberLookup(c, player.memberId);
+        if (!current()) break;
+        if (member == null || member.id != player.memberId) {
+          throw const TournamentException('No matching member returned.');
+        }
+        byId[player.memberId] = member;
+        found[player.id] = member.toJson();
+      } catch (error) {
+        if (!current()) break;
+        final message = plainMessage(error);
+        failures.add('${player.name}: $message');
+        if (message.contains('429') ||
+            message.contains('rate limit') ||
+            message.contains('API key') ||
+            message.contains('Public US Chess access')) {
+          break;
+        }
+      }
+      if (current()) {
+        setState(() => stateNotice = 'Looked up ${found.length} of $lookups…');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    var filled = 0;
+    if (c.event?.id == event.id) {
+      final before = _stateless(c.event!).map((p) => p.id).toSet();
+      c.recordMemberships(event.id, found);
+      filled = before
+          .where((id) => c.event!.player(id).state.isNotEmpty)
+          .length;
+    }
+    if (!mounted) return;
+    setState(() {
+      fetchingStates = false;
+      final remaining = current() ? _stateless(c.event!).length : 0;
+      stateNotice = current()
+          ? 'Saved $filled missing ${filled == 1 ? 'state' : 'states'}. '
+                '${remaining == 0 ? 'All player states are filled.' : '$remaining still missing; add a USCF ID, retry the lookup, or enter the state manually.'}'
+                '${failures.isEmpty ? '' : '\n${failures.join('\n')}'}'
+          : 'Event changed. Fetch again for the current roster.';
+    });
+  }
+
   void _fillStates(Event e) {
     final ids = _stateless(e).map((p) => p.id).toSet();
     try {
@@ -298,6 +368,11 @@ class _ReportsViewState extends State<ReportsView> {
           const SizedBox(height: 12),
           if (issues.isNotEmpty) _warnings(context, issues),
           if (advice.isNotEmpty) _warnings(context, advice, optional: true),
+          if (stateNotice != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(stateNotice!),
+            ),
           if (issues.isEmpty)
             const ListTile(
               contentPadding: EdgeInsets.zero,
@@ -311,7 +386,7 @@ class _ReportsViewState extends State<ReportsView> {
                 alignment: Alignment.centerLeft,
                 child: TextButton(
                   key: const ValueKey('fill-states'),
-                  onPressed: () => _fillStates(e),
+                  onPressed: fetchingStates ? null : () => _fillStates(e),
                   child: Text(
                     'Use ${e.state} for ${stateless.length} ${stateless.length == 1 ? 'player' : 'players'} without a state',
                   ),
@@ -522,6 +597,21 @@ class _ReportsViewState extends State<ReportsView> {
         childrenPadding: const EdgeInsets.fromLTRB(56, 0, 24, 16),
         expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (optional &&
+              _stateless(controller.event!).any((p) => p.memberId.isNotEmpty))
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('fetch-states'),
+                onPressed: fetchingStates ? null : _fetchStates,
+                icon: const Icon(Icons.cloud_download_outlined),
+                label: Text(
+                  fetchingStates
+                      ? 'Fetching states…'
+                      : 'Fetch missing states from US Chess',
+                ),
+              ),
+            ),
           for (final issue in issues)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -665,6 +755,7 @@ class ReportDetailsState extends State<ReportDetails> {
       children: [
         DraftStatus(draft: draft),
         Text('Report details', style: Theme.of(context).textTheme.titleMedium),
+        const Text('City, state and ZIP describe the tournament site.'),
         const SizedBox(height: 8),
         Wrap(
           spacing: 12,

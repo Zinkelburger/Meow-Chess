@@ -27,6 +27,17 @@ class RatingRefresh extends ChangeNotifier {
   String? notice;
   int _generation = 0;
 
+  /// Lookups awaiting one batched save, so a refresh adds one revision.
+  final _unrecorded = <String, Json>{};
+  String? _unrecordedEvent;
+
+  void _recordMemberships() {
+    if (_unrecordedEvent case final eventId? when _unrecorded.isNotEmpty) {
+      controller.recordMemberships(eventId, {..._unrecorded});
+    }
+    _unrecorded.clear();
+  }
+
   Player? original(String id) =>
       snapshot?.players.where((p) => p.id == id).firstOrNull;
 
@@ -93,8 +104,10 @@ class RatingRefresh extends ChangeNotifier {
   }
 
   Future<void> fetch({String? ratingCategory}) async {
+    _recordMemberships();
     final generation = ++_generation;
     final event = controller.event!;
+    _unrecordedEvent = event.id;
     if (ratingCategory != null) category = ratingCategory;
     snapshot = event;
     active = busy = true;
@@ -129,6 +142,7 @@ class RatingRefresh extends ChangeNotifier {
           );
         }
         byId[p.memberId] = found;
+        _unrecorded[p.id] = found.toJson();
         observations[p.id] = found;
         final live = controller.event!.players
             .where((x) => x.id == p.id)
@@ -158,6 +172,7 @@ class RatingRefresh extends ChangeNotifier {
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
     if (!current()) return;
+    _recordMemberships();
     busy = false;
     Diagnostics.record(
       'refresh USCF ratings',
@@ -176,6 +191,7 @@ class RatingRefresh extends ChangeNotifier {
   }
 
   void stop() {
+    _recordMemberships();
     _generation++;
     busy = false;
     notice =

@@ -82,6 +82,69 @@ class RatingsApi {
   RatingsApi(this.client);
   final http.Client client;
 
+  /// Bounded name search. Results are candidates, never an identity decision.
+  Future<List<MemberObservation>> search(String name, {String key = ''}) async {
+    final query = name.trim();
+    if (query.length < 2) {
+      throw const TournamentException('Enter at least two letters of a name.');
+    }
+    final publicAccess = key.trim().isEmpty;
+    final request =
+        http.Request(
+            'GET',
+            Uri.https(
+              'ratings-api.uschess.org',
+              '/api/${publicAccess ? 'v1' : 'v2'}/members',
+              {'Fuzzy': query, 'Offset': '0', 'Size': '10'},
+            ),
+          )
+          ..followRedirects = false
+          ..headers.addAll({
+            if (!publicAccess) 'X-Api-Key': key,
+            'Accept': 'application/json',
+          });
+    final response = await client
+        .send(request)
+        .then(http.Response.fromStream)
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) {
+      throw _requestFailure(response.statusCode, publicAccess);
+    }
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Json || decoded['items'] is! List) {
+        throw const FormatException();
+      }
+      final results = <MemberObservation>[];
+      for (final row in (decoded['items'] as List).take(10)) {
+        if (row is! Json) throw const FormatException();
+        final member = MemberObservation.parse(row, DateTime.now());
+        if (!isMemberId(member.id) || member.name.trim().isEmpty) {
+          throw const FormatException();
+        }
+        results.add(member);
+      }
+      return List.unmodifiable(results);
+    } catch (_) {
+      throw const TournamentException(
+        'Unreadable US Chess search results. Try again later.',
+      );
+    }
+  }
+
+  TournamentException _requestFailure(
+    int status,
+    bool publicAccess,
+  ) => TournamentException(switch (status) {
+    401 || 403 =>
+      publicAccess
+          ? 'Public US Chess access is unavailable. Add an API key in Data sources or try later.'
+          : 'US Chess rejected this API key. Update it in Data sources.',
+    429 =>
+      'US Chess rate limit reached. Retry later; local operation remains available.',
+    _ => 'US Chess lookup failed (HTTP $status). No local record was changed.',
+  });
+
   /// The public v1 route is an observed service capability, not an access guarantee.
   /// A dated supplement is required; a profile timestamp cannot date a rating.
   Future<MemberObservation> supplement(String id, {String key = ''}) async {
@@ -176,7 +239,7 @@ class RatingsApi {
     String key, {
     bool publicAccess = false,
   }) async {
-    if (!RegExp(r'^\d{8}$').hasMatch(id)) {
+    if (!isMemberId(id)) {
       throw const TournamentException('Enter an eight-digit ID first.');
     }
     if (key.trim().isEmpty && !publicAccess) {
@@ -204,17 +267,8 @@ class RatingsApi {
         .then(http.Response.fromStream)
         .timeout(const Duration(seconds: 15));
     if (response.statusCode != 200) {
-      throw TournamentException(switch (response.statusCode) {
-        401 || 403 =>
-          publicAccess
-              ? 'Public US Chess access is unavailable. Add an API key in Data sources or try later.'
-              : 'US Chess rejected this API key. Update it in Data sources.',
-        404 => 'Member ID not found. No local record was changed.',
-        429 =>
-          'US Chess rate limit reached. Retry later; local operation remains available.',
-        _ =>
-          'US Chess lookup failed (HTTP ${response.statusCode}). No local record was changed.',
-      });
+      if (response.statusCode == 404) throw const MemberNotFound();
+      throw _requestFailure(response.statusCode, publicAccess);
     }
     final Object? decoded;
     try {
@@ -249,4 +303,9 @@ class RatingsApi {
       provider: publicAccess ? 'US Chess public v1' : 'US Chess API v2',
     );
   }
+}
+
+class MemberNotFound extends TournamentException {
+  const MemberNotFound()
+    : super('Member ID not found. No local record was changed.');
 }

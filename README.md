@@ -73,6 +73,12 @@ retain their review step.
 for results are left alone. There is no separate start-round step.
 
 Right-click a player or section tab for **Move**, **Swap**, and **Withdraw**.
+Choose **Edit quad pairings** beside **New Section** to change opponents or flip
+colors within a quad. Select players in each round, then **Save pairings**.
+Everyone must meet once across the three rounds; changing opponents may require
+adjusting another unplayed round. Rounds with results, start markers or pairing
+assumptions stay locked. Saved edits update future rounds and printed sheets;
+reprint any sheets already distributed. **Undo** restores the previous schedule.
 The quad setup preview only displays the rating groups. **Print section sheets**
 prints one plain result sheet per quad with all round-robin pairings, including
 future rounds. Swiss sections print only the selected posted round. Sheets use
@@ -87,6 +93,9 @@ follow the repair links to resolve missing results or report inconsistencies.
 **Generate DBF files** becomes available once blocking issues are resolved;
 optional checks remain available for review. Final standings, crosstables,
 printouts, backup status, and submission notes are also available here.
+Expand **Optional checks** and choose **Fetch missing states from US Chess** to
+fill missing player states from their USCF IDs. Rating and membership lookups
+also fill missing states automatically; existing states are preserved.
 
 On **Pairings & results**, choose a round number or **Show all rounds** to find an earlier
 game. Choose **Correct a result**, or click a result cell in **Players & standings**, to review
@@ -108,6 +117,15 @@ as you change settings. Invalid rows must be fixed or explicitly skipped;
 paste a page containing a Name, Rating and USCF ID table, then review and confirm
 the players. Clubs can contribute their own URL rules and parsers; see
 [adding a club website](docs/CLUB_ROSTER_ADAPTERS.md).
+
+**Find by name** beside a player's US Chess ID searches official member records.
+**Check ID** warns about missing records or a different official name and offers
+possible corrections. Choose a candidate, then Save (or Add for a new player).
+Ratings stay unchanged. Event details offers the same name search for the chief
+and assistant chief TD: enter a name, choose **Find by name**, then select the ID.
+Search uses public access when available or the API key in Data sources; service
+failures leave the identity unverified. Report city, state and ZIP refer to the
+tournament site.
 
 On **Players**, **Show unofficial rating estimates** is off by default. Enable
 it to see approximate Regular ratings and changes as results are entered or

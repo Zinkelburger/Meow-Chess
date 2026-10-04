@@ -9,6 +9,7 @@ import '../application/tournament_controller.dart';
 import 'rating_refresh.dart';
 import 'identity_review.dart' show fetchMember, readRatingCategory;
 import '../domain/model.dart';
+import '../domain/pairing.dart';
 import '../infrastructure/roster_import.dart' show ImportRow;
 import 'dialogs.dart';
 import 'desktop_window.dart';
@@ -23,6 +24,7 @@ import 'workspace_actions.dart';
 import 'update_panels.dart';
 import 'help_panel.dart';
 import 'side_game_panel.dart';
+import 'quad_pairings_panel.dart';
 
 enum TaskView { players, results, reports }
 
@@ -201,6 +203,16 @@ class _WorkspaceState extends State<Workspace> {
         dock.close();
         pickSection(id, next: TaskView.results);
       },
+    ),
+  );
+
+  void editQuadPairings() => dock.show(
+    'quad-pairings',
+    QuadPairingsPanel(
+      key: UniqueKey(),
+      controller: c,
+      sectionId: sectionId,
+      onClose: dock.close,
     ),
   );
 
@@ -895,7 +907,22 @@ class _WorkspaceState extends State<Workspace> {
         ),
       );
     }
-    final state = postState(e, null);
+    // Completion includes fixed quad schedules even though they need no post
+    // button. A finished Swiss must not hide an unfinished quad in this event.
+    final overall = postState(c.pairingEvent, null);
+    if (!overall.complete && section != null && hasFixedQuadSchedule(section)) {
+      return const SizedBox.shrink();
+    }
+    final needingPairings = e.sections
+        .where((s) => !hasFixedQuadSchedule(s))
+        .toList();
+    if (!overall.complete && needingPairings.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final state = overall.complete
+        ? overall
+        : postState(e.copy(sections: needingPairings), null);
+    if (state.complete && !overall.complete) return const SizedBox.shrink();
     final muted = TextStyle(color: colors.onSurfaceVariant);
     if (state.complete) {
       return Row(
@@ -1069,6 +1096,25 @@ class _WorkspaceState extends State<Workspace> {
             icon: const Icon(Icons.add, size: 18),
             label: const Text('New Section'),
           ),
+          if (e.sections.any(hasFixedQuadSchedule)) ...[
+            const SizedBox(width: 8),
+            if (MediaQuery.sizeOf(context).width /
+                    MediaQuery.textScalerOf(context).scale(1) <
+                1100)
+              IconButton(
+                key: const ValueKey('edit-quad-pairings'),
+                tooltip: 'Edit quad pairings',
+                onPressed: editQuadPairings,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+              )
+            else
+              OutlinedButton.icon(
+                key: const ValueKey('edit-quad-pairings'),
+                onPressed: editQuadPairings,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Edit quad pairings'),
+              ),
+          ],
         ],
       ),
     );
@@ -1326,7 +1372,11 @@ class _WorkspaceState extends State<Workspace> {
       .where((g) => !g.outcome.resolved && g.pairingAssumption == null)
       .length;
   if (open.isEmpty) {
-    final missing = active.fold(0, (n, s) => n + waiting(s));
+    final missing = active
+        .expand((s) => s.rounds)
+        .expand((r) => r.games)
+        .where((g) => !g.outcome.resolved)
+        .length;
     if (missing == 0) return (label: null, why: null, complete: true);
     return (
       label: null,

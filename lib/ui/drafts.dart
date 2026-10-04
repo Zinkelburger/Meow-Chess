@@ -12,9 +12,12 @@ class FormDraft {
     final edits = saved['values'] as Map? ?? {};
     for (final entry in fields.entries) {
       final value = edits[entry.key];
-      entry.value.text = value is String && value != oldBase[entry.key]
-          ? value
-          : base[entry.key] ?? '';
+      final edited = value is String && value != oldBase[entry.key];
+      entry.value.text = edited ? value : base[entry.key] ?? '';
+      if (edited && oldBase[entry.key] is String) {
+        // Keep the original base so reopening cannot hide a conflicting edit.
+        _base[entry.key] = oldBase[entry.key] as String;
+      }
       entry.value.addListener(save);
     }
   }
@@ -24,7 +27,8 @@ class FormDraft {
   Map<String, String> _base;
   bool _loading = false;
   Map<String, String> get values => fields.map((k, v) => MapEntry(k, v.text));
-  bool get dirty => fields.entries.any((e) => e.value.text != _base[e.key]);
+  bool isEdited(String field) => fields[field]!.text != _base[field];
+  bool get dirty => fields.keys.any(isEdited);
 
   void save() {
     if (_loading) return;
@@ -34,6 +38,33 @@ class FormDraft {
       store.write(key, '');
     }
   }
+
+  /// Refresh untouched fields without losing input in other fields. A field
+  /// changed on both sides keeps its original base until the conflict is resolved.
+  void reconcile(Map<String, String> current) {
+    var changed = false;
+    _loading = true;
+    for (final entry in current.entries) {
+      final field = fields[entry.key];
+      if (field == null) continue;
+      if (field.text == _base[entry.key] || field.text == entry.value) {
+        changed = changed || _base[entry.key] != entry.value;
+        _base[entry.key] = entry.value;
+        if (field.text != entry.value) field.text = entry.value;
+      }
+    }
+    _loading = false;
+    if (changed) save();
+  }
+
+  Set<String> conflicts(Map<String, String> current) => {
+    for (final entry in current.entries)
+      if (fields.containsKey(entry.key) &&
+          fields[entry.key]!.text != _base[entry.key] &&
+          entry.value != _base[entry.key] &&
+          fields[entry.key]!.text != entry.value)
+        entry.key,
+  };
 
   void reset(Map<String, String> base) {
     _loading = true;

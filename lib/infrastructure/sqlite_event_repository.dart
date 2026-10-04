@@ -71,6 +71,10 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
       _db.execute('CREATE INDEX IF NOT EXISTS audit_node ON audit(node)');
       _db.execute('PRAGMA user_version = 2');
       _db.execute('COMMIT');
+      if (_path != ':memory:') {
+        _ownershipPath = File(_path).resolveSymbolicLinksSync();
+        _owners.add(this);
+      }
     } catch (error) {
       _db.close();
       if (error is SqliteException) {
@@ -88,8 +92,51 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
       rethrow;
     }
   }
+  static final _owners = <SqliteEventRepository>{};
+
+  /// Checks active databases and their journals using metadata only. Opening
+  /// and then closing a raw file descriptor could release this process's
+  /// POSIX SQLite locks, even if the descriptor was opened just for inspection.
+  static bool ownsPath(String path) {
+    String? resolved(String filename) {
+      try {
+        return File(filename).resolveSymbolicLinksSync();
+      } on FileSystemException {
+        // An external move/delete must not prevent inspecting other owners.
+        return null;
+      }
+    }
+
+    final absolute = p.normalize(p.absolute(path));
+    final target = resolved(path);
+    for (final owner in _owners) {
+      final paths = {
+        p.normalize(p.absolute(owner._path)),
+        if (owner._ownershipPath case final String original) original,
+        if (resolved(owner._path) case final String canonical) canonical,
+      };
+      for (final base in paths) {
+        for (final suffix in ['', '-wal', '-shm', '-journal']) {
+          final candidate = '$base$suffix';
+          if (p.equals(absolute, candidate) ||
+              (target != null && p.equals(target, candidate))) {
+            return true;
+          }
+          if (target == null) continue;
+          try {
+            if (FileSystemEntity.identicalSync(target, candidate)) return true;
+          } on FileSystemException {
+            // Journal creation/removal and external renames can race a stat.
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   final bool _created;
   final String _path;
+  String? _ownershipPath;
 
   /// SQLite may already have rolled back (for example after a failed COMMIT on
   /// a full disk); a second ROLLBACK would then mask the original error.
@@ -388,8 +435,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
       'Choose a new backup filename; existing copies are never overwritten.',
     );
     if (!replaceExisting && File(destination).existsSync()) throw exists;
-    if (replaceExisting) _checkReplacement(destination);
-    Directory(p.dirname(destination)).createSync(recursive: true);
+    createDirectoryDurably(p.dirname(destination));
     final staging = File(
       '$destination.$pid-${DateTime.now().microsecondsSinceEpoch}.partial',
     );
@@ -411,14 +457,19 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
         handle.closeSync();
       }
       try {
-        if (replaceExisting) _checkReplacement(destination);
-        publishFile(
+        void publish() => publishFile(
           staging.path,
           destination,
           replaceExisting: replaceExisting,
         );
+        if (replaceExisting) {
+          _replace(destination, publish);
+        } else {
+          publish();
+        }
       } on FileSystemException {
         if (!replaceExisting &&
+            staging.existsSync() &&
             FileSystemEntity.typeSync(destination, followLinks: false) !=
                 FileSystemEntityType.notFound) {
           throw exists;
@@ -430,7 +481,9 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     }
   }
 
-  void _checkReplacement(String destination) {
+  /// Keep SQLite ownership until POSIX publication; a preflight check alone
+  /// leaves a window in which another process can acquire the old database.
+  void _replace(String destination, void Function() publish) {
     if (_path != ':memory:' &&
         (p.equals(p.absolute(_path), p.absolute(destination)) ||
             (File(destination).existsSync() &&
@@ -439,59 +492,64 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
         'This is the open event file. Choose another location for the copy.',
       );
     }
-    // Replacing a database underneath a live writer or an unrecovered WAL
-    // would detach its contents from its journal. Never remove those journals.
     final resolved = File(destination).existsSync()
         ? File(destination).resolveSymbolicLinksSync()
         : destination;
-    bool hasJournals() => ['-wal', '-shm', '-journal'].any(
-      (suffix) =>
-          FileSystemEntity.typeSync('$resolved$suffix', followLinks: false) !=
-          FileSystemEntityType.notFound,
-    );
-    if (!hasJournals()) return;
+    bool present(String suffix) =>
+        FileSystemEntity.typeSync('$resolved$suffix', followLinks: false) !=
+        FileSystemEntityType.notFound;
     const unavailable = TournamentException(
       'This event may be open or awaiting recovery. Open and close it before replacing it.',
     );
-    // Only clean up an empty WAL left by inspection. Nonempty recovery data
-    // must be recovered through opening the event before attempting Replace.
     final wal = File('$resolved-wal');
-    if (FileSystemEntity.typeSync('$resolved-journal', followLinks: false) !=
-            FileSystemEntityType.notFound ||
-        (wal.existsSync() && wal.lengthSync() != 0) ||
-        !File(resolved).existsSync()) {
+    if (present('-journal') ||
+        (present('-wal') && (!wal.existsSync() || wal.lengthSync() != 0))) {
       throw unavailable;
     }
-    final handle = File(resolved).openSync();
-    try {
-      if (String.fromCharCodes(handle.readSync(16)) !=
-          'SQLite format 3\u0000') {
-        throw unavailable;
-      }
-    } finally {
-      handle.closeSync();
+    if (!File(resolved).existsSync()) {
+      if (present('-wal') || present('-shm')) throw unavailable;
+      publish();
+      return;
     }
-    // Let SQLite manage its own journals. Switching out of WAL requires an
-    // exclusive lock, so a live writer or reader prevents replacement.
     Database? check;
     try {
-      check = sqlite3.open(resolved, mode: OpenMode.readWrite);
-      check.execute('PRAGMA busy_timeout = 1000');
-      check.execute('BEGIN EXCLUSIVE');
-      check.select('SELECT name FROM sqlite_master LIMIT 1');
-      check.execute('COMMIT');
-      if (check.select('PRAGMA journal_mode = DELETE').first.values.first !=
-          'delete') {
-        throw unavailable;
+      try {
+        check = sqlite3.open(resolved, mode: OpenMode.readWrite);
+        check.execute('PRAGMA busy_timeout = 1000');
+        // Check even when no sidecars exist: DELETE-mode readers and reserved
+        // writers need not have created a journal. No raw File handle is
+        // closed here because POSIX close could release SQLite's locks.
+        check.select('SELECT name FROM sqlite_master LIMIT 1');
+        if (check.select('PRAGMA journal_mode = DELETE').first.values.first !=
+            'delete') {
+          throw unavailable;
+        }
+        check.execute('BEGIN EXCLUSIVE');
+      } on SqliteException catch (error) {
+        if (error.resultCode != 26 || present('-wal') || present('-shm')) {
+          throw unavailable;
+        }
+        // A user-confirmed ordinary file may be replaced as before.
+        check?.close();
+        check = null;
       }
-    } on SqliteException {
-      throw unavailable;
+      if (Platform.isWindows) {
+        // SQLite handles disallow delete sharing on Windows. Closing ours is
+        // required for MoveFileEx; any competing open handle blocks the move.
+        check?.close();
+        check = null;
+      }
+      publish();
     } finally {
+      // No writes were made to the locked target; closing rolls back the
+      // read-only exclusive transaction without creating a journal.
       check?.close();
     }
-    if (hasJournals()) throw unavailable;
   }
 
   @override
-  void close() => _db.close();
+  void close() {
+    _db.close();
+    _owners.remove(this);
+  }
 }

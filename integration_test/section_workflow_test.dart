@@ -77,7 +77,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(c.event!.games.first.outcome, Outcome.whiteWin);
       await capture('section-workflow-pairings');
-      await tester.tap(find.byKey(const ValueKey('show-crosstable')));
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('player-column-header')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(

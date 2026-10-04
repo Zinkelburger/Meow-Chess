@@ -11,6 +11,7 @@ MemberObservation observation(String id, int? rating) => MemberObservation(
   retrievedAt: '2026-10-03',
   supplementDate: '2026-10-01',
   ratings: {'R': rating},
+  state: 'NH',
 );
 
 void main() {
@@ -32,7 +33,11 @@ void main() {
       addTearDown(draft.dispose);
       await draft.fetch();
       expect(called, hasLength(3));
-      expect(c.event!.revision, revision);
+      expect(c.event!.revision, greaterThan(revision));
+      expect(c.event!.player('p0').rating, 2000);
+      expect(c.event!.player('p0').state, 'NH');
+      expect(c.event!.player('p2').state, 'NH');
+      expect(c.event!.player('p1').state, isEmpty);
       expect(draft.foundCount, 2);
       expect(draft.problem(c.event!.player('p1')), contains('No USCF ID'));
       expect(draft.problem(c.event!.player('p2')), contains('Unrated'));

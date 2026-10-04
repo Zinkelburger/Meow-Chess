@@ -197,6 +197,7 @@ class Game {
   final Outcome? pairingAssumption;
   final String pairingReason;
   Game copy({
+    String? id,
     Outcome? outcome,
     String? white,
     String? black,
@@ -205,7 +206,7 @@ class Game {
     Object? pairingAssumption = _unset,
     String? pairingReason,
   }) => Game(
-    id: id,
+    id: id ?? this.id,
     white: white ?? this.white,
     black: black ?? this.black,
     board: board ?? this.board,
@@ -339,7 +340,11 @@ class Section {
     this.ratingCeiling = 0,
     this.timeControl = '',
     this.sideGames = false,
+    List<List<int>> quadPairings = const [],
   }) : players = List.unmodifiable(players),
+       quadPairings = List.unmodifiable(
+         quadPairings.map((r) => List<int>.unmodifiable(r)),
+       ),
        rounds = List.unmodifiable(rounds);
   final String id, name;
 
@@ -353,6 +358,14 @@ class Section {
   final int plannedRounds, boardStart, ratingCeiling;
   final bool doubleGames;
   final List<Round> rounds;
+
+  /// Results may arrive out of order, or an earlier result may be reopened.
+  /// Every unresolved persisted round still reserves its players and boards.
+  Iterable<Round> get unresolvedRounds => rounds.where((r) => !r.complete);
+
+  /// Three rounds of White/Black roster slots, independent of player identity.
+  /// Empty uses the standard quad schedule.
+  final List<List<int>> quadPairings;
   bool get finished =>
       rounds.length >= plannedRounds && rounds.every((r) => r.complete);
   Section copy({
@@ -366,6 +379,7 @@ class Section {
     int? ratingCeiling,
     String? timeControl,
     bool? sideGames,
+    List<List<int>>? quadPairings,
   }) => Section(
     id: id,
     name: name ?? this.name,
@@ -378,6 +392,7 @@ class Section {
     ratingCeiling: ratingCeiling ?? this.ratingCeiling,
     timeControl: timeControl ?? this.timeControl,
     sideGames: sideGames ?? this.sideGames,
+    quadPairings: quadPairings ?? this.quadPairings,
   );
   Json toJson() => {
     'id': id,
@@ -391,6 +406,7 @@ class Section {
     'ratingCeiling': ratingCeiling,
     'timeControl': timeControl,
     'sideGames': sideGames,
+    if (quadPairings.isNotEmpty) 'quadPairings': quadPairings,
   };
   factory Section.fromJson(Json j) => Section(
     id: j['id'],
@@ -404,6 +420,9 @@ class Section {
     ratingCeiling: j['ratingCeiling'] ?? 0,
     timeControl: j['timeControl'] ?? '',
     sideGames: j['sideGames'] ?? false,
+    quadPairings: [
+      for (final r in j['quadPairings'] as List? ?? const []) List<int>.from(r),
+    ],
   );
 }
 
@@ -658,6 +677,28 @@ void validateEvent(Event e) {
   final livePeople = <String>{};
   for (final s in e.sections) {
     final sectionPeople = <String>{};
+    if (s.quadPairings.isNotEmpty) {
+      require(
+        s.quadPairings.length == 3 &&
+            s.quadPairings.every(
+              (r) =>
+                  r.length == 4 &&
+                  r.toSet().length == 4 &&
+                  r.every((slot) => slot >= 0 && slot < 4),
+            ),
+        'A manual quad schedule needs four distinct roster slots in each of three rounds.',
+      );
+      final opponents = <String>{};
+      for (final row in s.quadPairings) {
+        for (var i = 0; i < 4; i += 2) {
+          final pair = [row[i], row[i + 1]]..sort();
+          require(
+            opponents.add(pair.join('-')),
+            'A quad must pair each opponent once.',
+          );
+        }
+      }
+    }
     require(
       s.name.trim().isNotEmpty && s.plannedRounds > 0 && s.boardStart > 0,
       'Invalid section settings.',
@@ -672,16 +713,16 @@ void validateEvent(Event e) {
         'A person cannot have two entries in the same section.',
       );
     }
-    final latest = s.rounds.lastOrNull;
-    if (latest != null && !latest.complete) {
-      final sectionBoards = latest.games.map((g) => g.board).toSet();
+    final liveGames = s.unresolvedRounds.expand((r) => r.games).toList();
+    if (liveGames.isNotEmpty) {
+      final sectionBoards = liveGames.map((g) => g.board).toSet();
       for (final board in sectionBoards) {
         require(
           liveBoards.add(board),
           'Two active sections reserve the same board.',
         );
       }
-      final people = latest.games
+      final people = liveGames
           .where((g) => !g.outcome.resolved)
           .expand((g) => [g.white, g.black])
           .toSet();

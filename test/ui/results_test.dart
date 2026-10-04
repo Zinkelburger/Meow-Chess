@@ -107,8 +107,8 @@ void main() {
         Outcome.blackWin,
         Outcome.draw,
       ]);
-      await tester.tap(find.byType(TextField));
-      await tester.enterText(find.byType(TextField), '1');
+      await tester.tap(find.byKey(const ValueKey('board-search')));
+      await tester.enterText(find.byKey(const ValueKey('board-search')), '1');
       await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
       await tester.pump();
       expect(c.event!.games.where((g) => g.outcome.resolved).length, 3);
@@ -230,7 +230,7 @@ void main() {
   testWidgets(
     'round cells are read-only; byes can be cleared in player details',
     (tester) async {
-      final c = fixture();
+      final c = fixture(format: Format.swiss);
       addTearDown(c.dispose);
       await mountPlayers(tester, c);
       await tester.tap(find.byKey(const ValueKey('round-p0-2')));
@@ -299,6 +299,14 @@ void main() {
       find.byKey(ValueKey('player-${section.players.first}')),
     );
     expect(top.dy, lessThan(seed1.dy));
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('number-${g.black}')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Rank'), findsNothing);
     expect(find.text('Seed order'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 500));
@@ -390,7 +398,13 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
       await tester.pump();
       expect(c.event!.games.first.outcome, Outcome.draw);
-      expect(find.text('½'), findsNWidgets(2));
+      expect(
+        find.descendant(
+          of: find.byKey(ValueKey('game-${g.id}')),
+          matching: find.text('½'),
+        ),
+        findsNWidgets(2),
+      );
       // The cursor moved on to the next board, White's box.
       final next = c.event!.games.elementAt(1);
       await tester.sendKeyEvent(LogicalKeyboardKey.digit0);

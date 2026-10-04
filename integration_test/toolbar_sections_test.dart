@@ -120,7 +120,9 @@ void main() {
     await tester.tap(find.text('Pairings').first);
     await tester.pumpAndSettle();
     await capture('toolbar-rounds-small');
-    await tester.tap(find.byKey(const ValueKey('show-crosstable')));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('player-column-header')),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Rank'), findsOneWidget);
     expect(find.text('R1'), findsOneWidget);
@@ -130,10 +132,14 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1440, 900));
     await tester.tap(find.byKey(ValueKey('section-chip-${first.id}')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('show-crosstable')));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('player-column-header')),
+    );
     await tester.pumpAndSettle();
     await capture('workflow-crosstable');
-    await tester.tap(find.byKey(const ValueKey('show-boards')));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('board-column-header')),
+    );
     await tester.pumpAndSettle();
     await capture('workflow-pairings');
     c.change(

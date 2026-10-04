@@ -6,7 +6,7 @@ import '../support.dart';
 
 void main() {
   test(
-    'current pairings print only the latest posted round in a quad',
+    'round lookup can explicitly request only the latest posted quad round',
     () async {
       final c = fixture(count: 4);
       addTearDown(c.dispose);

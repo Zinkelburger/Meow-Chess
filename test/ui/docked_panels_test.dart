@@ -182,7 +182,7 @@ void main() {
   testWidgets('Edit pairings swaps two clicked players as a new revision', (
     tester,
   ) async {
-    final c = fixture();
+    final c = fixture(format: Format.swiss);
     addTearDown(c.dispose);
     final id = c.event!.sections.first.id;
     c.post((await tester.runAsync(() => c.propose(sectionId: id)))!);
@@ -255,14 +255,17 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('Print preview docks beside the boards', (tester) async {
+  testWidgets('Print packet always opens a preview beside the boards', (
+    tester,
+  ) async {
     final c = fixture();
     addTearDown(c.dispose);
     c.post((await tester.runAsync(() => c.propose()))!);
     await mountWorkspace(tester, c);
     await tester.tap(find.text('Pairings').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Print preview…'));
+    expect(find.byTooltip('Print preview…'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('print-round')));
     await tester.pump();
     expect(find.byKey(const ValueKey('print-panel')), findsOneWidget);
     expect(find.byType(Dialog), findsNothing);

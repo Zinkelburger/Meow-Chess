@@ -43,6 +43,7 @@ void main() {
                       'status': 'Active',
                       'firstName': 'Test',
                       'lastName': 'Player',
+                      'stateRep': 'NH',
                       'ratings': [
                         {'ratingSystem': 'R', 'rating': 999},
                       ],
@@ -59,6 +60,7 @@ void main() {
         expect(value.supplementDate, '2020-02-01');
         expect(value.expiration, '2027-12-31');
         expect(value.status, 'Active');
+        expect(value.state, 'NH');
         expect(value.toJson().toString(), isNot(contains('operator-key')));
       },
     );

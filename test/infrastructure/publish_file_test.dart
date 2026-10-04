@@ -15,6 +15,26 @@ void main() {
   });
   tearDown(() => directory.deleteSync(recursive: true));
 
+  test('durable directory creation supports nested backup destinations', () {
+    final nested = p.join(directory.path, 'copies', 'day', 'round');
+    createDirectoryDurably(nested);
+    expect(Directory(nested).existsSync(), true);
+    syncDirectory(nested);
+    publishFile(source.path, p.join(nested, 'copy.meow'));
+    expect(File(p.join(nested, 'copy.meow')).readAsStringSync(), 'complete');
+  });
+
+  test('directory synchronization errors are surfaced', () {
+    expect(
+      () => syncDirectory(p.join(directory.path, 'missing')),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(
+      () => syncDirectory(source.path),
+      throwsA(isA<FileSystemException>()),
+    );
+  }, skip: Platform.isWindows);
+
   test('publishes the complete file and removes its staging name', () {
     publishFile(source.path, destination);
     expect(File(destination).readAsStringSync(), 'complete');

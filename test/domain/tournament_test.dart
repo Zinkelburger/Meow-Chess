@@ -40,18 +40,27 @@ void main() {
         final ids = List.generate(n, (i) => '$i');
         final schedule = roundRobinSchedule(ids);
         final pairs = <String>{};
+        final colors = <String, int>{for (final id in ids) id: 0};
         for (final round in schedule) {
           final used = <String>{};
           for (final (a, b) in round) {
             if (a != null) expect(used.add(a), true);
             if (b != null) expect(used.add(b), true);
             if (a != null && b != null) {
+              colors[a] = colors[a]! + 1;
+              colors[b] = colors[b]! - 1;
               final pair = [a, b]..sort();
               expect(pairs.add(pair.join('/')), true);
             }
           }
         }
         expect(pairs.length, n * (n - 1) ~/ 2);
+        expect(
+          colors.values.map((balance) => balance.abs()),
+          everyElement(n.isOdd ? 0 : 1),
+          reason:
+              'Each of the $n players gets equally many colors, within one.',
+        );
       }
     },
   );
@@ -159,9 +168,9 @@ void main() {
     },
   );
   test(
-    'historical corrections require reason and preserve later games',
+    'historical Swiss corrections require reason and preserve later games',
     () async {
-      final c = fixture(count: 4);
+      final c = fixture(count: 4, format: Format.swiss);
       addTearDown(c.dispose);
       c.post(await c.propose());
       for (final g in c.event!.games.toList()) {

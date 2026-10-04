@@ -68,7 +68,8 @@ class ResultCorrection {
         for (final r in s.rounds)
           if (r.number > round.number) (s, r),
   ];
-  bool get hasDependencies => later.isNotEmpty || hasTransfers;
+  bool get hasDependencies =>
+      (section.format == Format.swiss && later.isNotEmpty) || hasTransfers;
 
   bool canReopenFrom(int number) =>
       !hasTransfers &&

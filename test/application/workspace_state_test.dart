@@ -65,4 +65,37 @@ void main() {
     store.dispose();
     repository.close();
   });
+
+  test(
+    'reconcile merges untouched fields and keeps conflicts until resolved',
+    () {
+      final repository = FailingPreferences();
+      final store = WorkspaceState(repository);
+      final rating = TextEditingController(), notes = TextEditingController();
+      final draft = FormDraft(
+        store,
+        'player',
+        {'rating': rating, 'notes': notes},
+        {'rating': '2000', 'notes': ''},
+      );
+      notes.text = 'Local notes';
+      draft.reconcile({'rating': '2100', 'notes': ''});
+      expect(rating.text, '2100');
+      expect(notes.text, 'Local notes');
+      expect(draft.conflicts({'rating': '2100', 'notes': ''}), isEmpty);
+      rating.text = '2150';
+      draft.reconcile({'rating': '2200', 'notes': ''});
+      expect(rating.text, '2150');
+      expect(draft.conflicts({'rating': '2200', 'notes': ''}), {'rating'});
+      rating.text = '2200';
+      draft.reconcile({'rating': '2200', 'notes': ''});
+      expect(draft.conflicts({'rating': '2200', 'notes': ''}), isEmpty);
+      expect(notes.text, 'Local notes');
+      draft.dispose();
+      rating.dispose();
+      notes.dispose();
+      store.dispose();
+      repository.close();
+    },
+  );
 }

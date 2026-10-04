@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'model.dart';
 
 /// One saved state of the event. Every command creates a node whose parent is
@@ -197,6 +199,11 @@ List<String> describeChanges(
   for (final (key, label) in [
     ('name', 'Event name'),
     ('date', 'Date'),
+    ('endDate', 'End date'),
+    ('city', 'City'),
+    ('state', 'State'),
+    ('zip', 'ZIP code'),
+    ('level', 'Rating report section type'),
     ('timeControl', 'Time control'),
     ('venue', 'Venue'),
     ('tdId', 'TD ID'),
@@ -216,6 +223,17 @@ List<String> describeChanges(
     out.add(
       after.practice ? 'Marked as a practice copy' : 'Practice mark removed',
     );
+  }
+
+  if (before.useTiebreaks != after.useTiebreaks) {
+    out.add(
+      after.useTiebreaks
+          ? 'Tie-break rankings enabled'
+          : 'Tie-break rankings disabled',
+    );
+  }
+  if (jsonEncode(before.rosterSource) != jsonEncode(after.rosterSource)) {
+    out.add('Roster source changed');
   }
 
   final oldPlayers = {for (final p in before.players) p.id: p};
@@ -238,6 +256,14 @@ List<String> describeChanges(
     final edits = [
       if (o.name != p.name) 'renamed from ${o.name}',
       if (o.rating != p.rating) 'rating ${value(o.rating, p.rating)}',
+      if (o.state != p.state)
+        'state ${value(_short(o.state), _short(p.state))}',
+      if (o.reportName != p.reportName)
+        'rating report name ${value(_short(o.reportName), _short(p.reportName))}',
+      if (o.personId != p.personId) 'linked person identity changed',
+      if (o.source != p.source) 'registration source changed',
+      if (jsonEncode(o.ratingEvidence) != jsonEncode(p.ratingEvidence))
+        'rating evidence changed',
       if (o.membershipEvidence.toString() != p.membershipEvidence.toString())
         'US Chess membership: ${p.membershipEvidence['expiration'] ?? 'date unavailable'} (${p.membershipEvidence['status'] ?? 'unknown'})',
       if (o.memberId != p.memberId)
@@ -286,6 +312,12 @@ List<String> describeChanges(
         'first board ${value(o.boardStart, s.boardStart)}',
       if (o.ratingCeiling != s.ratingCeiling)
         'rating ceiling ${value(o.ratingCeiling, s.ratingCeiling)}',
+      if (o.timeControl != s.timeControl)
+        'time control ${value(_short(o.timeControl), _short(s.timeControl))}',
+      if (o.sideGames != s.sideGames)
+        s.sideGames ? 'side games enabled' : 'side games disabled',
+      if (jsonEncode(o.quadPairings) != jsonEncode(s.quadPairings))
+        'quad pairing schedule changed',
       if (o.doubleGames != s.doubleGames)
         s.doubleGames ? 'double games' : 'single games',
     ];
@@ -294,6 +326,11 @@ List<String> describeChanges(
     final left = o.players.where((id) => !s.players.contains(id));
     if (joined.isNotEmpty) out.add('$label: added ${_list(joined.map(name))}');
     if (left.isNotEmpty) out.add('$label: removed ${_list(left.map(name))}');
+    if (joined.isEmpty &&
+        left.isEmpty &&
+        jsonEncode(o.players) != jsonEncode(s.players)) {
+      out.add('$label: player order changed');
+    }
 
     for (final r in o.rounds.skip(s.rounds.length)) {
       out.add('$label round ${r.number} removed');
@@ -312,6 +349,13 @@ List<String> describeChanges(
       } else if (old.startedAt != null && r.startedAt == null) {
         out.add('$label round ${r.number} start cleared');
       }
+      if (old.startedAt != null &&
+          r.startedAt != null &&
+          old.startedAt != r.startedAt) {
+        out.add('$prefix start time ${value(old.startedAt!, r.startedAt!)}');
+      }
+      if (old.postedAt != r.postedAt) out.add('$prefix posting time changed');
+      if (old.policy != r.policy) out.add('$prefix pairing policy changed');
       if (old.note != r.note) out.add('$prefix note ${_short(r.note)}');
       final oldGames = {for (final g in old.games) g.id: g};
       final gameIds = r.games.map((g) => g.id).toSet();
@@ -337,7 +381,21 @@ List<String> describeChanges(
             '$prefix board ${g.board} $pairing: ${value(x.outcome.label, g.outcome.label)}',
           );
         }
-        if (x.note != g.note && g.note.isNotEmpty) {
+        if (x.leg != g.leg) {
+          out.add('$prefix board ${g.board}: game leg ${value(x.leg, g.leg)}');
+        }
+        if (x.pairingAssumption != g.pairingAssumption) {
+          out.add(
+            '$prefix board ${g.board}: pairing assumption '
+            '${value(x.pairingAssumption?.label ?? '(none)', g.pairingAssumption?.label ?? '(none)')}',
+          );
+        }
+        if (x.pairingReason != g.pairingReason) {
+          out.add(
+            '$prefix board ${g.board}: pairing reason ${_short(g.pairingReason)}',
+          );
+        }
+        if (x.note != g.note) {
           out.add('$prefix board ${g.board} note ${_short(g.note)}');
         }
       }
@@ -346,7 +404,15 @@ List<String> describeChanges(
       final oldByes = {for (final x in old.byes) x.player: x.points};
       final newByes = {for (final x in r.byes) x.player: x.points};
       for (final id in {...oldByes.keys, ...newByes.keys}) {
-        if (oldByes[id] == newByes[id]) continue;
+        if (oldByes[id] == newByes[id]) {
+          final previous = old.byes.firstWhere((b) => b.player == id);
+          final current = r.byes.firstWhere((b) => b.player == id);
+          if (previous.reason != current.reason ||
+              previous.allocated != current.allocated) {
+            out.add('$prefix: ${name(id)} bye details changed');
+          }
+          continue;
+        }
         out.add(
           newByes[id] == null
               ? '$prefix: ${name(id)} bye removed'
@@ -359,6 +425,23 @@ List<String> describeChanges(
     out.add('Recorded a section transfer');
   } else if (after.transitions.length < before.transitions.length) {
     out.add('Section transfer record removed');
+  } else if (jsonEncode(before.transitions) != jsonEncode(after.transitions)) {
+    out.add('Section transfer record changed');
+  }
+  if (before.sections.length == after.sections.length &&
+      before.sections
+          .map((s) => s.id)
+          .toSet()
+          .containsAll(after.sections.map((s) => s.id)) &&
+      before.sections.map((s) => s.id).join('|') !=
+          after.sections.map((s) => s.id).join('|')) {
+    out.add('Section order changed');
+  }
+  // A future persisted field must never make a restore look unchanged merely
+  // because it has not yet acquired a specialized description above.
+  if (out.isEmpty &&
+      before.copy(revision: 0).encode() != after.copy(revision: 0).encode()) {
+    out.add('Other event details changed');
   }
   return out;
 }

@@ -1,5 +1,6 @@
 import 'result_keys.dart';
 import 'player_actions.dart';
+import 'quad_pairings_panel.dart';
 import '../infrastructure/reports.dart';
 import 'dart:math' as math;
 
@@ -8,17 +9,16 @@ import 'package:flutter/services.dart';
 
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
+import '../domain/pairing.dart';
 import 'dialogs.dart';
 import 'result_correction_dialog.dart';
 import 'players_view.dart'
     show
-        boardRange,
         halves,
         PlayerPanel,
         PlayerPanelState,
         PlayerDetailsLayout,
-        PlayersView,
-        detailsColumnWidth;
+        PlayersView;
 import 'panels.dart';
 import 'theme.dart';
 
@@ -100,15 +100,20 @@ class ResultsViewState extends State<ResultsView> {
 
   /// Score boxes by '$gameId-w' / '$gameId-b'.
   final boxes = <String, FocusNode>{};
-  bool missingOnly = false, forfeit = false, busy = false;
+  bool forfeit = false, busy = false;
+  bool get missingOnly =>
+      c.workspaceState.read('pairings-missing-only') == 'true';
+  final crosstableHeading = GlobalKey();
+  final stackedScroll = ScrollController();
 
   /// An earlier round on screen; null shows each section's current round.
   /// Restored read-only; a newly posted round resets the selection.
   int? selectedRound;
   bool showAllRounds = false;
-  bool crosstable = false;
-
-  void showCrosstable() => setState(() => crosstable = true);
+  void showCrosstable() {
+    final target = crosstableHeading.currentContext;
+    if (target != null) Scrollable.ensureVisible(target);
+  }
 
   /// Whether results in an earlier round may be changed.
   bool correcting = false;
@@ -132,10 +137,15 @@ class ResultsViewState extends State<ResultsView> {
   @override
   void initState() {
     super.initState();
+    showAllRounds = sections.any(hasFixedQuadSchedule);
     roundSignature = signature();
     final saved = c.workspaceState.readMap(preference);
-    missingOnly = saved['missingOnly'] == true;
-    crosstable = saved['crosstable'] == true;
+    if (c.workspaceState.read('pairings-missing-only') == null) {
+      c.workspaceState.write(
+        'pairings-missing-only',
+        '${saved['missingOnly'] == true}',
+      );
+    }
     if (saved['signature'] == roundSignature) {
       selectedRound = saved['round'] as int?;
       showAllRounds = saved['allRounds'] == true;
@@ -171,15 +181,15 @@ class ResultsViewState extends State<ResultsView> {
     remember();
   }
 
-  void printRound() => printSheets(
+  void printRound() => showPrint(
     context,
     c.event!,
     sectionId: widget.sectionId,
-    roundNumber: selectedRound,
-    kind: crosstable ? ReportKind.standings : ReportKind.packet,
+    roundNumber: sections.every(hasFixedQuadSchedule) ? null : selectedRound,
+    kind: ReportKind.packet,
   );
 
-  Iterable<Section> get sections => c.event!.sections.where(
+  Iterable<Section> get sections => c.pairingEvent.sections.where(
     (s) => widget.sectionId == null || s.id == widget.sectionId,
   );
 
@@ -193,8 +203,7 @@ class ResultsViewState extends State<ResultsView> {
     // A round was posted or undone: go back to the current round.
     if (roundSignature.isNotEmpty && next != roundSignature) {
       selectedRound = null;
-      showAllRounds = false;
-      crosstable = false;
+      showAllRounds = sections.any(hasFixedQuadSchedule);
       correcting = nudged = forfeit = false;
       activeBox = null;
       jump.clear();
@@ -216,6 +225,7 @@ class ResultsViewState extends State<ResultsView> {
       n.dispose();
     }
     scroll.dispose();
+    stackedScroll.dispose();
     jump.dispose();
     super.dispose();
   }
@@ -243,7 +253,9 @@ class ResultsViewState extends State<ResultsView> {
       showAllRounds ? s.rounds : [?shownRound(s)];
 
   /// An earlier round, whose results change only while correcting.
-  bool past(BoardRow row) => row.round.number < row.section.rounds.length;
+  bool past(BoardRow row) =>
+      row.section.format == Format.swiss &&
+      row.round.number < row.section.rounds.length;
   bool locked(BoardRow row) => past(row) && !correcting;
 
   List<BoardRow> rows() {
@@ -287,8 +299,6 @@ class ResultsViewState extends State<ResultsView> {
   void remember() {
     if (!ready) return;
     c.workspaceState.writeMap(preference, {
-      'missingOnly': missingOnly,
-      'crosstable': crosstable,
       'signature': roundSignature,
       'round': selectedRound,
       'allRounds': showAllRounds,
@@ -549,7 +559,9 @@ class ResultsViewState extends State<ResultsView> {
         for (final r in shownRounds(s)) (s, r),
     ];
     final all = rows(), visible = visibleRows();
-    final viewingPast = shown.any((x) => x.$2.number < x.$1.rounds.length);
+    final viewingPast = shown.any(
+      (x) => x.$1.format == Format.swiss && x.$2.number < x.$1.rounds.length,
+    );
     final latest = roundNumbers.lastOrNull;
     final player = e.players.where((p) => p.id == openPlayerId).firstOrNull;
     if (assumeFor != null && !all.any((r) => r.game.id == assumeFor)) {
@@ -560,7 +572,49 @@ class ResultsViewState extends State<ResultsView> {
       swapping = false;
       swapPick = null;
     }
-    final boards = PlayerDetailsLayout(
+    final boardHeading = shown.isEmpty
+        ? const Padding(
+            padding: EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: Text(
+              'Boards',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+          )
+        : _roundLine(context, shown, all, roundNumbers);
+    final boardToolbar = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (shown.isNotEmpty) _strip(context, shown, viewingPast),
+        for (final s in sections)
+          if (c.quadScheduleIssues[s.id] case final issue?)
+            _scheduleIssue(context, s, issue),
+        if (viewingPast) _pastBanner(context, shown),
+        if (swapping) _swapBanner(context, shown.single.$2),
+        if (forfeit) _forfeitPrompt(context),
+      ],
+    );
+    final boardTable = roundNumbers.isEmpty
+        ? const EmptyState(
+            icon: Icons.grid_view_outlined,
+            title: 'No rounds yet',
+            body: 'Create pairings to see the boards here.',
+          )
+        : visible.isEmpty && !shown.any((x) => x.$2.byes.isNotEmpty)
+        ? EmptyState(
+            icon: missingOnly && jump.text.isEmpty
+                ? Icons.check_circle_outline
+                : Icons.search_off,
+            title: missingOnly && jump.text.isEmpty
+                ? 'All results entered'
+                : 'No matching boards',
+            body: missingOnly && jump.text.isEmpty
+                ? 'Turn off Missing only to review them.'
+                : 'Try another name or board number.',
+          )
+        : _table(context, shown, visible, latest);
+    return PlayerDetailsLayout(
+      expandContent: true,
       panel:
           Dock.maybeOf(context) != null &&
               Dock.maybeOf(context)!.id != panelOwner
@@ -576,115 +630,104 @@ class ResultsViewState extends State<ResultsView> {
               onClose: () => showPlayer(null),
             ),
       child: LayoutBuilder(
-        builder: (context, layout) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: layout.maxHeight * 0.6),
-              child: SingleChildScrollView(
-                child: Column(
+        builder: (context, layout) {
+          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          final split = layout.maxWidth >= 1040 * scale;
+          final paneWidth = math.min(layout.maxWidth / 2, 560 * scale);
+          final standings = PlayersView(
+            key: ValueKey('crosstable-${widget.sectionId}'),
+            controller: c,
+            sectionId: widget.sectionId,
+            standingsOnly: true,
+            onPlayer: showPlayer,
+            standingsLayout: (heading, toolbar, table) {
+              final crossHeading = KeyedSubtree(
+                key: crosstableHeading,
+                child: heading,
+              );
+              if (!split) {
+                return SingleChildScrollView(
+                  key: const ValueKey('pairings-stacked'),
+                  controller: stackedScroll,
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: SizedBox(
+                      width: math.min(layout.maxWidth, 560 * scale),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          boardHeading,
+                          boardToolbar,
+                          boardTable,
+                          const SizedBox(height: 24),
+                          crossHeading,
+                          toolbar,
+                          table,
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
+              Widget sharedRow(Widget left, Widget right) => IntrinsicHeight(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (widget.roundAction != null)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: widget.roundAction!,
-                        ),
-                      ),
-                    if (shown.isNotEmpty) ...[
-                      _roundLine(context, shown, all, roundNumbers),
-                      _strip(context, shown, viewingPast),
-                    ],
-                    if (viewingPast) _pastBanner(context, shown),
-                    if (swapping) _swapBanner(context, shown.single.$2),
-                    if (forfeit) _forfeitPrompt(context),
+                    SizedBox(width: paneWidth, child: left),
+                    SizedBox(width: paneWidth, child: right),
                   ],
                 ),
-              ),
-            ),
-            Flexible(
-              child: roundNumbers.isEmpty
-                  ? const EmptyState(
-                      icon: Icons.grid_view_outlined,
-                      title: 'No rounds yet',
-                      body: 'Create pairings to see the boards here.',
-                    )
-                  : visible.isEmpty && !shown.any((x) => x.$2.byes.isNotEmpty)
-                  ? EmptyState(
-                      icon: missingOnly && jump.text.isEmpty
-                          ? Icons.check_circle_outline
-                          : Icons.search_off,
-                      title: missingOnly && jump.text.isEmpty
-                          ? 'All results entered'
-                          : 'No matching boards',
-                      body: missingOnly && jump.text.isEmpty
-                          ? 'Turn off Missing only to review them.'
-                          : 'Try another name or board number.',
-                    )
-                  : _table(context, shown, visible, latest),
-            ),
-          ],
-        ),
-      ),
-    );
-    return LayoutBuilder(
-      builder: (context, layout) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: layout.maxWidth - detailsColumnWidth(layout.maxWidth),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 4,
+              );
+              return Column(
+                key: const ValueKey('pairings-split'),
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final (value, label) in [
-                    (false, 'Boards'),
-                    (true, 'Crosstable'),
-                  ])
-                    ChoiceChip(
-                      key: ValueKey(value ? 'show-crosstable' : 'show-boards'),
-                      label: Text(label),
-                      selected: crosstable == value,
-                      showCheckmark: false,
-                      onSelected: (_) {
-                        FocusManager.instance.primaryFocus?.unfocus();
-                        Dock.maybeOf(context)?.close();
-                        setState(() {
-                          crosstable = value;
-                          openPlayerId = null;
-                        });
-                        if (!value) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) focusFirst();
-                          });
-                        }
-                      },
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: layout.maxHeight * 0.6,
                     ),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          sharedRow(crossHeading, boardHeading),
+                          sharedRow(toolbar, boardToolbar),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(width: paneWidth, child: table),
+                        SizedBox(width: paneWidth, child: boardTable),
+                      ],
+                    ),
+                  ),
                 ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: crosstable
-                ? PlayersView(
-                    key: ValueKey('crosstable-${widget.sectionId}'),
-                    controller: c,
-                    sectionId: widget.sectionId,
-                    standingsOnly: true,
-                  )
-                : boards,
-          ),
-        ],
+              );
+            },
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (widget.roundAction != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: widget.roundAction!,
+                  ),
+                ),
+              Expanded(child: standings),
+            ],
+          );
+        },
       ),
     );
   }
 
-  /// "Round 2 of 3 · 7 of 11 in", in the
-  /// size of a wall-sheet heading.
+  /// Compact round heading beside the crosstable heading.
   Widget _roundLine(
     BuildContext context,
     List<(Section, Round)> shown,
@@ -703,11 +746,13 @@ class ResultsViewState extends State<ResultsView> {
     final complete = shown.every((x) => x.$2.complete);
     final facts = [
       if (showAllRounds) '${numbers.length} rounds',
-      complete ? 'All ${all.length} in' : '$done of ${all.length} in',
+      complete
+          ? 'All ${all.length} results in'
+          : '$done of ${all.length} results in',
     ].nonNulls;
     final tabular = const [FontFeature.tabularFigures()];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Wrap(
         spacing: 24,
         runSpacing: 8,
@@ -722,7 +767,7 @@ class ResultsViewState extends State<ResultsView> {
                   TextSpan(
                     text: title,
                     style: const TextStyle(
-                      fontSize: 26,
+                      fontSize: 15,
                       fontWeight: FontWeight.w600,
                       height: 1.2,
                     ),
@@ -730,7 +775,7 @@ class ResultsViewState extends State<ResultsView> {
                   TextSpan(
                     text: '   ${facts.join('  ·  ')}',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 14,
                       color: colors.onSurfaceVariant,
                       fontFeatures: tabular,
                     ),
@@ -766,7 +811,7 @@ class ResultsViewState extends State<ResultsView> {
                       ),
                     ChoiceChip(
                       key: const ValueKey('all-rounds'),
-                      label: const Text('Show all rounds'),
+                      label: const Text('All'),
                       showCheckmark: false,
                       selected: showAllRounds,
                       onSelected: (_) => setState(() {
@@ -791,14 +836,15 @@ class ResultsViewState extends State<ResultsView> {
     bool viewingPast,
   ) {
     final single = widget.sectionId == null ? null : shown.singleOrNull;
+    final quad = sections.where(hasFixedQuadSchedule).singleOrNull;
     final editable = !viewingPast && single != null && !single.$2.hasPlay;
     final search = SizedBox(
-      width: 220 * MediaQuery.textScalerOf(context).scale(1),
+      width: 160 * MediaQuery.textScalerOf(context).scale(1),
       child: TextField(
         key: const ValueKey('board-search'),
         controller: jump,
         decoration: InputDecoration(
-          labelText: 'Find player or board',
+          labelText: 'Player or board',
           floatingLabelBehavior: FloatingLabelBehavior.never,
           prefixIcon: const Icon(Icons.search, size: 20),
           prefixIconConstraints: const BoxConstraints(
@@ -829,77 +875,41 @@ class ResultsViewState extends State<ResultsView> {
         },
       ),
     );
-    final actions = Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        if (!viewingPast &&
-            single != null &&
-            single.$2.hasPlay &&
-            !single.$2.complete)
-          Text(
-            'Pairings locked: play has started.',
-            key: const ValueKey('pairings-locked'),
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        if (editable && !swapping)
-          TextButton(
-            key: const ValueKey('edit-pairings'),
-            onPressed: () => setState(() {
-              swapping = true;
-              swapPick = null;
-            }),
-            child: const Text('Edit pairings'),
-          ),
-        IconButton(
-          tooltip: 'Print preview…',
-          onPressed: showAllRounds
-              ? null
-              : () => showPrint(
-                  context,
-                  c.event!,
-                  sectionId: widget.sectionId,
-                  roundNumber: selectedRound,
-                ),
-          icon: const Icon(Icons.preview_outlined, size: 18),
-        ),
-        OutlinedButton.icon(
-          key: const ValueKey('print-round'),
-          onPressed: showAllRounds ? null : printRound,
-          icon: const Icon(Icons.print_outlined, size: 18),
-          label: const Text('Print packet'),
-        ),
-      ],
-    );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Wrap(
-        spacing: 12,
+        spacing: 8,
         runSpacing: 8,
-        alignment: WrapAlignment.spaceBetween,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              search,
-              FilterChip(
-                chipAnimationStyle: noChipAnimation,
-                label: const Text('Missing only'),
-                selected: missingOnly,
-                onSelected: (v) {
-                  setState(() => missingOnly = v);
-                  remember();
-                },
-              ),
-            ],
+          search,
+          if ((quad != null || editable) && !swapping)
+            TextButton(
+              key: const ValueKey('edit-pairings'),
+              onPressed: quad != null
+                  ? () => showQuadPairingsEditor(context, c, sectionId: quad.id)
+                  : () => setState(() {
+                      swapping = true;
+                      swapPick = null;
+                    }),
+              child: const Text('Edit pairings'),
+            ),
+          FilterChip(
+            chipAnimationStyle: noChipAnimation,
+            label: const Text('Missing only'),
+            selected: missingOnly,
+            onSelected: (v) => setState(
+              () => c.workspaceState.write('pairings-missing-only', '$v'),
+            ),
           ),
-          actions,
+          IconButton(
+            key: const ValueKey('print-round'),
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+            padding: EdgeInsets.zero,
+            tooltip: 'Print packet',
+            onPressed: printRound,
+            icon: const Icon(Icons.print_outlined, size: 18),
+          ),
         ],
       ),
     );
@@ -917,7 +927,7 @@ class ResultsViewState extends State<ResultsView> {
     final foreground = correcting ? colors.onErrorContainer : colors.onSurface;
     return Container(
       key: const ValueKey('past-round-banner'),
-      margin: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       padding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
       decoration: BoxDecoration(
         color: background,
@@ -977,7 +987,7 @@ class ResultsViewState extends State<ResultsView> {
     final picked = swapPick == null ? null : c.event!.player(swapPick!);
     return Container(
       key: const ValueKey('swap-banner'),
-      margin: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       padding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
       decoration: BoxDecoration(
         color: colors.secondaryContainer,
@@ -1005,6 +1015,24 @@ class ResultsViewState extends State<ResultsView> {
             child: const Text('Done editing'),
           ),
         ],
+      ),
+    );
+  }
+
+  /// A quad round that posting would refuse is not shown; say why.
+  Widget _scheduleIssue(BuildContext context, Section s, String issue) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      key: ValueKey(('quad-schedule-issue', s.id)),
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        widget.sectionId == null ? '${s.name}: $issue' : issue,
+        style: TextStyle(color: colors.onErrorContainer),
       ),
     );
   }
@@ -1079,24 +1107,28 @@ class ResultsViewState extends State<ResultsView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         // Keep player names and inline actions readable at enlarged text sizes.
-        final width = math.max(
-          560 * MediaQuery.textScalerOf(context).scale(14) / 14,
-          constraints.maxWidth,
-        );
+        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+        final width = constraints.maxWidth.clamp(520 * scale, 560 * scale);
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SizedBox(
             width: width,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: colors.surfaceContainerLowest,
                   border: Border.all(color: colors.outlineVariant),
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                child:
-                    constraints.maxHeight <
-                        MediaQuery.textScalerOf(context).scale(150)
+                child: !constraints.hasBoundedHeight
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [_columns(context), ...items],
+                      )
+                    : constraints.maxHeight <
+                          MediaQuery.textScalerOf(context).scale(150)
                     ? SingleChildScrollView(
                         controller: scroll,
                         child: Column(
@@ -1128,16 +1160,19 @@ class ResultsViewState extends State<ResultsView> {
     );
   }
 
-  static const _board = 72.0, _row = 52.0;
+  static const _board = 40.0, _row = 32.0;
   double scoreWidth(BuildContext context) =>
-      math.max(64, MediaQuery.textScalerOf(context).scale(48));
+      math.max(36, MediaQuery.textScalerOf(context).scale(32));
 
   Widget _columns(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
+      key: const ValueKey('board-column-header'),
       color: colors.surfaceContainerLow,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: DefaultTextStyle.merge(
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
@@ -1169,26 +1204,17 @@ class ResultsViewState extends State<ResultsView> {
   Widget _sectionRow(BuildContext context, Section s, Round r) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      key: ValueKey('board-round-heading-${s.id}-${r.number}'),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: colors.outlineVariant)),
-      ),
-      child: Text.rich(
-        TextSpan(
-          children: [
-            TextSpan(
-              text: s.name,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-            ),
-            TextSpan(
-              text: [
-                '   Round ${r.number} of ${s.plannedRounds}',
-                boardRange(s),
-              ].join(' · '),
-              style: TextStyle(color: colors.onSurfaceVariant),
-            ),
-          ],
+        border: Border(
+          top: BorderSide(color: colors.outlineVariant),
+          bottom: BorderSide(color: colors.outlineVariant),
         ),
+      ),
+      child: Text(
+        showAllRounds ? '${s.name} · Round ${r.number}' : s.name,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1229,7 +1255,7 @@ class ResultsViewState extends State<ResultsView> {
             child: Text(
               'Bye',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: colors.onSurfaceVariant,
               ),
@@ -1240,7 +1266,7 @@ class ResultsViewState extends State<ResultsView> {
             child: Text(
               halves(b.points),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(width: 12),
@@ -1258,7 +1284,7 @@ class ResultsViewState extends State<ResultsView> {
                             : 'bye-player-${p.id}',
                       ),
                       onTap: () => showPlayer(p.id),
-                      child: Text(p.name, style: const TextStyle(fontSize: 18)),
+                      child: Text(p.name, style: const TextStyle(fontSize: 14)),
                     ),
                   ),
                   TextSpan(
@@ -1306,7 +1332,7 @@ class ResultsViewState extends State<ResultsView> {
               ),
           ],
         ),
-        style: const TextStyle(fontSize: 18),
+        style: const TextStyle(fontSize: 14),
         textAlign: right ? TextAlign.right : TextAlign.left,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
@@ -1394,7 +1420,7 @@ class ResultsViewState extends State<ResultsView> {
       onTap: () => focusBox(g.id, true),
       child: Container(
         constraints: const BoxConstraints(minHeight: _row),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         decoration: BoxDecoration(
           border: Border(
             top: BorderSide(
@@ -1412,7 +1438,7 @@ class ResultsViewState extends State<ResultsView> {
                 child: Text(
                   '${g.board}${row.section.doubleGames ? '·${g.leg}' : ''}',
                   style: TextStyle(
-                    fontSize: 19,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: colors.onSurface,
                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -1480,9 +1506,9 @@ class ResultsViewState extends State<ResultsView> {
               onTap: () => focusBox(g.id, white),
               child: Container(
                 width: scoreWidth(context),
-                constraints: const BoxConstraints(minHeight: 44),
+                constraints: const BoxConstraints(minHeight: 24),
                 padding: EdgeInsets.symmetric(
-                  vertical: caption == null ? 8 : 4,
+                  vertical: caption == null ? 3 : 2,
                 ),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
@@ -1498,9 +1524,9 @@ class ResultsViewState extends State<ResultsView> {
                     Text(
                       mark,
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        height: 1.15,
+                        height: 1,
                         color: odd
                             ? colors.error
                             : assumed

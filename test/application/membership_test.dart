@@ -18,6 +18,38 @@ Json evidence(
 
 void main() {
   test(
+    'member checks fill valid missing states without replacing manual states',
+    () {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      final p = c.event!.players.first;
+      c.recordMembership(c.event!.id, p.id, {
+        ...evidence(p.memberId),
+        'state': ' nh ',
+      });
+      expect(c.repository.load()!.player(p.id).state, 'NH');
+      c.savePlayer(c.event!.player(p.id).copy(state: 'MA'));
+      c.recordMembership(c.event!.id, p.id, {
+        ...evidence(p.memberId),
+        'state': 'NY',
+      });
+      expect(c.event!.player(p.id).state, 'MA');
+      for (final state in [null, '', 'M1', 'Massachusetts']) {
+        c.recordMembership(c.event!.id, 'p1', {
+          ...evidence(c.event!.player('p1').memberId),
+          'state': state,
+        });
+        expect(c.event!.player('p1').state, isEmpty);
+      }
+      c.recordMembership(c.event!.id, 'p1', {
+        ...evidence(c.event!.player('p1').memberId, checked: '2026-10-02'),
+        'state': 'NY',
+      });
+      expect(c.event!.player('p1').state, isEmpty);
+    },
+  );
+
+  test(
     'membership survives save/reload and rating edits, clears for a new ID',
     () {
       final c = fixture(count: 4);
@@ -194,4 +226,23 @@ void main() {
       );
     },
   );
+
+  test('a batch of lookups is one revision and one undo step', () {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    final before = c.event!.revision;
+    final players = c.event!.players;
+    final recorded = c.recordMemberships(c.event!.id, {
+      for (final p in players) p.id: {...evidence(p.memberId), 'state': 'NH'},
+      // A stale lookup for an edited ID is dropped, not the whole batch.
+      'p0': evidence('99999999'),
+    });
+    expect(recorded, {for (final p in players.skip(1)) p.id});
+    expect(c.event!.revision, before + 1);
+    expect(c.event!.player('p0').state, isEmpty);
+    expect(c.event!.player('p1').state, 'NH');
+    c.undo();
+    expect(c.event!.revision, isNot(before + 1));
+    expect(c.event!.players.every((p) => p.state.isEmpty), isTrue);
+  });
 }

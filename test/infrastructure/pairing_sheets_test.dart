@@ -62,7 +62,166 @@ List<(int, int, String, String)> draw(Round round) => [
   for (final g in round.games) (g.board, g.leg, g.white, g.black),
 ];
 
+// Default PDF fonts keep ASCII labels in the page's drawing commands. Decode
+// those streams to verify printed content without a platform PDF dependency.
+String pdfText(Uint8List bytes) {
+  final raw = latin1.decode(bytes);
+  final commands =
+      RegExp(r'<<(.*?)>>\s*stream\r?\n(.*?)\r?\nendstream', dotAll: true)
+          .allMatches(raw)
+          .map((match) {
+            final data = latin1.encode(match[2]!);
+            return latin1.decode(
+              match[1]!.contains('/FlateDecode') ? zlib.decode(data) : data,
+            );
+          })
+          .join('\n');
+  return RegExp(r'\(([^()]*)\)').allMatches(commands).map((m) => m[1]!).join();
+}
+
 void main() {
+  test(
+    'quad PDFs print the complete player grid from every print entry',
+    () async {
+      final event = sample();
+      final section = event.sections.first;
+      final posted = section.copy(rounds: [reportPairingRounds(section).first]);
+      final snapshot = event.copy(sections: [posted]);
+      for (final kind in [
+        ReportKind.pairings,
+        ReportKind.sections,
+        ReportKind.packet,
+      ]) {
+        final commands = pdfText(
+          await reportPdf(
+            snapshot,
+            kind,
+            roundNumber: 1,
+            currentRoundOnly: true,
+          ),
+        );
+        expect(commands, contains('Player'));
+        for (final round in [1, 2, 3]) {
+          expect(commands, contains('Round$round'));
+        }
+        // Quad a's fixed draw: player 1 faces 4 as White, then 3 and 2 as Black.
+        for (final pairing in ['W4', 'B3', 'B2']) {
+          expect(commands, contains(pairing));
+        }
+        expect(commands, isNot(contains('Board')));
+        expect(snapshot.sections.single.rounds, hasLength(1));
+      }
+    },
+  );
+
+  test(
+    'larger round robins keep board tables and the selected round',
+    () async {
+      final event = sample();
+      var section = event.sections.last.copy(
+        format: Format.roundRobin,
+        plannedRounds: 5,
+      );
+      final first = proposeRound(event, section, () => 'r1');
+      section = section.copy(rounds: [first]);
+      final commands = pdfText(
+        await reportPdf(
+          event.copy(sections: [section]),
+          ReportKind.pairings,
+          roundNumber: 1,
+          currentRoundOnly: true,
+        ),
+      );
+      for (final label in ['Board', 'White', 'Black', 'Round1']) {
+        expect(commands, contains(label));
+      }
+      expect(commands, isNot(contains('Round2')));
+      expect(
+        commands,
+        isNot(contains('Round-robin pairing sheet'.replaceAll(' ', ''))),
+      );
+    },
+  );
+
+  test('a round-scoped packet keeps quads whose rounds are unposted', () async {
+    final event = sample();
+    final swiss = event.sections.last;
+    final r1 = proposeRound(event, swiss, () => 'g1');
+    final scoped = event.copy(
+      sections: [
+        ...event.sections.take(2),
+        swiss.copy(
+          rounds: [
+            r1.copy(
+              games: [for (final g in r1.games) g.copy(outcome: Outcome.draw)],
+            ),
+            Round(
+              number: 2,
+              games: [Game(id: 'g2', white: 'p8', black: 'p9', board: 5)],
+            ),
+          ],
+        ),
+      ],
+    );
+    final commands = pdfText(
+      await reportPdf(scoped, ReportKind.packet, roundNumber: 2),
+    );
+    for (final name in ['Quad1', 'Quad2', 'BottomSwiss']) {
+      expect(commands, contains(name));
+    }
+  });
+
+  test('a posted opponent missing from the roster prints by name', () async {
+    final event = sample();
+    final quad = event.sections.first;
+    final posted = quad.copy(
+      rounds: [
+        Round(
+          number: 1,
+          games: [
+            Game(id: 'x', white: 'p0', black: 'p12', board: 1),
+            Game(id: 'y', white: 'p1', black: 'p2', board: 2),
+          ],
+        ),
+      ],
+    );
+    final commands = pdfText(
+      await reportPdf(event.copy(sections: [posted]), ReportKind.pairings),
+    );
+    expect(commands, isNot(contains('null')));
+    expect(commands, contains('MorganTaylor'));
+  });
+
+  test('Swiss PDF retains the board layout and selected round', () async {
+    final event = sample();
+    final section = event.sections.last.copy(
+      rounds: [
+        Round(
+          number: 1,
+          games: [Game(id: 'r1', white: 'p8', black: 'p9', board: 5)],
+        ),
+        Round(
+          number: 2,
+          games: [Game(id: 'r2', white: 'p10', black: 'p11', board: 5)],
+        ),
+      ],
+    );
+    final commands = pdfText(
+      await reportPdf(
+        event.copy(sections: [section]),
+        ReportKind.pairings,
+        roundNumber: 1,
+        currentRoundOnly: true,
+      ),
+    );
+    for (final label in ['Board', 'Result', 'White', 'Black', 'Round1']) {
+      expect(commands, contains(label));
+    }
+    expect(commands, isNot(contains('Round2')));
+    expect(commands, isNot(contains('Round3')));
+    expect(commands, isNot(contains('Player')));
+  });
+
   test(
     'quad paper schedule matches posting for every color lot and both legs',
     () {

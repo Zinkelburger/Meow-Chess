@@ -4,6 +4,7 @@ import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 
 TournamentController fixture({
   int count = 8,
+  Format format = Format.quad,
   bool practice = false,
   String path = ':memory:',
 }) {
@@ -20,6 +21,16 @@ TournamentController fixture({
       ),
   ]);
   c.applyQuads(c.quadPreview(), c.event!.revision);
+  if (format != Format.quad) {
+    c.change(
+      'Use requested test format',
+      c.event!.copy(
+        sections: [
+          for (final section in c.event!.sections) section.copy(format: format),
+        ],
+      ),
+    );
+  }
   return c;
 }
 

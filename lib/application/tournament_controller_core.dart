@@ -9,6 +9,7 @@ import '../domain/history.dart';
 import '../domain/result_correction.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
+import '../domain/us_chess.dart';
 import 'event_repository.dart';
 import 'diagnostics.dart';
 import 'failures.dart';
@@ -22,7 +23,18 @@ class PairingBatch {
 }
 
 class TournamentControllerCore extends ChangeNotifier {
-  TournamentControllerCore(this.repository) : event = repository.load();
+  TournamentControllerCore(this.repository) {
+    try {
+      event = repository.load();
+    } catch (_) {
+      // Construction did not return an owner who could release the connection.
+      // A close failure must not hide the original invalid-event error.
+      try {
+        repository.close();
+      } catch (_) {}
+      rethrow;
+    }
+  }
   final EventRepository repository;
   late final _workspaceState = WorkspaceStateCore(repository);
   WorkspaceStateCore get workspaceState => _workspaceState;
@@ -121,41 +133,59 @@ class TournamentControllerCore extends ChangeNotifier {
     );
   }
 
-  /// Stores provider membership data only for the event and identity requested.
+  /// Stores membership data and fills a missing state for the requested identity.
   /// A late response must never restore an edited ID or overwrite a newer check.
-  bool recordMembership(String eventId, String playerId, Json observation) {
+  bool recordMembership(String eventId, String playerId, Json observation) =>
+      recordMemberships(eventId, {playerId: observation}).isNotEmpty;
+
+  /// Records a batch of lookups as one revision and one undo step, keeping
+  /// only observations that still match the player's ID and are not older
+  /// than the stored check. Returns the players whose evidence was accepted.
+  Set<String> recordMemberships(
+    String eventId,
+    Map<String, Json> observations,
+  ) {
     final e = event;
-    if (e == null || e.id != eventId) return false;
-    final player = e.players.where((p) => p.id == playerId).firstOrNull;
-    if (player == null || player.memberId != observation['id']) return false;
-    final checked = DateTime.tryParse('${observation['retrievedAt']}');
-    final previous = DateTime.tryParse(
-      '${player.membershipEvidence['retrievedAt']}',
-    );
-    if (checked == null || (previous != null && checked.isBefore(previous))) {
-      return false;
+    if (e == null || e.id != eventId) return const {};
+    final updated = <String, Player>{};
+    for (final MapEntry(key: playerId, value: observation)
+        in observations.entries) {
+      final player = e.players.where((p) => p.id == playerId).firstOrNull;
+      if (player == null || player.memberId != observation['id']) continue;
+      final checked = DateTime.tryParse('${observation['retrievedAt']}');
+      final previous = DateTime.tryParse(
+        '${player.membershipEvidence['retrievedAt']}',
+      );
+      if (checked == null || (previous != null && checked.isBefore(previous))) {
+        continue;
+      }
+      final state = observation['state'] is String
+          ? (observation['state'] as String).trim().toUpperCase()
+          : '';
+      updated[playerId] = player.copy(
+        membershipEvidence: {
+          for (final key in [
+            'id',
+            'name',
+            'expiration',
+            'status',
+            'retrievedAt',
+            'provider',
+            'state',
+          ])
+            key: observation[key],
+        },
+        state: player.state.isEmpty && isStateCode(state) ? state : null,
+      );
     }
-    final evidence = <String, dynamic>{
-      for (final key in [
-        'id',
-        'name',
-        'expiration',
-        'status',
-        'retrievedAt',
-        'provider',
-      ])
-        key: observation[key],
-    };
+    if (updated.isEmpty) return const {};
     change(
-      'Check US Chess membership for ${player.name}',
-      e.copy(
-        players: [
-          for (final p in e.players)
-            p.id == playerId ? p.copy(membershipEvidence: evidence) : p,
-        ],
-      ),
+      updated.length == 1
+          ? 'Check US Chess membership for ${updated.values.single.name}'
+          : 'Check US Chess membership for ${updated.length} players',
+      e.copy(players: [for (final p in e.players) updated[p.id] ?? p]),
     );
-    return true;
+    return updated.keys.toSet();
   }
 
   /// Team membership is a roster label; it does not imply a pairing restriction.
@@ -263,8 +293,8 @@ class TournamentControllerCore extends ChangeNotifier {
     final last = section.rounds.lastOrNull;
     final append = last != null && !last.complete;
     final occupiedBoards = e.sections
-        .where((s) => s.rounds.isNotEmpty && !s.rounds.last.complete)
-        .expand((s) => s.rounds.last.games)
+        .expand((s) => s.unresolvedRounds)
+        .expand((r) => r.games)
         .map((g) => g.board)
         .toSet();
     var board = section.boardStart;
@@ -370,9 +400,6 @@ class TournamentControllerCore extends ChangeNotifier {
   Section _section(String id) =>
       event!.sections.where((s) => s.id == id).firstOrNull ??
       (throw const TournamentException('That section no longer exists.'));
-  Game _game(String id) =>
-      event!.games.where((g) => g.id == id).firstOrNull ??
-      (throw const TournamentException('The selected game no longer exists.'));
 
   List<Section> quadPreview() => makeQuads(event!, newId);
   void applyQuads(List<Section> sections, int expectedRevision) {
@@ -444,6 +471,7 @@ class TournamentControllerCore extends ChangeNotifier {
         (s) =>
             s.players.isNotEmpty &&
             !s.sideGames &&
+            (!onlyReady || !hasFixedQuadSchedule(s)) &&
             (sectionId == null || s.id == sectionId) &&
             !s.finished &&
             (!onlyReady ||
@@ -494,17 +522,18 @@ class TournamentControllerCore extends ChangeNotifier {
     // Board numbers reserve physical space across independently progressing sections.
     final busy = <int, String>{};
     for (final s in updated) {
-      if (s.rounds.isEmpty) continue;
-      final r = s.rounds.last;
-      if (r.complete) continue;
-      for (final g in r.games.where((g) => g.leg == 1)) {
-        final prior = busy[g.board];
+      final boards = s.unresolvedRounds
+          .expand((r) => r.games)
+          .map((g) => g.board)
+          .toSet();
+      for (final board in boards) {
+        final prior = busy[board];
         if (prior != null) {
           throw TournamentException(
-            'Board ${g.board} is already reserved by $prior. Adjust board ranges.',
+            'Board $board is already reserved by $prior. Adjust board ranges.',
           );
         }
-        busy[g.board] = s.name;
+        busy[board] = s.name;
       }
     }
     for (final r in batch.rounds.values) {
@@ -564,8 +593,32 @@ class TournamentControllerCore extends ChangeNotifier {
     );
   }
 
+  _Projection? _projection;
+  _Projection get _projected {
+    final e = event!, cached = _projection;
+    if (cached != null && identical(cached.source, e)) return cached;
+    final sections = <Section>[], issues = <String, String>{};
+    for (final s in e.sections) {
+      final (:rounds, :issue) = projectQuad(e, s);
+      sections.add(s.copy(rounds: rounds));
+      if (issue != null) issues[s.id] = issue;
+    }
+    return _projection = (
+      source: e,
+      projected: e.copy(sections: sections),
+      issues: issues,
+    );
+  }
+
+  /// Read-only schedule projection, computed once per revision. Browsing
+  /// pairings does not post rounds.
+  Event get pairingEvent => _projected.projected;
+
+  /// Why a quad's remaining rounds cannot be shown, by section ID.
+  Map<String, String> get quadScheduleIssues => _projected.issues;
+
   ResultCorrection reviewResult(String gameId) =>
-      ResultCorrection(event!, gameId);
+      ResultCorrection(_materialize(gameId).$1, gameId);
 
   bool correctionHasDependencies(String gameId) =>
       reviewResult(gameId).hasDependencies;
@@ -598,9 +651,44 @@ class TournamentControllerCore extends ChangeNotifier {
     );
   }
 
-  void recordResult(String gameId, Outcome outcome, {String reason = ''}) {
+  /// Saves the projected quad rounds through the one holding [gameId], so its
+  /// result has a posted round to live in. Later rounds stay projected and can
+  /// still take requested byes and withdrawals.
+  (Event, Game) _materialize(String gameId) {
     final e = event!;
-    final game = _game(gameId);
+    if (e.games.where((g) => g.id == gameId).firstOrNull case final game?) {
+      return (e, game);
+    }
+    for (final projected in pairingEvent.sections) {
+      final round = projected.rounds
+          .where((r) => r.games.any((g) => g.id == gameId))
+          .firstOrNull;
+      if (round == null) continue;
+      final now = DateTime.now().toUtc().toIso8601String();
+      final next = e.copy(
+        sections: [
+          for (final s in e.sections)
+            s.id != projected.id
+                ? s
+                : s.copy(
+                    rounds: [
+                      ...s.rounds,
+                      for (final r in projected.rounds.sublist(
+                        s.rounds.length,
+                        round.number,
+                      ))
+                        r.copy(postedAt: now),
+                    ],
+                  ),
+        ],
+      );
+      return (next, round.games.firstWhere((g) => g.id == gameId));
+    }
+    throw const TournamentException('The selected game no longer exists.');
+  }
+
+  void recordResult(String gameId, Outcome outcome, {String reason = ''}) {
+    final (e, game) = _materialize(gameId);
     if (game.outcome == outcome && game.note == reason) return;
     if (correctionHasDependencies(gameId) && reason.trim().isEmpty) {
       throw const TournamentException(
@@ -645,8 +733,7 @@ class TournamentControllerCore extends ChangeNotifier {
   }
 
   void setPairingAssumption(String gameId, Outcome assumption, String reason) {
-    final e = event!;
-    final game = _game(gameId);
+    final (e, game) = _materialize(gameId);
     if (game.outcome.resolved || !assumption.played || reason.trim().isEmpty) {
       throw const TournamentException(
         'Choose a win, draw or loss assumption for an unresolved game and record the TD’s reason.',
@@ -694,6 +781,112 @@ class TournamentControllerCore extends ChangeNotifier {
       byes[round] = points;
     }
     savePlayer(player.copy(byes: byes));
+  }
+
+  /// Saves a complete quad schedule, including unplayed posted rounds, in one
+  /// revision. Played rounds and pairing assumptions retain their participants.
+  void editQuadPairings(
+    String sectionId,
+    List<List<String>> pairings,
+    int expectedRevision,
+  ) {
+    final e = event!, s = _section(sectionId);
+    if (e.revision != expectedRevision) {
+      throw const TournamentException(
+        'The event changed. Reopen the quad editor and review again.',
+      );
+    }
+    if (s.format != Format.quad || s.players.length != 4 || s.sideGames) {
+      throw const TournamentException(
+        'Choose a quad with exactly four players.',
+      );
+    }
+    if (pairings.length != 3 ||
+        pairings.any(
+          (r) =>
+              r.length != 4 ||
+              r.toSet().length != 4 ||
+              !r.toSet().containsAll(s.players),
+        )) {
+      throw const TournamentException(
+        'Each round must include all four quad players exactly once.',
+      );
+    }
+    final opponents = <String>{};
+    for (final (index, row) in pairings.indexed) {
+      for (var board = 0; board < 2; board++) {
+        final a = row[board * 2], b = row[board * 2 + 1];
+        final slots = [s.players.indexOf(a), s.players.indexOf(b)]..sort();
+        if (!opponents.add(slots.join('-'))) {
+          throw TournamentException(
+            'Round ${index + 1} repeats ${e.player(a).name} vs ${e.player(b).name}. Adjust the other unplayed round so everyone meets once.',
+          );
+        }
+        if (pairingRestricted(e, a, b)) {
+          throw TournamentException(
+            '${e.player(a).name} and ${e.player(b).name} have a do-not-pair request.',
+          );
+        }
+      }
+    }
+    final rounds = <Round>[];
+    for (final r in s.rounds) {
+      final row = pairings[r.number - 1];
+      final boards = r.games
+          .where((g) => g.leg == 1)
+          .map((g) => g.board)
+          .toList();
+      if (r.byes.isNotEmpty ||
+          boards.length != 2 ||
+          r.games.length != (s.doubleGames ? 4 : 2)) {
+        throw const TournamentException(
+          'This quad has a custom round. Review its pairings separately.',
+        );
+      }
+      // A game whose players change gets a new ID, so a stale reference to
+      // the old pairing is refused instead of scoring different players.
+      Game reseat(Game g) {
+        final slot = boards.indexOf(g.board) * 2, second = g.leg == 2 ? 1 : 0;
+        final white = row[slot + second], black = row[slot + 1 - second];
+        return white == g.white && black == g.black
+            ? g
+            : g.copy(id: newId(), white: white, black: black);
+      }
+
+      final games = r.games.map(reseat).toList();
+      final changed = games.indexed.any(
+        (entry) => !identical(entry.$2, r.games[entry.$1]),
+      );
+      if (changed &&
+          (r.hasPlay || r.games.any((g) => g.pairingAssumption != null))) {
+        throw TournamentException(
+          'Round ${r.number} has started or has a result or pairing assumption. Keep its pairings unchanged.',
+        );
+      }
+      rounds.add(
+        changed
+            ? r.copy(
+                games: games,
+                revision: r.revision + 1,
+                note: 'Manual quad pairings',
+              )
+            : r,
+      );
+    }
+    final slots = [
+      for (final row in pairings) [for (final id in row) s.players.indexOf(id)],
+    ];
+    change(
+      'Edit ${s.name} pairings',
+      e.copy(
+        sections: [
+          for (final section in e.sections)
+            section.id == s.id
+                ? section.copy(quadPairings: slots, rounds: rounds)
+                : section,
+        ],
+      ),
+    );
   }
 
   /// Exchanges roster slots atomically; posted schedules cannot be rewritten.
@@ -964,3 +1157,10 @@ class TournamentControllerCore extends ChangeNotifier {
     super.dispose();
   }
 }
+
+/// The quad projection of one event revision, keyed by that revision's object.
+typedef _Projection = ({
+  Event source,
+  Event projected,
+  Map<String, String> issues,
+});

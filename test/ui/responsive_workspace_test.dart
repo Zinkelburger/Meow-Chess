@@ -30,7 +30,10 @@ void main() {
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.reset);
-        final c = fixture(practice: true);
+        final c = fixture(
+          practice: true,
+          format: scenario == 'past rounds' ? Format.swiss : Format.quad,
+        );
         addTearDown(c.dispose);
         c.post((await tester.runAsync(() => c.propose()))!);
         await tester.pumpWidget(

@@ -300,6 +300,79 @@ void main() {
     },
   );
 
+  test(
+    'active ownership protects database and journal aliases until close',
+    () {
+      final path = p.join(directory.path, 'owned.data');
+      final c = fixture(path: path);
+      expect(SqliteEventRepository.ownsPath(path), true);
+      for (final suffix in ['-wal', '-shm', '-journal']) {
+        expect(SqliteEventRepository.ownsPath('$path$suffix'), true);
+      }
+      if (!Platform.isWindows) {
+        final alias = p.join(directory.path, 'alias.csv');
+        Link(alias).createSync(path);
+        expect(SqliteEventRepository.ownsPath(alias), true);
+      }
+      c.dispose();
+      expect(SqliteEventRepository.ownsPath(path), false);
+    },
+  );
+
+  test('failed initial load releases exclusive ownership', () {
+    final path = p.join(directory.path, 'invalid-event.meow');
+    fixture(path: path).dispose();
+    final inject = sqlite3.open(path);
+    inject.execute("UPDATE event SET data='{'");
+    inject.close();
+    expect(
+      () => TournamentController(SqliteEventRepository(path)),
+      throwsFormatException,
+    );
+    final reader = sqlite3.open(path);
+    try {
+      expect(reader.select('SELECT data FROM event').single['data'], '{');
+    } finally {
+      reader.close();
+    }
+  });
+
+  for (final transaction in ['BEGIN', 'BEGIN IMMEDIATE']) {
+    test('replacement preserves a DELETE-mode $transaction transaction', () {
+      final target = p.join(directory.path, 'delete-open.meow');
+      final original = fixture(path: target);
+      final originalState = original.event!.encode();
+      original.dispose();
+      final reader = sqlite3.open(target);
+      var readerClosed = false;
+      addTearDown(() {
+        if (!readerClosed) reader.close();
+      });
+      reader.execute('PRAGMA journal_mode = DELETE');
+      reader.execute(transaction);
+      final expected = reader.select('SELECT data FROM event').single['data'];
+      expect(File('$target-wal').existsSync(), false);
+      expect(File('$target-journal').existsSync(), false);
+      final fresh = fixture();
+      addTearDown(fresh.dispose);
+      expect(
+        () => fresh.repository.backup(target, replaceExisting: true),
+        throwsA(isA<TournamentException>()),
+      );
+      expect(reader.select('SELECT data FROM event').single['data'], expected);
+      reader.execute('ROLLBACK');
+      reader.close();
+      readerClosed = true;
+      // The refusal must leave the original independently readable.
+      final reopened = SqliteEventRepository(target);
+      try {
+        expect(reopened.load()!.encode(), originalState);
+      } finally {
+        reopened.close();
+      }
+    });
+  }
+
   test('replacement refuses an active reader even when its WAL is empty', () {
     final target = p.join(directory.path, 'read-open.meow');
     final previous = fixture(path: target);

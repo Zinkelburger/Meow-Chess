@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/infrastructure/ratings_api.dart';
+import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/ui/players_view.dart';
 import 'package:meow_chess/ui/reports_view.dart';
 import '../support.dart';
@@ -24,6 +26,88 @@ Future<void> show(
 }
 
 void main() {
+  testWidgets('optional checks fetch states and retain unresolved warnings', (
+    tester,
+  ) async {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    c.savePlayer(c.event!.player('p1').copy(state: 'MA'));
+    c.savePlayer(c.event!.player('p2').copy(memberId: ''));
+    final called = <String>[];
+    await show(
+      tester,
+      c,
+      () => ReportsView(
+        controller: c,
+        memberLookup: (_, id) async {
+          called.add(id);
+          if (id == '12000003') throw const TournamentException('HTTP 500');
+          return MemberObservation(
+            id: id,
+            name: 'Player',
+            retrievedAt: '2026-10-04',
+            ratings: const {},
+            state: 'NH',
+          );
+        },
+      ),
+    );
+    await tester.tap(find.byKey(const PageStorageKey('rating-advice-details')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('fetch-states')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(called, ['12000000', '12000003']);
+    expect(c.repository.load()!.player('p0').state, 'NH');
+    expect(c.event!.player('p1').state, 'MA');
+    expect(c.event!.player('p2').state, isEmpty);
+    expect(c.event!.player('p3').state, isEmpty);
+    expect(c.event!.player('p0').rating, 2000);
+    expect(find.textContaining('Saved 1 missing state.'), findsOneWidget);
+    expect(find.textContaining('HTTP 500'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'state fetch cannot overwrite an ID or state edited during lookup',
+    (tester) async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      final pending = Completer<MemberObservation?>();
+      await show(
+        tester,
+        c,
+        () =>
+            ReportsView(controller: c, memberLookup: (_, id) => pending.future),
+      );
+      await tester.tap(
+        find.byKey(const PageStorageKey('rating-advice-details')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('fetch-states')));
+      await tester.pump();
+      c.savePlayer(
+        c.event!.player('p0').copy(memberId: '99887766', state: 'MA'),
+      );
+      pending.complete(
+        const MemberObservation(
+          id: '12000000',
+          name: 'Player',
+          retrievedAt: '2026-10-04',
+          ratings: {},
+          state: 'NH',
+        ),
+      );
+      await tester.pump();
+      expect(c.event!.player('p0').state, 'MA');
+      expect(c.event!.player('p0').membershipEvidence, isEmpty);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('report details save inline and fill missing states on request', (
     tester,
   ) async {

@@ -71,58 +71,80 @@ void main() {
   });
 
   for (final brightness in Brightness.values) {
-    testWidgets('expiring this month has a yellow highlight in $brightness', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(1400, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final c = fixture(count: 4);
-      addTearDown(c.dispose);
-      final now = DateTime.now();
-      final expiration = DateTime(
-        now.year,
-        now.month + 1,
-        0,
-      ).toIso8601String().substring(0, 10);
-      final p = c.event!.players.first;
-      c.recordMembership(
-        c.event!.id,
-        p.id,
-        member(p.memberId, expiration: expiration).toJson(),
-      );
-      final theme = meowTheme(brightness);
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: theme,
-          home: Scaffold(body: PlayersView(controller: c)),
-        ),
-      );
-      expect(find.text('Expires this month'), findsOneWidget);
-      expect(find.text('Expired'), findsNothing);
-      final date = tester.widget<Text>(find.text(expiration));
-      expect(
-        date.style!.color,
-        brightness == Brightness.dark
-            ? const Color(0xffffd966)
-            : const Color(0xff785500),
-      );
-      final yellow = find.ancestor(
-        of: find.text(expiration),
-        matching: find.byWidgetPredicate(
-          (w) =>
-              w is Container &&
-              w.decoration is BoxDecoration &&
-              (w.decoration as BoxDecoration).color ==
-                  (brightness == Brightness.dark
-                      ? const Color(0xff493d12)
-                      : const Color(0xffffefb2)),
-        ),
-      );
-      expect(yellow, findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'expiry warning stays aligned and clear of notes in $brightness',
+      (tester) async {
+        tester.view.physicalSize = const Size(1400, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final c = fixture(count: 4);
+        addTearDown(c.dispose);
+        final now = DateTime.now();
+        final expiration = DateTime(
+          now.year,
+          now.month + 1,
+          0,
+        ).toIso8601String().substring(0, 10);
+        final p = c.event!.players.first;
+        c.savePlayer(p.copy(registrationNote: 'Arriving late'));
+        final other = c.event!.players[1];
+        c.recordMembership(
+          c.event!.id,
+          other.id,
+          member(other.memberId, expiration: '2099-12-31').toJson(),
+        );
+        c.recordMembership(
+          c.event!.id,
+          p.id,
+          member(p.memberId, expiration: expiration).toJson(),
+        );
+        final theme = meowTheme(brightness);
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: theme,
+            home: Scaffold(body: PlayersView(controller: c)),
+          ),
+        );
+        expect(find.text('Expires this month'), findsOneWidget);
+        expect(find.text('Expired'), findsNothing);
+        final date = tester.widget<Text>(find.text(expiration));
+        expect(
+          date.style!.color,
+          brightness == Brightness.dark
+              ? const Color(0xffffd966)
+              : const Color(0xff785500),
+        );
+        for (final scale in [1.0, 2.0]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: theme,
+              builder: (_, child) => MediaQuery(
+                data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: Scaffold(body: PlayersView(controller: c)),
+            ),
+          );
+          await tester.pumpAndSettle();
+          final dateRect = tester.getRect(find.text(expiration));
+          final normalRect = tester.getRect(find.text('2099-12-31'));
+          final warningRect = tester.getRect(find.text('Expires this month'));
+          final noteRect = tester.getRect(find.text('Arriving late'));
+          expect(dateRect.left, normalRect.left);
+          expect(
+            dateRect.left,
+            tester.getTopLeft(find.text('USCF expires')).dx,
+          );
+          expect(warningRect.left, dateRect.left);
+          expect(warningRect.top, greaterThanOrEqualTo(dateRect.bottom));
+          expect(warningRect.right, lessThanOrEqualTo(noteRect.left - 12));
+          expect(dateRect.right, lessThan(noteRect.left));
+          expect(tester.takeException(), isNull);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets(

@@ -354,7 +354,16 @@ and optional rating estimates and IDs. These actions do not live in the global
 toolbar. Players has no round columns, scores, standings, or create-pairings action.
 
 Pairings owns creating rounds, editing boards, entering results, and the
-**Boards / Crosstable** switch. The crosstable shows rank, rounds, and points;
+two always-visible tables. Both tables use the Players table's compact
+14px type, 32px minimum rows, and 24px score fields. On wide windows, equal compact panes
+share heading and toolbar rows so their table headers align even when controls
+wrap. The visible gap is 24px, and the right-hand editor column stays reserved.
+Narrow windows stack boards above the crosstable in one vertically scrolling page.
+There are no view-toggle chips. Missing only is an event-wide saved preference
+that carries across sections. Print packet always opens the preview. Selected
+sections omit redundant in-table section summaries; All sections keeps names only.
+Result counts explicitly say “1 of 2 results in”.
+The crosstable shows rank, rounds, and points;
 prize filters, BH/SB columns, and a permanent result-key legend are omitted.
 Membership and optional rating estimates remain in Players. The roster keeps
 Name, Rating and USCF expiry in a compact, content-width table instead of

@@ -57,7 +57,7 @@ void main() {
   testWidgets('pairings are ready for results without a separate start step', (
     tester,
   ) async {
-    final c = fixture();
+    final c = fixture(format: Format.swiss);
     addTearDown(c.dispose);
     c.post((await tester.runAsync(() => c.propose()))!);
     final s = c.event!.sections.first;
@@ -66,7 +66,7 @@ void main() {
     expect(roundLine(tester), isNot(contains('Posted')));
     expect(roundLine(tester), isNot(contains('Started')));
     expect(roundLine(tester), isNot(contains('Not started')));
-    expect(roundLine(tester), contains('0 of 2 in'));
+    expect(roundLine(tester), contains('0 of 2 results in'));
     expect(find.byKey(const ValueKey('start-round')), findsNothing);
     expect(find.byKey(const ValueKey('undo-post')), findsNothing);
     final g = s.rounds.last.games.first;
@@ -77,7 +77,7 @@ void main() {
       c.event!.games.firstWhere((x) => x.id == g.id).outcome,
       Outcome.whiteWin,
     );
-    expect(roundLine(tester), contains('1 of 2 in'));
+    expect(roundLine(tester), contains('1 of 2 results in'));
     expect(find.byKey(const ValueKey('undo-post')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
@@ -85,7 +85,7 @@ void main() {
   testWidgets(
     'an earlier round is read-only until Correct a result, and posting resets the view',
     (tester) async {
-      final c = fixture();
+      final c = fixture(format: Format.swiss);
       addTearDown(c.dispose);
       final id = c.event!.sections.first.id;
       c.post((await tester.runAsync(() => c.propose(sectionId: id)))!);
@@ -184,7 +184,7 @@ void main() {
   testWidgets('unfinished and assumed results are marked, not blank', (
     tester,
   ) async {
-    final c = fixture();
+    final c = fixture(format: Format.swiss);
     addTearDown(c.dispose);
     c.post((await tester.runAsync(() => c.propose()))!);
     final [a, b, ...] = c.event!.sections.first.rounds.last.games;

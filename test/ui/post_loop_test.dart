@@ -53,7 +53,7 @@ Future<void> post(WidgetTester tester, TournamentController c) async {
 
 void main() {
   test('the post button names the round and says why it is held', () async {
-    final c = fixture();
+    final c = fixture(format: Format.swiss);
     addTearDown(c.dispose);
     final [q1, q2] = c.event!.sections;
     expect(
@@ -84,7 +84,7 @@ void main() {
   testWidgets(
     'creating pairings from one section creates every ready section once',
     (tester) async {
-      final c = fixture();
+      final c = fixture(format: Format.swiss);
       addTearDown(c.dispose);
       await mount(tester, c);
       final first = c.event!.sections.first.id;
@@ -108,7 +108,7 @@ void main() {
   );
 
   testWidgets('event complete replaces the post button', (tester) async {
-    final c = fixture();
+    final c = fixture(format: Format.swiss);
     addTearDown(c.dispose);
     for (
       var round = 0;
@@ -128,6 +128,77 @@ void main() {
     expect(find.byKey(const ValueKey('report-scope')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
+
+  test('pairing assumptions cannot complete the event', () {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    final games = c.pairingEvent.games.toList();
+    for (final game in games.take(games.length - 1)) {
+      c.recordResult(game.id, Outcome.draw);
+    }
+    c.setPairingAssumption(games.last.id, Outcome.draw, 'Still playing');
+    expect(postState(c.pairingEvent, null).complete, false);
+    expect(
+      postState(c.pairingEvent, null).why,
+      contains('1 result still to enter'),
+    );
+  });
+
+  testWidgets('fixed quads finish without a post button', (tester) async {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    await mount(tester, c);
+    await tester.tap(find.text('Pairings').first);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('event-complete')), findsNothing);
+    for (final game in c.pairingEvent.games.toList()) {
+      c.recordResult(game.id, Outcome.draw);
+    }
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('event-complete')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
+    await tester.tap(find.text('Finish & export'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('report-scope')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'finished Swiss does not mark an unfinished quad event complete',
+    (tester) async {
+      final c = fixture();
+      addTearDown(c.dispose);
+      final first = c.event!.sections.first;
+      c.change(
+        'Use mixed formats',
+        c.event!.copy(
+          sections: [
+            first.copy(format: Format.swiss),
+            c.event!.sections.last,
+          ],
+        ),
+      );
+      for (var round = 0; round < first.plannedRounds; round++) {
+        c.post((await tester.runAsync(() => c.propose(sectionId: first.id)))!);
+        for (final game in c.event!.sections.first.rounds.last.games) {
+          c.recordResult(game.id, Outcome.draw);
+        }
+      }
+      await mount(tester, c);
+      await tester.tap(find.text('Pairings').first);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('event-complete')), findsNothing);
+      for (final game
+          in c.pairingEvent.sections.last.rounds
+              .expand((r) => r.games)
+              .toList()) {
+        c.recordResult(game.id, Outcome.draw);
+      }
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('event-complete')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('Swiss rounds post without a certification notice', (
     tester,

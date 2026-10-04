@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
@@ -9,6 +10,44 @@ import '../domain/pairing.dart';
 import '../domain/standings.dart';
 
 enum ReportKind { packet, pairings, standings, crosstable, sections }
+
+/// A player's result, stable opponent number, and color. Both print and text
+/// reports use this representation; a bye is distinct from an unplayed cell.
+String crosstableCell(
+  Event event,
+  Round round,
+  String playerId,
+  Map<String, int> numbers,
+) {
+  final games =
+      round.games
+          .where((g) => g.white == playerId || g.black == playerId)
+          .toList()
+        ..sort((a, b) => a.leg.compareTo(b.leg));
+  if (games.isEmpty) {
+    final bye = round.byes.where((b) => b.player == playerId).firstOrNull;
+    return bye == null ? '--' : 'BYE ${scoreText(bye.points)}';
+  }
+  return games
+      .map((game) {
+        final white = game.white == playerId;
+        final opponent = white ? game.black : game.white;
+        final points = white
+            ? game.outcome.whiteScore
+            : game.outcome.blackScore;
+        final code = !game.outcome.resolved
+            ? '?'
+            : !game.outcome.played
+            ? 'F${scoreText(points)}'
+            : points == 2
+            ? 'W'
+            : points == 1
+            ? 'D'
+            : 'L';
+        return '$code${numbers[opponent] ?? event.player(opponent).name}${white ? 'w' : 'b'}';
+      })
+      .join('/');
+}
 
 String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
   final lines = <String>['${e.name} | ${e.date} | revision ${e.revision}', ''];
@@ -29,36 +68,14 @@ String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
     for (final row in rows) {
       final id = row.player.id;
       final cells = s.rounds
-          .map((r) {
-            final games = r.games
-                .where((g) => g.white == id || g.black == id)
-                .toList();
-            if (games.isEmpty) {
-              final bye = r.byes.where((b) => b.player == id).firstOrNull;
-              return (bye == null ? '--' : 'BYE ${scoreText(bye.points)}')
-                  .padRight(s.doubleGames ? 18 : 8);
-            }
-            return games
-                .map((g) {
-                  final white = g.white == id;
-                  final opponent = white ? g.black : g.white;
-                  final points = white
-                      ? g.outcome.whiteScore
-                      : g.outcome.blackScore;
-                  final code = !g.outcome.resolved
-                      ? '?'
-                      : !g.outcome.played
-                      ? 'F${scoreText(points)}'
-                      : points == 2
-                      ? 'W'
-                      : points == 1
-                      ? 'D'
-                      : 'L';
-                  return '$code${numbers[opponent] ?? e.player(opponent).name}${white ? 'w' : 'b'}';
-                })
-                .join('/')
-                .padRight(s.doubleGames ? 18 : 8);
-          })
+          .map(
+            (r) => crosstableCell(
+              e,
+              r,
+              id,
+              numbers,
+            ).padRight(s.doubleGames ? 18 : 8),
+          )
           .join(' ');
       lines.add(
         '${numbers[id].toString().padLeft(3)}  ${row.player.name.padRight(nameWidth)}  ${row.player.rating.toString().padLeft(4)}  ${scoreText(row.points).padLeft(4)}  $cells',
@@ -141,49 +158,11 @@ List<Round> reportPairingRounds(
     }
     return [round];
   }
-  final schedule = roundRobinSchedule(
-    section.players,
-    quad: section.format == Format.quad,
-    colorLot: quadColorLot(section),
-  );
+  final count = min(section.plannedRounds, sectionSchedule(section).length);
   return [
-    for (final (index, pairs) in schedule.take(section.plannedRounds).indexed)
-      section.rounds.where((r) => r.number == index + 1).firstOrNull ??
-          (() {
-            final games = <Game>[];
-            final byes = <ByeAward>[];
-            var board = section.boardStart;
-            for (final (white, black) in pairs) {
-              if (white == null || black == null) {
-                final player = white ?? black;
-                if (player != null) {
-                  byes.add(ByeAward(player, 0, 'Round-robin sit-out'));
-                }
-                continue;
-              }
-              games.add(
-                Game(
-                  id: 'paper-${section.id}-$index-$board-1',
-                  white: white,
-                  black: black,
-                  board: board,
-                ),
-              );
-              if (section.doubleGames) {
-                games.add(
-                  Game(
-                    id: 'paper-${section.id}-$index-$board-2',
-                    white: black,
-                    black: white,
-                    board: board,
-                    leg: 2,
-                  ),
-                );
-              }
-              board++;
-            }
-            return Round(number: index + 1, games: games, byes: byes);
-          })(),
+    for (var n = 1; n <= count; n++)
+      section.rounds.where((r) => r.number == n).firstOrNull ??
+          paperRound(section, n),
   ];
 }
 
@@ -245,6 +224,128 @@ List<Standing> reportStandings(
   ];
 }
 
+/// Fixed player numbers stay readable even after the standings order changes.
+/// Only the round cells are bisected; the player's name spans both halves.
+List<pw.Widget> _roundRobinPairingGrid(
+  Event event,
+  Section section,
+  List<Round> rounds,
+) {
+  final numbers = {
+    for (final (index, id) in section.players.indexed) id: index + 1,
+  };
+  const line = pw.BorderSide(width: 0.6);
+  pw.Widget label(String text, {bool header = false, bool left = false}) =>
+      pw.Container(
+        height: header ? 28 : 60,
+        alignment: left ? pw.Alignment.centerLeft : pw.Alignment.center,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 7),
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(
+            fontSize: header ? 11 : 12,
+            fontWeight: header ? pw.FontWeight.bold : pw.FontWeight.normal,
+          ),
+        ),
+      );
+  // A posted opponent who has since left the roster has no number.
+  String opponentLabel(String id) =>
+      numbers[id]?.toString() ??
+      ' ${event.players.where((p) => p.id == id).firstOrNull?.name ?? '?'}';
+  pw.Widget roundCell(String player, Round round) {
+    final games =
+        round.games
+            .where((g) => g.white == player || g.black == player)
+            .toList()
+          ..sort((a, b) => a.leg.compareTo(b.leg));
+    final bye = round.byes.where((b) => b.player == player).firstOrNull;
+    final labels = games.isEmpty
+        ? [bye == null ? '-' : 'Bye']
+        : [
+            for (final game in games)
+              (game.white == player ? 'W' : 'B') +
+                  opponentLabel(game.white == player ? game.black : game.white),
+          ];
+    return pw.Row(
+      children: [
+        for (final (index, text) in labels.indexed)
+          pw.Expanded(
+            child: pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border(left: index == 0 ? pw.BorderSide.none : line),
+              ),
+              child: pw.Column(
+                children: [
+                  pw.Container(
+                    height: 27,
+                    alignment: pw.Alignment.center,
+                    decoration: const pw.BoxDecoration(
+                      border: pw.Border(bottom: line),
+                    ),
+                    child: pw.Text(
+                      text,
+                      style: const pw.TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  pw.SizedBox(height: 33),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  return [
+    pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 14, bottom: 8),
+      child: pw.Text(
+        'Round-robin pairing sheet',
+        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+      ),
+    ),
+    // Keep larger round robins legible instead of squeezing every round across.
+    for (var offset = 0; offset < rounds.length; offset += 5) ...[
+      pw.Table(
+        border: pw.TableBorder.all(width: 0.6),
+        columnWidths: {
+          0: const pw.FixedColumnWidth(28),
+          1: const pw.FlexColumnWidth(2.5),
+          for (var i = 0; i < rounds.skip(offset).take(5).length; i++)
+            i + 2: const pw.FlexColumnWidth(),
+        },
+        children: [
+          pw.TableRow(
+            repeat: true,
+            decoration: const pw.BoxDecoration(color: PdfColors.grey100),
+            children: [
+              label('#', header: true),
+              label('Player', header: true, left: true),
+              for (final round in rounds.skip(offset).take(5))
+                label('Round ${round.number}', header: true),
+            ],
+          ),
+          for (final player in section.players)
+            pw.TableRow(
+              children: [
+                label('${numbers[player]}'),
+                label(event.player(player).name, left: true),
+                for (final round in rounds.skip(offset).take(5))
+                  roundCell(player, round),
+              ],
+            ),
+        ],
+      ),
+      pw.SizedBox(height: 8),
+    ],
+    pw.Text(
+      'W = White, B = Black; number = opponent. Write your result below.'
+      '${section.doubleGames ? ' Paired boxes are games 1 and 2, left to right.' : ''}',
+      style: const pw.TextStyle(fontSize: 10),
+    ),
+  ];
+}
+
 Future<Uint8List> reportPdf(
   Event e,
   ReportKind kind, {
@@ -278,10 +379,21 @@ Future<Uint8List> reportPdf(
         (roundNumbers != null ||
             roundNumber == null ||
             roundNumber == 0 ||
+            hasFixedQuadSchedule(s) ||
             s.rounds.any((r) => r.number == roundNumber)),
   )) {
     sectionCount++;
-    final number = roundNumbers?[scope.id] ?? roundNumber;
+    final requested = roundNumbers?[scope.id] ?? roundNumber;
+    // A quad's later rounds may be unposted yet still shown and printed.
+    // Rounds post in order, so "through round n" is then all of its rounds.
+    // An explicit per-section round stays strict.
+    final number =
+        roundNumbers == null &&
+            hasFixedQuadSchedule(scope) &&
+            requested != null &&
+            requested > scope.rounds.length
+        ? null
+        : requested;
     e = eventThroughRound(source, number, sectionId: scope.id);
     final s = e.sections.firstWhere((s) => s.id == scope.id);
     final table = reportStandings(e, s, ceiling: ceiling, forPrizes: forPrizes);
@@ -308,18 +420,23 @@ Future<Uint8List> reportPdf(
     if (kind == ReportKind.sections ||
         kind == ReportKind.pairings ||
         kind == ReportKind.packet) {
-      // Use the full section for fixed schedules, even when printing from the
-      // round-one screen. Swiss still honors the frozen selected round.
+      // A quad prints its complete reusable grid from every print entry. Larger
+      // round robins and Swiss keep board tables, which players need to find
+      // their seats, and honor the selected round.
+      final quadGrid = hasFixedQuadSchedule(scope);
       final rounds = reportPairingRounds(
         scope,
         roundNumber: number,
-        currentRoundOnly: currentRoundOnly,
+        currentRoundOnly: currentRoundOnly && !quadGrid,
       );
       if (rounds.isEmpty) {
         title('Pairings');
         widgets.add(pw.Text('Pairings have not been created yet.'));
       }
-      for (final round in rounds) {
+      if (quadGrid && rounds.isNotEmpty) {
+        widgets.addAll(_roundRobinPairingGrid(source, scope, rounds));
+      }
+      for (final round in quadGrid ? <Round>[] : rounds) {
         widgets.add(pw.NewPage(freeSpace: 100));
         widgets.add(
           pw.Padding(
@@ -421,26 +538,26 @@ Future<Uint8List> reportPdf(
     }
     if (kind == ReportKind.crosstable) {
       title('Crosstable');
+      final numbers = {for (final (i, id) in s.players.indexed) id: i + 1};
       grid(
-        ['Player', 'Pts', for (final r in s.rounds) 'R${r.number}'],
+        ['#', 'Player', 'Pts', for (final r in s.rounds) 'R${r.number}'],
         [
           for (final row in table)
             [
+              '${numbers[row.player.id]}',
               row.player.name,
               _halves(row.points),
               for (final r in s.rounds)
-                r.games
-                    .where(
-                      (g) =>
-                          g.white == row.player.id || g.black == row.player.id,
-                    )
-                    .map(
-                      (g) =>
-                          '${g.white == row.player.id ? 'W' : 'B'} ${g.outcome.label}',
-                    )
-                    .join(' / '),
+                crosstableCell(e, r, row.player.id, numbers),
             ],
         ],
+      );
+      widgets.add(
+        pw.Text(
+          'W/D/L = win/draw/loss; number = opponent; w/b = color. '
+          'F = forfeit points; ? = unresolved; BYE = awarded points.',
+          style: const pw.TextStyle(fontSize: 9),
+        ),
       );
     }
     doc.addPage(

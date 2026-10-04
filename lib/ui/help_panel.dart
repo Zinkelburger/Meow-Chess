@@ -1,7 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
-import 'package:file_selector/file_selector.dart';
 import '../infrastructure/save_location.dart';
+import '../infrastructure/artifact_file.dart';
 import 'package:flutter/material.dart';
 import '../infrastructure/diagnostic_log.dart';
 import '../application/diagnostics.dart';
@@ -41,6 +40,10 @@ const helpArticles = [
       (
         'When is the color lot decided?',
         'Meow-Chess derives the two final-round color choices from the randomly generated section ID. The choice is stable: previewing again, reopening the event or posting a round does not redraw it. Each posted quad round records the color lot in its notes.',
+      ),
+      (
+        'Edit opponents and colors',
+        'Choose Edit quad pairings beside New Section, then select the quad. Each round shows White and Black on both boards. Choose a player to exchange places in that round, or choose Flip colors. When changing opponents, adjust the other unplayed round too so everyone meets once. Save pairings updates posted games, future pairings and printed sheets together. Reprint sheets already handed out. Rounds with results, a start marker or pairing assumptions are locked; other rounds remain editable. Undo restores the previous schedule.',
       ),
       (
         'Changing a quad',
@@ -106,6 +109,10 @@ const helpArticles = [
     'Refresh and verify US Chess ratings',
     'Review USCF rating changes before applying them.',
     [
+      (
+        'Find or correct a US Chess ID',
+        'Beside a player’s US Chess ID, choose Find by name to search official member records. Check ID warns if the record is missing or the official name differs, and searches for possible corrections. Compare the name, state and rating, select Use, then Save or Add. Ratings stay unchanged. In Event details, type a chief or assistant TD’s name and choose Find by name to select their ID. Service failures mean unverified, not an invalid ID.',
+      ),
       (
         'Refresh one or everyone',
         'Use Players → Player tools → Refresh from USCF for the whole event, or the refresh arrow beside a player’s US Chess ID for one person. Check the returned official name, ID, category and supplement date. Confirm the rating changes you want in the player table, or keep current ratings. A failed lookup leaves local values intact.',
@@ -201,10 +208,7 @@ class _HelpPanelState extends State<HelpPanel> {
         suggestedName: 'meow-chess-diagnostics.log',
       );
       if (location == null) return;
-      await XFile.fromData(
-        Uint8List.fromList(utf8.encode(log.read())),
-        mimeType: 'text/plain',
-      ).saveTo(location.path);
+      writeArtifact(location.path, utf8.encode(log.read()));
       if (mounted) {
         setState(() => logNotice = 'Diagnostic log saved to ${location.path}');
       }

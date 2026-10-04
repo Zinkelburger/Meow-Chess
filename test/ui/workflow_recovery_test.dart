@@ -227,7 +227,7 @@ void main() {
   testWidgets(
     'results restore board side and historical rounds reopen locked',
     (tester) async {
-      final c = fixture(count: 4);
+      final c = fixture(count: 4, format: Format.swiss);
       addTearDown(c.dispose);
       c.post((await tester.runAsync(() => c.propose()))!);
       for (final g in c.event!.games.toList()) {
@@ -265,7 +265,7 @@ void main() {
       final state = tester.state<ResultsViewState>(find.byType(ResultsView));
       expect(state.selectedRound, 1);
       expect(state.correcting, false);
-      await tester.tap(find.byTooltip('Print preview…'));
+      await tester.tap(find.byKey(const ValueKey('print-round')));
       await tester.pump();
       final preview = tester.widget<PrintPanel>(find.byType(PrintPanel));
       expect(preview.roundNumber, 1);

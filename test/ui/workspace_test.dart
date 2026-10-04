@@ -247,7 +247,12 @@ void main() {
     tester.testTextInput.updateEditingValue(
       const TextEditingValue(text: '12345678'),
     );
-    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    // The inline identity tools remain reachable by keyboard before Rating.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab); // Find by name.
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab); // Check ID.
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab); // Rating.
     await tester.pumpAndSettle();
     expectFocused('panel-rating');
     tester.testTextInput.updateEditingValue(
@@ -328,18 +333,19 @@ void main() {
     expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
     await tester.tap(find.text('Pairings').first);
     await tester.pumpAndSettle();
-    expect(find.text('Create pairings · Round 1 · 2 sections'), findsOneWidget);
-    // Players need no check-in to be paired.
-    await tester.tap(find.byKey(const ValueKey('pair-next-round')));
-    // Pairing runs in an isolate, outside the fake test clock.
-    await tester.runAsync(() async {
-      for (var i = 0; i < 200 && c.event!.games.isEmpty; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-    });
+    // A four-player quad exposes all three fixed rounds immediately.
+    expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
+    expect(c.event!.games, isEmpty);
+    expect(c.pairingEvent.sections.every((s) => s.rounds.length == 3), true);
+    expect(c.pairingEvent.games, hasLength(12));
+    final game = c.pairingEvent.games.first;
+    await tester.tap(find.byKey(ValueKey('score-${game.id}-w')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
     await tester.pumpAndSettle();
-    expect(c.event!.sections.every((s) => s.rounds.length == 1), true);
-    expect(c.event!.games, hasLength(4));
+    expect(
+      c.event!.games.firstWhere((g) => g.id == game.id).outcome,
+      Outcome.whiteWin,
+    );
   });
 
   testWidgets('ticked players move between sections after confirmation', (

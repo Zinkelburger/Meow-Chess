@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
-import 'package:meow_chess/domain/standings.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/ui/players_view.dart';
 import '../support.dart';
@@ -34,29 +33,8 @@ Future<void> mountPlayers(
   );
 }
 
-Standing row(String name, int points, int bh, int sb) =>
-    Standing(Player(id: name, name: name), points, bh, sb, 1);
-
 void main() {
-  test('ties share a rank marked T-, and the reason is spelled out', () {
-    final rows = [
-      row('Ann', 4, 6, 8),
-      row('Bob', 4, 5, 8),
-      row('Cy', 2, 5, 4),
-      row('Di', 2, 5, 4),
-      row('Ed', 0, 4, 0),
-    ];
-    expect(
-      {for (final e in rankLabels(rows).entries) e.key: e.value.$1},
-      {'Ann': '1', 'Bob': '2', 'Cy': 'T-3', 'Di': 'T-3', 'Ed': '5'},
-    );
-    expect(whyRank(rows, rows[0]), contains('Buchholz'));
-    expect(whyRank(rows, rows[0]), contains('3 against 2½'));
-    expect(whyRank(rows, rows[2]), contains('share the rank'));
-    expect(whyRank(rows, rows[4]), 'The only player on 0 points.');
-  });
-
-  testWidgets('standings show plain ranks with explanations on hover', (
+  testWidgets('tied standings have one sequential number column per section', (
     tester,
   ) async {
     final c = fixture();
@@ -66,32 +44,31 @@ void main() {
       c.recordResult(g.id, Outcome.draw);
     }
     await mountPlayers(tester, c);
-    expect(find.text('Rank'), findsOneWidget);
+    expect(find.text('Rank'), findsNothing);
+    expect(find.text('#'), findsOneWidget);
     expect(find.text('BH'), findsNothing);
     expect(find.text('SB'), findsNothing);
-    // All four in a quad drew: everyone is tied.
-    expect(find.text('T-1'), findsNWidgets(8));
+    // Tied players still occupy positions 1–4 within each quad.
+    expect(find.text('T-1'), findsNothing);
+    for (final section in c.event!.sections) {
+      for (final (i, id) in section.players.indexed) {
+        expect(
+          find.descendant(
+            of: find.byKey(ValueKey('number-$id')),
+            matching: find.text('${i + 1}'),
+          ),
+          findsOneWidget,
+        );
+      }
+    }
     final id = c.event!.sections.first.players.first;
-    final rank = find.byKey(ValueKey('rank-$id'));
-    expect(
-      find.descendant(of: rank, matching: find.byType(Icon)),
-      findsNothing,
-    );
-    expect(
-      find.descendant(of: rank, matching: find.byType(InkWell)),
-      findsNothing,
-    );
-    final tooltip = tester.widget<Tooltip>(
-      find.descendant(of: rank, matching: find.byType(Tooltip)),
-    );
-    expect(tooltip.message, contains('share the place'));
-    await tester.tap(rank);
+    await tester.tap(find.byKey(ValueKey('number-$id')));
     await tester.pumpAndSettle();
     expect(find.byKey(ValueKey('why-$id')), findsNothing);
     expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
     expect(find.text('Seed order'), findsNothing);
     expect(find.byKey(const ValueKey('pairings-pane')), findsNothing);
-    expect(find.text('Print standings'), findsOneWidget);
+    expect(find.byTooltip('Print standings'), findsOneWidget);
     expect(find.text('Print pairings'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
@@ -119,7 +96,7 @@ void main() {
         findsNothing,
       );
       expect(find.byKey(const ValueKey('pairings-pane')), findsNothing);
-      expect(find.text('Print standings'), findsOneWidget);
+      expect(find.byTooltip('Print standings'), findsOneWidget);
       // A four-player section should not stretch its table to fill the page.
       final list = find.descendant(
         of: standings,
@@ -149,7 +126,7 @@ void main() {
         ..create('Swiss');
       addTearDown(c.dispose);
       c.importPlayers([
-        for (final (i, r) in [2100, 1900, 1700, 1500].indexed)
+        for (final (i, r) in [2100, 1900, 1700, 1500, 1300, 1100].indexed)
           Player(id: 'p$i', name: 'Player $i', rating: r),
       ]);
       c.addSection('Open', Format.swiss, 3);
@@ -165,7 +142,14 @@ void main() {
       expect(find.text('USCF expires'), findsNothing);
       expect(find.text('1 / W win · 0 / L loss · D draw'), findsNothing);
       expect(find.byTooltip('1 / W win · 0 / L loss · D draw'), findsNothing);
-      for (var i = 0; i < 4; i++) {
+      for (var i = 0; i < 6; i++) {
+        expect(
+          find.descendant(
+            of: find.byKey(ValueKey('number-p$i')),
+            matching: find.text('${i + 1}'),
+          ),
+          findsOneWidget,
+        );
         expect(find.byKey(ValueKey('player-p$i')), findsOneWidget);
       }
       expect(tester.takeException(), isNull);
@@ -173,7 +157,7 @@ void main() {
     },
   );
 
-  testWidgets('pairing numbers are the section numbers the crosstable prints', (
+  testWidgets('crosstable numbering starts at one in each section', (
     tester,
   ) async {
     final c = fixture();
