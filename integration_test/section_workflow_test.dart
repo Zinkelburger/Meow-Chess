@@ -67,15 +67,19 @@ void main() {
       await tester.tap(find.byKey(ValueKey('section-chip-${section.id}')));
       await tester.tap(find.text('Pairings').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('pair-next-round')));
-      await tester.pumpAndSettle();
-      expect(c.event!.sections.every((s) => s.rounds.length == 1), true);
+      // A quad displays its complete schedule without posting or writing a
+      // revision. Scoring materializes the scored round in the same transaction.
+      expect(c.event!.sections.every((s) => s.rounds.isEmpty), true);
       expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
-      final games = c.event!.sections.first.rounds.single.games;
+      final displayed = c.pairingEvent.sections.first;
+      expect(displayed.rounds, hasLength(3));
+      final games = displayed.rounds.first.games;
       await tester.tap(find.byKey(ValueKey('score-${games.first.id}-w')));
       await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
       await tester.pumpAndSettle();
       expect(c.event!.games.first.outcome, Outcome.whiteWin);
+      expect(c.event!.sections.first.rounds, hasLength(1));
+      expect(c.pairingEvent.sections.first.rounds, hasLength(3));
       await capture('section-workflow-pairings');
       await tester.ensureVisible(
         find.byKey(const ValueKey('player-column-header')),

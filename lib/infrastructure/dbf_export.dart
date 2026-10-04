@@ -1,3 +1,5 @@
+import '../version.dart';
+export '../version.dart' show appVersion;
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -68,10 +70,6 @@ Uint8List encodeDbf(
   bytes.last = 26;
   return bytes;
 }
-
-/// Sent as `H_PROGRAM` (at most ten characters). A test keeps it equal to the
-/// version in pubspec.yaml.
-const appVersion = '1.1.1';
 
 /// Sections that appear in the report: every section with entrants.
 List<Section> reportedSections(Event e) =>

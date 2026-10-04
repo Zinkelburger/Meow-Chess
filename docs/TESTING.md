@@ -44,7 +44,7 @@ another configured runner. No Python runtime is needed by the distributed app.
 On a standalone Windows development/CI host, after `flutter pub get --enforce-lockfile`:
 
 ```powershell
-flutter analyze lib test integration_test tools
+flutter analyze lib test integration_test tools scripts
 python scripts/lint.py
 $env:MEOW_EXPORT_FIXTURES = '1'
 $env:MEOW_CHESS_DESKTOP_SETUP = '0'

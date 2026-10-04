@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:meow_chess/application/diagnostics.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
@@ -20,7 +21,7 @@ void main() {
 
   setUp(() {
     directory = Directory.systemTemp.createTempSync('meow-save-dialog-');
-    destination = '${directory.path}/existing.meow';
+    destination = p.join(directory.path, 'existing.meow');
     final c = TournamentController(SqliteEventRepository(destination));
     c.create('Previous tournament');
     c.dispose();

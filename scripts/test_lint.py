@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from lint import architecture_issues
+from lint import architecture_issues, release_issues
 
 
 class ArchitectureTest(unittest.TestCase):
@@ -27,6 +27,20 @@ class ArchitectureTest(unittest.TestCase):
             self.assertEqual(architecture_issues(root), [])
             file.write_text("import 'package:meow_chess/infrastructure/api.dart';", encoding='utf-8')
             self.assertEqual(len(architecture_issues(root)), 1)
+
+
+class ReleaseVersionTest(unittest.TestCase):
+    def test_package_exporter_and_tag_must_agree(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'lib').mkdir()
+            (root / 'pubspec.yaml').write_text('version: 1.2.0+4\n', encoding='utf-8')
+            source = root / 'lib/version.dart'
+            source.write_text("const appVersion = '1.2.0';\n", encoding='utf-8')
+            self.assertEqual(release_issues(root, 'refs/tags/v1.2.0'), [])
+            self.assertEqual(len(release_issues(root, 'refs/tags/v1.1.1')), 1)
+            source.write_text("const appVersion = '1.1.1';\n", encoding='utf-8')
+            self.assertEqual(len(release_issues(root)), 1)
 
 
 if __name__ == '__main__':

@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/tournament_tools.dart';
+import 'package:meow_chess/version.dart';
 
 Future<void> main(List<String> args) async {
   if (args.length != 2 || !['--root', '--cli-root'].contains(args.first)) {
@@ -61,7 +62,7 @@ Future<void> main(List<String> args) async {
                     'capabilities': {
                       'tools': {'listChanged': false},
                     },
-                    'serverInfo': {'name': 'meow-chess', 'version': '1.0.0'},
+                    'serverInfo': {'name': 'meow-chess', 'version': appVersion},
                     'instructions':
                         'Local tournament files only. Read get_event before edits and pass its expectedRevision. Close the event before opening it in the GUI. Never invent results or identities.',
                   });

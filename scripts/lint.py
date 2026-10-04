@@ -2,9 +2,11 @@
 """Small architecture and documentation gates, independent of Flutter analysis."""
 from pathlib import Path
 import re
+import os
 import subprocess
 
 root = Path(__file__).resolve().parent.parent
+
 def architecture_issues(root):
     """Resolve Dart imports/exports, including nested files and package URIs."""
     issues = []
@@ -29,8 +31,24 @@ def architecture_issues(root):
     return issues
 
 
+def release_issues(root, ref=''):
+    pubspec = re.search(r'^version:\s*([^+\s]+)', (root / 'pubspec.yaml').read_text(encoding='utf-8'), re.M)
+    dart = re.search(r"const appVersion = '([^']+)';", (root / 'lib/version.dart').read_text(encoding='utf-8'))
+    if pubspec is None or dart is None:
+        return ['Could not read the package/export version']
+    version = pubspec[1]
+    issues = []
+    if dart[1] != version:
+        issues.append(f'Package version {version} does not match appVersion {dart[1]}')
+    if len('MEOW ' + version) > 10:
+        issues.append('The release version exceeds the ten-character DBF H_PROGRAM field')
+    if ref.startswith('refs/tags/') and ref != 'refs/tags/v' + version:
+        issues.append(f'Release tag {ref} does not match package version {version}')
+    return issues
+
+
 def main():
-    issues = architecture_issues(root)
+    issues = architecture_issues(root) + release_issues(root, os.environ.get('GITHUB_REF', ''))
     for file in [root / 'README.md', *(root / 'docs').glob('*.md')]:
         for target in re.findall(r'\]\(([^)]+)\)', file.read_text(encoding='utf-8')):
             if '://' not in target and not target.startswith('#') and not (file.parent / target.split('#')[0]).exists():
@@ -47,7 +65,7 @@ def main():
     subprocess.run(['git', 'diff', '--check'], cwd=root, check=True)
     if issues:
         raise SystemExit('\n'.join(issues))
-    print('PASS: domain boundaries, application boundaries, local links, requirement IDs, whitespace')
+    print('PASS: domain boundaries, application boundaries, local links, requirement IDs, release version, whitespace')
 
 
 if __name__ == "__main__":

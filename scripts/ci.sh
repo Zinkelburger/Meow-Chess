@@ -14,7 +14,7 @@ if [[ -d "$local_deps" ]]; then
   export PKG_CONFIG_PATH="$local_deps${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 fi
 case "${1:-test}" in
-  analyze) exec "$runner" with -- flutter analyze lib test integration_test tools ;;
+  analyze) exec "$runner" with -- flutter analyze lib test integration_test tools scripts ;;
   lint) python3 scripts/lint.py ;;
   status) exec "$runner" status ;;
   test) shift || true; exec "$runner" with -- flutter test --concurrency=2 "$@" ;;

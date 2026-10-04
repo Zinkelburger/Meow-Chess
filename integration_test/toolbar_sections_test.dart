@@ -124,7 +124,13 @@ void main() {
       find.byKey(const ValueKey('player-column-header')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Rank'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('player-column-header')),
+        matching: find.text('#'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('R1'), findsOneWidget);
     expect(find.text('USCF expires'), findsNothing);
     expect(find.byKey(const ValueKey('player-tools')), findsNothing);

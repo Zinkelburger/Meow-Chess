@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/artifact_save.dart';
 
@@ -20,7 +21,7 @@ void main() {
     replacementDirectory = Directory.systemTemp.createTempSync(
       'meow-replacement-',
     );
-    destination = '${destinationDirectory.path}/report.csv';
+    destination = p.join(destinationDirectory.path, 'report.csv');
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
   });
   tearDown(() {

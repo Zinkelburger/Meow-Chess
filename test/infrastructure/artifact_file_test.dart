@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/artifact_file.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
@@ -20,7 +21,7 @@ void main() {
   tearDown(() => directory.deleteSync(recursive: true));
 
   test('native report save cannot overwrite the open event', () async {
-    final path = '${directory.path}/event.meow';
+    final path = p.join(directory.path, 'event.meow');
     final controller = fixture(path: path);
     final id = controller.event!.id;
     const channel = MethodChannel('meow_chess/file_save');
@@ -52,7 +53,7 @@ void main() {
   });
 
   test('renamed SQLite databases and recovery files are protected', () {
-    final path = '${directory.path}/renamed.csv';
+    final path = p.join(directory.path, 'renamed.csv');
     final controller = fixture(path: path);
     try {
       final original = File(path).readAsBytesSync();
@@ -78,16 +79,16 @@ void main() {
   });
 
   test('database aliases cannot bypass protection', () {
-    final path = '${directory.path}/event.meow';
+    final path = p.join(directory.path, 'event.meow');
     final controller = fixture(path: path);
     try {
-      final soft = '${directory.path}/symlink.csv';
+      final soft = p.join(directory.path, 'symlink.csv');
       Link(soft).createSync(path);
       expect(
         () => writeArtifact(soft, [1]),
         throwsA(isA<TournamentException>()),
       );
-      final hard = '${directory.path}/hardlink.csv';
+      final hard = p.join(directory.path, 'hardlink.csv');
       expect(Process.runSync('ln', [path, hard]).exitCode, 0);
       expect(
         () => writeArtifact(hard, [1]),
@@ -102,7 +103,7 @@ void main() {
   test(
     'closed databases are protected even without the tournament extension',
     () {
-      final path = '${directory.path}/closed.csv';
+      final path = p.join(directory.path, 'closed.csv');
       fixture(path: path).dispose();
       final before = File(path).readAsBytesSync();
       expect(SqliteEventRepository.ownsPath(path), isFalse);
@@ -115,7 +116,7 @@ void main() {
   );
 
   test('ordinary report replacement is complete and staging is removed', () {
-    final path = '${directory.path}/standings.csv';
+    final path = p.join(directory.path, 'standings.csv');
     File(path).writeAsStringSync('previous');
     writeArtifact(path, utf8.encode('complete report'));
     expect(File(path).readAsStringSync(), 'complete report');
@@ -123,7 +124,7 @@ void main() {
   });
 
   test('unrecovered sidecars protect a target with a damaged header', () {
-    final path = '${directory.path}/damaged.csv';
+    final path = p.join(directory.path, 'damaged.csv');
     File(path).writeAsStringSync('damaged database header');
     File('$path-wal').writeAsStringSync('recovery');
     expect(() => writeArtifact(path, [1]), throwsA(isA<TournamentException>()));
