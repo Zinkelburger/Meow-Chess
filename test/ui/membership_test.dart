@@ -167,7 +167,7 @@ void main() {
             body: RatingsRefreshPanel.membership(
               controller: c,
               onClose: () {},
-              lookup: (_, id) async {
+              lookup: (id) async {
                 if (id == previous.memberId) {
                   throw const TournamentException('Lookup failed; try later.');
                 }
@@ -208,7 +208,7 @@ void main() {
           body: RatingsRefreshPanel.membership(
             controller: c,
             onClose: () {},
-            lookup: (_, _) => request.future,
+            lookup: (_) => request.future,
           ),
         ),
       ),

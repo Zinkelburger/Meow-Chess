@@ -48,7 +48,9 @@ jobs:
       - name: Analyze
         run: flutter analyze lib test integration_test tools
       - name: Architecture and documentation lint
-        run: python scripts/lint.py
+        run: |
+          python scripts/test_lint.py
+          python scripts/lint.py
       - name: Install independent DBF reader
         run: python -m pip install dbfread==2.0.7
       - name: Prepare evidence directory
@@ -57,11 +59,13 @@ jobs:
         run: flutter test --concurrency=2 --reporter expanded --file-reporter json:artifacts/unit-tests.json
       - name: Independently validate DBFs and exercise fragile mock importer
         run: python scripts/check_exports.py --validate-only
-      - name: MCP tools and Boylston reports replayed against US Chess rated records
+      - name: Build MCP server
+        run: dart build cli --target=tools/tournament_mcp.dart --output=build/tournament-cli
+      - name: Exercise MCP through the portable launcher
+        run: python scripts/test_tournament_mcp.py
+      - name: Boylston reports replayed against US Chess rated records
         if: runner.os == 'Linux'
         run: |
-          dart build cli --target=tools/tournament_mcp.dart --output=build/tournament-cli
-          python scripts/test_tournament_mcp.py
           python scripts/test_boylston_replay.py
       - name: Abrupt process termination and SQLite recovery
         run: python scripts/verify_recovery.py
@@ -91,6 +95,38 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-evidence-${{ matrix.os }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+  macos-artifacts:
+    name: macOS artifact publication
+    runs-on: macos-14
+    timeout-minutes: 30
+    env:
+      MEOW_DATA_DIR: ${{ runner.temp }}/meow-native-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Test the Dart artifact boundary
+        run: flutter test test/infrastructure/artifact_file_test.dart test/infrastructure/artifact_save_test.dart
+      - name: Compile the macOS application
+        run: flutter build macos --debug
+      - name: Test Foundation staging and publication
+        run: >-
+          xcodebuild test -workspace macos/Runner.xcworkspace -scheme Runner
+          -configuration Debug -destination 'platform=macOS'
+          -resultBundlePath artifacts/macos-publication.xcresult
+          CODE_SIGNING_ALLOWED=NO
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-evidence-macos-artifacts
           path: artifacts/
           if-no-files-found: warn
           retention-days: 14

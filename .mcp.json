@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "meow-chess": {
-      "command": "bash",
-      "args": ["scripts/tournament_mcp.sh"]
+      "command": "dart",
+      "args": ["scripts/tournament_mcp.dart"]
     }
   }
 }

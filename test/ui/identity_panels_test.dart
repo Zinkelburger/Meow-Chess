@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/infrastructure/ratings_api.dart';
 import 'package:meow_chess/ui/event_panel.dart';
-import 'package:meow_chess/ui/players_view.dart';
+import 'package:meow_chess/ui/player_panel.dart';
 import '../support.dart';
 
 const candidate = MemberObservation(
@@ -81,7 +81,7 @@ void main() {
           controller: c,
           player: original,
           onClose: () {},
-          identityLookup: (_, _) async => throw const MemberNotFound(),
+          identityLookup: (_) async => throw const MemberNotFound(),
           memberSearch: (_) async => [candidate],
         ),
       );

@@ -8,6 +8,8 @@ import 'package:uuid/uuid.dart';
 import '../domain/history.dart';
 import '../domain/result_correction.dart';
 import '../domain/model.dart';
+import '../domain/member_observation.dart';
+import '../domain/rating_update.dart';
 import '../domain/pairing.dart';
 import '../domain/us_chess.dart';
 import 'event_repository.dart';
@@ -131,6 +133,49 @@ class TournamentControllerCore extends ChangeNotifier {
             : [...e.players, player],
       ),
     );
+  }
+
+  /// Validates the entire approval against current state before a single commit.
+  /// Both rating-review surfaces use this command, including undo/audit behavior.
+  int applyReviewedRatings({
+    required Event snapshot,
+    required Map<String, MemberObservation> observations,
+    required Set<String> playerIds,
+    required String category,
+  }) {
+    final current = event!;
+    if (current.id != snapshot.id) {
+      throw const TournamentException('Event changed. Refresh again.');
+    }
+    final updates = <String, Player>{};
+    for (final id in playerIds) {
+      final player = current.players.where((p) => p.id == id).firstOrNull;
+      final observation = observations[id];
+      if (player == null || observation == null) {
+        throw const TournamentException(
+          'The reviewed player is no longer available. Refresh again.',
+        );
+      }
+      final problem = ratingUpdateProblem(
+        current: current,
+        snapshot: snapshot,
+        player: player,
+        observation: observation,
+        category: category,
+      );
+      if (problem != null) throw TournamentException(problem);
+      updates[id] = applyRatingObservation(player, observation, category);
+    }
+    if (updates.isEmpty) return 0;
+    change(
+      'Apply ${updates.length} monthly supplement ratings',
+      current.copy(
+        players: [
+          for (final player in current.players) updates[player.id] ?? player,
+        ],
+      ),
+    );
+    return updates.length;
   }
 
   /// Stores membership data and fills a missing state for the requested identity.

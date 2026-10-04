@@ -1,3 +1,4 @@
+import '../application/member_lookup.dart';
 import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
@@ -6,28 +7,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../application/failures.dart';
+import '../application/member_lookup_batch.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
 import '../infrastructure/reports.dart';
-import '../infrastructure/ratings_api.dart';
-import '../infrastructure/save_location.dart';
-import '../infrastructure/artifact_file.dart';
+import '../infrastructure/artifact_save.dart';
 import '../infrastructure/dbf_export.dart';
 import 'dialogs.dart';
 import 'panels.dart';
 import 'drafts.dart';
 import 'event_panel.dart';
-import 'players_view.dart';
-import 'identity_review.dart';
-import 'rating_refresh.dart';
-
-Future<void> saveArtifact(String name, Uint8List bytes) async {
-  final location = await chooseSaveLocation(suggestedName: name);
-  if (location != null) {
-    writeArtifact(location.path, bytes);
-  }
-}
+import 'player_panel.dart';
+import 'side_panel.dart';
+import '../infrastructure/member_directory.dart';
 
 class ReportsView extends StatefulWidget {
   const ReportsView({
@@ -43,7 +36,7 @@ class ReportsView extends StatefulWidget {
   final String? sectionId;
   final ValueChanged<String?>? onResults;
   final VoidCallback? onStandings, onBackups;
-  final RatingLookup memberLookup;
+  final MemberLookup memberLookup;
   @override
   State<ReportsView> createState() => _ReportsViewState();
 }
@@ -256,8 +249,7 @@ class _ReportsViewState extends State<ReportsView> {
     final c = controller, event = controller.event!;
     final players = _stateless(event);
     final lookups = players.where((p) => p.memberId.isNotEmpty).length;
-    final byId = <String, MemberObservation>{};
-    // Saved together at the end, as one revision and one undo step.
+    // One batch produces one audited membership save, including partial success.
     final found = <String, Json>{};
     final failures = <String>[];
     bool current() => mounted && controller == c && c.event?.id == event.id;
@@ -265,53 +257,40 @@ class _ReportsViewState extends State<ReportsView> {
       fetchingStates = true;
       stateNotice = null;
     });
-    for (final player in players) {
-      if (!current()) break;
-      if (player.memberId.isEmpty) continue;
-      try {
-        final member =
-            byId[player.memberId] ??
-            await widget.memberLookup(c, player.memberId);
-        if (!current()) break;
-        if (member == null || member.id != player.memberId) {
-          throw const TournamentException('No matching member returned.');
-        }
-        byId[player.memberId] = member;
-        found[player.id] = member.toJson();
-      } catch (error) {
-        if (!current()) break;
-        final message = plainMessage(error);
-        failures.add('${player.name}: $message');
-        if (message.contains('429') ||
-            message.contains('rate limit') ||
-            message.contains('API key') ||
-            message.contains('Public US Chess access')) {
-          break;
-        }
-      }
+    try {
+      await const MemberLookupBatch().run(
+        players,
+        lookup: (id) => widget.memberLookup(id),
+        isCurrent: current,
+        onFound: (player, member) {
+          found[player.id] = member.toJson();
+          setState(
+            () => stateNotice = 'Looked up ${found.length} of $lookups…',
+          );
+        },
+        onFailure: (player, error, _) =>
+            failures.add('${player.name}: ${plainMessage(error)}'),
+      );
+      var filled = 0;
       if (current()) {
-        setState(() => stateNotice = 'Looked up ${found.length} of $lookups…');
+        final before = _stateless(c.event!).map((p) => p.id).toSet();
+        c.recordMemberships(event.id, found);
+        filled = before
+            .where((id) => c.event!.player(id).state.isNotEmpty)
+            .length;
       }
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-    }
-    var filled = 0;
-    if (c.event?.id == event.id) {
-      final before = _stateless(c.event!).map((p) => p.id).toSet();
-      c.recordMemberships(event.id, found);
-      filled = before
-          .where((id) => c.event!.player(id).state.isNotEmpty)
-          .length;
-    }
-    if (!mounted) return;
-    setState(() {
-      fetchingStates = false;
+      if (!mounted) return;
       final remaining = current() ? _stateless(c.event!).length : 0;
       stateNotice = current()
           ? 'Saved $filled missing ${filled == 1 ? 'state' : 'states'}. '
                 '${remaining == 0 ? 'All player states are filled.' : '$remaining still missing; add a USCF ID, retry the lookup, or enter the state manually.'}'
                 '${failures.isEmpty ? '' : '\n${failures.join('\n')}'}'
           : 'Event changed. Fetch again for the current roster.';
-    });
+    } catch (error) {
+      if (mounted) stateNotice = plainMessage(error);
+    } finally {
+      if (mounted) setState(() => fetchingStates = false);
+    }
   }
 
   void _fillStates(Event e) {

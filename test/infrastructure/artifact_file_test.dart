@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/artifact_file.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
-import 'package:meow_chess/ui/reports_view.dart';
+import 'package:meow_chess/infrastructure/artifact_save.dart';
 
 import '../support.dart';
 

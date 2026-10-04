@@ -1,12 +1,11 @@
 import 'dart:convert';
-import '../infrastructure/save_location.dart';
-import '../infrastructure/artifact_file.dart';
+import '../infrastructure/artifact_save.dart';
 import 'package:flutter/material.dart';
 import '../infrastructure/diagnostic_log.dart';
 import '../application/diagnostics.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
-import 'players_view.dart' show SidePanel;
+import 'side_panel.dart';
 
 class HelpArticle {
   const HelpArticle(this.id, this.title, this.summary, this.sections);
@@ -204,13 +203,13 @@ class _HelpPanelState extends State<HelpPanel> {
         );
         return;
       }
-      final location = await chooseSaveLocation(
-        suggestedName: 'meow-chess-diagnostics.log',
+      final path = await saveArtifact(
+        'meow-chess-diagnostics.log',
+        utf8.encode(log.read()),
       );
-      if (location == null) return;
-      writeArtifact(location.path, utf8.encode(log.read()));
+      if (path == null) return;
       if (mounted) {
-        setState(() => logNotice = 'Diagnostic log saved to ${location.path}');
+        setState(() => logNotice = 'Diagnostic log saved to $path');
       }
     } catch (e, stack) {
       Diagnostics.record(

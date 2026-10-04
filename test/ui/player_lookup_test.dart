@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/infrastructure/ratings_api.dart';
-import 'package:meow_chess/ui/players_view.dart';
+import 'package:meow_chess/ui/player_panel.dart';
 import '../support.dart';
 
 MemberObservation observation(String id, String name) => MemberObservation(
@@ -32,7 +32,7 @@ void main() {
               controller: c,
               player: c.event!.players[0],
               onClose: () {},
-              memberLookup: (_, id) {
+              memberLookup: (id) {
                 expect(id, '99999999');
                 return request.future;
               },
@@ -88,7 +88,7 @@ void main() {
             controller: c,
             player: c.event!.players[index],
             onClose: () {},
-            memberLookup: (_, _) {
+            memberLookup: (_) {
               final request = Completer<MemberObservation?>();
               requests.add(request);
               return request.future;
@@ -142,7 +142,7 @@ void main() {
             controller: c,
             player: c.event!.players[0],
             onClose: () {},
-            memberLookup: (_, _) => request.future,
+            memberLookup: (_) => request.future,
           ),
         ),
       ),

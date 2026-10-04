@@ -39,7 +39,7 @@ void main() {
               path: 'Rating review.meow',
               onClose: () {},
               onTheme: () {},
-              ratingLookup: (_, id) async => MemberObservation(
+              ratingLookup: (id) async => MemberObservation(
                 id: id,
                 name: {
                   '12000000': 'Maya Patel',

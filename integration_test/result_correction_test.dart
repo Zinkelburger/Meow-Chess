@@ -23,6 +23,17 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final c = TournamentController(SqliteEventRepository(':memory:'));
     populatePractice(c);
+    // Historical-round correction is the Swiss workflow. Quads publish their
+    // whole schedule at once and remain directly editable while unstarted.
+    c.change(
+      'Prepare Swiss correction rehearsal',
+      c.event!.copy(
+        sections: [
+          c.event!.sections.first.copy(format: Format.swiss),
+          ...c.event!.sections.skip(1),
+        ],
+      ),
+    );
     final section = c.event!.sections.first;
     c.post(await c.propose(sectionId: section.id));
     for (final g in c.event!.sections.first.rounds.first.games) {

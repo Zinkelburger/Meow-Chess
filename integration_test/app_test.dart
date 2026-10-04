@@ -169,8 +169,14 @@ void main() {
             );
           }
           if (round == 0 && section.id == c.event!.sections.first.id) {
+            // Keyboard advance scrolls to the next quad round in the stacked
+            // layout. Bring the packet toolbar back before clicking it.
+            final printPacket = find.byKey(const ValueKey('print-round'));
+            await tester.ensureVisible(printPacket);
+            await tester.pumpAndSettle();
+            expect(printPacket.hitTestable(), findsOneWidget);
             await screenshot('results-section');
-            await tester.tap(find.byKey(const ValueKey('print-round')));
+            await tester.tap(printPacket);
             await tester.pumpAndSettle(const Duration(seconds: 1));
             expect(find.byKey(const ValueKey('print-panel')), findsOneWidget);
             await screenshot('print-docked');

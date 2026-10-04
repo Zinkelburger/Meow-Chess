@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/ui/panels.dart';
-import 'package:meow_chess/ui/players_view.dart';
+import 'package:meow_chess/ui/player_panel.dart';
 import 'package:meow_chess/ui/results_view.dart';
 import 'package:meow_chess/ui/theme.dart';
 import 'package:meow_chess/ui/workspace.dart';

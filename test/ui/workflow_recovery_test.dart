@@ -9,7 +9,7 @@ import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/reports.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/ui/panels.dart';
-import 'package:meow_chess/ui/players_view.dart';
+import 'package:meow_chess/ui/player_panel.dart';
 import 'package:meow_chess/ui/theme.dart';
 import 'package:meow_chess/ui/results_view.dart';
 import 'package:meow_chess/ui/reports_view.dart';

@@ -7,7 +7,7 @@ import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import 'panels.dart';
-import 'players_view.dart' show SidePanel;
+import 'side_panel.dart';
 
 void showQuadPairingsEditor(
   BuildContext context,

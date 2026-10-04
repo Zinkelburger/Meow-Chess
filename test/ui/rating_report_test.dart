@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/infrastructure/ratings_api.dart';
 import 'package:meow_chess/domain/model.dart';
-import 'package:meow_chess/ui/players_view.dart';
+import 'package:meow_chess/ui/player_panel.dart';
 import 'package:meow_chess/ui/reports_view.dart';
 import '../support.dart';
 
@@ -39,7 +39,7 @@ void main() {
       c,
       () => ReportsView(
         controller: c,
-        memberLookup: (_, id) async {
+        memberLookup: (id) async {
           called.add(id);
           if (id == '12000003') throw const TournamentException('HTTP 500');
           return MemberObservation(
@@ -78,8 +78,7 @@ void main() {
       await show(
         tester,
         c,
-        () =>
-            ReportsView(controller: c, memberLookup: (_, id) => pending.future),
+        () => ReportsView(controller: c, memberLookup: (id) => pending.future),
       );
       await tester.tap(
         find.byKey(const PageStorageKey('rating-advice-details')),
@@ -161,7 +160,7 @@ void main() {
           controller: c,
           player: c.event!.player(id),
           onClose: () {},
-          memberLookup: (_, memberId) async => MemberObservation(
+          memberLookup: (memberId) async => MemberObservation(
             id: memberId,
             name: 'Morgan Lee',
             retrievedAt: '2026-09-30',

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../application/failures.dart';
 import '../domain/us_chess.dart';
 import '../infrastructure/ratings_api.dart';
-import 'identity_review.dart';
+import '../infrastructure/member_directory.dart';
 
 /// Searches and checks identity without saving drafts or changing ratings.
 class MemberIdentityLookup extends StatefulWidget {

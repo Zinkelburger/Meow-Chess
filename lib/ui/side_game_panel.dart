@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
-import 'players_view.dart' show SidePanel;
+import 'side_panel.dart';
 
 /// Side games use explicit opponents, independent of main-section pairings.
 class SideGamePanel extends StatefulWidget {

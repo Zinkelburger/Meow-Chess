@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import 'panels.dart';
-import 'players_view.dart' show SidePanel;
+import 'side_panel.dart';
 
 enum PlayerOperation { move, swap, withdraw }
 

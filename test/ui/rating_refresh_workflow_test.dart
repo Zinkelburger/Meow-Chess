@@ -31,7 +31,7 @@ void main() {
               rosterLoader: (_) async => parseRoster(
                 'Name,Rating,USCF ID\nNew Player,UNR,99887766\nNo ID Player,UNR,',
               ),
-              ratingLookup: (_, id) async {
+              ratingLookup: (id) async {
                 calls++;
                 return MemberObservation(
                   id: id,

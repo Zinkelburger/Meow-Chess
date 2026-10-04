@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../domain/model.dart';
 import '../infrastructure/reports.dart';
 import 'panels.dart' show printSheets;
-import 'players_view.dart' show halves;
-import 'results_view.dart' show scoreMark;
+import 'player_format.dart';
+import 'result_format.dart';
 
 /// A compact wall sheet of each section's latest posted round.
 class CurrentPairings extends StatelessWidget {

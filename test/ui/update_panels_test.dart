@@ -70,7 +70,7 @@ void main() {
             body: RatingsRefreshPanel(
               controller: c,
               onClose: () {},
-              lookup: (_, id) async => MemberObservation(
+              lookup: (id) async => MemberObservation(
                 id: id,
                 name: 'Official Name',
                 retrievedAt: '2026-10-03',

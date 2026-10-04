@@ -1,16 +1,19 @@
+import '../application/member_lookup.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../application/tournament_controller.dart';
 import '../application/failures.dart';
 import '../application/diagnostics.dart';
+import '../application/member_lookup_batch.dart';
 import '../domain/model.dart';
+import '../domain/rating_update.dart';
 import '../domain/membership.dart';
 import 'membership_style.dart';
 import '../infrastructure/roster_import.dart';
 import '../infrastructure/web_roster.dart';
 import '../infrastructure/ratings_api.dart';
-import 'identity_review.dart';
-import 'players_view.dart' show SidePanel;
+import '../infrastructure/member_directory.dart';
+import 'side_panel.dart';
 
 String rosterRefreshLabel(Event event) {
   final source = event.rosterSource['url'] as String?;
@@ -296,8 +299,7 @@ class RatingsRefreshPanel extends StatefulWidget {
   final bool membershipOnly;
   final TournamentController controller;
   final VoidCallback onClose;
-  final Future<MemberObservation?> Function(TournamentController, String)
-  lookup;
+  final MemberLookup lookup;
   @override
   State<RatingsRefreshPanel> createState() => _RatingsRefreshPanelState();
 }
@@ -333,51 +335,41 @@ class _RatingsRefreshPanelState extends State<RatingsRefreshPanel> {
       cancelled = false;
       notice = null;
     });
-    for (final p in event.players) {
-      if (!mounted || cancelled) break;
-      if (p.memberId.isEmpty) {
-        setState(
-          () => failures[p.id] = 'No USCF ID — enter one on the player card.',
-        );
-        continue;
+    try {
+      final outcome = await const MemberLookupBatch().run(
+        event.players,
+        lookup: (id) => widget.lookup(id),
+        isCurrent: () =>
+            mounted &&
+            !cancelled &&
+            c.event?.id == snapshot?.id &&
+            c.event?.revision == snapshot?.revision,
+        onMissingId: (player) => setState(
+          () => failures[player.id] =
+              'No USCF ID — enter one on the player card.',
+        ),
+        onFound: (player, found) {
+          c.recordMembership(event.id, player.id, found.toJson());
+          setState(() {
+            snapshot = c.event!;
+            observations[player.id] = found;
+          });
+        },
+        onFailure: (player, error, _) =>
+            setState(() => failures[player.id] = plainMessage(error)),
+      );
+      if (!mounted) return;
+      if (outcome == MemberBatchOutcome.providerStopped) {
+        notice =
+            'Provider stopped the batch. Completed lookups are available below; retry later.';
+      } else if (outcome == MemberBatchOutcome.cancelled && !cancelled) {
+        notice = 'The event changed. Fetch again to check the current roster.';
       }
-      try {
-        final found = await widget.lookup(c, p.memberId);
-        if (!mounted || cancelled) break;
-        if (found == null || found.id != p.memberId) {
-          throw const TournamentException('No matching member returned.');
-        }
-        if (c.event!.id != snapshot!.id ||
-            c.event!.revision != snapshot!.revision) {
-          setState(
-            () => notice =
-                'The event changed. Fetch again to check the current roster.',
-          );
-          break;
-        }
-        c.recordMembership(event.id, p.id, found.toJson());
-        setState(() {
-          snapshot = c.event!;
-          observations[p.id] = found;
-        });
-      } catch (e) {
-        if (!mounted || cancelled) break;
-        final message = plainMessage(e);
-        setState(() => failures[p.id] = message);
-        if (message.contains('429') ||
-            message.contains('rate limit') ||
-            message.contains('API key') ||
-            message.contains('Public US Chess access')) {
-          setState(
-            () => notice =
-                'Provider stopped the batch. Completed lookups are available below; retry later.',
-          );
-          break;
-        }
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+    } catch (error) {
+      if (mounted) notice = plainMessage(error);
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
-    if (mounted) setState(() => busy = false);
   }
 
   @override
@@ -393,25 +385,11 @@ class _RatingsRefreshPanelState extends State<RatingsRefreshPanel> {
           'The event changed. Fetch and review ratings again.',
         );
       }
-      c.change(
-        'Apply ${selected.length} monthly supplement ratings',
-        c.event!.copy(
-          players: [
-            for (final p in c.event!.players)
-              if (selected.contains(p.id))
-                p.copy(
-                  rating: observations[p.id]!.ratings[category],
-                  ratingEvidence: {
-                    ...p.ratingEvidence,
-                    ...observations[p.id]!.toJson(),
-                    'kind': 'monthly supplement',
-                    'category': category,
-                  },
-                )
-              else
-                p,
-          ],
-        ),
+      c.applyReviewedRatings(
+        snapshot: snapshot!,
+        observations: observations,
+        playerIds: selected,
+        category: category,
       );
       setState(() {
         notice =
@@ -515,9 +493,14 @@ class _RatingsRefreshPanelState extends State<RatingsRefreshPanel> {
                 value: selected.contains(p.id),
                 onChanged:
                     busy ||
-                        m.ratings[category] == null ||
-                        m.alreadyApplied(p, category) ||
-                        (snapshot!.sectionOf(p.id)?.rounds.isNotEmpty ?? false)
+                        ratingUpdateProblem(
+                              current: c.event!,
+                              snapshot: snapshot!,
+                              player: c.event!.player(p.id),
+                              observation: m,
+                              category: category,
+                            ) !=
+                            null
                     ? null
                     : (value) => setState(() {
                         value == true

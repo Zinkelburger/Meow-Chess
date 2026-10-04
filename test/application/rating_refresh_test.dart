@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/ui/rating_refresh.dart';
-import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/ratings_api.dart';
 import '../support.dart';
 
@@ -25,7 +24,7 @@ void main() {
       final called = <String>[];
       final draft = RatingRefresh(
         c,
-        lookup: (_, id) async {
+        lookup: (id) async {
           called.add(id);
           return observation(id, id == '12000002' ? 0 : 1300);
         },
@@ -61,7 +60,7 @@ void main() {
     final revision = c.event!.revision;
     final draft = RatingRefresh(
       c,
-      lookup: (_, _) async => fail('Must skip missing IDs'),
+      lookup: (_) async => fail('Must skip missing IDs'),
     );
     addTearDown(draft.dispose);
     await draft.fetch();
@@ -85,7 +84,7 @@ void main() {
       };
       final draft = RatingRefresh(
         c,
-        lookup: (_, id) async => observation(id, values[id]),
+        lookup: (id) async => observation(id, values[id]),
       );
       addTearDown(draft.dispose);
       await draft.fetch();
@@ -103,7 +102,7 @@ void main() {
       addTearDown(c.dispose);
       final draft = RatingRefresh(
         c,
-        lookup: (_, id) async => observation(id, 1300),
+        lookup: (id) async => observation(id, 1300),
       );
       addTearDown(draft.dispose);
       await draft.fetch();
@@ -126,7 +125,7 @@ void main() {
       final c = fixture(count: 4);
       addTearDown(c.dispose);
       final pending = Completer<MemberObservation?>();
-      final draft = RatingRefresh(c, lookup: (_, _) => pending.future);
+      final draft = RatingRefresh(c, lookup: (_) => pending.future);
       addTearDown(draft.dispose);
       final work = draft.fetch();
       draft.discard();
@@ -136,8 +135,14 @@ void main() {
       expect(draft.observations, isEmpty);
       final limited = RatingRefresh(
         c,
-        lookup: (_, id) async {
-          if (id == '12000001') throw const TournamentException('HTTP 429');
+        lookup: (id) async {
+          if (id == '12000001') {
+            throw const MemberLookupFailure(
+              MemberLookupFailureKind.rateLimited,
+              'Provider limit reached',
+              statusCode: 429,
+            );
+          }
           return observation(id, 1500);
         },
       );

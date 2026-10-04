@@ -3,7 +3,28 @@ import 'package:flutter/material.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../infrastructure/roster_import.dart';
-import 'players_view.dart' show SidePanel, importRosterRows;
+import '../domain/model.dart';
+import 'side_panel.dart';
+
+/// Imports roster text and returns a one-line summary.
+String importRoster(TournamentController c, String source) {
+  return importRosterRows(c, parseRoster(source));
+}
+
+/// Commits the same interpreted rows that were reviewed in the preview.
+String importRosterRows(TournamentController c, List<ImportRow> rows) {
+  final valid = rows.where((r) => r.player != null).toList();
+  if (valid.isEmpty) {
+    throw const TournamentException('No players found.');
+  }
+  final skipped = c.importPlayers(valid.map((r) => r.player!).toList());
+  final bad = rows.where((r) => r.error != null).map((r) => r.line).toList();
+  return [
+    'Imported ${valid.length - skipped} players',
+    if (skipped > 0) '$skipped already in the event',
+    if (bad.isNotEmpty) '${bad.length} unreadable (line ${bad.join(', ')})',
+  ].join(' · ');
+}
 
 /// File interpretation stays local until the reviewed rows are imported.
 class RosterImportPanel extends StatefulWidget {

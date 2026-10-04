@@ -1,23 +1,20 @@
+import '../application/member_lookup.dart';
 import 'package:flutter/foundation.dart';
 
 import '../domain/model.dart';
-import '../infrastructure/ratings_api.dart';
+import '../domain/rating_update.dart';
+import '../domain/member_observation.dart';
+import '../application/member_lookup_batch.dart';
 import '../application/failures.dart';
 import '../application/diagnostics.dart';
 import '../application/tournament_controller.dart';
-
-typedef RatingLookup =
-    Future<MemberObservation?> Function(
-      TournamentController controller,
-      String memberId,
-    );
 
 /// A review draft, independent of the right-hand player editor. Fetching never
 /// changes pairing ratings. Relevant player edits invalidate only that row.
 class RatingRefresh extends ChangeNotifier {
   RatingRefresh(this.controller, {required this.lookup});
   final TournamentController controller;
-  final RatingLookup lookup;
+  final MemberLookup lookup;
   final observations = <String, MemberObservation>{};
   final failures = <String, String>{};
   final selected = <String>{};
@@ -62,15 +59,13 @@ class RatingRefresh extends ChangeNotifier {
     if (m == null) {
       return busy ? 'Waiting for USCF…' : 'Not checked. Retry refresh.';
     }
-    if ((proposed(p) ?? 0) <= 0) {
-      return 'Unrated / no published ${const {'R': 'Regular', 'Q': 'Quick', 'B': 'Blitz'}[category]} rating. Current rating kept.';
-    }
-    if (m.supplementDate == null) return 'No dated supplement. Retry later.';
-    if (controller.event!.sectionOf(p.id)?.rounds.isNotEmpty ?? false) {
-      return 'Pairings posted. Pairing rating kept.';
-    }
-    if (m.alreadyApplied(p, category)) return 'Already up to date.';
-    return null;
+    return ratingUpdateProblem(
+      current: controller.event!,
+      snapshot: snapshot!,
+      player: p,
+      observation: m,
+      category: category,
+    );
   }
 
   bool canApply(Player p) => problem(p) == null;
@@ -122,81 +117,72 @@ class RatingRefresh extends ChangeNotifier {
     );
     notifyListeners();
     bool current() => generation == _generation;
-    // Deduplicate IDs, but retain a review result on every player row.
-    final byId = <String, MemberObservation?>{};
-    for (final p in event.players) {
-      if (!current()) return;
-      if (controller.event?.id != event.id) {
-        stop();
-        return;
-      }
-      if (p.memberId.trim().isEmpty) continue;
-      try {
-        final found = byId.containsKey(p.memberId)
-            ? byId[p.memberId]
-            : await lookup(controller, p.memberId);
-        if (!current()) return;
-        if (found == null || found.id != p.memberId) {
-          throw const TournamentException(
-            'No matching USCF member. Check the ID in player details, or keep the current rating.',
+    try {
+      final outcome = await const MemberLookupBatch().run(
+        event.players,
+        lookup: (id) => lookup(id),
+        isCurrent: () => current() && controller.event?.id == event.id,
+        onFound: (player, found) {
+          _unrecorded[player.id] = found.toJson();
+          observations[player.id] = found;
+          final live = controller.event!.players
+              .where((x) => x.id == player.id)
+              .firstOrNull;
+          if (live != null && canApply(live)) selected.add(live.id);
+          notifyListeners();
+        },
+        onFailure: (player, error, stack) {
+          Diagnostics.record(
+            'lookup USCF rating',
+            'failed',
+            context: {'playerId': player.id},
+            error: error,
+            stack: stack,
           );
-        }
-        byId[p.memberId] = found;
-        _unrecorded[p.id] = found.toJson();
-        observations[p.id] = found;
-        final live = controller.event!.players
-            .where((x) => x.id == p.id)
-            .firstOrNull;
-        if (live != null && canApply(live)) selected.add(p.id);
-      } catch (e, stack) {
-        Diagnostics.record(
-          'lookup USCF rating',
-          'failed',
-          context: {'playerId': p.id},
-          error: e,
-          stack: stack,
-        );
-        if (!current()) return;
-        final message = plainMessage(e);
-        failures[p.id] = '$message Retry later or edit the player manually.';
-        if (message.contains('429') ||
-            message.contains('rate limit') ||
-            message.contains('API key') ||
-            message.contains('Public US Chess access')) {
-          notice =
-              'USCF stopped responding. Review completed lookups, retry later, or keep current ratings.';
-          break;
-        }
+          failures[player.id] =
+              '${plainMessage(error)} Retry later or edit the player manually.';
+          notifyListeners();
+        },
+      );
+      if (!current()) return;
+      if (outcome == MemberBatchOutcome.providerStopped) {
+        notice =
+            'USCF stopped responding. Review completed lookups, retry later, or keep current ratings.';
+      } else if (outcome == MemberBatchOutcome.cancelled) {
+        notice = 'Event changed. Refresh again for the current roster.';
       }
-      notifyListeners();
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      _recordMemberships();
+      Diagnostics.record(
+        'refresh USCF ratings',
+        'completed',
+        context: {
+          'found': foundCount,
+          'failures': failures.length,
+          'missingIds': event.players.where((p) => p.memberId.isEmpty).length,
+        },
+      );
+      if (event.players.every((p) => p.memberId.trim().isEmpty)) {
+        notice =
+            'No USCF IDs to look up. Nothing changed. Add IDs in player details if you want ratings later.';
+      }
+    } finally {
+      if (current()) {
+        busy = false;
+        notifyListeners();
+      }
     }
-    if (!current()) return;
-    _recordMemberships();
-    busy = false;
-    Diagnostics.record(
-      'refresh USCF ratings',
-      'completed',
-      context: {
-        'found': foundCount,
-        'failures': failures.length,
-        'missingIds': event.players.where((p) => p.memberId.isEmpty).length,
-      },
-    );
-    if (event.players.every((p) => p.memberId.trim().isEmpty)) {
-      notice =
-          'No USCF IDs to look up. Nothing changed. Add IDs in player details if you want ratings later.';
-    }
-    notifyListeners();
   }
 
   void stop() {
-    _recordMemberships();
     _generation++;
     busy = false;
     notice =
         'Stopped. You can review completed lookups or keep current ratings.';
-    notifyListeners();
+    try {
+      _recordMemberships();
+    } finally {
+      notifyListeners();
+    }
   }
 
   int apply() {
@@ -207,35 +193,11 @@ class RatingRefresh extends ChangeNotifier {
     }
     final ids = approved.map((p) => p.id).toSet();
     if (ids.isEmpty) return 0;
-    controller.change(
-      'Apply ${ids.length} monthly supplement ratings',
-      controller.event!.copy(
-        players: [
-          for (final p in controller.event!.players)
-            if (ids.contains(p.id))
-              p.copy(
-                rating: proposed(p),
-                ratingEvidence: {
-                  ...p.ratingEvidence,
-                  ...observations[p.id]!.toJson(),
-                  'kind': 'monthly supplement',
-                  'category': category,
-                },
-                membershipEvidence:
-                    (DateTime.tryParse(
-                          '${p.membershipEvidence['retrievedAt']}',
-                        )?.isAfter(
-                          DateTime.tryParse(observations[p.id]!.retrievedAt) ??
-                              DateTime(1970),
-                        ) ??
-                        false)
-                    ? p.membershipEvidence
-                    : observations[p.id]!.toJson(),
-              )
-            else
-              p,
-        ],
-      ),
+    controller.applyReviewedRatings(
+      snapshot: snapshot!,
+      observations: observations,
+      playerIds: ids,
+      category: category,
     );
     discard();
     return ids.length;
@@ -245,6 +207,8 @@ class RatingRefresh extends ChangeNotifier {
     _generation++;
     active = busy = false;
     snapshot = null;
+    _unrecorded.clear();
+    _unrecordedEvent = null;
     observations.clear();
     failures.clear();
     selected.clear();

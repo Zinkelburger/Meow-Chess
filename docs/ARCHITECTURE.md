@@ -1,4 +1,38 @@
-# Proposed architecture
+# Architecture
+
+## Current boundaries
+
+The application remains one Dart package. `domain/` contains competition rules
+and provider evidence values; `application/` owns commands and orchestration;
+`infrastructure/` owns SQLite, HTTP, credentials and desktop I/O. The architecture
+lint checks imports and exports recursively, including package-style imports.
+
+`MemberLookupBatch` implements serial requests, deduplication, pacing, identity
+validation and cancellation without writing tournament data. `MemberDirectory`
+owns keychain access and HTTP-client lifetimes. Reads cannot write preferences
+into a repository after its event has closed. Provider failures carry a typed
+kind; translated message text does not decide whether a batch stops.
+
+Both rating-review surfaces use `applyReviewedRatings`. It validates every
+approval against current identity, rating and posted pairings before one audited
+commit. Unrelated edits remain valid, newer membership evidence survives, and a
+failed approval cannot partially apply a batch. Widget state owns selection and
+presentation, not a second implementation of these mutation rules.
+
+The player workspace composes `PlayerPanel`, `PasteRosterPanel`, and the shared
+`SidePanel` layout. Formatting helpers are independent of screens, so reports
+and pairings do not import a player table just to display a score or a panel.
+
+GUI report and diagnostic exports use `artifact_save.dart`. Portable writes
+stage and flush a complete file before publication. Sandboxed macOS asks
+Foundation for an `itemReplacementDirectory` on the target volume and uses
+coordinated replacement; a save-dialog grant for one file does not authorize
+creating a sibling directory. Shared validation protects tournament databases,
+recovery files and aliases before staging and before publication. This boundary
+is separate from database backups, which retain their SQLite snapshot and
+exclusive-publication guarantees.
+
+## Design direction
 
 Use a modular Flutter application with a pure Dart competition core and a local
 relational store. One process and one authoritative event writer are sufficient

@@ -1,3 +1,5 @@
+import '../application/member_lookup.dart';
+import 'rating_settings.dart';
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import '../application/failures.dart';
@@ -6,9 +8,9 @@ import '../domain/model.dart';
 import '../domain/us_chess.dart';
 import '../infrastructure/ratings_api.dart';
 import 'history_panel.dart' show historyTime;
-import 'identity_review.dart';
+import '../infrastructure/member_directory.dart';
 import 'member_identity_lookup.dart';
-import 'players_view.dart' show SidePanel;
+import 'side_panel.dart';
 import 'drafts.dart';
 import 'workspace_actions.dart';
 
@@ -25,8 +27,7 @@ class EventPanel extends StatefulWidget {
   final TournamentController controller;
   final VoidCallback onClose;
   final String? initialField;
-  final Future<MemberObservation?> Function(TournamentController, String)
-  identityLookup;
+  final MemberLookup identityLookup;
   final Future<List<MemberObservation>> Function(String) memberSearch;
   @override
   State<EventPanel> createState() => EventPanelState();
@@ -243,7 +244,7 @@ class EventPanelState extends State<EventPanel> {
             MemberIdentityLookup(
               key: ValueKey('event-identity-$key'),
               id: text[key]!,
-              lookup: (id) => widget.identityLookup(c, id),
+              lookup: (id) => widget.identityLookup(id),
               search: widget.memberSearch,
               onSelected: (member) => setState(() {
                 text[key]!.text = member.id;

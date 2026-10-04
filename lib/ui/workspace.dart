@@ -1,3 +1,4 @@
+import '../application/member_lookup.dart';
 import 'player_actions.dart';
 import 'dart:async';
 
@@ -7,7 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../application/tournament_controller.dart';
 import 'rating_refresh.dart';
-import 'identity_review.dart' show fetchMember, readRatingCategory;
+import '../infrastructure/member_directory.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import '../infrastructure/roster_import.dart' show ImportRow;
@@ -17,6 +18,7 @@ import 'event_panel.dart';
 import 'history_panel.dart';
 import 'panels.dart';
 import '../infrastructure/reports.dart' show ReportKind;
+import 'side_panel.dart';
 import 'players_view.dart';
 import 'results_view.dart';
 import 'reports_view.dart';
@@ -41,7 +43,7 @@ class Workspace extends StatefulWidget {
   final TournamentController controller;
   final String path;
   final VoidCallback onClose, onTheme;
-  final RatingLookup? ratingLookup;
+  final MemberLookup? ratingLookup;
   final Future<List<ImportRow>> Function(String)? rosterLoader;
   @override
   State<Workspace> createState() => _WorkspaceState();

@@ -1,71 +1,6 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
 import '../application/failures.dart';
-import '../application/tournament_controller.dart';
-import '../infrastructure/ratings_api.dart';
-
-const _secure = FlutterSecureStorage();
-const _keyName = 'uschess-v2';
-
-Future<List<MemberObservation>> searchMembers(String name) async {
-  String? key;
-  try {
-    key = await _secure.read(key: _keyName);
-  } catch (_) {
-    /* Public lookup also works without a keychain. */
-  }
-  final client = http.Client();
-  try {
-    return await RatingsApi(client).search(name, key: key ?? '');
-  } finally {
-    client.close();
-  }
-}
-
-/// Fetches a dated supplement using the public endpoint when no key is set.
-Future<MemberObservation?> fetchMember(
-  TournamentController c,
-  String memberId,
-) => _fetchMember(c, memberId, membershipOnly: false);
-
-/// Membership does not require a published rating or a monthly supplement.
-Future<MemberObservation?> fetchMembership(
-  TournamentController c,
-  String memberId,
-) => _fetchMember(c, memberId, membershipOnly: true);
-
-Future<MemberObservation?> _fetchMember(
-  TournamentController c,
-  String memberId, {
-  required bool membershipOnly,
-}) async {
-  String? key;
-  try {
-    key = await _secure.read(key: _keyName);
-  } catch (_) {
-    /* Public lookup also works without a keychain. */
-  }
-  final client = http.Client();
-  try {
-    final api = RatingsApi(client);
-    final observation = membershipOnly
-        ? await api.member(
-            memberId,
-            key ?? '',
-            publicAccess: (key ?? '').trim().isEmpty,
-          )
-        : await api.supplement(memberId, key: key ?? '');
-    c.repository.writePreference(
-      'member:$memberId',
-      jsonEncode(observation.toJson()),
-    );
-    return observation;
-  } finally {
-    client.close();
-  }
-}
+import '../infrastructure/member_directory.dart';
 
 /// An inline field for the US Chess API key. The key is kept in the system
 /// keychain, not in the event file.
@@ -90,7 +25,7 @@ class _ApiKeyFieldState extends State<ApiKeyField> {
     final key = text.text.trim();
     if (key.isEmpty) return;
     try {
-      await _secure.write(key: _keyName, value: key);
+      await saveMemberApiKey(key);
       if (!mounted) return;
       text.clear();
       setState(() => status = 'Key saved.');
@@ -136,15 +71,6 @@ class _ApiKeyFieldState extends State<ApiKeyField> {
   );
 }
 
-Future<String> readRatingCategory() async {
-  try {
-    final value = await _secure.read(key: 'meow-rating-category');
-    return ['R', 'Q', 'B'].contains(value) ? value! : 'R';
-  } catch (_) {
-    return 'R';
-  }
-}
-
 /// Shared across events on this computer, alongside the operator's API key.
 class RatingSettings extends StatefulWidget {
   const RatingSettings({super.key});
@@ -165,7 +91,7 @@ class _RatingSettingsState extends State<RatingSettings> {
 
   Future<void> save(String value) async {
     try {
-      await _secure.write(key: 'meow-rating-category', value: value);
+      await saveRatingCategory(value);
       if (mounted) {
         setState(() {
           category = value;

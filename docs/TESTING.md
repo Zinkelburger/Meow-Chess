@@ -4,6 +4,11 @@ CI is the release gate, with independent jobs on Ubuntu 22.04, Windows Server
 2022 and Windows Server 2025. Each runs analysis, architecture/link lint, all
 unit/widget tests, independent DBF decoding, abrupt-termination recovery and the
 native Flutter desktop integration tests. A failed job blocks the release build.
+The Linux and Windows jobs also compile and exercise the MCP server through its
+portable Dart launcher, using a different working directory and Unicode paths.
+A separate macOS job compiles the app and exercises Foundation report staging
+and replacement. That job does not qualify the full macOS tournament workflow
+or replace a manual save-dialog sandbox test outside the app container.
 The workflow can also run manually from Actions → CI without publishing anything.
 Pushing a commit to the opt-in `windows-check` branch runs the same matrix without
 a release tag; this also works before the workflow reaches the default branch.
@@ -53,13 +58,29 @@ foreach ($target in Get-ChildItem integration_test/*_test.dart) {
 }
 ```
 
-On Linux, CI also builds the MCP server and replays real club reports:
+Linux and Windows CI build and test the MCP server. Linux additionally replays
+real club reports:
 
 ```bash
 dart build cli --target=tools/tournament_mcp.dart --output=build/tournament-cli
 python3 scripts/test_tournament_mcp.py
 python3 scripts/test_boylston_replay.py
 ```
+
+The checked-in `.mcp.json` uses `dart scripts/tournament_mcp.dart`. Build the CLI
+bundle first using the command above. The launcher selects `.exe` on Windows,
+does not require Bash, resolves the bundle relative to its own file, and keeps
+stdout reserved for the protocol. Native clients must run the configuration
+from the repository root, or use an absolute launcher path. The Bash script is
+retained only as a compatibility entry point.
+
+New regression coverage lives in `member_lookup_batch_test.dart`,
+`rating_approval_test.dart`, `ratings_failure_test.dart` and
+`artifact_save_test.dart`. These cover late-response rejection, duplicate IDs,
+provider failures independent of wording, atomic approval, newer evidence,
+native staging outside the selected directory and publication failure. The
+macOS XCTest target tests native creation/replacement and preservation of the
+old report when the staged source is missing.
 
 `test_boylston_replay.py` rebuilds each anonymized report in
 `test/fixtures/boylston/` through the MCP tools, exports it, and fails on any

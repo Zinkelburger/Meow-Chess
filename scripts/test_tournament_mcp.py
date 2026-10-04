@@ -2,6 +2,7 @@
 """Protocol and real controller/storage tests against the compiled MCP process."""
 import json
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -13,9 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 class Client:
     def __init__(self, root, log=None):
         self.process = subprocess.Popen(
-            [str(ROOT / 'build/tournament-cli/bundle/bin/tournament_mcp'), '--root', str(root)],
+            [shutil.which('dart') or 'dart', str(ROOT / 'scripts/tournament_mcp.dart'), str(root)],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, bufsize=1)
+            text=True, encoding='utf-8', bufsize=1, cwd=root)
         self.counter = 0
         self.revision = None
         self.log = log
@@ -75,7 +76,7 @@ def read_dbf(path):
 
 class TournamentMcpTest(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(prefix="meow chess café ")
         self.root = Path(self.temp.name)
         self.client = Client(self.root)
 
@@ -169,7 +170,7 @@ class TournamentMcpTest(unittest.TestCase):
         self.assertEqual(len(side['players']), 2)
         self.assertFalse(set(side['players']) & set(event['sections'][0]['players']))
         result = c.call('export_event', directory='side-only', sectionId=side_id)
-        saved = json.loads((Path(result['directory']) / 'event.json').read_text())
+        saved = json.loads((Path(result['directory']) / 'event.json').read_text(encoding='utf-8'))
         self.assertEqual([s['id'] for s in saved['sections']], [side_id])
 
     def test_double_games_and_manual_results(self):
@@ -207,7 +208,7 @@ class TournamentMcpTest(unittest.TestCase):
         folder = Path(result['directory'])
         self.assertEqual(result['dbfIssues'], [])
         self.assertEqual(sorted(p.name for p in self.root.iterdir() if 'partial' in p.name), [])
-        manifest = json.loads((folder / 'manifest.json').read_text())
+        manifest = json.loads((folder / 'manifest.json').read_text(encoding='utf-8'))
         self.assertEqual(manifest['sections'][0]['reportedRounds'], 2)
         self.assertIn('UNVERIFIED', manifest['status'])
         header, = read_dbf(folder / 'THEXPORT.DBF')

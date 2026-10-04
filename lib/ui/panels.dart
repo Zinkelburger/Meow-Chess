@@ -16,7 +16,8 @@ import '../infrastructure/reports.dart';
 import '../infrastructure/remembered_printing.dart';
 import 'dialogs.dart' show FieldSpec, showFailure;
 import 'drafts.dart';
-import 'players_view.dart' show SidePanel, ratingText;
+import 'player_format.dart';
+import 'side_panel.dart';
 
 /// The tool docked at the right of the workspace: one at a time, beside
 /// the table it acts on, never over it.
