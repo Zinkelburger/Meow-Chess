@@ -3,8 +3,7 @@
 #   git tag v0.2.0 && git push origin v0.2.0
 #
 # Linux: portable zip, .deb, .rpm and .flatpak. Windows: portable zip and a
-# setup .exe. Every package registers .meow files; the zips offer to on first
-# launch (linux/runner and windows/runner desktop_integration).
+# setup .exe. All downloads and checksums are published without a description.
 
 name: Release
 
@@ -130,16 +129,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
+          fail_on_unmatched_files: true
+          generate_release_notes: false
           # Tags with a dash (v1.2.0-rc1) are marked as pre-releases.
           prerelease: ${{ contains(github.ref_name, '-') }}
           name: Meow-Chess ${{ github.ref_name }}
-          body: |
-            Offline tournament management for Linux and Windows: Swiss and quad sections, player registration and rating lookup, keyboard results entry, persistent history and recovery, PDF reports, and US Chess DBF export.
-
-            **Windows:** download `meow-chess-${{ github.ref_name }}-windows-setup.exe` and run it.
-            **Ubuntu / Debian:** the `.deb`. **Fedora / openSUSE:** the `.rpm`. **Any Linux:** the `.flatpak`.
-            The `.zip` files run without installing; the app offers to set itself up on first launch.
-
-            Downloads include SHA-256 checksums in `SHA256SUMS`.
-
-            See [release qualification](https://github.com/Zinkelburger/Meow-Chess/blob/${{ github.ref_name }}/docs/TESTING.md) for automated coverage and remaining limits. Federation acceptance and full US Chess Swiss priority conformance remain unverified.
+          body: ""

@@ -41,6 +41,15 @@ debug-connection state cannot leak into the next test executable. If the runner 
 slot; do not run heavy commands outside containment. `MEOW_JOB_RUNNER` may select
 another configured runner. No Python runtime is needed by the distributed app.
 
+The shared runner keeps build scratch files and disposable app profiles on disk
+under `~/.cache/chess-prep-jobs`, with private per-job temporary directories that
+are removed on exit. `CHESS_PREP_JOB_CACHE` can select another disk-backed path.
+It refuses memory-backed checkouts and cache directories: this workstation's
+`/tmp` is RAM-backed, so compiling there reduces memory available to every app.
+Only small coordination locks remain in `/tmp`; do not remove those locks while
+the runner is installed or jobs may stop sharing the same admission limits.
+Use a checkout under the project directory and the wrapper above for local work.
+
 On a standalone Windows development/CI host, after `flutter pub get --enforce-lockfile`:
 
 ```powershell
@@ -88,6 +97,20 @@ difference from the accepted SwissSys report that has no stated reason, or any
 result that disagrees with what US Chess rated where SwissSys's own report did
 not.
 
+## 1.2.1 maintenance regressions
+
+The maintenance suite checks that replacing pairings invalidates old game IDs,
+that an outstanding pairing assumption prevents replacement, and that roster
+reviews cannot cross event boundaries even when revisions match. Simulated
+storage failures verify that completed membership lookups remain retryable and
+cannot silently proceed to rating approval. Storage tests protect live database
+recovery files and aliases from Save Copy, and verify that report-package
+publication preserves a concurrently created destination.
+
+The tag-triggered release repeats the platform matrix before building packages.
+The shared local runner separately tests disk-backed scratch storage, isolation,
+abandoned-job cleanup, and rejection of memory-backed build directories.
+
 ## 1.2.0 pre-release verification — October 4, 2026
 
 [CI run 37179195816](https://github.com/Zinkelburger/Meow-Chess/actions/runs/37179195816)
@@ -124,7 +147,7 @@ eight-package export matrix, independent byte reader and corruption tests.
 | Teams and sibling requests | UI assignment and do-not-pair action, legal alternative opponent, four-round persistence, backup, invalid/stale mutations rejected; team names alone do not change pairings | Team names are roster labels for mixed-doubles partners. Fixed-board team tournaments and team scoring are not implemented. |
 | Tournament day | Native app library create/close/reopen; roster paste, section creation, pairing, keyboard scoring, PDF, dark/light screenshots and independent backup | File-picker/print-driver UI, actual physical printers and OS double-click forwarding need separate native/manual qualification. |
 | Data durability | Atomic rollback and auto-rollback injection, exclusive ownership, stale writes, exact backup/reopen, no-clobber publication, unknown/corrupt/future-file refusal, durable history, real process kill after acknowledged WAL commits | Tests cannot prove zero data loss under power failure, faulty storage, filesystem failure or every migration. Keep independent backups. |
-| Safe APIs and boundaries | SQL-looking/Unicode text stored literally, parameterized repository operations, fixed HTTPS ratings host, credentials only in headers, redirects disabled, response identity checks, private data excluded from public reports; lint enforces domain/application boundaries | No live API credentials are used. macOS is not in this qualification matrix. |
+| Safe APIs and boundaries | SQL-looking/Unicode text stored literally, parameterized repository operations, fixed HTTPS ratings host, credentials only in headers, redirects disabled, response identity checks, private data excluded from public reports; lint enforces domain/application boundaries | No live API credentials are used. macOS coverage is limited to compilation and native artifact publication. |
 
 Windows runs exercise real SQLite and `MoveFileExW` backup publication rather than
 mocking platform file operations. The dangling-symlink test is skipped on Windows

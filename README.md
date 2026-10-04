@@ -4,7 +4,7 @@ An offline-first Flutter desktop tournament director workspace.
 US Chess first; Swiss events, easy quads, reliable identity/rating checks, and
 usable printing. Inspired by SwissSys workflows and Chess Auto Prep V2's UI.
 
-**Meow-Chess 1.2.0** provides an offline desktop workspace for Linux and Windows.
+**Meow-Chess 1.2.1** provides an offline desktop workspace for Linux and Windows.
 Download the installers and portable bundles from [Releases](https://github.com/Zinkelburger/Meow-Chess/releases).
 This release adds complete quad schedules and pairing edits, improves US Chess
 identity and rating review, and preserves reliable history and recovery. Shared
@@ -12,6 +12,9 @@ lookup and approval logic keeps late network responses from changing another
 event, while smaller UI components make the desktop workflows easier to maintain.
 The optional MCP launcher now works without Bash on Windows; report exports use
 the native replacement mechanism on sandboxed macOS.
+The 1.2.1 maintenance update protects database recovery files when saving copies,
+rejects stale roster and pairing edits, preserves rating lookups after save
+failures, and durably publishes complete report packages.
 Federation acceptance and full Swiss priority conformance remain unverified; see
 [implementation status](docs/IMPLEMENTATION.md) and [release qualification](docs/TESTING.md).
 The existing
@@ -151,8 +154,9 @@ builds a second launch hands its file to the window already open.
 Pushing a `v*` tag (`git tag v0.2.0 && git push origin v0.2.0`) runs
 [release.yml](.github/workflows/release.yml): the CI gate, then a GitHub Release with
 a Windows setup `.exe` and portable zip, and Linux `.deb`, `.rpm`, `.flatpak` and
-portable zip. A tag with a dash (`v0.2.0-rc1`) is published as a pre-release. The
-Windows build alone can be tried from Actions → Windows build → Run workflow.
+portable zip, plus checksums, with no release description. A tag with a dash
+(`v0.2.0-rc1`) is published as a pre-release. The Windows build alone can be tried
+from Actions → Windows build → Run workflow.
 
 Every package makes `.meow` files open in Meow Chess on double-click. The portable
 zips do it on first launch instead: the app asks "Set up Meow Chess on this
