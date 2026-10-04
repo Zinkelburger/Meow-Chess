@@ -21,7 +21,9 @@ void main() {
     (tester) async {
       await tester.binding.setSurfaceSize(const Size(1280, 720));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      final c = fixture(count: 4);
+      // Swiss history prints the selected round; quad reports print the full
+      // fixed schedule and are covered by section_workflow_test.
+      final c = fixture(count: 4, format: Format.swiss);
       final boundaryKey = GlobalKey();
       final scale = ValueNotifier(2.0);
       final dark = ValueNotifier(false);
@@ -113,6 +115,7 @@ void main() {
       await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
+      await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('lookup-query')), '#1');
       await tester.pumpAndSettle();
       expect(find.byType(LookupPanel), findsOneWidget);
