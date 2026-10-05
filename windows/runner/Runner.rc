@@ -89,11 +89,14 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
+            // path_provider names the data folder after CompanyName and
+            // ProductName (%APPDATA%\org.meowchess\Meow Chess): changing
+            // either hides every existing user's tournament library.
             VALUE "CompanyName", "org.meowchess" "\0"
             VALUE "FileDescription", "Meow Chess" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "meow_chess" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 org.meowchess. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Meow Chess contributors. Licensed under the GNU AGPLv3." "\0"
             VALUE "OriginalFilename", "meow_chess.exe" "\0"
             VALUE "ProductName", "Meow Chess" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

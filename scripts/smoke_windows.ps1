@@ -3,13 +3,13 @@
 # installer file-list check cannot. Only the process started here is stopped.
 param([Parameter(Mandatory=$true)][string]$Executable)
 $ErrorActionPreference = 'Stop'
-$profile = Join-Path ([System.IO.Path]::GetTempPath()) ('meow-smoke-' + [guid]::NewGuid())
-New-Item -ItemType Directory -Path $profile | Out-Null
+$dataDir = Join-Path ([System.IO.Path]::GetTempPath()) ('meow-smoke-' + [guid]::NewGuid())
+New-Item -ItemType Directory -Path $dataDir | Out-Null
 $previousData = $env:MEOW_DATA_DIR
 $previousSetup = $env:MEOW_CHESS_DESKTOP_SETUP
 $app = $null
 try {
-    $env:MEOW_DATA_DIR = $profile
+    $env:MEOW_DATA_DIR = $dataDir
     $env:MEOW_CHESS_DESKTOP_SETUP = '0'
     $app = Start-Process -FilePath $Executable -WorkingDirectory (Split-Path $Executable) -PassThru
     $deadline = (Get-Date).AddSeconds(30)
@@ -33,5 +33,5 @@ try {
     }
     $env:MEOW_DATA_DIR = $previousData
     $env:MEOW_CHESS_DESKTOP_SETUP = $previousSetup
-    Remove-Item -LiteralPath $profile -Recurse -Force
+    Remove-Item -LiteralPath $dataDir -Recurse -Force
 }

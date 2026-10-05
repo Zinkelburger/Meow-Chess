@@ -20,6 +20,9 @@ on:
         default: v0.0.0-check
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   build-windows:
     runs-on: windows-2022
@@ -72,54 +75,54 @@ jobs:
         run: |
           Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "meow-chess-${env:MEOW_RELEASE_VERSION}-windows.zip"
 
-      # Inno Setup ships on the hosted Windows image; the choco line is a
-      # fallback for when an image update drops it.
+      # Inno Setup 6 ships on the hosted Windows image; choco is the fallback
+      # for when an image update drops it, pinned to 6 because 7 installs to a
+      # different folder and has not been qualified with installer.iss.
       - name: Build installer
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) {
-            choco install innosetup --no-progress -y
+            choco install innosetup --version=6.7.1 --no-progress -y
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+          if (-not (Test-Path $iscc)) { throw "Inno Setup 6 is not at $iscc" }
           $version = $env:MEOW_RELEASE_VERSION.TrimStart("v")
           & $iscc "/DAppVersion=$version" packaging\windows\installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Move-Item "dist\meow-chess-$version-windows-setup.exe" "meow-chess-${env:MEOW_RELEASE_VERSION}-windows-setup.exe"
 
-      # Install the finished setup silently and check it put the app in place
-      # and registered .meow for the user.
-      - name: Install the setup and check the .meow association
+      # The upgrade TDs will actually run: from the latest published release.
+      # A tag build runs before its own release is published, so "latest" is
+      # the one before it.
+      - name: Download the previous release's setup
+        id: previous
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $installDir = Join-Path $env:RUNNER_TEMP "Meow Chess installer test"
-          $log = Join-Path $env:RUNNER_TEMP "installer.log"
-          # Start-Process -Wait: setup.exe is a GUI program, so the call
-          # operator would return before it finished.
-          $proc = Start-Process -FilePath (Resolve-Path "meow-chess-${env:MEOW_RELEASE_VERSION}-windows-setup.exe") -Wait -PassThru -ArgumentList @(
-            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART',
-            ('/DIR="{0}"' -f $installDir), ('/LOG="{0}"' -f $log)
-          )
-          if ($proc.ExitCode -ne 0) {
-            Write-Host "Installer exited with $($proc.ExitCode):"
-            if (Test-Path $log) { Get-Content $log -Tail 80 }
-            exit $proc.ExitCode
+          $dir = Join-Path $env:RUNNER_TEMP 'previous-release'
+          gh release download --repo $env:GITHUB_REPOSITORY --pattern '*-windows-setup.exe' --dir $dir
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host '::notice::No previous Windows setup to upgrade from; testing a reinstall instead'
+            exit 0
           }
-          foreach ($f in @('meow_chess.exe','VCRUNTIME140.dll','data\flutter_assets\AssetManifest.bin')) {
-            if (-not (Test-Path (Join-Path $installDir $f))) { throw "Installed app is missing $f" }
-          }
-          $progId = (Get-ItemProperty 'HKCU:\Software\Classes\.meow').'(default)'
-          if ($progId -ne 'MeowChess.Tournament') { throw ".meow is registered to '$progId'" }
-          $command = (Get-ItemProperty 'HKCU:\Software\Classes\MeowChess.Tournament\shell\open\command').'(default)'
-          if ($command -notlike "*meow_chess.exe*%1*") { throw "Unexpected open command: $command" }
-          $choice = (Get-ItemProperty 'HKCU:\Software\MeowChess').FileAssociationChoice
-          if ($choice -ne 'yes') { throw "Installer did not record the association choice" }
-          Write-Host ".meow opens with: $command"
+          $setup = Get-ChildItem $dir -Filter '*-windows-setup.exe' | Select-Object -First 1
+          Write-Host "Upgrading from $($setup.Name)"
+          "path=$($setup.FullName)" >> $env:GITHUB_OUTPUT
 
-      - name: Launch the installed release and close its window
+      # Upgrade over the previous release, check files and the .meow
+      # association, launch it, then uninstall: refused while open, clean once
+      # closed, tournament library kept.
+      - name: Upgrade, launch and uninstall the setup
         shell: pwsh
+        env:
+          PREVIOUS_SETUP: ${{ steps.previous.outputs.path }}
         run: |
-          ./scripts/smoke_windows.ps1 -Executable (Join-Path $env:RUNNER_TEMP "Meow Chess installer test\meow_chess.exe")
+          ./scripts/test_windows_installer.ps1 `
+            -Setup "meow-chess-${env:MEOW_RELEASE_VERSION}-windows-setup.exe" `
+            -PreviousSetup $env:PREVIOUS_SETUP `
+            -ExpectedVersion ($env:MEOW_RELEASE_VERSION.TrimStart('v'))
 
       - uses: actions/upload-artifact@v4
         with:

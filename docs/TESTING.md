@@ -18,8 +18,22 @@ editing, and that reconnecting and restarting restores its grant.
 The workflow runs on every push to `main`, and can also run manually from
 Actions → CI without publishing anything. All work is committed directly to
 `main`; the project does not use feature branches.
-The separate Windows build workflow checks packaging and installation, then
-launches the installed release and requires a native window and clean close.
+The separate Windows build workflow checks packaging, then runs
+`scripts/test_windows_installer.ps1`: it upgrades over the latest published
+release's setup, checks that files from the old bundle are gone and that `.meow`
+is associated, launches the installed release and requires a native window and
+clean close, confirms the uninstaller refuses while the app is open, and then
+uninstalls and checks that the app, shortcut and registry entries are gone while
+the tournament library stays.
+
+GitHub has no Windows 10 runners; both Windows Server images stand in for it. To
+check a real Windows 10 PC, run the same script there in a Windows account
+where Meow Chess is not installed (the script refuses to run otherwise). Run
+it from a checkout, because it needs `smoke_windows.ps1` beside it:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\test_windows_installer.ps1 -Setup meow-chess-v1.2.2-windows-setup.exe
+```
 
 The pinned Flutter SDK and committed pubspec.lock are shared across the matrix.
 Tests use synthetic players, temporary event files and an isolated event library;
