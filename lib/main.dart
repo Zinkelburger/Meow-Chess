@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'application/diagnostics.dart';
 import 'infrastructure/diagnostic_log.dart';
+import 'infrastructure/event_save.dart';
+import 'infrastructure/file_access.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -27,6 +29,7 @@ Future<void> main() async {
       : Directory(configured);
   await directory.create(recursive: true);
   DiagnosticLog.initialize(directory);
+  await restoreFileAccess();
   final previousFlutterError = FlutterError.onError;
   FlutterError.onError = (details) {
     Diagnostics.record(
@@ -188,7 +191,7 @@ class _MeowAppState extends State<MeowApp> {
       final fresh = TournamentController(SqliteEventRepository(':memory:'));
       try {
         fresh.create(name);
-        fresh.repository.backup(location.path, replaceExisting: true);
+        await saveSelectedEvent(fresh.repository, location.path);
         Diagnostics.record(
           'create event file',
           'succeeded',
@@ -197,9 +200,17 @@ class _MeowAppState extends State<MeowApp> {
       } finally {
         fresh.dispose();
       }
+      final remembered = await rememberFileAccess(location.path);
+      if (!mounted) return;
       newName.clear();
       naming = false;
       open(location.path);
+      if (!remembered && context.mounted) {
+        showFailure(
+          context,
+          'The event was saved, but its access could not be remembered. Select it with Open event after restarting.',
+        );
+      }
     } catch (e, stack) {
       Diagnostics.record(
         'create event file',
@@ -257,7 +268,19 @@ class _MeowAppState extends State<MeowApp> {
         const XTypeGroup(label: 'Meow-Chess event', extensions: ['meow']),
       ],
     );
-    if (file != null) open(file.path);
+    if (file == null) return;
+    final remembered = await rememberFileAccess(file.path);
+    if (!mounted) return;
+    open(file.path);
+    if (!remembered) {
+      final context = navigator.currentContext;
+      if (context != null && context.mounted) {
+        showFailure(
+          context,
+          'The event can be opened now, but its access could not be remembered. Select it with Open event after restarting.',
+        );
+      }
+    }
   }
 
   void close() {

@@ -295,6 +295,19 @@ class TournamentControllerCore extends ChangeNotifier {
     if ((white.personId ?? white.id) == (black.personId ?? black.id)) {
       throw const TournamentException('Choose two different people.');
     }
+    final people = {white.personId ?? white.id, black.personId ?? black.id};
+    if (e.games
+        .where((game) => !game.outcome.resolved)
+        .any(
+          (game) => [game.white, game.black].any((id) {
+            final player = e.player(id);
+            return people.contains(player.personId ?? player.id);
+          }),
+        )) {
+      throw const TournamentException(
+        'Finish the players’ current games before pairing a side game.',
+      );
+    }
     final existing = sectionId == null
         ? e.sections.where((s) => s.sideGames).firstOrNull
         : _section(sectionId);
@@ -336,7 +349,17 @@ class TournamentControllerCore extends ChangeNotifier {
 
     final a = entry(white), b = entry(black);
     final last = section.rounds.lastOrNull;
-    final append = last != null && !last.complete;
+    final append =
+        last != null &&
+        !last.complete &&
+        !last.games.any(
+          (g) =>
+              g.white == a.id ||
+              g.black == a.id ||
+              g.white == b.id ||
+              g.black == b.id,
+        ) &&
+        !last.byes.any((bye) => bye.player == a.id || bye.player == b.id);
     final occupiedBoards = e.sections
         .expand((s) => s.unresolvedRounds)
         .expand((r) => r.games)

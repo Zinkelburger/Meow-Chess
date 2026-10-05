@@ -1,4 +1,5 @@
 import 'model.dart';
+import 'fixed_schedule.dart';
 
 class Standing {
   const Standing(
@@ -22,14 +23,26 @@ List<Standing> standings(
   bool forPrizes = false,
 }) {
   final excluded = <String>{};
-  if (forPrizes && section.format != Format.swiss) {
-    final scheduled = section.plannedRounds * (section.doubleGames ? 2 : 1);
+  if (forPrizes &&
+      !section.sideGames &&
+      section.players.length >= 2 &&
+      pairingFormat(section) != Format.swiss) {
+    // Count actual opponents in the planned schedule; odd fields have sit-outs.
+    final scheduled = <String, int>{for (final id in section.players) id: 0};
+    for (final round in sectionSchedule(section).take(section.plannedRounds)) {
+      for (final (white, black) in round) {
+        if (white == null || black == null) continue;
+        final games = section.doubleGames ? 2 : 1;
+        scheduled[white] = scheduled[white]! + games;
+        scheduled[black] = scheduled[black]! + games;
+      }
+    }
     for (final id in section.players) {
       final played = section.rounds
           .expand((r) => r.games)
           .where((g) => g.outcome.played && (g.white == id || g.black == id))
           .length;
-      if (event.player(id).withdrawn && played * 2 < scheduled) {
+      if (event.player(id).withdrawn && played * 2 < scheduled[id]!) {
         excluded.add(id);
       }
     }

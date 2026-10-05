@@ -9,9 +9,6 @@ class AppDelegate: FlutterAppDelegate {
   private var fileChannel: FlutterMethodChannel?
   private var pendingFiles: [String] = []
   private var filesReady = false
-  // Finder grants the sandboxed app access to the files it opens; keep those
-  // grants for the life of the process.
-  private var scopedFiles: [URL] = []
 
   func attachFileOpenChannel(_ messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(
@@ -46,7 +43,9 @@ class AppDelegate: FlutterAppDelegate {
   override func application(_ application: NSApplication, open urls: [URL]) {
     let files = urls.filter { $0.isFileURL }
     for url in files {
-      if url.startAccessingSecurityScopedResource() { scopedFiles.append(url) }
+      // Retain Finder's scoped URL before converting it to a Dart path. A
+      // failed bookmark save must not prevent opening the file this session.
+      try? FileAccessBookmarks.shared.remember(url)
     }
     let paths = files.map { $0.path }
     if !paths.isEmpty {

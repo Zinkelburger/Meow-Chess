@@ -6,9 +6,15 @@ unit/widget tests, independent DBF decoding, abrupt-termination recovery and the
 native Flutter desktop integration tests. A failed job blocks the release build.
 The Linux and Windows jobs also compile and exercise the MCP server through its
 portable Dart launcher, using a different working directory and Unicode paths.
-A separate macOS job compiles the app and exercises Foundation report staging
-and replacement. That job does not qualify the full macOS tournament workflow
+A separate macOS job compiles the app and exercises Foundation staging,
+exclusive publication, replacement, bookmark restoration and the Dart event-save
+boundary. That job does not qualify the full macOS tournament workflow
 or replace a manual save-dialog sandbox test outside the app container.
+That manual test must create an event outside the container, save a copy, choose
+an external backup folder, restart the app, reopen from Recent events and verify
+a new automatic backup without selecting either path again. Also verify that a
+disconnected backup volume reports a backup failure without preventing event
+editing, and that reconnecting and restarting restores its grant.
 The workflow can also run manually from Actions → CI without publishing anything.
 Pushing a commit to the opt-in `windows-check` branch runs the same matrix without
 a release tag; this also works before the workflow reaches the default branch.

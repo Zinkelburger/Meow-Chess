@@ -24,15 +24,15 @@ class SqliteEventRepository implements EventRepository {
           'This event was created by a newer Meow-Chess version.',
         );
       }
-      if (!_created &&
-          _db
-              .select(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='event'",
-              )
-              .isEmpty) {
-        throw const TournamentException('This file is not a Meow-Chess event.');
-      }
       _db.execute('PRAGMA locking_mode = EXCLUSIVE');
+      // Merely choosing a file must not migrate an unrelated or damaged
+      // database. These reads happen before persistent journal/schema changes;
+      // exclusive locking mode retains their locks until ownership is acquired.
+      Event? current;
+      if (!_created) {
+        _validateExistingSchema(version);
+        current = load();
+      }
       _db.execute('PRAGMA journal_mode = WAL');
       _db.execute('PRAGMA synchronous = FULL');
       _db.execute('BEGIN EXCLUSIVE');
@@ -54,7 +54,6 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
         _db.execute(
           'ALTER TABLE audit ADD COLUMN node INTEGER REFERENCES node(id)',
         );
-        final current = load();
         if (current != null) {
           _db.execute(
             'INSERT INTO audit(revision,action,timestamp,node) VALUES(?,?,?,?)',
@@ -137,6 +136,62 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
   final bool _created;
   final String _path;
   String? _ownershipPath;
+
+  void _validateExistingSchema(int version) {
+    const invalid = TournamentException(
+      'This file is not a valid Meow-Chess event database.',
+    );
+    if (version != 1 && version != 2) throw invalid;
+    final expected = {
+      'event': ['id', 'revision', 'data'],
+      'player': ['id', 'data'],
+      'section': ['id', 'ordinal', 'data'],
+      'membership': ['section_id', 'player_id', 'ordinal'],
+      'round': ['section_id', 'number', 'data'],
+      'game': [
+        'id',
+        'section_id',
+        'round_number',
+        'white_id',
+        'black_id',
+        'data',
+      ],
+      'bye': ['section_id', 'round_number', 'player_id', 'data'],
+      'preference': ['key', 'value'],
+      if (version == 2)
+        'node': ['id', 'parent', 'action', 'timestamp', 'state'],
+    };
+    final tables = _db
+        .select("SELECT name FROM sqlite_master WHERE type='table'")
+        .map((row) => row['name'])
+        .toSet();
+    List<String> columns(String table) => [
+      for (final row in _db.select('PRAGMA table_info($table)'))
+        row['name'] as String,
+    ];
+    for (final entry in expected.entries) {
+      // Ordinary writes use positional INSERTs, so column order matters too.
+      if (!tables.contains(entry.key) ||
+          !_sameColumns(columns(entry.key), entry.value)) {
+        throw invalid;
+      }
+    }
+    final audit = columns('audit');
+    final auditBase = ['id', 'revision', 'action', 'timestamp'];
+    final legacyAudit = [...auditBase, 'before_state', 'undone'];
+    if (!tables.contains('audit') ||
+        (version == 1
+            ? !_sameColumns(audit, legacyAudit)
+            : !_sameColumns(audit, [...auditBase, 'node']) &&
+                  !_sameColumns(audit, [...legacyAudit, 'node']))) {
+      throw invalid;
+    }
+    if (_db.select('SELECT id FROM event LIMIT 2').length > 1) throw invalid;
+  }
+
+  static bool _sameColumns(List<String> actual, List<String> expected) =>
+      actual.length == expected.length &&
+      actual.indexed.every((entry) => entry.$2 == expected[entry.$1]);
 
   /// SQLite may already have rolled back (for example after a failed COMMIT on
   /// a full disk); a second ROLLBACK would then mask the original error.
@@ -434,14 +489,9 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     const exists = TournamentException(
       'Choose a new backup filename; existing copies are never overwritten.',
     );
-    final name = p.basename(destination).toLowerCase();
-    if (ownsPath(destination) ||
-        ['-wal', '-shm', '-journal'].any(name.endsWith)) {
-      throw const TournamentException(
-        'This is an open event file or a database recovery file. Choose another location for the copy.',
-      );
-    }
+    validateBackupDestination(destination);
     if (!replaceExisting && File(destination).existsSync()) throw exists;
+    final replacing = replaceExisting && File(destination).existsSync();
     createDirectoryDurably(p.dirname(destination));
     final staging = File(
       '$destination.$pid-${DateTime.now().microsecondsSinceEpoch}.partial',
@@ -464,18 +514,15 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
         handle.closeSync();
       }
       try {
-        void publish() => publishFile(
-          staging.path,
-          destination,
-          replaceExisting: replaceExisting,
-        );
-        if (replaceExisting) {
+        void publish() =>
+            publishFile(staging.path, destination, replaceExisting: replacing);
+        if (replacing) {
           _replace(destination, publish);
         } else {
           publish();
         }
       } on FileSystemException {
-        if (!replaceExisting &&
+        if (!replacing &&
             staging.existsSync() &&
             FileSystemEntity.typeSync(destination, followLinks: false) !=
                 FileSystemEntityType.notFound) {
@@ -488,9 +535,51 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     }
   }
 
+  /// Reject active databases and recovery files before staging and publication.
+  static void validateBackupDestination(String destination) {
+    final name = p.basename(destination).toLowerCase();
+    if (ownsPath(destination) ||
+        ['-wal', '-shm', '-journal'].any(name.endsWith)) {
+      throw const TournamentException(
+        'This is an open event file or a database recovery file. Choose another location for the copy.',
+      );
+    }
+  }
+
+  /// Native selected-file publication can await Foundation while retaining the
+  /// same SQLite replacement lock used by portable, synchronous backups.
+  static Future<void> replaceBackup(
+    String destination,
+    Future<void> Function(bool replaceExisting) publish, {
+    bool? replaceExisting,
+  }) async {
+    validateBackupDestination(destination);
+    final replacing =
+        (replaceExisting ?? true) && File(destination).existsSync();
+    final lock = replacing ? _lockReplacement(destination) : null;
+    try {
+      // An absent target has no SQLite lock. Native publication must remain
+      // exclusive if another file appears while awaiting coordination.
+      await publish(replacing);
+    } finally {
+      lock?.close();
+    }
+  }
+
+  static void _replace(String destination, void Function() publish) {
+    validateBackupDestination(destination);
+    final lock = _lockReplacement(destination);
+    try {
+      publish();
+    } finally {
+      lock?.close();
+    }
+  }
+
   /// Keep SQLite ownership until POSIX publication; a preflight check alone
   /// leaves a window in which another process can acquire the old database.
-  void _replace(String destination, void Function() publish) {
+  /// Closing the handle rolls back its read-only exclusive transaction.
+  static Database? _lockReplacement(String destination) {
     final resolved = File(destination).existsSync()
         ? File(destination).resolveSymbolicLinksSync()
         : destination;
@@ -507,8 +596,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     }
     if (!File(resolved).existsSync()) {
       if (present('-wal') || present('-shm')) throw unavailable;
-      publish();
-      return;
+      return null;
     }
     Database? check;
     try {
@@ -538,11 +626,10 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
         check?.close();
         check = null;
       }
-      publish();
-    } finally {
-      // No writes were made to the locked target; closing rolls back the
-      // read-only exclusive transaction without creating a journal.
+      return check;
+    } catch (_) {
       check?.close();
+      rethrow;
     }
   }
 

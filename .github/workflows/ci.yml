@@ -100,7 +100,7 @@ jobs:
           retention-days: 14
 
   macos-artifacts:
-    name: macOS artifact publication
+    name: macOS file publication and access
     runs-on: macos-14
     timeout-minutes: 30
     steps:
@@ -111,11 +111,11 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get --enforce-lockfile
-      - name: Test the Dart artifact boundary
-        run: flutter test test/infrastructure/artifact_file_test.dart test/infrastructure/artifact_save_test.dart
+      - name: Test the Dart file boundaries
+        run: flutter test test/infrastructure/artifact_file_test.dart test/infrastructure/artifact_save_test.dart test/infrastructure/event_save_test.dart test/infrastructure/file_access_test.dart
       - name: Compile the macOS application
         run: flutter build macos --debug
-      - name: Test Foundation staging and publication
+      - name: Test Foundation staging, publication and bookmarks
         env:
           MEOW_DATA_DIR: ${{ runner.temp }}/meow-native-tests
         run: >-

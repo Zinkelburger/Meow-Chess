@@ -45,7 +45,7 @@ void main() {
           return replacementDirectory.path;
         }
         expect(call.method, 'publish');
-        final args = Map<String, String>.from(call.arguments);
+        final args = Map<String, dynamic>.from(call.arguments);
         expect(args['destination'], destination);
         expect(File(args['source']!).parent.path, replacementDirectory.path);
         expect(File(args['source']!).readAsBytesSync(), [1, 2, 3]);

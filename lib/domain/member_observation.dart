@@ -1,4 +1,5 @@
 import 'model.dart';
+import 'rating_system.dart';
 
 /// Provider evidence kept separate from the locally approved player fields.
 class MemberObservation {
@@ -22,12 +23,15 @@ class MemberObservation {
   /// `LAST, FIRST` from the separate US Chess name fields.
   final String? reportName;
   final Map<String, int?> ratings;
-  bool alreadyApplied(Player player, String category) =>
-      player.rating == ratings[category] &&
-      player.ratingEvidence['id'] == id &&
-      player.ratingEvidence['category'] == category &&
-      supplementDate != null &&
-      player.ratingEvidence['supplementDate'] == supplementDate;
+  bool alreadyApplied(Player player, String category) {
+    final system = RatingSystem.parse(category);
+    return system != null &&
+        player.rating == ratings[system.code] &&
+        player.ratingEvidence['id'] == id &&
+        RatingSystem.parse(player.ratingEvidence['category']) == system &&
+        supplementDate != null &&
+        player.ratingEvidence['supplementDate'] == supplementDate;
+  }
 
   Json toJson() => {
     'id': id,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../application/workspace_state.dart';
+import '../domain/model.dart';
 
 /// Stores partial input, including invalid values, without applying it. A saved
 /// base keeps untouched fields in sync when another view edits the same record.
@@ -65,6 +66,24 @@ class FormDraft {
           fields[entry.key]!.text != entry.value)
         entry.key,
   };
+
+  /// Reads current record values at the save boundary, merges untouched fields,
+  /// and refuses to overwrite a field edited both here and elsewhere. Callers
+  /// must apply the returned values synchronously, before any asynchronous work.
+  Map<String, String> prepareSave(
+    Map<String, String> current, {
+    Map<String, String> labels = const {},
+  }) {
+    reconcile(current);
+    final changed = conflicts(current);
+    if (changed.isNotEmpty) {
+      final names = changed.map((key) => labels[key] ?? key).join(', ');
+      throw TournamentException(
+        '$names changed elsewhere. Discard this draft to load the saved values, then re-enter your changes.',
+      );
+    }
+    return values;
+  }
 
   void reset(Map<String, String> base) {
     _loading = true;

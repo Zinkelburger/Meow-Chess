@@ -57,6 +57,31 @@ void main() {
     },
   );
 
+  test('finished side-game players can play while other games continue', () {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    final players = c.event!.players;
+    final id = c.addSideGame(players[0].id, players[1].id);
+    c.addSideGame(players[2].id, players[3].id);
+    var section = c.event!.sections.firstWhere((s) => s.id == id);
+    expect(section.rounds.single.games, hasLength(2));
+    final first = section.rounds.single.games.first;
+    c.recordResult(first.id, Outcome.draw);
+    c.addSideGame(players[0].id, players[1].id);
+    section = c.event!.sections.firstWhere((s) => s.id == id);
+    expect(section.rounds, hasLength(2));
+    expect(section.rounds.first.complete, isFalse);
+    expect(section.rounds.last.games.single.white, first.white);
+    expect(section.plannedRounds, 2);
+    final before = c.event!.encode();
+    expect(
+      () => c.addSideGame(players[0].id, players[2].id),
+      throwsA(isA<TournamentException>()),
+    );
+    expect(c.event!.encode(), before);
+    expect(c.repository.load()!.encode(), before);
+  });
+
   test(
     'separate section entries keep identity but do not carry scores or byes',
     () {

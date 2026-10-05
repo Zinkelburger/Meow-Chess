@@ -10,6 +10,7 @@ class MainFlutterWindow: NSWindow {
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     ArtifactFileChannel.register(with: flutterViewController.engine.binaryMessenger)
+    FileAccessBookmarks.register(with: flutterViewController.engine.binaryMessenger)
     (NSApplication.shared.delegate as? AppDelegate)?.attachFileOpenChannel(
       flutterViewController.engine.binaryMessenger)
 

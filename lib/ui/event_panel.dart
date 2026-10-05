@@ -108,22 +108,12 @@ class EventPanelState extends State<EventPanel> {
 
   /// Saves pending edits. Returns false and shows why if invalid.
   bool commit() {
-    draft.reconcile(stored);
-    final conflicts = draft.conflicts(stored);
-    if (conflicts.isNotEmpty) {
-      final names = _fields
-          .where((field) => conflicts.contains(field.$1))
-          .map((field) => field.$2)
-          .join(', ');
-      setState(
-        () => error =
-            '$names changed elsewhere. Discard this draft to load the saved values, then re-enter your changes.',
-      );
-      return false;
-    }
-    if (!draft.dirty) return true;
-    final v = values;
     try {
+      final v = draft.prepareSave(
+        stored,
+        labels: {for (final field in _fields) field.$1: field.$2},
+      );
+      if (!draft.dirty) return true;
       if (v['name']!.trim().isEmpty) {
         throw const TournamentException('Enter the event name.');
       }

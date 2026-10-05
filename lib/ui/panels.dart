@@ -79,6 +79,7 @@ class FieldsPanel extends StatefulWidget {
     required this.onSave,
     required this.onClose,
     this.values = const {},
+    this.currentValues,
     this.description,
     this.saveLabel = 'Save',
     this.controller,
@@ -91,6 +92,9 @@ class FieldsPanel extends StatefulWidget {
   final String? description;
   final List<FieldSpec> fields;
   final Map<String, String> values;
+
+  /// For editing an existing record, read its latest values at save/discard.
+  final Map<String, String> Function()? currentValues;
   final FutureOr<void> Function(Map<String, String>) onSave;
   final VoidCallback onClose;
   @override
@@ -140,16 +144,20 @@ class _FieldsPanelState extends State<FieldsPanel> {
 
   Future<void> save() async {
     if (busy) return;
-    final values = text.map((k, v) => MapEntry(k, v.text));
-    final missing = widget.fields
-        .where((f) => f.required && values[f.key]!.trim().isEmpty)
-        .firstOrNull;
-    if (missing != null) {
-      setState(() => error = 'Enter the ${missing.label.toLowerCase()}.');
-      return;
-    }
-    setState(() => busy = true);
     try {
+      final values =
+          draft?.prepareSave(
+            widget.currentValues?.call() ?? widget.values,
+            labels: {for (final f in widget.fields) f.key: f.label},
+          ) ??
+          text.map((k, v) => MapEntry(k, v.text));
+      final missing = widget.fields
+          .where((f) => f.required && values[f.key]!.trim().isEmpty)
+          .firstOrNull;
+      if (missing != null) {
+        throw TournamentException('Enter the ${missing.label.toLowerCase()}.');
+      }
+      setState(() => busy = true);
       await widget.onSave(values);
       draft?.reset(values);
       if (mounted) widget.onClose();
@@ -160,6 +168,15 @@ class _FieldsPanelState extends State<FieldsPanel> {
           busy = false;
         });
       }
+    }
+  }
+
+  void discard() {
+    try {
+      draft?.reset(widget.currentValues?.call() ?? widget.values);
+      setState(() => error = null);
+    } catch (e) {
+      setState(() => error = plainMessage(e));
     }
   }
 
@@ -231,9 +248,19 @@ class _FieldsPanelState extends State<FieldsPanel> {
           ),
         Align(
           alignment: Alignment.centerLeft,
-          child: FilledButton(
-            onPressed: busy ? null : save,
-            child: Text(busy ? 'Saving…' : widget.saveLabel),
+          child: Wrap(
+            spacing: 8,
+            children: [
+              FilledButton(
+                onPressed: busy ? null : save,
+                child: Text(busy ? 'Saving…' : widget.saveLabel),
+              ),
+              if (draft != null)
+                TextButton(
+                  onPressed: busy ? null : discard,
+                  child: const Text('Discard draft'),
+                ),
+            ],
           ),
         ),
       ],
@@ -555,13 +582,33 @@ class _QuadPlayer extends StatelessWidget {
   );
 }
 
+Map<String, String> _sectionSettings(Section section) => {
+  'name': section.name,
+  'format': section.format.name,
+  'sideGames': '${section.sideGames}',
+  'doubleGames': '${section.doubleGames}',
+  'rounds': '${section.plannedRounds}',
+  'board': '${section.boardStart}',
+  'timeControl': section.timeControl,
+};
+
 /// Name, length and board numbers of one section.
 Widget sectionSettingsPanel(
   TournamentController c,
   String sectionId,
   VoidCallback onClose,
 ) {
-  final s = c.event!.sections.firstWhere((s) => s.id == sectionId);
+  Section currentSection() {
+    final section = c.event!.sections
+        .where((s) => s.id == sectionId)
+        .firstOrNull;
+    if (section == null) {
+      throw const TournamentException('This section no longer exists.');
+    }
+    return section;
+  }
+
+  final s = currentSection();
   return FieldsPanel(
     key: ValueKey('section-settings-$sectionId'),
     controller: c,
@@ -597,23 +644,11 @@ Widget sectionSettingsPanel(
       FieldSpec('board', 'First board number', required: true),
       FieldSpec('timeControl', 'Time control (blank uses event default)'),
     ],
-    values: {
-      'name': s.name,
-      'format': s.format.name,
-      'sideGames': '${s.sideGames}',
-      'doubleGames': '${s.doubleGames}',
-      'rounds': '${s.plannedRounds}',
-      'board': '${s.boardStart}',
-      'timeControl': s.timeControl,
-    },
+    values: _sectionSettings(s),
+    currentValues: () => _sectionSettings(currentSection()),
     onClose: onClose,
     onSave: (v) {
-      final current = c.event!.sections
-          .where((x) => x.id == sectionId)
-          .firstOrNull;
-      if (current == null) {
-        throw const TournamentException('This section no longer exists.');
-      }
+      final current = currentSection();
       final format = Format.values.byName(v['format']!);
       final sideGames = v['sideGames'] == 'true';
       final doubleGames = v['doubleGames'] == 'true';
@@ -833,14 +868,32 @@ class PrintPanel extends StatefulWidget {
   State<PrintPanel> createState() => _PrintPanelState();
 }
 
+/// Binds generated bytes and stale-report approval to one event snapshot.
+class _PrintPreviewJob {
+  const _PrintPreviewJob(this.event, this.pdf, {this.approvedAtRevision});
+  final Event event;
+  final Future<Uint8List> pdf;
+  final int? approvedAtRevision;
+
+  bool isStale(int? currentRevision) =>
+      currentRevision != null && currentRevision != event.revision;
+
+  bool canPrint(int? currentRevision) =>
+      !isStale(currentRevision) || approvedAtRevision == currentRevision;
+
+  _PrintPreviewJob approve(int? currentRevision) =>
+      _PrintPreviewJob(event, pdf, approvedAtRevision: currentRevision);
+}
+
 class _PrintPanelState extends State<PrintPanel> {
-  late Event snapshot = widget.event;
-  late Future<Uint8List> pdf = generate();
-  int? approvedOldRevision;
+  late _PrintPreviewJob preview = createPreview(widget.event);
+  Event get snapshot => preview.event;
   bool printing = false;
   int? get currentRevision => widget.controller?.event?.revision;
-  bool get stale =>
-      currentRevision != null && currentRevision != snapshot.revision;
+  bool get stale => preview.isStale(currentRevision);
+
+  _PrintPreviewJob createPreview(Event event) =>
+      _PrintPreviewJob(event, generate(event));
 
   @override
   void initState() {
@@ -858,8 +911,7 @@ class _PrintPanelState extends State<PrintPanel> {
     super.dispose();
   }
 
-  Future<Uint8List> generate() async {
-    final event = snapshot;
+  Future<Uint8List> generate(Event event) async {
     if (widget.generate != null) return widget.generate!(event);
     final font = pw.Font.ttf(
       await rootBundle.load('assets/fonts/Inter-Regular.ttf'),
@@ -882,15 +934,20 @@ class _PrintPanelState extends State<PrintPanel> {
 
   Future<void> printPreview({bool changePrinter = false}) async {
     if (printing) return;
+    final job = preview;
+    bool canSend() =>
+        mounted && identical(preview, job) && job.canPrint(currentRevision);
+    if (!canSend()) return;
     setState(() => printing = true);
     try {
-      final bytes = await pdf;
-      if (!mounted || (stale && approvedOldRevision != currentRevision)) return;
+      final bytes = await job.pdf;
+      if (!mounted || !canSend()) return;
       await sendToPrinter(
         context,
         bytes,
-        snapshot.name,
+        job.event.name,
         changePrinter: changePrinter,
+        canSend: canSend,
       );
     } catch (e) {
       if (mounted) showFailure(context, e);
@@ -900,9 +957,7 @@ class _PrintPanelState extends State<PrintPanel> {
   }
 
   void refresh() => setState(() {
-    snapshot = widget.controller?.event ?? snapshot;
-    approvedOldRevision = null;
-    pdf = generate();
+    preview = createPreview(widget.controller?.event ?? snapshot);
   });
 
   @override
@@ -941,7 +996,7 @@ class _PrintPanelState extends State<PrintPanel> {
 
     final labels = scopedSections.map(scopeLabel).toSet();
     final roundLabel = labels.length == 1 ? labels.single : 'Selected rounds';
-    final canPrint = !stale || approvedOldRevision == currentRevision;
+    final canPrint = preview.canPrint(currentRevision);
     return SidePanel(
       key: const ValueKey('print-panel'),
       title: '$what · ${section?.name ?? 'all sections'}',
@@ -1007,7 +1062,9 @@ class _PrintPanelState extends State<PrintPanel> {
                               if (!canPrint)
                                 TextButton(
                                   onPressed: () => setState(
-                                    () => approvedOldRevision = currentRevision,
+                                    () => preview = preview.approve(
+                                      currentRevision,
+                                    ),
                                   ),
                                   child: Text(
                                     'Use older revision ${snapshot.revision}',
@@ -1023,7 +1080,7 @@ class _PrintPanelState extends State<PrintPanel> {
               ),
               Expanded(
                 child: FutureBuilder<Uint8List>(
-                  future: pdf,
+                  future: preview.pdf,
                   builder: (context, result) {
                     if (result.connectionState != ConnectionState.done) {
                       return const Center(child: Text('Preparing…'));
@@ -1038,7 +1095,7 @@ class _PrintPanelState extends State<PrintPanel> {
                             ),
                             TextButton(
                               onPressed: () => setState(() {
-                                pdf = generate();
+                                preview = createPreview(snapshot);
                               }),
                               child: const Text('Retry'),
                             ),
@@ -1312,12 +1369,14 @@ Future<void> sendToPrinter(
   Uint8List bytes,
   String name, {
   bool changePrinter = false,
+  bool Function()? canSend,
 }) async {
   Object? preferenceError;
   final success = await RememberedPrinting.shared.print(
     bytes,
     name,
     changePrinter: changePrinter,
+    canSend: canSend,
     onPreferenceError: (error) => preferenceError = error,
     choose: (printers) async {
       if (!context.mounted) return null;

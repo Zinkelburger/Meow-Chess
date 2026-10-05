@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'model.dart';
+import 'rating_system.dart';
 import 'us_chess.dart';
 
 /// A display-only, single-pass Regular rating estimate. Never a pairing input.
@@ -37,7 +38,8 @@ RatingPreview previewRating(Event event, Section? section, Player player) {
   bool regularRating(Player p) =>
       p.rating > 0 &&
       (p.ratingEvidence['category'] == null ||
-          p.ratingEvidence['category'] == 'regular');
+          RatingSystem.parse(p.ratingEvidence['category']) ==
+              RatingSystem.regular);
   if (!regularRating(player)) {
     return const RatingPreview(reason: 'A starting Regular rating is needed.');
   }

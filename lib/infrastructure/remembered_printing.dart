@@ -88,6 +88,8 @@ class RememberedPrinting {
     String name, {
     required Future<Printer?> Function(List<Printer>) choose,
     bool changePrinter = false,
+    // Recheck snapshot validity after asynchronous discovery or selection.
+    bool Function()? canSend,
     void Function(Object)? onPreferenceError,
   }) async {
     if (busy) return false;
@@ -100,6 +102,7 @@ class RememberedPrinting {
         );
       }
       if (!capabilities.directPrint || !capabilities.canListPrinters) {
+        if (canSend != null && !canSend()) return false;
         return await send(null, bytes, name);
       }
       final available = (await printers()).where((p) => p.isAvailable).toList();
@@ -118,7 +121,7 @@ class RememberedPrinting {
           ? null
           : available.where((p) => p.url == saved?.url).firstOrNull;
       printer ??= await choose(available);
-      if (printer == null) return false;
+      if (printer == null || (canSend != null && !canSend())) return false;
       final success = await send(printer, bytes, name);
       if (success) {
         try {

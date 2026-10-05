@@ -2,7 +2,6 @@ import '../application/member_lookup.dart';
 import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -639,17 +638,15 @@ class ReportDetailsState extends State<ReportDetails> {
   String? error;
   late FormDraft draft;
   final fieldFocus = <String, FocusNode>{};
-  Map<String, String> shown = const {};
   TournamentController get c => widget.controller;
-  Map<String, String> get values => text.map((k, v) => MapEntry(k, v.text));
-  bool get dirty => !mapEquals(values, stored);
+  bool get dirty => draft.dirty;
   Map<String, String> get stored {
     final e = c.event!;
     return {'city': e.city, 'state': e.state, 'zip': e.zip};
   }
 
   void load() {
-    shown = stored;
+    final shown = stored;
     for (final e in text.entries) {
       e.value.text = shown[e.key]!;
     }
@@ -666,10 +663,7 @@ class ReportDetailsState extends State<ReportDetails> {
   @override
   void didUpdateWidget(ReportDetails oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (mapEquals(values, shown) && !mapEquals(shown, stored)) {
-      draft.reset(stored);
-      load();
-    }
+    draft.reconcile(stored);
   }
 
   @override
@@ -685,9 +679,12 @@ class ReportDetailsState extends State<ReportDetails> {
   }
 
   bool commit() {
-    if (!dirty) return true;
-    final v = values;
     try {
+      final v = draft.prepareSave(
+        stored,
+        labels: {for (final field in _fields) field.$1: field.$2},
+      );
+      if (!draft.dirty) return true;
       c.change(
         'Edit report details',
         c.event!.copy(
@@ -825,32 +822,26 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
   late final text = TextEditingController(
     text: widget.controller.event!.submission,
   );
-  late String shown = widget.controller.event!.submission;
   final focus = FocusNode(debugLabel: 'submission notes');
   String? error;
   late FormDraft draft;
-  bool get dirty => text.text != widget.controller.event!.submission;
+  bool get dirty => draft.dirty;
+  Map<String, String> get stored => {
+    'notes': widget.controller.event!.submission,
+  };
 
   @override
   void initState() {
     super.initState();
-    draft = FormDraft(
-      widget.controller.workspaceState,
-      'draft-submission',
-      {'notes': text},
-      {'notes': shown},
-    );
+    draft = FormDraft(widget.controller.workspaceState, 'draft-submission', {
+      'notes': text,
+    }, stored);
   }
 
   @override
   void didUpdateWidget(SubmissionNotes oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Follow undo and other outside changes unless mid-edit.
-    final stored = widget.controller.event!.submission;
-    if (text.text == shown && stored != shown) {
-      draft.reset({'notes': stored});
-      shown = stored;
-    }
+    draft.reconcile(stored);
   }
 
   @override
@@ -862,17 +853,18 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
   }
 
   void save() {
-    if (!dirty) return;
     try {
+      final values = draft.prepareSave(
+        stored,
+        labels: {'notes': 'Submission notes'},
+      );
+      if (!draft.dirty) return;
       widget.controller.change(
         'Update submission record',
-        widget.controller.event!.copy(submission: text.text),
+        widget.controller.event!.copy(submission: values['notes']),
       );
-      draft.reset({'notes': text.text});
-      setState(() {
-        shown = text.text;
-        error = null;
-      });
+      draft.reset(stored);
+      setState(() => error = null);
     } catch (e) {
       setState(() => error = plainMessage(e));
     }
@@ -920,8 +912,10 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
                 FilledButton(onPressed: save, child: const Text('Save')),
                 const SizedBox(width: 8),
                 TextButton(
-                  onPressed: () =>
-                      setState(() => draft.reset({'notes': shown})),
+                  onPressed: () => setState(() {
+                    draft.reset(stored);
+                    error = null;
+                  }),
                   child: const Text('Discard draft'),
                 ),
               ],

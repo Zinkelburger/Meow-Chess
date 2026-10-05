@@ -73,6 +73,124 @@ void main() {
     expect(c.event!.revision, before);
     await tester.pump();
   });
+  for (final rating in [0, 5000]) {
+    testWidgets('single-player approval rejects unavailable rating $rating', (
+      tester,
+    ) async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      final key = GlobalKey<PlayerPanelState>();
+      final player = c.event!.players.first;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PlayerPanel(
+              key: key,
+              controller: c,
+              player: player,
+              onClose: () {},
+              memberLookup: (_) async => MemberObservation(
+                id: player.memberId,
+                name: player.name,
+                retrievedAt: '2026-10-02',
+                supplementDate: '2026-10-01',
+                ratings: {'R': rating},
+              ),
+            ),
+          ),
+        ),
+      );
+      await key.currentState!.lookup();
+      await tester.pump();
+      tester
+          .widget<ActionChip>(find.widgetWithText(ActionChip, 'R $rating'))
+          .onPressed!();
+      await tester.pump();
+      final before = c.event!.encode();
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Confirm rating change'),
+          )
+          .onPressed!();
+      await tester.pump();
+      expect(c.event!.encode(), before);
+      expect(c.repository.load()!.players.first.rating, player.rating);
+      expect(key.currentState!.error, contains('Current rating kept'));
+    });
+  }
+
+  testWidgets(
+    'single-player approval keeps unrelated edits and newer membership',
+    (tester) async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      final key = GlobalKey<PlayerPanelState>();
+      final player = c.event!.players.first;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: c,
+              builder: (_, _) => PlayerPanel(
+                key: key,
+                controller: c,
+                player: c.event!.players.first,
+                onClose: () {},
+                memberLookup: (_) async => MemberObservation(
+                  id: player.memberId,
+                  name: player.name,
+                  retrievedAt: '2026-10-02',
+                  supplementDate: '2026-10-01',
+                  ratings: {'R': 1800},
+                  expiration: '2027-12-31',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await key.currentState!.lookup();
+      await tester.pump();
+      tester
+          .widget<ActionChip>(find.widgetWithText(ActionChip, 'R 1800'))
+          .onPressed!();
+      await tester.pump();
+      final confirm = tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Confirm rating change'),
+          )
+          .onPressed!;
+      c.savePlayer(
+        c.event!.players.first.copy(
+          notes: 'Keep this note',
+          membershipEvidence: {
+            'id': player.memberId,
+            'retrievedAt': '2026-10-04',
+            'expiration': '2028-12-31',
+          },
+        ),
+      );
+      await tester.pump();
+      confirm();
+      await tester.pump();
+      final saved = c.event!.players.first;
+      expect(saved.rating, 1800);
+      expect(saved.ratingEvidence['category'], 'R');
+      expect(saved.notes, 'Keep this note');
+      expect(saved.membershipEvidence['expiration'], '2028-12-31');
+      c.undo();
+      expect(c.event!.players.first.rating, player.rating);
+      await tester.pump();
+      c.savePlayer(c.event!.players.first.copy(rating: 1700));
+      await tester.pump();
+      final before = c.event!.encode();
+      confirm();
+      await tester.pump();
+      expect(c.event!.encode(), before);
+      expect(key.currentState!.error, contains('Edited since lookup'));
+    },
+  );
+
   testWidgets('late success and failure cannot affect another player lookup', (
     tester,
   ) async {

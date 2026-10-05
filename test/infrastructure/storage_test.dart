@@ -124,6 +124,86 @@ void main() {
     expect(check.select('PRAGMA user_version').first.values.first, 999);
     check.close();
   });
+  for (final version in [0, 1, 2]) {
+    test('an unrelated event table at version $version is not migrated', () {
+      final path = p.join(directory.path, 'unrelated-event.meow');
+      final db = sqlite3.open(path);
+      db.execute('CREATE TABLE event (title TEXT)');
+      db.execute("INSERT INTO event VALUES('preserve me')");
+      db.execute('PRAGMA user_version=$version');
+      db.close();
+      final original = File(path).readAsBytesSync();
+      expect(
+        () => SqliteEventRepository(path),
+        throwsA(isA<TournamentException>()),
+      );
+      expect(File(path).readAsBytesSync(), original);
+      final check = sqlite3.open(path);
+      try {
+        expect(
+          check.select('PRAGMA user_version').single.values.single,
+          version,
+        );
+        expect(
+          check.select('PRAGMA journal_mode').single.values.single,
+          'delete',
+        );
+        expect(
+          check
+              .select("SELECT name FROM sqlite_master WHERE type='table'")
+              .map((row) => row['name']),
+          ['event'],
+        );
+      } finally {
+        check.close();
+      }
+    });
+  }
+  for (final damage in ['missing table', 'invalid JSON', 'invalid event']) {
+    test('opening a database with $damage leaves bytes and schema intact', () {
+      final path = p.join(directory.path, 'damaged-event.meow');
+      fixture(path: path).dispose();
+      final inject = sqlite3.open(path);
+      inject.execute('PRAGMA journal_mode = DELETE');
+      switch (damage) {
+        case 'missing table':
+          inject.execute('DROP TABLE preference');
+        case 'invalid JSON':
+          inject.execute("UPDATE event SET data='{'");
+        case 'invalid event':
+          inject.execute(r"UPDATE event SET data=json_set(data, '$.name', '')");
+      }
+      final schema = inject
+          .select('SELECT sql FROM sqlite_master ORDER BY name')
+          .map((row) => row['sql'])
+          .toList();
+      inject.close();
+      final original = File(path).readAsBytesSync();
+      expect(
+        () => SqliteEventRepository(path),
+        damage == 'invalid JSON'
+            ? throwsFormatException
+            : throwsA(isA<TournamentException>()),
+      );
+      expect(File(path).readAsBytesSync(), original);
+      final check = sqlite3.open(path);
+      try {
+        expect(check.select('PRAGMA user_version').single.values.single, 2);
+        expect(
+          check.select('PRAGMA journal_mode').single.values.single,
+          'delete',
+        );
+        expect(
+          check
+              .select('SELECT sql FROM sqlite_master ORDER BY name')
+              .map((row) => row['sql']),
+          schema,
+        );
+      } finally {
+        check.close();
+      }
+    });
+  }
   test('preferences and interrupted drafts survive reopening', () {
     final path = p.join(directory.path, 'draft.meow');
     final c = fixture(path: path);

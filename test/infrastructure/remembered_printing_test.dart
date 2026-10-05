@@ -154,4 +154,40 @@ void main() {
       throwsA(isA<TournamentException>()),
     );
   });
+  for (final directPrint in [false, true]) {
+    test(
+      'invalidated job is cancelled at the send boundary; direct=$directPrint',
+      () async {
+        var valid = true;
+        var sends = 0;
+        final service = RememberedPrinting(
+          preference: preference,
+          info: () async {
+            if (!directPrint) valid = false;
+            return directPrint ? direct : const PrintingInfo(canPrint: true);
+          },
+          printers: () async => [a],
+          send: (_, _, _) async {
+            sends++;
+            return true;
+          },
+        );
+        expect(
+          await service.print(
+            bytes,
+            'Sheets',
+            canSend: () => valid,
+            choose: (_) async {
+              valid = false;
+              return a;
+            },
+          ),
+          false,
+        );
+        expect(sends, 0);
+        expect(service.busy, false);
+        expect(await preference.read(), isNull);
+      },
+    );
+  }
 }

@@ -82,7 +82,7 @@ class PlayerPanelState extends State<PlayerPanel> {
   String? swapWith;
   int? moveRevision;
   String? pendingRating;
-  int? lookupRevision;
+  Event? lookupSnapshot;
 
   /// US Chess lookup: in progress, result, or failure message.
   bool looking = false;
@@ -95,6 +95,7 @@ class PlayerPanelState extends State<PlayerPanel> {
     _lookupGeneration++;
     looking = false;
     member = null;
+    lookupSnapshot = null;
     pendingRating = null;
     lookupError = null;
   }
@@ -106,14 +107,14 @@ class PlayerPanelState extends State<PlayerPanel> {
     setState(invalidateLookup);
   }
 
-  void applyMember(MemberObservation observation, void Function(Player) save) {
-    if (member != observation || widget.player == null) return;
+  bool applyMember(MemberObservation observation, void Function(Player) save) {
+    if (member != observation || widget.player == null) return false;
     final player = fresh;
     if (player.memberId != observation.id ||
         text['memberId']!.text.trim() != observation.id) {
-      return;
+      return false;
     }
-    attempt(() => save(player));
+    return attempt(() => save(player));
   }
 
   /// The last player added, confirmed under the add form.
@@ -252,21 +253,16 @@ class PlayerPanelState extends State<PlayerPanel> {
   bool commit() {
     final adding = widget.player == null;
     final current = stored(adding ? null : fresh);
-    draft.reconcile(current);
-    final conflicts = draft.conflicts(current);
-    if (conflicts.isNotEmpty) {
-      final names = _fields
-          .where((field) => conflicts.contains(field.$1))
-          .map((field) => field.$2)
-          .join(', ');
-      setState(
-        () => error =
-            '$names changed elsewhere. Discard this draft to load the saved values, then re-enter your changes.',
+    late Map<String, String> v;
+    if (!attempt(() {
+      v = draft.prepareSave(
+        current,
+        labels: {for (final field in _fields) field.$1: field.$2},
       );
+    })) {
       return false;
     }
     if (!_fields.any((field) => draft.isEdited(field.$1))) return true;
-    final v = values;
     ({String? into, String? problem}) joined = (into: null, problem: null);
     final ok = attempt(() {
       final rating = parseRating(v['rating']!);
@@ -389,7 +385,7 @@ class PlayerPanelState extends State<PlayerPanel> {
         c.event!.players.any((p) => p.id == playerId && p.memberId == memberId);
     setState(() {
       looking = true;
-      lookupRevision = c.event!.revision;
+      lookupSnapshot = c.event!;
       pendingRating = null;
       member = null;
       lookupError = null;
@@ -398,9 +394,7 @@ class PlayerPanelState extends State<PlayerPanel> {
       final found = await widget.memberLookup(memberId);
       if (!current()) return;
       if (found?.id == memberId) {
-        final unchanged = lookupRevision == c.event!.revision;
         c.recordMembership(eventId, playerId, found!.toJson());
-        if (unchanged) lookupRevision = c.event!.revision;
       }
       setState(() {
         member = found?.id == memberId ? found : null;
@@ -678,28 +672,19 @@ class PlayerPanelState extends State<PlayerPanel> {
               ),
               FilledButton(
                 onPressed: () {
-                  if (lookupRevision != c.event!.revision) {
-                    setState(
-                      () => lookupError =
-                          'The event changed. Refresh and review again.',
-                    );
-                    return;
-                  }
-                  applyMember(
+                  final snapshot = lookupSnapshot;
+                  if (snapshot == null) return;
+                  if (applyMember(
                     m,
-                    (player) => c.savePlayer(
-                      player.copy(
-                        rating: m.ratings[category],
-                        ratingEvidence: {
-                          ...player.ratingEvidence,
-                          ...m.toJson(),
-                          'kind': 'monthly supplement',
-                          'category': category,
-                        },
-                      ),
+                    (player) => c.applyReviewedRatings(
+                      snapshot: snapshot,
+                      observations: {player.id: m},
+                      playerIds: {player.id},
+                      category: category,
                     ),
-                  );
-                  setState(() => pendingRating = null);
+                  )) {
+                    setState(() => pendingRating = null);
+                  }
                 },
                 child: const Text('Confirm rating change'),
               ),

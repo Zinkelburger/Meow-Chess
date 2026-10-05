@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/domain/rating_preview.dart';
+import 'package:meow_chess/domain/member_observation.dart';
+import 'package:meow_chess/domain/rating_update.dart';
 
 Event eventWith(
   List<Game> games, {
@@ -54,6 +56,53 @@ void main() {
     expect(result.games, 1);
     expect(e.encode(), before);
   });
+
+  test(
+    'published Regular evidence preserves player and opponent estimates',
+    () {
+      final event = eventWith([game('1', Outcome.whiteWin)]);
+      final before = estimate(event);
+      final approved = event.copy(
+        players: [
+          for (final player in event.players)
+            applyRatingObservation(
+              player,
+              MemberObservation(
+                id: player.memberId,
+                name: player.name,
+                retrievedAt: '2026-10-04',
+                supplementDate: '2026-10-01',
+                ratings: {'R': player.rating},
+              ),
+              'R',
+            ),
+        ],
+      );
+      expect(estimate(approved).rating, before.rating);
+      expect(estimate(approved).change, before.change);
+      for (final category in ['regular', 'Regular', 'R']) {
+        final compatible = approved.copy(
+          players: [
+            for (final player in approved.players)
+              player.copy(ratingEvidence: {'category': category}),
+          ],
+        );
+        expect(estimate(compatible).rating, before.rating);
+      }
+      for (final category in ['Q', 'B', 'quick', 'blitz', 'unknown']) {
+        final other = approved.copy(
+          players: [
+            for (final player in approved.players)
+              player.id == 'a'
+                  ? player.copy(ratingEvidence: {'category': category})
+                  : player,
+          ],
+        );
+        expect(estimate(other).rating, isNull);
+        expect(estimate(other).reason, contains('starting Regular rating'));
+      }
+    },
+  );
 
   test('black win, draw and loss score from the player perspective', () {
     expect(

@@ -1,5 +1,6 @@
 import 'member_observation.dart';
 import 'model.dart';
+import 'rating_system.dart';
 
 /// Explains why an observed rating cannot replace the reviewed local value.
 /// Unrelated edits do not invalidate a review; identity, rating and pairings do.
@@ -22,9 +23,11 @@ String? ratingUpdateProblem({
   if (observation.id != player.memberId) {
     return 'The returned member does not match the requested ID.';
   }
-  final rating = observation.ratings[category];
+  final system = RatingSystem.parse(category);
+  if (system == null) return 'Choose a recognized rating system.';
+  final rating = observation.ratings[system.code];
   if (rating == null || rating <= 0 || rating > 4000) {
-    return 'Unrated / no published ${const {'R': 'Regular', 'Q': 'Quick', 'B': 'Blitz'}[category] ?? category} rating. Current rating kept.';
+    return 'Unrated / no published ${system.label} rating. Current rating kept.';
   }
   if (observation.supplementDate == null) {
     return 'No dated supplement. Retry later.';
@@ -44,17 +47,21 @@ Player applyRatingObservation(
   MemberObservation observation,
   String category,
 ) {
+  final system = RatingSystem.parse(category);
+  if (system == null) {
+    throw const TournamentException('Choose a recognized rating system.');
+  }
   final previous = DateTime.tryParse(
     '${player.membershipEvidence['retrievedAt']}',
   );
   final retrieved = DateTime.tryParse(observation.retrievedAt);
   return player.copy(
-    rating: observation.ratings[category],
+    rating: observation.ratings[system.code],
     ratingEvidence: {
       ...player.ratingEvidence,
       ...observation.toJson(),
       'kind': 'monthly supplement',
-      'category': category,
+      'category': system.code,
     },
     membershipEvidence:
         previous != null && (retrieved == null || previous.isAfter(retrieved))
