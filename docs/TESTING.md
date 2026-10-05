@@ -15,9 +15,9 @@ an external backup folder, restart the app, reopen from Recent events and verify
 a new automatic backup without selecting either path again. Also verify that a
 disconnected backup volume reports a backup failure without preventing event
 editing, and that reconnecting and restarting restores its grant.
-The workflow can also run manually from Actions → CI without publishing anything.
-Pushing a commit to the opt-in `windows-check` branch runs the same matrix without
-a release tag; this also works before the workflow reaches the default branch.
+The workflow runs on every push to `main`, and can also run manually from
+Actions → CI without publishing anything. All work is committed directly to
+`main`; the project does not use feature branches.
 The separate Windows build workflow checks packaging and installation, then
 launches the installed release and requires a native window and clean close.
 

@@ -40,8 +40,7 @@ The [SwissSys archive coverage](research/SWISSSYS_ARCHIVE.md) and
 reviewed requirements and tested parity.
 
 The [review of Fable’s tournament-day additions](docs/FABLE_REVIEW.md) records
-what to keep, corrections needed, and how the two proposals fit together. Those
-main-checkout edits are reviewed but not yet merged into this branch.
+what to keep, corrections needed, and how the two proposals fit together.
 
 The [history and recovery contract](docs/HISTORY_AND_RECOVERY.md) specifies safe
 “back up to round X,” persistent Undo/Redo, version comparison and saved alternatives.
