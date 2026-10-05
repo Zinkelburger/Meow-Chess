@@ -19,6 +19,7 @@ import 'history_panel.dart';
 import 'panels.dart';
 import '../infrastructure/reports.dart' show ReportKind;
 import 'side_panel.dart';
+import 'theme.dart' show controlHeight;
 import 'players_view.dart';
 import 'results_view.dart';
 import 'reports_view.dart';
@@ -54,6 +55,9 @@ class _WorkspaceState extends State<Workspace> {
   TaskView view = TaskView.players;
   bool pairing = false;
   bool historyOpen = false;
+
+  /// The Undo or Redo step History was opened to review, if any.
+  int? historyReview;
 
   /// Event details, backups and copies, docked at the right.
   bool eventOpen = false;
@@ -307,10 +311,24 @@ class _WorkspaceState extends State<Workspace> {
           ),
         );
 
-  void undo() =>
-      travel(context, c, c.graph.back, (a) => c.undo(acceptLosses: a));
-  void redo() =>
-      travel(context, c, c.graph.forward, (a) => c.redo(acceptLosses: a));
+  void undo() => step(c.graph.back, c.undo);
+  void redo() => step(c.graph.forward, c.redo);
+
+  /// A routine step moves at once. One with consequences opens History on
+  /// that step, where they are listed beside the button that commits it.
+  void step(int? node, void Function({bool acceptLosses}) move) {
+    if (node == null) return;
+    try {
+      if (historyNeedsReview(c, node)) {
+        setState(() => historyReview = node);
+        dock.claim('history');
+        return;
+      }
+      move();
+    } catch (e) {
+      showFailure(context, e);
+    }
+  }
 
   void toggleHistory() {
     if (historyOpen) {
@@ -330,6 +348,7 @@ class _WorkspaceState extends State<Workspace> {
 
   void dockChanged() {
     historyOpen = dock.id == 'history';
+    if (!historyOpen) historyReview = null;
     eventOpen = dock.id == 'event';
     c.workspaceState.write('historyPanel', historyOpen ? 'open' : 'closed');
     refresh();
@@ -375,9 +394,9 @@ class _WorkspaceState extends State<Workspace> {
                 ('1 / W', 'This player wins'),
                 ('0 / L', 'This player loses'),
                 ('D', 'Draw (½ on the sheet)'),
-                ('F, then 1 or 0', 'Forfeit result'),
-                ('+ / −', 'Forfeit win / loss'),
-                ('X', 'Double forfeit'),
+                ('F', 'No-show: this player forfeits'),
+                ('X', 'This player wins by forfeit'),
+                ('F on both players', 'Double forfeit'),
                 ('Delete', 'Clear the result'),
                 ('↑ / ↓', 'Previous / next board'),
                 ('← / →', 'Other player'),
@@ -410,7 +429,6 @@ class _WorkspaceState extends State<Workspace> {
         controller: c,
         sectionId: section?.id,
         ratingRefresh: ratingRefresh,
-        onLookup: lookup,
         onRefreshRoster: refreshRoster,
         onRefreshRatings: startRatingRefresh,
         onAddSections: e.sections.any((s) => s.rounds.isNotEmpty)
@@ -427,18 +445,9 @@ class _WorkspaceState extends State<Workspace> {
       ),
       TaskView.reports => PlayerDetailsLayout(
         child: ReportsView(
-          key: ValueKey('reports-${section?.id}'),
+          key: const ValueKey('reports'),
           controller: c,
-          sectionId: section?.id,
           onResults: (id) => pickSection(id, next: TaskView.results),
-          onStandings: () {
-            go(TaskView.results);
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                resultsKeys[sectionId ?? 'all']?.currentState?.showCrosstable();
-              }
-            });
-          },
           onBackups: showBackups,
         ),
       ),
@@ -473,298 +482,323 @@ class _WorkspaceState extends State<Workspace> {
           focusNode: workspaceFocus,
           autofocus: true,
           child: Scaffold(
-            body: SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Top bar: event name and pages on the left, tool icons pinned
-                  // to the right.
-                  WorkspaceToolbar(
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final navigation = SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          hitTestBehavior: HitTestBehavior.deferToChild,
-                          child: Row(
-                            children: [
-                              ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: constraints.maxWidth < 1100
-                                      ? 160
-                                      : 260,
-                                ),
-                                child: Tooltip(
-                                  message: 'Event details',
-                                  child: TextButton.icon(
-                                    key: const ValueKey('event-details'),
-                                    onPressed: toggleEvent,
-                                    iconAlignment: IconAlignment.end,
-                                    icon: Icon(
-                                      Icons.edit_outlined,
-                                      size: 16,
-                                      color: colors.onSurfaceVariant,
-                                    ),
-                                    style: TextButton.styleFrom(
-                                      foregroundColor: colors.onSurface,
-                                      backgroundColor: eventOpen
-                                          ? colors.primary.withValues(
-                                              alpha: 0.12,
-                                            )
-                                          : null,
-                                      minimumSize: const Size(0, 32),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
+            // Names, IDs, scores and messages can be dragged over and copied.
+            body: SelectionArea(
+              child: SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Top bar: event name and pages on the left, tool icons pinned
+                    // to the right.
+                    WorkspaceToolbar(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final navigation = SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            hitTestBehavior: HitTestBehavior.deferToChild,
+                            child: Row(
+                              children: [
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: constraints.maxWidth < 1100
+                                        ? 160
+                                        : 260,
+                                  ),
+                                  child: Tooltip(
+                                    message: 'Event details',
+                                    child: TextButton.icon(
+                                      key: const ValueKey('event-details'),
+                                      onPressed: toggleEvent,
+                                      iconAlignment: IconAlignment.end,
+                                      icon: Icon(
+                                        Icons.edit_outlined,
+                                        size: 16,
+                                        color: colors.onSurfaceVariant,
                                       ),
-                                    ),
-                                    label: Text(
-                                      e.name,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 15,
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: colors.onSurface,
+                                        backgroundColor: eventOpen
+                                            ? colors.primary.withValues(
+                                                alpha: 0.12,
+                                              )
+                                            : null,
+                                        minimumSize: const Size(0, 32),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                        ),
+                                      ),
+                                      label: Text(
+                                        e.name,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 15,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        );
-                        final actions = Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _barIcon(
-                              Icons.help_outline,
-                              'Help articles',
-                              () => dock.id == 'help'
-                                  ? dock.close()
-                                  : dock.show(
-                                      'help',
-                                      HelpPanel(
-                                        controller: c,
-                                        onClose: dock.close,
+                              ],
+                            ),
+                          );
+                          final actions = Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _barIcon(
+                                Icons.help_outline,
+                                'Help articles',
+                                () => dock.id == 'help'
+                                    ? dock.close()
+                                    : dock.show(
+                                        'help',
+                                        HelpPanel(
+                                          controller: c,
+                                          onClose: dock.close,
+                                        ),
                                       ),
-                                    ),
-                              selected: dock.id == 'help',
-                            ),
-                            _barIcon(
-                              Icons.keyboard_outlined,
-                              'Keyboard shortcuts (F1)',
-                              keyboardHelp,
-                              selected: dock.id == 'keyboard-help',
-                            ),
-                            _toolbarDivider(),
-                            _barIcon(
-                              Icons.arrow_back,
-                              c.canUndo
-                                  ? 'Undo ${c.undoLabel} (Ctrl+Z)'
-                                  : 'Nothing to undo',
-                              c.canUndo ? undo : null,
-                              key: const ValueKey('undo'),
-                            ),
-                            _barIcon(
-                              Icons.arrow_forward,
-                              c.canRedo
-                                  ? 'Redo ${c.redoLabel} (Ctrl+Shift+Z)'
-                                  : 'Nothing to redo',
-                              c.canRedo ? redo : null,
-                            ),
-                            _barIcon(
-                              Icons.history,
-                              historyOpen
-                                  ? 'Hide history (Ctrl+H)'
-                                  : 'History (Ctrl+H)',
-                              toggleHistory,
-                              selected: historyOpen,
-                            ),
-                            _toolbarDivider(),
-                            _barIcon(
-                              dark
-                                  ? Icons.light_mode_outlined
-                                  : Icons.dark_mode_outlined,
-                              dark ? 'Light mode' : 'Dark mode',
-                              widget.onTheme,
-                            ),
-                            _barIcon(
-                              Icons.home_outlined,
-                              'Close event',
-                              widget.onClose,
-                            ),
-                          ],
-                        );
-                        if (constraints.maxWidth /
-                                MediaQuery.textScalerOf(context).scale(1) <
-                            640) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              navigation,
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: actions,
+                                selected: dock.id == 'help',
+                              ),
+                              _barIcon(
+                                Icons.keyboard_outlined,
+                                'Keyboard shortcuts (F1)',
+                                keyboardHelp,
+                                selected: dock.id == 'keyboard-help',
+                              ),
+                              _toolbarDivider(),
+                              _barIcon(
+                                Icons.arrow_back,
+                                c.canUndo
+                                    ? 'Undo ${c.undoLabel} (Ctrl+Z)'
+                                    : 'Nothing to undo',
+                                c.canUndo ? undo : null,
+                                key: const ValueKey('undo'),
+                              ),
+                              _barIcon(
+                                Icons.arrow_forward,
+                                c.canRedo
+                                    ? 'Redo ${c.redoLabel} (Ctrl+Shift+Z)'
+                                    : 'Nothing to redo',
+                                c.canRedo ? redo : null,
+                              ),
+                              _barIcon(
+                                Icons.history,
+                                historyOpen
+                                    ? 'Hide history (Ctrl+H)'
+                                    : 'History (Ctrl+H)',
+                                toggleHistory,
+                                selected: historyOpen,
+                              ),
+                              _toolbarDivider(),
+                              _barIcon(
+                                dark
+                                    ? Icons.light_mode_outlined
+                                    : Icons.dark_mode_outlined,
+                                dark ? 'Light mode' : 'Dark mode',
+                                widget.onTheme,
+                              ),
+                              _barIcon(
+                                Icons.home_outlined,
+                                'Close event',
+                                widget.onClose,
                               ),
                             ],
                           );
-                        }
-                        return Row(
-                          children: [
-                            Expanded(child: navigation),
-                            const SizedBox(width: 12),
-                            actions,
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                  if (e.practice) _practiceBanner(context),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, layout) {
-                        final pages = Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
-                          children: [
-                            for (final (task, label) in [
-                              (TaskView.players, 'Players'),
-                              (TaskView.results, 'Pairings'),
-                              (TaskView.reports, 'Export'),
-                            ])
-                              _tab(label, view == task, () => go(task)),
-                          ],
-                        );
-                        final action = view != TaskView.results
-                            ? const SizedBox.shrink()
-                            : _postControl(context, e, section);
-                        if (layout.maxWidth /
-                                MediaQuery.textScalerOf(context).scale(1) <
-                            1050) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              pages,
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: action,
-                              ),
-                            ],
-                          );
-                        }
-                        return Row(
-                          children: [
-                            pages,
-                            const SizedBox(width: 24),
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: action,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                  _sectionTabs(context),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (c.backupWarning != null)
-                                MaterialBanner(
-                                  content: Text(c.backupWarning!),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: c.secondaryBackup,
-                                      child: const Text('Retry'),
-                                    ),
-                                  ],
+                          if (constraints.maxWidth /
+                                  MediaQuery.textScalerOf(context).scale(1) <
+                              640) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                navigation,
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: actions,
                                 ),
-                              if (postNotes.isNotEmpty) _postNotes(context),
-                              Expanded(
-                                child: LayoutBuilder(
-                                  builder: (context, layout) => Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      content,
-                                      if (dock.panel != null)
-                                        Positioned(
-                                          top: 0,
-                                          bottom: 0,
-                                          right: 0,
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                              top: 16,
-                                            ),
-                                            child: ConstrainedBox(
-                                              constraints: BoxConstraints(
-                                                maxWidth: detailsColumnWidth(
-                                                  layout.maxWidth,
-                                                ),
-                                              ),
-                                              child: dock.panel,
-                                            ),
-                                          ),
-                                        ),
-                                      if (eventOpen)
-                                        Positioned(
-                                          top: 0,
-                                          bottom: 0,
-                                          right: 0,
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                              top: 16,
-                                            ),
-                                            child: ConstrainedBox(
-                                              constraints: BoxConstraints(
-                                                maxWidth: detailsColumnWidth(
-                                                  layout.maxWidth,
-                                                ),
-                                              ),
-                                              child: EventPanel(
-                                                key: eventPanel,
-                                                controller: c,
-                                                onClose: toggleEvent,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      if (historyOpen)
-                                        Positioned(
-                                          top: 0,
-                                          bottom: 0,
-                                          right: 0,
-                                          child: ConstrainedBox(
-                                            constraints: BoxConstraints(
-                                              maxWidth: detailsColumnWidth(
-                                                layout.maxWidth,
-                                              ),
-                                            ),
-                                            child: HistoryPanel(
-                                              controller: c,
-                                              onClose: toggleHistory,
-                                            ),
-                                          ),
-                                        ),
+                              ],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              Expanded(child: navigation),
+                              const SizedBox(width: 12),
+                              actions,
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                    if (e.practice) _practiceBanner(context),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: LayoutBuilder(
+                        builder: (context, layout) {
+                          final pages = Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              for (final (task, label) in [
+                                (TaskView.players, 'Players'),
+                                (TaskView.results, 'Pairings'),
+                                (TaskView.reports, 'Export'),
+                              ])
+                                _tab(label, view == task, () => go(task)),
+                            ],
+                          );
+                          final action = view != TaskView.results
+                              ? const SizedBox.shrink()
+                              : _postControl(context, e, section);
+                          // One control tall whether or not Create pairings is
+                          // offered, so changing section never shifts the page.
+                          final reserved = BoxConstraints(
+                            minHeight: MediaQuery.textScalerOf(
+                              context,
+                            ).scale(controlHeight),
+                          );
+                          if (layout.maxWidth /
+                                  MediaQuery.textScalerOf(context).scale(1) <
+                              1050) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                pages,
+                                ConstrainedBox(
+                                  constraints: view == TaskView.results
+                                      ? reserved
+                                      : const BoxConstraints(),
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: action,
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+                          return ConstrainedBox(
+                            constraints: reserved,
+                            child: Row(
+                              children: [
+                                pages,
+                                const SizedBox(width: 24),
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: action,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    // The rating report always covers every section.
+                    if (view != TaskView.reports) _sectionTabs(context),
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (c.backupWarning != null)
+                                  MaterialBanner(
+                                    content: Text(c.backupWarning!),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: c.secondaryBackup,
+                                        child: const Text('Retry'),
+                                      ),
                                     ],
                                   ),
+                                if (postNotes.isNotEmpty) _postNotes(context),
+                                Expanded(
+                                  child: LayoutBuilder(
+                                    builder: (context, layout) => Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        content,
+                                        if (dock.panel != null)
+                                          Positioned(
+                                            top: 0,
+                                            bottom: 0,
+                                            right: 0,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 16,
+                                              ),
+                                              child: ConstrainedBox(
+                                                constraints: BoxConstraints(
+                                                  maxWidth: detailsColumnWidth(
+                                                    layout.maxWidth,
+                                                  ),
+                                                ),
+                                                child: dock.panel,
+                                              ),
+                                            ),
+                                          ),
+                                        if (eventOpen)
+                                          Positioned(
+                                            top: 0,
+                                            bottom: 0,
+                                            right: 0,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 16,
+                                              ),
+                                              child: ConstrainedBox(
+                                                constraints: BoxConstraints(
+                                                  maxWidth: detailsColumnWidth(
+                                                    layout.maxWidth,
+                                                  ),
+                                                ),
+                                                child: EventPanel(
+                                                  key: eventPanel,
+                                                  controller: c,
+                                                  onClose: toggleEvent,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        if (historyOpen)
+                                          Positioned(
+                                            top: 0,
+                                            bottom: 0,
+                                            right: 0,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 16,
+                                              ),
+                                              child: ConstrainedBox(
+                                                constraints: BoxConstraints(
+                                                  maxWidth: detailsColumnWidth(
+                                                    layout.maxWidth,
+                                                  ),
+                                                ),
+                                                child: HistoryPanel(
+                                                  controller: c,
+                                                  review: historyReview,
+                                                  onClose: toggleHistory,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  _statusBar(context, e),
-                ],
+                    _statusBar(context, e),
+                  ],
+                ),
               ),
             ),
           ),
@@ -860,7 +894,7 @@ class _WorkspaceState extends State<Workspace> {
                     : 'Backup $backedUp',
               ),
             ),
-            Text('  ·  Revision ${e.revision}  ·  ', style: style),
+            Text('  ·  ', style: style),
             Text(
               '${e.players.length} players · ${e.sections.length} sections · ${widget.path}',
               overflow: TextOverflow.ellipsis,
@@ -1189,23 +1223,13 @@ class _WorkspaceState extends State<Workspace> {
             [
               const PopupMenuItem(
                 value: 'print',
-                child: Text('Print section sheets'),
+                child: Text('Print player list'),
               ),
               const PopupMenuItem(
                 value: 'preview',
-                child: Text('Preview section sheets…'),
+                child: Text('Preview player list…'),
               ),
               if (section != null) ...[
-                const PopupMenuDivider(),
-                const PopupMenuItem(value: 'move', child: Text('Move player…')),
-                const PopupMenuItem(
-                  value: 'swap',
-                  child: Text('Swap players…'),
-                ),
-                const PopupMenuItem(
-                  value: 'withdraw',
-                  child: Text('Withdraw / reinstate player…'),
-                ),
                 const PopupMenuDivider(),
                 const PopupMenuItem(
                   value: 'settings',
@@ -1252,15 +1276,6 @@ class _WorkspaceState extends State<Workspace> {
                 c.event!,
                 sectionId: id,
                 kind: ReportKind.sections,
-              );
-            case 'move':
-            case 'swap':
-            case 'withdraw':
-              showPlayerOperation(
-                context,
-                c,
-                PlayerOperation.values.byName(action),
-                sectionId: id,
               );
             case 'settings':
               pickSection(id);

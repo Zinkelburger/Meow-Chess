@@ -63,10 +63,8 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(
-      find.textContaining('Revision ${c.event!.revision}'),
-      findsOneWidget,
-    );
+    // Internal revision numbers stay out of the status bar.
+    expect(find.textContaining('Revision'), findsNothing);
     expect(find.text('No backup folder'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('status-backup')));
     await tester.pumpAndSettle();

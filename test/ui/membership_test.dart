@@ -1,10 +1,7 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/ratings_api.dart';
 import 'package:meow_chess/ui/players_view.dart';
-import 'package:meow_chess/ui/update_panels.dart';
 import 'package:meow_chess/ui/theme.dart';
 import '../support.dart';
 
@@ -42,31 +39,29 @@ void main() {
     c.recordMembership(c.event!.id, p.id, member(p.memberId).toJson());
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: PlayersView(controller: c)),
+        home: Scaffold(
+          body: PlayersView(controller: c, onRefreshRatings: () {}),
+        ),
       ),
     );
     expect(find.text('USCF expires'), findsOneWidget);
-    expect(find.text('Note'), findsOneWidget);
+    expect(find.text('Registration note'), findsOneWidget);
     expect(find.text('Arriving late'), findsOneWidget);
     expect(find.byTooltip('Arriving late'), findsOneWidget);
     expect(find.text('Private TD note'), findsNothing);
     expect(
-      tester.getTopLeft(find.text('Note')).dx,
+      tester.getTopLeft(find.text('Registration note')).dx,
       greaterThan(tester.getTopLeft(find.text('USCF expires')).dx),
     );
-    final date = tester.widget<Text>(find.text('2020-01-31'));
+    // Date and warning share one line so the row height never changes.
+    final expired = find.text('2020-01-31  Expired');
     expect(
-      date.style!.color,
-      Theme.of(tester.element(find.text('2020-01-31'))).colorScheme.error,
+      tester.widget<Text>(expired).textSpan!.style!.color,
+      Theme.of(tester.element(expired)).colorScheme.error,
     );
-    expect(find.text('Expired'), findsOneWidget);
     expect(find.text('Not checked'), findsNWidgets(3));
-    await tester.tap(find.byKey(const ValueKey('player-tools')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Check memberships'));
-    await tester.pumpAndSettle();
-    expect(find.text('Check USCF memberships'), findsOneWidget);
-    expect(find.text('Fetch memberships'), findsOneWidget);
+    // One USCF refresh fetches ratings and membership expiry together.
+    expect(find.byKey(const ValueKey('refresh-uscf')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -106,11 +101,11 @@ void main() {
             home: Scaffold(body: PlayersView(controller: c)),
           ),
         );
-        expect(find.text('Expires this month'), findsOneWidget);
-        expect(find.text('Expired'), findsNothing);
-        final date = tester.widget<Text>(find.text(expiration));
+        final warning = find.text('$expiration  Expires this month');
+        expect(warning, findsOneWidget);
+        expect(find.textContaining('Expired'), findsNothing);
         expect(
-          date.style!.color,
+          tester.widget<Text>(warning).textSpan!.style!.color,
           brightness == Brightness.dark
               ? const Color(0xffffd966)
               : const Color(0xff785500),
@@ -127,101 +122,20 @@ void main() {
             ),
           );
           await tester.pumpAndSettle();
-          final dateRect = tester.getRect(find.text(expiration));
+          final dateRect = tester.getRect(warning);
           final normalRect = tester.getRect(find.text('2099-12-31'));
-          final warningRect = tester.getRect(find.text('Expires this month'));
           final noteRect = tester.getRect(find.text('Arriving late'));
           expect(dateRect.left, normalRect.left);
           expect(
             dateRect.left,
             tester.getTopLeft(find.text('USCF expires')).dx,
           );
-          expect(warningRect.left, dateRect.left);
-          expect(warningRect.top, greaterThanOrEqualTo(dateRect.bottom));
-          expect(warningRect.right, lessThanOrEqualTo(noteRect.left - 12));
-          expect(dateRect.right, lessThan(noteRect.left));
+          expect(dateRect.height, normalRect.height);
+          expect(dateRect.right, lessThanOrEqualTo(noteRect.left - 12));
           expect(tester.takeException(), isNull);
         }
         expect(tester.takeException(), isNull);
       },
     );
   }
-
-  testWidgets(
-    'membership check saves unrated and posted players, retains data on failure',
-    (tester) async {
-      final c = fixture(count: 4);
-      addTearDown(c.dispose);
-      c.savePlayer(c.event!.players.first.copy(rating: 0));
-      c.post((await tester.runAsync(() => c.propose()))!);
-      final previous = c.event!.players[1];
-      c.recordMembership(
-        c.event!.id,
-        previous.id,
-        member(previous.memberId, expiration: '2028-12-31').toJson(),
-      );
-      final ratings = c.event!.players.map((p) => p.rating).toList();
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: RatingsRefreshPanel.membership(
-              controller: c,
-              onClose: () {},
-              lookup: (id) async {
-                if (id == previous.memberId) {
-                  throw const TournamentException('Lookup failed; try later.');
-                }
-                return member(id);
-              },
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('Fetch memberships'));
-      await finishBatch(tester);
-      expect(
-        c.repository.load()!.players.first.membershipEvidence['expiration'],
-        '2020-01-31',
-      );
-      expect(
-        c.event!.players[1].membershipEvidence['expiration'],
-        '2028-12-31',
-      );
-      expect(c.event!.players.map((p) => p.rating), ratings);
-      expect(c.event!.players.first.ratingEvidence['supplementDate'], isNull);
-      expect(find.text('Lookup failed; try later.'), findsOneWidget);
-      expect(find.byType(CheckboxListTile), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  testWidgets('a roster edit during a membership request stops the batch', (
-    tester,
-  ) async {
-    final c = fixture(count: 4);
-    addTearDown(c.dispose);
-    final request = Completer<MemberObservation?>();
-    final original = c.event!.players.first;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: RatingsRefreshPanel.membership(
-            controller: c,
-            onClose: () {},
-            lookup: (_) => request.future,
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('Fetch memberships'));
-    await tester.pump();
-    c.savePlayer(original.copy(memberId: '99999999'));
-    request.complete(member(original.memberId));
-    await finishBatch(tester);
-    expect(c.event!.players.first.membershipEvidence, isEmpty);
-    expect(
-      find.text('The event changed. Fetch again to check the current roster.'),
-      findsOneWidget,
-    );
-  });
 }

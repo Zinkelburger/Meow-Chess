@@ -178,6 +178,12 @@ String _list(Iterable<String> names) {
       : '${all.take(3).join(', ')} and ${all.length - 3} more';
 }
 
+String _format(Format f) => switch (f) {
+  Format.swiss => 'Swiss',
+  Format.quad => 'Quad',
+  Format.roundRobin => 'Round robin',
+};
+
 String _short(String text) {
   final line = text.replaceAll('\n', ' ').trim();
   if (line.isEmpty) return '(empty)';
@@ -305,7 +311,8 @@ List<String> describeChanges(
     final label = s.name;
     final settings = [
       if (o.name != s.name) 'renamed from ${o.name}',
-      if (o.format != s.format) 'format ${value(o.format.name, s.format.name)}',
+      if (o.format != s.format)
+        'format ${value(_format(o.format), _format(s.format))}',
       if (o.plannedRounds != s.plannedRounds)
         'rounds ${value(o.plannedRounds, s.plannedRounds)}',
       if (o.boardStart != s.boardStart)
@@ -336,7 +343,7 @@ List<String> describeChanges(
       out.add('$label round ${r.number} removed');
     }
     for (final r in s.rounds) {
-      final prefix = '$label R${r.number}';
+      final prefix = '$label round ${r.number}';
       final old = o.rounds.where((x) => x.number == r.number).firstOrNull;
       if (old == null) {
         out.add(
@@ -444,6 +451,60 @@ List<String> describeChanges(
     out.add('Other event details changed');
   }
   return out;
+}
+
+/// A history row: what happened, in the TD's words, and where.
+typedef HistoryStep = ({String title, String context});
+
+/// Headline for one history step. A result entry or correction reads as the
+/// game itself (players and score) with its section, round and board beneath,
+/// instead of as a list of field changes.
+HistoryStep summarizeStep(Event before, Event after) {
+  final items = describeChanges(before, after, includePrevious: false);
+  final results = <(Section, Round, Game, Game)>[];
+  var reopenedFrom = 0;
+  for (final s in after.sections) {
+    final o = before.sections.where((x) => x.id == s.id).firstOrNull;
+    if (o == null) continue;
+    if (o.rounds.length > s.rounds.length) reopenedFrom = s.rounds.length + 1;
+    for (final r in s.rounds) {
+      final old = o.rounds.where((x) => x.number == r.number).firstOrNull;
+      final games = {for (final g in old?.games ?? <Game>[]) g.id: g};
+      for (final g in r.games) {
+        final x = games[g.id];
+        if (x != null && x.outcome != g.outcome) results.add((s, r, x, g));
+      }
+    }
+  }
+  if (results.length == 1) {
+    final (s, r, x, g) = results.single;
+    final pairing =
+        '${_name(before, after, g.white)} – ${_name(before, after, g.black)}';
+    return (
+      title: g.outcome == Outcome.unreported
+          ? '$pairing: result cleared'
+          : '$pairing  ${g.outcome.label}',
+      context: [
+        '${s.name} · Round ${r.number} · Board ${g.board}',
+        if (x.outcome != Outcome.unreported && g.outcome != Outcome.unreported)
+          'was ${x.outcome.label}',
+        if (reopenedFrom > 0) 'round $reopenedFrom onward unpaired',
+      ].join(' · '),
+    );
+  }
+  if (items.isEmpty) return (title: 'No visible change', context: '');
+  final first = items.first;
+  final colon = first.indexOf(': ');
+  return (
+    title: colon < 0 || colon + 2 >= first.length
+        ? first
+        : first.substring(0, colon + 2) +
+              first[colon + 2].toUpperCase() +
+              first.substring(colon + 3),
+    context: items.length == 1
+        ? ''
+        : 'and ${items.length - 1} more ${items.length == 2 ? 'change' : 'changes'}',
+  );
 }
 
 /// Play recorded in [from] that moving to [to] would take away, when that is

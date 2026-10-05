@@ -43,8 +43,10 @@ void main() {
     final answer = find.text('Board ${g.board} · White vs ${black.name}');
     expect(answer, findsOneWidget);
     expect(tester.getSize(answer).height, greaterThanOrEqualTo(24));
-    // The Players button closes it again.
-    await tester.tap(find.byTooltip('Find player (Ctrl+L)'));
+    // Ctrl+L closes it again.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
     await tester.pump();
     expect(find.byKey(const ValueKey('lookup-panel')), findsNothing);
     await tester.pumpWidget(const SizedBox());

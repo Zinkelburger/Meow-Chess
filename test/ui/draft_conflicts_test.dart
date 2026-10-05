@@ -29,6 +29,7 @@ void main() {
             ),
           ),
         );
+        await openPanelGroup(tester, 'notes');
         await tester.enterText(
           find.byKey(const ValueKey('panel-notes')),
           'Only notes were edited',
@@ -95,6 +96,7 @@ void main() {
       expect(c.event!.player('p0').rating, 2200);
       key.currentState!.discardDraft();
       await tester.pump();
+      await openPanelGroup(tester, 'notes');
       await tester.enterText(
         find.byKey(const ValueKey('panel-notes')),
         'Reviewed',

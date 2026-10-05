@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
@@ -6,107 +5,28 @@ import '../application/tournament_controller.dart';
 import '../domain/history.dart';
 import '../domain/model.dart';
 import 'dialogs.dart';
-import 'result_correction_dialog.dart';
+import 'panels.dart';
+import 'result_correction_panel.dart';
+import 'side_panel.dart';
+import 'theme.dart';
 
-final _travelling = <TournamentController>{};
-
-/// Review dependent operations before changing the live event. Single ordinary
-/// steps retain keyboard speed; restoring across operations needs confirmation.
-Future<void> travel(
-  BuildContext context,
-  TournamentController c,
-  int? node,
-  void Function(bool acceptLosses) move,
-) async {
-  if (node == null || !_travelling.add(c)) return;
-  try {
-    final revision = c.event!.revision;
-    final lost = c.lossesTo(node);
-    final target = c.repository.snapshot(node);
-    final path = c.graph.pathTo(node);
-    final targetGames = {for (final game in target.games) game.id: game};
-    final dependentResult = c.event!.games.any(
-      (g) =>
-          targetGames[g.id] != null &&
-          targetGames[g.id]!.outcome != g.outcome &&
-          c.correctionHasDependencies(g.id),
-    );
-    if (lost.isNotEmpty ||
-        path.undo.length + path.apply.length > 1 ||
-        dependentResult) {
-      final accepted = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Review history change'),
-          scrollable: true,
-          content: SizedBox(
-            width: 580,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'This restores the whole event to the selected transaction. The version you leave remains saved in History.',
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Undo ${path.undo.length} · Apply ${path.apply.length} operations',
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                if (dependentResult)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      'An earlier result changes while later pairings remain. To choose how to handle those rounds, cancel and use Correct a result or Undo this result.',
-                    ),
-                  ),
-                for (final item in describeChanges(c.event!, target))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(item),
-                  ),
-                if (lost.isNotEmpty) ...[
-                  const Divider(),
-                  const Text(
-                    'Recorded play leaves the live event:',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  for (final item in lost) Text(item),
-                ],
-                const SizedBox(height: 12),
-                const Text(
-                  'Printed or shared copies stay unchanged. Replace any affected outputs after restoring.',
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              key: const ValueKey('confirm-history-change'),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Restore event'),
-            ),
-          ],
-        ),
-      );
-      if (accepted != true || !context.mounted) return;
-      if (c.event!.revision != revision) {
-        throw const TournamentException(
-          'The event changed during review. Review this history change again.',
-        );
-      }
-    }
-    move(lost.isNotEmpty);
-  } catch (e) {
-    if (context.mounted) showFailure(context, e);
-  } finally {
-    _travelling.remove(c);
-  }
+/// Whether moving to [node] changes an earlier result while rounds paired
+/// after it stay in place. That needs the correction review, not a restore.
+bool changesDependentResult(TournamentController c, Event target) {
+  final targetGames = {for (final game in target.games) game.id: game};
+  return c.event!.games.any(
+    (g) =>
+        targetGames[g.id] != null &&
+        targetGames[g.id]!.outcome != g.outcome &&
+        c.correctionHasDependencies(g.id),
+  );
 }
+
+/// A routine Undo or Redo moves at once. One that removes recorded play or
+/// changes an earlier result under later pairings is shown in History first.
+bool historyNeedsReview(TournamentController c, int node) =>
+    c.lossesTo(node).isNotEmpty ||
+    changesDependentResult(c, c.repository.snapshot(node));
 
 String historyTime(String timestamp) {
   final t = DateTime.parse(timestamp).toLocal(), now = DateTime.now();
@@ -117,16 +37,41 @@ String historyTime(String timestamp) {
       : '${t.month}/${t.day} $clock';
 }
 
-const _rowHeight = 60.0, _laneWidth = 14.0, _maxLanes = 6;
+/// One line in the list: a change on the event's line, a change that was
+/// undone and kept aside, or the switch that shows or hides those.
+sealed class _Entry {
+  const _Entry();
+}
+
+class _Change extends _Entry {
+  const _Change(this.id, {this.aside = false, this.last = false});
+  final int id;
+
+  /// Undone and replaced by later work, kept in its own group.
+  final bool aside;
+
+  /// The oldest row of its line, where the rail ends.
+  final bool last;
+}
+
+class _Aside extends _Entry {
+  const _Aside(this.root, this.count, this.open);
+  final int root, count;
+  final bool open;
+}
 
 class HistoryPanel extends StatefulWidget {
   const HistoryPanel({
     required this.controller,
     required this.onClose,
+    this.review,
     super.key,
   });
   final TournamentController controller;
   final VoidCallback onClose;
+
+  /// A step Undo or Redo stopped at so its consequences can be read first.
+  final int? review;
   @override
   State<HistoryPanel> createState() => _HistoryPanelState();
 }
@@ -135,38 +80,39 @@ class _HistoryPanelState extends State<HistoryPanel> {
   TournamentController get c => widget.controller;
   final focus = FocusNode(debugLabel: 'history');
   final scroll = ScrollController();
-  final expandedBranches = <int>{};
+  final openAsides = <int>{};
   final rowKeys = <int, GlobalKey>{};
-  final expandedPreviews = <String>{};
+  final expandedLists = <String>{};
   int? selected;
   int? shownHead;
 
   // Saved states are immutable. Only visible operations need to be read.
   final snapshots = <int, Event>{};
-  final changes = <int, List<String>>{};
+  final summaries = <int, HistoryStep>{};
   Event snapshot(int id) => snapshots[id] ??= c.repository.snapshot(id);
-  List<String> step(int id) => changes.putIfAbsent(id, () {
+  HistoryStep summary(int id) => summaries.putIfAbsent(id, () {
     final node = c.graph.nodes[id]!;
-    if (node.parent == null) return const [];
+    if (node.parent == null) return (title: node.action, context: '');
     try {
-      return describeChanges(
-        snapshot(node.parent!),
-        snapshot(id),
-        includePrevious: false,
-      );
+      return summarizeStep(snapshot(node.parent!), snapshot(id));
     } catch (_) {
-      return ['Details unavailable'];
+      return (title: node.action, context: 'Details unavailable');
     }
   });
 
-  String title(int id) {
-    final items = step(id);
-    final text = items.length == 1 ? items.single : c.graph.nodes[id]!.action;
-    final colon = text.indexOf(': ');
-    if (colon < 0 || colon + 2 >= text.length) return text;
-    return text.substring(0, colon + 2) +
-        text[colon + 2].toUpperCase() +
-        text.substring(colon + 3);
+  @override
+  void initState() {
+    super.initState();
+    shownHead = c.graph.head;
+    if (widget.review != null) select(widget.review);
+  }
+
+  @override
+  void didUpdateWidget(HistoryPanel old) {
+    super.didUpdateWidget(old);
+    if (widget.review != null && widget.review != old.review) {
+      select(widget.review);
+    }
   }
 
   @override
@@ -177,6 +123,13 @@ class _HistoryPanelState extends State<HistoryPanel> {
   }
 
   void select(int? id) {
+    // A change kept aside opens its group so the selection is visible.
+    final graph = c.graph;
+    if (id != null && graph.style(id) == NodeStyle.branch) {
+      for (final entry in graph.branches.entries) {
+        if (entry.value.contains(id)) openAsides.add(entry.key);
+      }
+    }
     setState(() => selected = id);
     focus.requestFocus();
     if (id == null) return;
@@ -196,34 +149,70 @@ class _HistoryPanelState extends State<HistoryPanel> {
     });
   }
 
-  void back() =>
-      travel(context, c, c.graph.back, (a) => c.undo(acceptLosses: a));
-  void forward() =>
-      travel(context, c, c.graph.forward, (a) => c.redo(acceptLosses: a));
-  void restore(int id) =>
-      travel(context, c, id, (a) => c.restore(id, acceptLosses: a));
+  /// The event's line newest first, with each group of undone changes just
+  /// above the change they branched from.
+  List<_Entry> entries(HistoryGraph graph) {
+    final line =
+        graph.nodes.keys
+            .where((id) => graph.style(id) != NodeStyle.branch)
+            .toList()
+          ..sort((a, b) => b - a);
+    final asides = <int, List<int>>{};
+    for (final root in graph.branches.keys) {
+      (asides[graph.nodes[root]!.parent!] ??= []).add(root);
+    }
+    return [
+      for (final id in line) ...[
+        for (final root in asides[id] ?? <int>[]) ...[
+          _Aside(root, graph.branches[root]!.length, openAsides.contains(root)),
+          if (openAsides.contains(root))
+            for (final (i, aside)
+                in (graph.branches[root]!.toList()..sort((a, b) => b - a))
+                    .indexed)
+              _Change(
+                aside,
+                aside: true,
+                last: i == graph.branches[root]!.length - 1,
+              ),
+        ],
+        _Change(id, last: id == line.last),
+      ],
+    ];
+  }
+
+  void moveTo(int id) {
+    final graph = c.graph;
+    try {
+      if (id == graph.back) {
+        c.undo(acceptLosses: true);
+      } else if (id == graph.forward) {
+        c.redo(acceptLosses: true);
+      } else {
+        c.restore(id, acceptLosses: true);
+      }
+    } catch (e) {
+      if (mounted) showFailure(context, e);
+    }
+  }
 
   KeyEventResult key(FocusNode _, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
-    final rows = c.graph.folded(expandedBranches).rows;
-    final index = rows.indexWhere(
-      (r) => r.node.id == (selected ?? c.graph.head),
-    );
+    final rows = [
+      for (final e in entries(c.graph))
+        if (e is _Change) e.id,
+    ];
+    final index = rows.indexOf(selected ?? c.graph.head ?? -1);
     switch (event.logicalKey) {
-      case LogicalKeyboardKey.arrowLeft:
-        back();
-      case LogicalKeyboardKey.arrowRight:
-        forward();
       case LogicalKeyboardKey.arrowUp when index > 0:
-        select(rows[index - 1].node.id);
+        select(rows[index - 1]);
       case LogicalKeyboardKey.arrowDown
           when index >= 0 && index < rows.length - 1:
-        select(rows[index + 1].node.id);
+        select(rows[index + 1]);
       case LogicalKeyboardKey.enter || LogicalKeyboardKey.numpadEnter
           when selected != null && selected != c.graph.head:
-        restore(selected!);
+        moveTo(selected!);
       case LogicalKeyboardKey.escape:
         if (selected != null) {
           select(null);
@@ -243,225 +232,222 @@ class _HistoryPanelState extends State<HistoryPanel> {
       shownHead = graph.head;
       selected = null;
     }
-    final visible = graph.folded(expandedBranches);
-    final lanes = math.min(
-      _maxLanes,
-      visible.rows.fold(
-        1,
-        (n, r) => math.max(
-          n,
-          math.max(r.lane + 1, math.max(r.top.length, r.bottom.length)),
+    final list = entries(graph);
+    final muted = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
+    // Many changes land in the same minute; the time shows where it changes.
+    String? lastTime;
+    final times = <int, String?>{};
+    for (final e in list) {
+      if (e is! _Change) continue;
+      final t = historyTime(graph.nodes[e.id]!.timestamp);
+      times[e.id] = t == lastTime ? null : t;
+      lastTime = t;
+    }
+    return SidePanel(
+      title: 'History',
+      onClose: widget.onClose,
+      scrolls: false,
+      children: [
+        Focus(
+          focusNode: focus,
+          onKeyEvent: key,
+          child: ListView.builder(
+            key: const ValueKey('history-graph'),
+            controller: scroll,
+            scrollCacheExtent: const ScrollCacheExtent.pixels(600),
+            // The explanation follows the changes, so large text never
+            // pushes the newest change out of view.
+            itemCount: list.length + 1,
+            itemBuilder: (context, i) => i == list.length
+                ? Padding(
+                    key: const ValueKey('history-keys'),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                    child: Text(
+                      'Choosing a change only shows it. The event moves when you go back.\n'
+                      '↑ ↓ choose · Enter go back · Ctrl+Z undo',
+                      style: muted.copyWith(height: 1.5),
+                    ),
+                  )
+                : switch (list[i]) {
+                    final _Aside a => _asideToggle(context, a),
+                    final _Change e => _row(
+                      context,
+                      e,
+                      graph,
+                      times[e.id],
+                      above: i > 0,
+                    ),
+                  },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _asideToggle(BuildContext context, _Aside a) {
+    final colors = Theme.of(context).colorScheme;
+    final noun = a.count == 1 ? 'change' : 'changes';
+    return CustomPaint(
+      painter: _Rail(colors: colors, kind: _RailKind.toggle, open: a.open),
+      child: Padding(
+        padding: const EdgeInsets.only(left: _asideIndent - 8),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: ValueKey('history-branch-${a.root}'),
+            onPressed: () {
+              setState(() {
+                if (a.open) {
+                  openAsides.remove(a.root);
+                  if (c.graph.branches[a.root]!.contains(selected)) {
+                    selected = null;
+                  }
+                } else {
+                  openAsides.add(a.root);
+                }
+              });
+              focus.requestFocus();
+            },
+            icon: Icon(a.open ? Icons.expand_less : Icons.expand_more),
+            label: Text(
+              a.open
+                  ? 'Hide ${a.count} undone $noun'
+                  : '${a.count} undone $noun, kept',
+            ),
+          ),
         ),
       ),
     );
-    final small = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
-    return Container(
-      width: 400,
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLowest,
-        border: Border(left: BorderSide(color: colors.outlineVariant)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
-            child: Row(
-              children: [
-                Text('History', style: Theme.of(context).textTheme.titleMedium),
-                const Spacer(),
-                IconButton(
-                  tooltip: c.canUndo ? 'Undo ${c.undoLabel}' : 'At the start',
-                  icon: const Icon(Icons.arrow_back, size: 19),
-                  onPressed: c.canUndo ? back : null,
-                  visualDensity: VisualDensity.compact,
-                ),
-                IconButton(
-                  tooltip: c.canRedo ? 'Redo ${c.redoLabel}' : 'Nothing ahead',
-                  icon: const Icon(Icons.arrow_forward, size: 19),
-                  onPressed: c.canRedo ? forward : null,
-                  visualDensity: VisualDensity.compact,
-                ),
-                IconButton(
-                  tooltip: 'Close history (Ctrl+H)',
-                  icon: const Icon(Icons.close, size: 20),
-                  onPressed: widget.onClose,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            key: const ValueKey('history-keys'),
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(child: Text('Review · live unchanged', style: small)),
-                const Tooltip(
-                  message:
-                      '← → undo and redo · ↑ ↓ review · Enter restores · Esc closes details or History',
-                  child: Icon(Icons.keyboard_outlined, size: 20),
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: colors.outlineVariant),
-          Expanded(
-            child: Focus(
-              focusNode: focus,
-              onKeyEvent: key,
-              child: ListView.builder(
-                key: const ValueKey('history-graph'),
-                controller: scroll,
-                scrollCacheExtent: const ScrollCacheExtent.pixels(600),
-                itemCount: visible.rows.length,
-                itemBuilder: (context, i) {
-                  final row = visible.rows[i], id = row.node.id;
-                  final isHead = id == graph.head;
-                  final branch = graph.branches[id];
-                  final expanded = expandedBranches.contains(id);
-                  final isSelected = selected == id;
-                  return Material(
-                    color: isSelected
-                        ? colors.primary.withValues(alpha: 0.07)
-                        : Colors.transparent,
-                    child: IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SizedBox(
-                            width: 8 + lanes * _laneWidth,
-                            child: CustomPaint(
-                              painter: _GraphPainter(row, graph, colors),
+  }
+
+  Widget _row(
+    BuildContext context,
+    _Change e,
+    HistoryGraph graph,
+    String? time, {
+    required bool above,
+  }) {
+    final id = e.id, colors = Theme.of(context).colorScheme;
+    final isHead = id == graph.head, isSelected = selected == id;
+    final style = graph.style(id);
+    final step = summary(id);
+    final muted = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
+    final scale = MediaQuery.textScalerOf(context);
+    // The dot sits on the first line of the title at any text size.
+    final dotY = _rowPadding + scale.scale(14) * 1.4 / 2;
+    final state = isHead
+        ? 'Now'
+        : style == NodeStyle.past
+        ? null
+        : 'Undone';
+    return Material(
+      color: isSelected ? colors.surfaceContainerHigh : Colors.transparent,
+      child: CustomPaint(
+        painter: _Rail(
+          colors: colors,
+          kind: e.aside
+              ? _RailKind.aside
+              : isHead
+              ? _RailKind.head
+              : style == NodeStyle.past
+              ? _RailKind.past
+              : _RailKind.ahead,
+          above: above,
+          below: !e.last,
+          dotY: dotY,
+          aside: e.aside,
+        ),
+        child: Padding(
+          padding: EdgeInsets.only(left: e.aside ? _asideIndent : _indent),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(
+                button: true,
+                selected: isSelected,
+                label: [
+                  step.title,
+                  if (step.context.isNotEmpty) step.context,
+                  ?state,
+                  historyTime(graph.nodes[id]!.timestamp),
+                ].join(', '),
+                excludeSemantics: true,
+                child: InkWell(
+                  key: ValueKey('history-$id'),
+                  onTap: () => select(isSelected ? null : id),
+                  child: Container(
+                    key: rowKeys.putIfAbsent(id, () => GlobalKey()),
+                    padding: const EdgeInsets.fromLTRB(
+                      0,
+                      _rowPadding,
+                      16,
+                      _rowPadding,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                step.title,
+                                maxLines: isSelected ? null : 2,
+                                overflow: isSelected
+                                    ? null
+                                    : TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  height: 1.4,
+                                  fontWeight: isHead || isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: style == NodeStyle.past
+                                      ? colors.onSurface
+                                      : colors.onSurfaceVariant,
+                                ),
+                              ),
                             ),
-                          ),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                InkWell(
-                                  key: ValueKey('history-$id'),
-                                  onTap: () => select(isSelected ? null : id),
-                                  child: Container(
-                                    key: rowKeys.putIfAbsent(
-                                      id,
-                                      () => GlobalKey(),
-                                    ),
-                                    constraints: const BoxConstraints(
-                                      minHeight: _rowHeight,
-                                    ),
-                                    padding: const EdgeInsets.fromLTRB(
-                                      8,
-                                      12,
-                                      12,
-                                      12,
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Wrap(
-                                          spacing: 8,
-                                          runSpacing: 4,
-                                          crossAxisAlignment:
-                                              WrapCrossAlignment.center,
-                                          children: [
-                                            Text(
-                                              '#$id',
-                                              style: small.copyWith(
-                                                fontFamily: 'SourceCodePro',
-                                              ),
-                                            ),
-                                            if (isHead)
-                                              Text(
-                                                'Current',
-                                                style: small.copyWith(
-                                                  color: colors.primary,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              )
-                                            else if (graph.style(id) ==
-                                                NodeStyle.future)
-                                              Text('Ahead', style: small),
-                                            Text(
-                                              historyTime(row.node.timestamp),
-                                              style: small,
-                                            ),
-                                            Icon(
-                                              isSelected
-                                                  ? Icons.expand_less
-                                                  : Icons.expand_more,
-                                              size: 15,
-                                              color: colors.onSurfaceVariant,
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          title(id),
-                                          maxLines: isSelected ? null : 2,
-                                          overflow: isSelected
-                                              ? null
-                                              : TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            height: 1.35,
-                                            fontWeight: FontWeight.w600,
-                                            color: colors.onSurface,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                            if (time != null)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 12,
+                                  top: 2,
+                                ),
+                                child: Text(
+                                  time,
+                                  style: muted.copyWith(
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
                                 ),
-                                if (branch != null)
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: TextButton.icon(
-                                      key: ValueKey('history-branch-$id'),
-                                      onPressed: () {
-                                        setState(() {
-                                          if (expanded) {
-                                            expandedBranches.remove(id);
-                                            if (branch.contains(selected)) {
-                                              selected = id;
-                                            }
-                                          } else {
-                                            expandedBranches.add(id);
-                                          }
-                                        });
-                                        focus.requestFocus();
-                                      },
-                                      icon: Icon(
-                                        expanded
-                                            ? Icons.unfold_less
-                                            : Icons.account_tree_outlined,
-                                        size: 15,
-                                      ),
-                                      label: Text(
-                                        '${expanded ? 'Collapse' : 'Saved'} branch · ${branch.length} ${branch.length == 1 ? 'operation' : 'operations'}',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ),
-                                  ),
-                                if (isSelected) _details(context, id, graph),
+                              ),
+                          ],
+                        ),
+                        if (step.context.isNotEmpty || state != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (state != null) StatusPill(state),
+                                if (step.context.isNotEmpty)
+                                  Text(step.context, style: muted),
                               ],
                             ),
                           ),
-                        ],
-                      ),
+                      ],
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
-            ),
+              if (isSelected) _details(context, id, graph),
+            ],
           ),
-          Divider(height: 1, color: colors.outlineVariant),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Text('All branches are saved.', style: small),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -470,152 +456,150 @@ class _HistoryPanelState extends State<HistoryPanel> {
     final colors = Theme.of(context).colorScheme;
     final path = graph.pathTo(id);
     final parent = graph.nodes[id]!.parent;
+    final small = TextStyle(fontSize: 13, height: 1.4, color: colors.onSurface);
+    final muted = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
     List<String> items;
-    ({String gameId, Outcome outcome})? resultUndo;
+    ({String gameId, Outcome outcome})? fix;
     List<String> lost;
+    bool dependent;
     try {
       items = parent == null
           ? []
           : describeChanges(snapshot(parent), snapshot(id));
-      resultUndo = parent == null
+      fix = parent == null
           ? null
           : reversibleResult(snapshot(parent), snapshot(id), c.event!);
       lost = id == graph.head ? [] : playLost(c.event!, snapshot(id));
+      dependent = id != graph.head && changesDependentResult(c, snapshot(id));
     } catch (_) {
       return const Padding(
-        padding: EdgeInsets.all(12),
+        padding: EdgeInsets.only(bottom: 12, right: 16),
         child: Text('This saved state could not be read.'),
       );
     }
-    Widget label(String text) => Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 8),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: colors.onSurfaceVariant,
-        ),
-      ),
+    Widget heading(String text) => Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 4),
+      child: Text(text, style: Theme.of(context).textTheme.titleSmall),
     );
-    Widget operation(int operationId) => Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 44,
-            child: Text(
-              '#$operationId',
-              style: TextStyle(
-                fontSize: 12,
-                fontFamily: 'SourceCodePro',
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              title(operationId),
-              style: const TextStyle(fontSize: 12, height: 1.4),
-            ),
-          ),
-        ],
-      ),
-    );
-    List<Widget> operations(String verb, List<int> ids) {
+    List<Widget> changes(String what, List<int> ids) {
       if (ids.isEmpty) return [];
-      final key = '$id|${graph.head}|$verb';
-      final expanded = expandedPreviews.contains(key);
+      final key = '$id|${graph.head}|$what';
+      final open = expandedLists.contains(key);
       return [
-        label(
-          '$verb ${ids.length} ${ids.length == 1 ? 'operation' : 'operations'}',
+        heading(
+          '$what ${ids.length} ${ids.length == 1 ? 'change' : 'changes'}',
         ),
-        for (final operationId in expanded ? ids : ids.take(4))
-          operation(operationId),
+        for (final other in open ? ids : ids.take(4))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(summary(other).title, style: small),
+          ),
         if (ids.length > 4)
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
               onPressed: () => setState(() {
-                if (expanded) {
-                  expandedPreviews.remove(key);
-                } else {
-                  expandedPreviews.add(key);
-                }
+                if (!expandedLists.remove(key)) expandedLists.add(key);
               }),
-              child: Text(
-                expanded ? 'Show fewer' : 'Show ${ids.length - 4} more',
-              ),
+              child: Text(open ? 'Show fewer' : 'Show ${ids.length - 4} more'),
             ),
           ),
       ];
     }
 
+    final style = graph.style(id);
+    final moveLabel = switch (style) {
+      NodeStyle.past => 'Go back to here',
+      NodeStyle.future => 'Redo up to here',
+      NodeStyle.branch => 'Switch to this version',
+    };
+    final move = fix == null
+        ? FilledButton.icon(
+            key: const ValueKey('history-restore'),
+            onPressed: () => moveTo(id),
+            icon: const Icon(Icons.restore),
+            label: Text(moveLabel),
+          )
+        : OutlinedButton.icon(
+            key: const ValueKey('history-restore'),
+            onPressed: () => moveTo(id),
+            icon: const Icon(Icons.restore),
+            label: Text(moveLabel),
+          );
     return Padding(
       key: ValueKey('history-details-$id'),
-      padding: const EdgeInsets.fromLTRB(8, 0, 16, 12),
+      padding: const EdgeInsets.fromLTRB(0, 0, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          label(
-            'Transaction #$id · ${historyTime(graph.nodes[id]!.timestamp)}',
-          ),
-          if (items.isNotEmpty) ...[
-            for (final item in items)
+          for (final item in items)
+            // A one-line step already reads in full in its title.
+            if (items.length > 1 ||
+                item.toLowerCase() != summary(id).title.toLowerCase())
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  item,
-                  style: const TextStyle(fontSize: 12, height: 1.4),
-                ),
+                child: Text(item, style: small),
               ),
-          ],
-          if (resultUndo != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                key: const ValueKey('history-undo-result'),
-                icon: const Icon(Icons.undo, size: 16),
-                label: const Text('Undo this result…'),
-                onPressed: () => reviewResultCorrection(
-                  context,
-                  c,
-                  resultUndo!.gameId,
-                  outcome: resultUndo.outcome,
-                  reason: 'Undo result from transaction #$id',
-                ),
-              ),
-            ),
           if (id == graph.head)
-            Text(
-              'You are here.',
-              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('The event is here now.', style: muted),
             )
           else ...[
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.icon(
-                key: const ValueKey('history-restore'),
-                onPressed: () => restore(id),
-                icon: const Icon(Icons.restore, size: 16),
-                label: Text('Restore #$id'),
-              ),
-            ),
-            ...operations('Undo', path.undo),
-            ...operations('Apply', path.apply),
+            ...changes('Undoes', path.undo),
+            ...changes('Brings back', path.apply),
             if (lost.isNotEmpty) ...[
-              label('Recorded play affected'),
-              for (final item in lost)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    item,
-                    style: TextStyle(fontSize: 12, color: colors.error),
-                  ),
-                ),
+              const SizedBox(height: 16),
+              _Warning(
+                title: 'Removes recorded play',
+                lines: lost,
+                note: 'Printed or shared copies stay as they are.',
+              ),
             ],
+            if (dependent && fix == null) ...[
+              const SizedBox(height: 16),
+              _Warning(
+                title:
+                    'An earlier result changes while later rounds stay paired',
+                lines: const [],
+                note:
+                    'To choose what happens to those rounds, use Correct a result in Pairings instead.',
+              ),
+            ],
+            const SizedBox(height: 16),
+            if (fix != null) ...[
+              FilledButton.icon(
+                key: const ValueKey('history-undo-result'),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Fix this result'),
+                onPressed: () {
+                  final dock = Dock.maybeOf(context);
+                  openResultCorrection(
+                    context,
+                    c,
+                    fix!.gameId,
+                    outcome: fix.outcome,
+                    onDone: () => dock?.claim('history'),
+                  );
+                },
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 12),
+                child: Text(
+                  'Changes only this game. Everything after it stays.',
+                  style: muted,
+                ),
+              ),
+            ],
+            move,
+            if (path.undo.length + path.apply.length > 1 || fix != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Moves the whole event to this point. Nothing is deleted; you can come back.',
+                  style: muted,
+                ),
+              ),
           ],
         ],
       ),
@@ -623,87 +607,200 @@ class _HistoryPanelState extends State<HistoryPanel> {
   }
 }
 
-class _GraphPainter extends CustomPainter {
-  _GraphPainter(this.row, this.graph, this.colors);
-  final GraphRow row;
-  final HistoryGraph graph;
-  final ColorScheme colors;
+/// Consequences worth reading before acting, marked by an icon and a title
+/// rather than by colour.
+class _Warning extends StatelessWidget {
+  const _Warning({required this.title, required this.lines, this.note});
+  final String title;
+  final List<String> lines;
+  final String? note;
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            size: 20,
+            color: colors.onErrorContainer,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DefaultTextStyle.merge(
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: colors.onErrorContainer,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  for (final line in lines) Text(line),
+                  if (note != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(note!),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-  Color color(int child) => switch (graph.style(child)) {
-    NodeStyle.past => colors.primary,
-    NodeStyle.future => colors.primary.withValues(alpha: 0.4),
-    NodeStyle.branch => colors.outline,
-  };
+const _rowPadding = 12.0;
+const _spineX = 16.0, _asideX = 32.0;
+const _indent = 32.0, _asideIndent = 48.0;
+
+enum _RailKind { past, head, ahead, aside, toggle }
+
+/// One straight rail for the event's line; undone changes hang beside it on
+/// a second rail that rejoins where they branched off.
+class _Rail extends CustomPainter {
+  _Rail({
+    required this.colors,
+    required this.kind,
+    this.above = true,
+    this.below = true,
+    this.dotY = 0,
+    this.aside = false,
+    this.open = false,
+  });
+  final ColorScheme colors;
+  final _RailKind kind;
+  final bool above, below, aside, open;
+  final double dotY;
 
   @override
   void paint(Canvas canvas, Size size) {
-    double x(int lane) => 12 + math.min(lane, _maxLanes - 1) * _laneWidth;
-    const cy = _rowHeight / 2;
-    final line = Paint()
+    // Undone changes ahead of the event draw lighter than its past.
+    final newer = Paint()
       ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-    final lanes = math.max(row.top.length, row.bottom.length);
-    for (var i = 0; i < lanes; i++) {
-      final top = i < row.top.length ? row.top[i] : null;
-      final bottom = i < row.bottom.length ? row.bottom[i] : null;
-      if (i == row.lane) {
-        if (top != null) {
-          canvas.drawLine(
-            Offset(x(i), 0),
-            Offset(x(i), cy),
-            line..color = color(top),
-          );
-        }
-        if (bottom != null) {
-          canvas.drawLine(
-            Offset(x(i), cy),
-            Offset(x(i), size.height),
-            line..color = color(bottom),
-          );
-        }
-      } else if (row.merges.contains(i) && top != null) {
-        canvas.drawPath(
-          Path()
-            ..moveTo(x(i), 0)
-            ..quadraticBezierTo(x(i), cy, x(row.lane), cy),
-          line..color = color(top),
-        );
-      } else if (top != null) {
+      ..color = kind == _RailKind.past ? colors.outline : colors.outlineVariant;
+    final older = Paint()
+      ..strokeWidth = 2
+      ..color = kind == _RailKind.ahead
+          ? colors.outlineVariant
+          : colors.outline;
+    final side = Paint()
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..color = colors.outlineVariant;
+    final spine = Paint()
+      ..strokeWidth = 2
+      ..color = colors.outline;
+    switch (kind) {
+      case _RailKind.toggle:
         canvas.drawLine(
-          Offset(x(i), 0),
-          Offset(x(i), size.height),
-          line..color = color(top),
+          const Offset(_spineX, 0),
+          Offset(_spineX, size.height),
+          spine,
         );
-      }
+        if (!open) {
+          canvas.drawPath(
+            Path()
+              ..moveTo(_asideX, size.height / 2)
+              ..quadraticBezierTo(_asideX, size.height, _spineX, size.height),
+            side,
+          );
+        } else {
+          canvas.drawLine(
+            Offset(_asideX, size.height / 2),
+            Offset(_asideX, size.height),
+            side,
+          );
+        }
+        return;
+      case _RailKind.aside:
+        canvas.drawLine(
+          const Offset(_spineX, 0),
+          Offset(_spineX, size.height),
+          spine,
+        );
+        canvas.drawLine(const Offset(_asideX, 0), Offset(_asideX, dotY), side);
+        if (below) {
+          canvas.drawLine(
+            Offset(_asideX, dotY),
+            Offset(_asideX, size.height),
+            side,
+          );
+        } else {
+          canvas.drawPath(
+            Path()
+              ..moveTo(_asideX, dotY)
+              ..quadraticBezierTo(_asideX, size.height, _spineX, size.height),
+            side,
+          );
+        }
+        _hollow(canvas, const Offset(_asideX, 0).translate(0, dotY));
+        return;
+      case _RailKind.past || _RailKind.head || _RailKind.ahead:
+        if (above) {
+          canvas.drawLine(
+            const Offset(_spineX, 0),
+            Offset(_spineX, dotY),
+            newer,
+          );
+        }
+        if (below) {
+          canvas.drawLine(
+            Offset(_spineX, dotY),
+            Offset(_spineX, size.height),
+            older,
+          );
+        }
+        final center = Offset(_spineX, dotY);
+        if (kind == _RailKind.head) {
+          canvas.drawCircle(center, 7, Paint()..color = colors.onSurface);
+          canvas.drawCircle(
+            center,
+            3,
+            Paint()..color = colors.surfaceContainerLowest,
+          );
+        } else if (kind == _RailKind.past) {
+          canvas.drawCircle(center, 4.5, Paint()..color = colors.outline);
+        } else {
+          _hollow(canvas, center);
+        }
     }
-    final id = row.node.id, center = Offset(x(row.lane), cy);
-    final style = graph.style(id);
-    final ring = color(id);
-    if (id == graph.head) {
-      canvas.drawCircle(
-        center,
-        7,
-        Paint()..color = ring.withValues(alpha: 0.25),
-      );
-    }
+  }
+
+  void _hollow(Canvas canvas, Offset center) {
     canvas.drawCircle(
       center,
-      id == graph.head ? 5 : 4,
-      Paint()
-        ..color = style == NodeStyle.past
-            ? ring
-            : colors.surfaceContainerLowest,
+      4.5,
+      Paint()..color = colors.surfaceContainerLowest,
     );
     canvas.drawCircle(
       center,
-      id == graph.head ? 5 : 4,
+      4.5,
       Paint()
-        ..color = ring
+        ..color = colors.outline
         ..strokeWidth = 1.5
         ..style = PaintingStyle.stroke,
     );
   }
 
   @override
-  bool shouldRepaint(_GraphPainter old) => true;
+  bool shouldRepaint(_Rail old) =>
+      old.colors != colors ||
+      old.kind != kind ||
+      old.above != above ||
+      old.below != below ||
+      old.dotY != dotY ||
+      old.open != open;
 }

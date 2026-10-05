@@ -26,7 +26,12 @@ String crosstableCell(
         ..sort((a, b) => a.leg.compareTo(b.leg));
   if (games.isEmpty) {
     final bye = round.byes.where((b) => b.player == playerId).firstOrNull;
-    return bye == null ? '--' : 'BYE ${scoreText(bye.points)}';
+    if (bye == null) return '--';
+    return switch (bye.points) {
+      2 => 'B---',
+      1 => 'H---',
+      _ => 'U---',
+    };
   }
   return games
       .map((game) {
@@ -38,7 +43,7 @@ String crosstableCell(
         final code = !game.outcome.resolved
             ? '?'
             : !game.outcome.played
-            ? 'F${scoreText(points)}'
+            ? (points == 2 ? 'X' : 'F')
             : points == 2
             ? 'W'
             : points == 1
@@ -417,9 +422,53 @@ Future<Uint8List> reportPdf(
         cellPadding: const pw.EdgeInsets.all(6),
       ),
     );
-    if (kind == ReportKind.sections ||
-        kind == ReportKind.pairings ||
-        kind == ReportKind.packet) {
+    if (kind == ReportKind.sections) {
+      // The section's players by pairing number. Pairings print from the
+      // Pairings view, so this sheet never depends on a round existing.
+      title('Players');
+      widgets.add(
+        pw.TableHelper.fromTextArray(
+          headers: ['#', 'Player', 'Rating', 'US Chess ID'],
+          data: [
+            for (final (i, id) in s.players.indexed)
+              [
+                '${i + 1}',
+                '${source.player(id).name}'
+                    '${source.player(id).withdrawn ? ' (withdrawn)' : ''}',
+                source.player(id).rating == 0
+                    ? 'UNR'
+                    : '${source.player(id).rating}',
+                source.player(id).memberId,
+              ],
+          ],
+          columnWidths: {
+            0: const pw.FixedColumnWidth(32),
+            1: const pw.FlexColumnWidth(),
+            2: const pw.FixedColumnWidth(64),
+            3: const pw.FixedColumnWidth(96),
+          },
+          cellAlignments: {
+            0: pw.Alignment.centerRight,
+            1: pw.Alignment.centerLeft,
+            2: pw.Alignment.centerRight,
+            3: pw.Alignment.centerLeft,
+          },
+          headerAlignments: {
+            0: pw.Alignment.centerRight,
+            1: pw.Alignment.centerLeft,
+            2: pw.Alignment.centerRight,
+            3: pw.Alignment.centerLeft,
+          },
+          cellStyle: const pw.TextStyle(fontSize: 12),
+          headerStyle: pw.TextStyle(
+            fontSize: 12,
+            fontWeight: pw.FontWeight.bold,
+          ),
+          cellPadding: const pw.EdgeInsets.all(6),
+        ),
+      );
+    }
+    if (kind == ReportKind.pairings || kind == ReportKind.packet) {
       // A quad prints its complete reusable grid from every print entry. Larger
       // round robins and Swiss keep board tables, which players need to find
       // their seats, and honor the selected round.

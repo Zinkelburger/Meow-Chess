@@ -695,7 +695,7 @@ class TournamentControllerCore extends ChangeNotifier {
   void correctResult(
     ResultCorrection review,
     Outcome outcome, {
-    required String reason,
+    String reason = '',
     int? reopenFrom,
     bool confirmedUnstarted = false,
   }) {
@@ -712,9 +712,10 @@ class TournamentControllerCore extends ChangeNotifier {
       confirmedUnstarted: confirmedUnstarted,
     );
     change(
-      'Correct ${review.section.name} R${review.round.number}, board ${review.game.board}: '
-      '${review.game.outcome.label} → ${outcome.label} · '
-      '${reopenFrom == null ? 'Keep later pairings' : 'Reopen from round $reopenFrom'} · ${reason.trim()}',
+      'Correct ${review.section.name} round ${review.round.number}, board ${review.game.board}: '
+      '${review.game.outcome.label} → ${outcome.label}'
+      '${reopenFrom == null ? '' : ', unpair from round $reopenFrom'}'
+      '${reason.trim().isEmpty ? '' : ' · ${reason.trim()}'}',
       next,
     );
   }

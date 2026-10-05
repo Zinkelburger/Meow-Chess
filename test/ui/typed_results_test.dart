@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/ui/players_view.dart';
+import 'package:meow_chess/ui/result_format.dart';
 import 'package:meow_chess/ui/result_keys.dart';
 import 'package:meow_chess/ui/results_view.dart';
 import 'package:meow_chess/ui/theme.dart';
@@ -53,6 +54,23 @@ void main() {
         expect(resultFromKey(key(value, '½'), white: white), isNull);
       }
     }
+  });
+
+  test('F marks the focused player a no-show; X is a forfeit win', () {
+    final f = key(LogicalKeyboardKey.keyF), x = key(LogicalKeyboardKey.keyX);
+    expect(resultFromKey(f, white: true), Outcome.blackForfeit);
+    expect(resultFromKey(f, white: false), Outcome.whiteForfeit);
+    expect(resultFromKey(x, white: true), Outcome.whiteForfeit);
+    expect(resultFromKey(x, white: false), Outcome.blackForfeit);
+    // F on the second player of a board whose opponent is already absent.
+    expect(
+      resultFromKey(f, white: false, current: Outcome.blackForfeit),
+      Outcome.doubleForfeit,
+    );
+    expect(scoreMark(Outcome.whiteForfeit, white: true), 'X');
+    expect(scoreMark(Outcome.whiteForfeit, white: false), 'F');
+    expect(scoreMark(Outcome.doubleForfeit, white: true), 'F');
+    expect([byeMark(2), byeMark(1), byeMark(0)], ['B---', 'H---', 'U---']);
   });
 
   testWidgets(

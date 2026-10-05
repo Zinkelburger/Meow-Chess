@@ -15,8 +15,11 @@ import '../infrastructure/member_directory.dart';
 import 'member_identity_lookup.dart';
 import '../domain/member_observation.dart';
 
+import 'player_actions.dart';
 import 'side_panel.dart';
 import 'player_format.dart';
+import 'rating_refresh.dart';
+import 'rating_review_panel.dart';
 
 class PlayerPanel extends StatefulWidget {
   const PlayerPanel({
@@ -28,10 +31,17 @@ class PlayerPanel extends StatefulWidget {
     this.identityLookup = fetchMembership,
     this.memberSearch = searchMembers,
     this.focusField,
+    this.ratingReview,
+    this.onBackToReview,
     super.key,
   });
   final TournamentController controller;
   final String? focusField;
+
+  /// An open USCF rating review. The player stays fully editable; this
+  /// player's proposal shows under the Rating field.
+  final RatingRefresh? ratingReview;
+  final VoidCallback? onBackToReview;
 
   /// Where a new player goes by default: the section on screen.
   final String? sectionId;
@@ -53,17 +63,91 @@ class PlayerPanelState extends State<PlayerPanel> {
     ('rating', 'Rating', 1),
     ('state', 'State (2 letters)', 1),
     ('reportName', 'Name on rating report', 1),
-    ('team', 'Team / mixed-doubles name', 1),
-    ('notes', 'Private notes', 3),
+    ('team', 'Team', 1),
+    ('notes', 'Notes', 3),
   ];
   final text = {for (final f in _fields) f.$1: TextEditingController()};
   final fieldFocus = {for (final f in _fields) f.$1: FocusNode()};
 
+  /// Collapsible groups below the identity fields. Adding a player keeps
+  /// the extras under one "More details" group so a walk-up stays quick.
+  static const _groups = [
+    'byes',
+    'uschess',
+    'requests',
+    'team',
+    'notes',
+    'more',
+  ];
+  final groupFocus = {for (final g in _groups) g: FocusNode()};
+
+  /// Groups open in this panel. A TD's own open/close choice is remembered
+  /// across players; otherwise a group opens where it is likely needed.
+  final expanded = <String>{};
+
+  String? groupOf(String field) => widget.player == null
+      ? switch (field) {
+          'state' || 'reportName' || 'team' || 'notes' => 'more',
+          _ => null,
+        }
+      : switch (field) {
+          'reportName' => 'uschess',
+          'team' => 'team',
+          'notes' => 'notes',
+          'byes' => 'byes',
+          'avoid' => 'requests',
+          _ => null,
+        };
+
+  String _groupPref(String group) => 'player-panel-group-$group';
+
+  void openGroups() {
+    expanded.clear();
+    final e = c.event!, p = widget.player;
+    final s = p == null ? null : e.sectionOf(p.id);
+    bool byDefault(String group) => switch (group) {
+      'byes' => s == null || s.format == Format.swiss,
+      'uschess' =>
+        p != null &&
+            MembershipSummary(p, eventDate: e.lastDate).severity !=
+                MembershipSeverity.normal,
+      _ => false,
+    };
+    for (final group in _groups) {
+      final saved = c.workspaceState.read(_groupPref(group));
+      if (saved == null ? byDefault(group) : saved == 'open') {
+        expanded.add(group);
+      }
+    }
+    // A restored draft or move shows where it was being edited.
+    for (final (key, _, _) in _fields) {
+      if (groupOf(key) case final group? when draft.isEdited(key)) {
+        expanded.add(group);
+      }
+    }
+    moving = moveTo != null;
+    if (groupOf(widget.focusField ?? '') case final group?) {
+      expanded.add(group);
+    }
+  }
+
+  void toggleGroup(String group) {
+    final open = !expanded.contains(group);
+    setState(() => open ? expanded.add(group) : expanded.remove(group));
+    c.workspaceState.write(_groupPref(group), open ? 'open' : 'closed');
+  }
+
   void focusRequestedField() {
-    final node = fieldFocus[widget.focusField ?? 'name'];
-    if (node == null) return;
+    final field = widget.focusField ?? 'name';
+    final group = groupOf(field);
+    if (group != null && !expanded.contains(group)) {
+      setState(() => expanded.add(group));
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      final node =
+          fieldFocus[field] ?? (group == null ? null : groupFocus[group]);
+      if (node == null) return;
       node.requestFocus();
       if (node.context != null) {
         Scrollable.ensureVisible(node.context!, alignment: 0.2);
@@ -77,7 +161,10 @@ class PlayerPanelState extends State<PlayerPanel> {
   final moveTarget = TextEditingController();
   String? error;
 
-  /// A move waiting for a reason, because play has started.
+  /// The move form under the action row is open.
+  bool moving = false;
+
+  /// The chosen destination, and in a quad who exchanges places.
   String? moveTo;
   String? swapWith;
   int? moveRevision;
@@ -152,6 +239,7 @@ class PlayerPanelState extends State<PlayerPanel> {
     restoreDraft();
     _lastMemberIdText = text['memberId']!.text;
     text['memberId']!.addListener(memberIdChanged);
+    openGroups();
     focusRequestedField();
   }
 
@@ -188,6 +276,8 @@ class PlayerPanelState extends State<PlayerPanel> {
     });
     joinSection = widget.sectionId;
     moveTo = null;
+    swapWith = null;
+    moving = false;
     setState(() => error = null);
   }
 
@@ -207,6 +297,7 @@ class PlayerPanelState extends State<PlayerPanel> {
     }
     if (old.player?.id != widget.player?.id) {
       draft.dispose();
+      moving = false;
       moveTo = null;
       swapWith = null;
       moveRevision = null;
@@ -215,6 +306,7 @@ class PlayerPanelState extends State<PlayerPanel> {
       lookupError = null;
       load();
       restoreDraft();
+      openGroups();
     } else {
       draft.reconcile(stored(widget.player));
     }
@@ -223,7 +315,7 @@ class PlayerPanelState extends State<PlayerPanel> {
   @override
   void dispose() {
     draft.dispose();
-    for (final node in fieldFocus.values) {
+    for (final node in [...fieldFocus.values, ...groupFocus.values]) {
       node.dispose();
     }
     joinDraft.dispose();
@@ -332,6 +424,7 @@ class PlayerPanelState extends State<PlayerPanel> {
   void pickSection(String? target) {
     if (target == null || !commit()) return;
     setState(() {
+      moving = true;
       moveTo = target;
       moveTarget.text = target;
       moveRevision = c.event!.revision;
@@ -361,13 +454,17 @@ class PlayerPanelState extends State<PlayerPanel> {
               reason: reason.text.trim(),
             ),
     )) {
-      setState(() {
-        moveTo = null;
-        moveTarget.clear();
-        reason.clear();
-      });
+      cancelMove();
     }
   }
+
+  void cancelMove() => setState(() {
+    moving = false;
+    moveTo = null;
+    swapWith = null;
+    moveTarget.clear();
+    reason.clear();
+  });
 
   Future<void> lookup() async {
     if (!commit()) return;
@@ -384,6 +481,7 @@ class PlayerPanelState extends State<PlayerPanel> {
         text['memberId']!.text.trim() == memberId &&
         c.event!.players.any((p) => p.id == playerId && p.memberId == memberId);
     setState(() {
+      expanded.add('uschess');
       looking = true;
       lookupSnapshot = c.event!;
       pendingRating = null;
@@ -410,11 +508,11 @@ class PlayerPanelState extends State<PlayerPanel> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final fields = [
-      for (final (key, label, lines) in _fields) ...[
+  Widget field(String key) {
+    final (_, label, lines) = _fields.firstWhere((f) => f.$1 == key);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 8),
           child: TextField(
@@ -429,13 +527,6 @@ class PlayerPanelState extends State<PlayerPanel> {
             decoration: InputDecoration(
               labelText: label,
               alignLabelWithHint: lines > 1,
-              suffixIcon: key == 'memberId' && widget.player != null
-                  ? IconButton(
-                      tooltip: 'Refresh monthly supplement',
-                      onPressed: looking ? null : lookup,
-                      icon: const Icon(Icons.refresh, size: 18),
-                    )
-                  : null,
             ),
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) => commit(),
@@ -453,12 +544,42 @@ class PlayerPanelState extends State<PlayerPanel> {
             }),
           ),
       ],
-      if (error != null)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Text(error!, style: TextStyle(color: colors.error)),
-        ),
-    ];
+    );
+  }
+
+  /// A group's closed summary: the value, or "None".
+  String summaryOf(String key) {
+    final value = text[key]!.text.trim();
+    return value.isEmpty ? 'None' : value.split('\n').first;
+  }
+
+  DisclosureGroup group(
+    String id,
+    String title,
+    List<Widget> children, {
+    String? summary,
+    Color? summaryColor,
+  }) => DisclosureGroup(
+    key: ValueKey('group-$id'),
+    title: title,
+    open: expanded.contains(id),
+    onToggle: () => toggleGroup(id),
+    focusNode: groupFocus[id],
+    summary: summary,
+    summaryColor: summaryColor,
+    children: children,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
+    final problem = error == null
+        ? null
+        : Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(error!, style: TextStyle(color: colors.error)),
+          );
     void close() => widget.onClose();
 
     final player = widget.player;
@@ -468,10 +589,12 @@ class PlayerPanelState extends State<PlayerPanel> {
         onClose: close,
         children: [
           DraftStatus(draft: draft),
-          ...fields,
+          field('name'),
+          field('memberId'),
+          field('rating'),
           if (c.event!.sections.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(top: 4, bottom: 12),
               child: DropdownButtonFormField<String?>(
                 key: const ValueKey('panel-join-section'),
                 initialValue: joinSection,
@@ -491,6 +614,25 @@ class PlayerPanelState extends State<PlayerPanel> {
                 }),
               ),
             ),
+          group(
+            'more',
+            'More details',
+            [
+              field('state'),
+              field('reportName'),
+              field('team'),
+              field('notes'),
+            ],
+            summary:
+                [
+                  for (final key in ['state', 'reportName', 'team', 'notes'])
+                    if (text[key]!.text.trim().isNotEmpty) key,
+                ].isEmpty
+                ? 'State, team, notes'
+                : 'Filled in',
+          ),
+          const SizedBox(height: 12),
+          ?problem,
           Align(
             alignment: Alignment.centerLeft,
             child: Wrap(
@@ -516,397 +658,576 @@ class PlayerPanelState extends State<PlayerPanel> {
       );
     }
     final e = c.event!, p = player, s = e.sectionOf(p.id);
-    final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
     final membership = MembershipSummary(p, eventDate: e.lastDate);
     final checkedAt = p.membershipEvidence['id'] == p.memberId
         ? DateTime.tryParse('${p.membershipEvidence['retrievedAt']}')
         : null;
-    Widget heading(String label) => Padding(
-      padding: const EdgeInsets.only(top: 24, bottom: 8),
-      child: Text(label, style: Theme.of(context).textTheme.titleMedium),
-    );
-    // Byes can be requested for rounds not yet paired.
-    final planned =
-        s?.plannedRounds ??
-        e.sections.fold<int>(
-          0,
-          (n, x) => x.plannedRounds > n ? x.plannedRounds : n,
-        );
-    final open = [
-      for (var r = (s?.rounds.length ?? 0) + 1; r <= planned; r++) r,
+    final checked = checkedAt != null && p.memberId.isNotEmpty;
+    final open = openRounds(e, p);
+    final avoided = [
+      for (final other in e.players)
+        if (other.id != p.id &&
+            (p.avoid.contains(other.id) || other.avoid.contains(p.id)))
+          other,
     ];
+    final byes = [
+      for (final r in open)
+        if (p.byes[r] case final points?) 'R$r ${halves(points)}',
+    ];
+    final move = MoveFields(
+      event: e,
+      playerId: p.id,
+      target: moveTo,
+      swapWith: swapWith,
+      reason: reason,
+      onTarget: pickSection,
+      onSwap: (v) => setState(() => swapWith = v),
+      onSubmit: confirmMove,
+    );
+    final fact = TextStyle(fontSize: 13, color: colors.onSurface);
+    TableRow factRow(String label, String value, {Color? color}) => TableRow(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 16, bottom: 4),
+          child: Text(label, style: muted),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(value, style: fact.copyWith(color: color)),
+        ),
+      ],
+    );
+
     return SidePanel(
       title: p.name,
       onClose: close,
-      children: [
-        DraftStatus(draft: draft),
-        if (p.withdrawn)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text('Withdrawn', style: muted),
-          ),
-        ...fields,
-        if (dirty)
-          Wrap(
-            spacing: 8,
-            children: [
-              FilledButton(onPressed: commit, child: const Text('Save')),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: discardDraft,
-                child: const Text('Discard draft'),
-              ),
-            ],
-          ),
-        if (p.ratingEvidence.isNotEmpty)
-          Text(
-            p.ratingEvidence['supplementDate'] != null
-                ? 'Monthly supplement: ${p.ratingEvidence['supplementDate']}'
-                : 'Registration rating: ${p.ratingEvidence['registrationRating'] ?? p.rating}',
-          ),
-        heading('US Chess'),
-        Text(
-          checkedAt != null && p.memberId.isNotEmpty
-              ? 'Expires: ${membership.label}'
-              : membership.label,
-          style: TextStyle(color: membershipColor(colors, membership)),
-        ),
-        if (checkedAt != null && p.memberId.isNotEmpty)
-          Text(
-            'Checked: ${checkedAt.toIso8601String().substring(0, 10)}',
-            style: muted,
-          ),
-        if (p.memberId.isEmpty)
-          Text('Enter a US Chess ID to look the player up.', style: muted)
-        else ...[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton(
-              onPressed: looking ? null : lookup,
-              child: Text(looking ? 'Looking up…' : 'Look up ${p.memberId}'),
-            ),
-          ),
-          if (lookupError == 'key')
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Looking up IDs needs a US Chess API key.',
-                    style: muted,
-                  ),
-                  const SizedBox(height: 8),
-                  ApiKeyField(onSaved: lookup),
-                ],
-              ),
-            )
-          else if (lookupError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(lookupError!, style: TextStyle(color: colors.error)),
-            ),
-          if (member case final m?) ...[
-            const SizedBox(height: 12),
-            Text(m.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-            Text(
-              'Monthly supplement: ${m.supplementDate ?? 'date unavailable'}',
-            ),
-            const SizedBox(height: 8),
+      footer: [
+        if (dirty || error != null) ...[
+          ?problem,
+          if (dirty)
             Wrap(
               spacing: 8,
-              runSpacing: 8,
               children: [
-                if (m.state case final st?
-                    when isStateCode(st) && st != p.state)
-                  ActionChip(
-                    chipAnimationStyle: noChipAnimation,
-                    label: Text('Use state $st'),
-                    onPressed: () => applyMember(
-                      m,
-                      (player) => c.savePlayer(player.copy(state: st)),
-                    ),
-                  ),
-                if (m.reportName case final rn? when rn != playerReportName(p))
-                  ActionChip(
-                    chipAnimationStyle: noChipAnimation,
-                    label: Text('Report as $rn'),
-                    tooltip: 'Use the US Chess spelling on the rating report',
-                    onPressed: () => applyMember(
-                      m,
-                      (player) => c.savePlayer(player.copy(reportName: rn)),
-                    ),
-                  ),
-                if (m.name.isNotEmpty && m.name != p.name)
-                  ActionChip(
-                    chipAnimationStyle: noChipAnimation,
-                    label: Text('Use name ${m.name}'),
-                    onPressed: () => applyMember(
-                      m,
-                      (player) => c.savePlayer(player.copy(name: m.name)),
-                    ),
-                  ),
-                for (final r in m.ratings.entries)
-                  if (r.value != null)
-                    ActionChip(
-                      chipAnimationStyle: noChipAnimation,
-                      avatar: m.alreadyApplied(p, r.key)
-                          ? const Icon(Icons.check, size: 16)
-                          : null,
-                      label: Text('${r.key} ${r.value}'),
-                      tooltip: 'Review this rating for pairings',
-                      onPressed:
-                          m.alreadyApplied(p, r.key) ||
-                              (s?.rounds.isNotEmpty ?? false)
-                          ? null
-                          : () => setState(() => pendingRating = r.key),
-                    ),
-              ],
-            ),
-            if (s?.rounds.isNotEmpty ?? false)
-              const Text('Pairings are posted. The pairing rating is kept.'),
-            if (pendingRating case final category?) ...[
-              const SizedBox(height: 12),
-              Text(
-                'Confirm ${m.name} (${m.id}): ${p.rating} → ${m.ratings[category]} ($category).',
-              ),
-              FilledButton(
-                onPressed: () {
-                  final snapshot = lookupSnapshot;
-                  if (snapshot == null) return;
-                  if (applyMember(
-                    m,
-                    (player) => c.applyReviewedRatings(
-                      snapshot: snapshot,
-                      observations: {player.id: m},
-                      playerIds: {player.id},
-                      category: category,
-                    ),
-                  )) {
-                    setState(() => pendingRating = null);
-                  }
-                },
-                child: const Text('Confirm rating change'),
-              ),
-            ],
-          ],
-        ],
-        if (open.isNotEmpty) ...[
-          heading('Byes'),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              'Points a requested bye scores in each round not yet paired.',
-              style: muted,
-            ),
-          ),
-          for (final r in open)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  SizedBox(width: 72, child: Text('Round $r')),
-                  Expanded(
-                    child: SegmentedButton<int>(
-                      key: ValueKey('panel-bye-$r'),
-                      showSelectedIcon: false,
-                      style: const ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                        padding: WidgetStatePropertyAll(EdgeInsets.zero),
-                      ),
-                      segments: const [
-                        ButtonSegment(value: -1, label: Text('None')),
-                        ButtonSegment(value: 1, label: Text('1/2')),
-                        ButtonSegment(value: 0, label: Text('0')),
-                        ButtonSegment(value: 2, label: Text('1')),
-                      ],
-                      selected: {p.byes[r] ?? -1},
-                      onSelectionChanged: p.withdrawn
-                          ? null
-                          : (v) =>
-                                attempt(() => c.reserveBye(p.id, r, v.single)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-        if (e.sections.isNotEmpty) ...[
-          heading('Section'),
-          DropdownButton<String>(
-            key: const ValueKey('panel-section'),
-            value: moveTo ?? s?.id,
-            hint: const Text('Not in a section'),
-            isExpanded: true,
-            items: [
-              for (final x in e.sections)
-                DropdownMenuItem(value: x.id, child: Text(x.name)),
-            ],
-            onChanged: pickSection,
-          ),
-          if (moveTo != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Move ${p.name} from ${s?.name ?? 'Unassigned'} to ${e.sections.firstWhere((x) => x.id == moveTo).name}. Confirm below. A reason is required after play.',
-              style: muted,
-            ),
-            if (s != null &&
-                s.rounds.isEmpty &&
-                e.sections
-                    .firstWhere((x) => x.id == moveTo)
-                    .rounds
-                    .isEmpty) ...[
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: swapWith ?? '',
-                key: ValueKey('swap-partner-$moveTo'),
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Move or exchange places',
-                ),
-                items: [
-                  const DropdownMenuItem(
-                    value: '',
-                    child: Text('Move without a swap'),
-                  ),
-                  for (final id
-                      in e.sections.firstWhere((x) => x.id == moveTo).players)
-                    if (id != p.id)
-                      DropdownMenuItem(
-                        value: id,
-                        child: Text('Swap with ${e.player(id).name}'),
-                      ),
-                ],
-                onChanged: (value) =>
-                    setState(() => swapWith = value == '' ? null : value),
-              ),
-            ],
-            const SizedBox(height: 8),
-            TextField(
-              controller: reason,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Reason'),
-              onSubmitted: (_) => confirmMove(),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                FilledButton(
-                  onPressed: confirmMove,
-                  child: Text(
-                    swapWith == null ? 'Confirm move' : 'Confirm swap',
-                  ),
-                ),
-                const SizedBox(width: 8),
+                FilledButton(onPressed: commit, child: const Text('Save')),
                 TextButton(
-                  onPressed: () => setState(() {
-                    moveTo = null;
-                    moveTarget.clear();
-                    reason.clear();
-                  }),
-                  child: const Text('Cancel'),
+                  onPressed: discardDraft,
+                  child: const Text('Discard draft'),
                 ),
               ],
             ),
-          ],
         ],
-        heading('Pairing requests'),
-        if (e.sections.any(
-          (x) =>
-              x.rounds.isEmpty &&
-              !x.players.any(
-                (id) => (e.player(id).personId ?? id) == (p.personId ?? p.id),
-              ),
-        )) ...[
-          PopupMenuButton<String>(
-            key: const ValueKey('add-separate-section-entry'),
-            tooltip: 'Add a separate section entry',
-            onSelected: (id) => attempt(() {
-              c.addSectionEntry(p.id, id);
-            }),
-            itemBuilder: (_) => [
-              for (final x in e.sections.where(
-                (x) =>
-                    x.rounds.isEmpty &&
-                    !x.players.any(
-                      (id) =>
-                          (e.player(id).personId ?? id) == (p.personId ?? p.id),
-                    ),
-              ))
-                PopupMenuItem(value: x.id, child: Text(x.name)),
-            ],
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('Add a separate section entry…'),
-            ),
-          ),
-          Text(
-            'For a side game or another ladder section. Starts a separate score and keeps the original entry.',
-            style: muted,
-          ),
-          const SizedBox(height: 12),
-        ],
-        Text(
-          'Do not pair with these players in future rounds. For siblings or other requests; independent of team membership.',
-          style: muted,
-        ),
-        const SizedBox(height: 8),
-        for (final other in e.players.where(
-          (other) =>
-              other.id != p.id &&
-              (p.avoid.contains(other.id) || other.avoid.contains(p.id)),
-        ))
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: InputChip(
-              label: Text(other.name),
-              onDeleted: () =>
-                  attempt(() => c.avoidPair(p.id, other.id, false)),
-              deleteButtonTooltipMessage: 'Allow pairing with ${other.name}',
-            ),
-          ),
-        // Typed, not scrolled: a club event has 100+ names.
-        Autocomplete<Player>(
-          key: ValueKey('avoid-${p.id}-${p.avoid.length}'),
-          displayStringForOption: (o) => o.name,
-          optionsBuilder: (value) {
-            final q = value.text.trim().toLowerCase();
-            if (q.isEmpty) return const [];
-            return e.players.where(
-              (o) =>
-                  o.id != p.id &&
-                  !p.avoid.contains(o.id) &&
-                  o.name.toLowerCase().contains(q),
-            );
-          },
-          onSelected: (o) => attempt(() => c.avoidPair(p.id, o.id, true)),
-          fieldViewBuilder: (context, text, focus, submit) => TextField(
-            key: const ValueKey('avoid-player'),
-            controller: text,
-            focusNode: focus,
-            decoration: const InputDecoration(
-              labelText: 'Avoid pairing with',
-              prefixIcon: Icon(Icons.person_off_outlined, size: 18),
-            ),
-            onSubmitted: (_) => submit(),
-          ),
-        ),
-        if (s != null && s.format != Format.swiss)
-          Text(
-            'In a quad or round robin everyone must meet. Put these players in different sections to honor the request.',
-            style: muted,
-          ),
-        heading('Status'),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton(
-            onPressed: () => attempt(
-              () => c.savePlayer(fresh.copy(withdrawn: !p.withdrawn)),
-            ),
-            child: Text(p.withdrawn ? 'Reinstate' : 'Withdraw'),
-          ),
-        ),
       ],
+      children: [
+        DraftStatus(draft: draft),
+        // Who this is and the two decisions TDs make about a player mid-event.
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              '${s?.name ?? 'Not in a section'} · ${ratingText(p.rating)}',
+              style: muted,
+            ),
+            if (p.withdrawn) const StatusPill('Withdrawn'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton(
+              key: const ValueKey('panel-withdraw'),
+              onPressed: () => attempt(
+                () => c.savePlayer(fresh.copy(withdrawn: !p.withdrawn)),
+              ),
+              child: Text(
+                p.withdrawn
+                    ? 'Reinstate'
+                    : ['Withdraw', ?withdrawAfter(e, p.id)].join(' '),
+              ),
+            ),
+            if (e.sections.length > (s == null ? 0 : 1))
+              OutlinedButton(
+                key: const ValueKey('panel-move'),
+                onPressed: moving
+                    ? cancelMove
+                    : () => setState(() => moving = true),
+                child: const Text('Move…'),
+              ),
+          ],
+        ),
+        if (moving)
+          Container(
+            key: const ValueKey('panel-move-form'),
+            margin: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: colors.outlineVariant),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                move,
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    FilledButton(
+                      key: const ValueKey('panel-confirm-move'),
+                      onPressed: move.ready ? confirmMove : null,
+                      child: const Text('Move'),
+                    ),
+                    TextButton(
+                      onPressed: cancelMove,
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 16),
+        field('name'),
+        field('memberId'),
+        field('rating'),
+        if (widget.ratingReview case final review? when review.active)
+          PlayerRatingReview(
+            draft: review,
+            player: p,
+            onBack: widget.onBackToReview ?? close,
+          ),
+        field('state'),
+        const SizedBox(height: 8),
+        // Withdrawn players take zero-point byes; the pill already says so.
+        if (open.isNotEmpty && !p.withdrawn)
+          group(
+            'byes',
+            'Byes',
+            [
+              ByeGrid(
+                rounds: open,
+                byes: p.byes,
+                onToggle: (r, points) => attempt(
+                  () => c.reserveBye(
+                    p.id,
+                    r,
+                    p.byes[r] == points ? -1 : points,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            summary: byes.isEmpty ? 'None' : byes.join(' · '),
+          ),
+        group(
+          'uschess',
+          'US Chess',
+          [
+            Table(
+              columnWidths: const {
+                0: IntrinsicColumnWidth(),
+                1: FlexColumnWidth(),
+              },
+              children: [
+                factRow(
+                  'Expires',
+                  checked
+                      ? [membership.label, ?membership.warning].join(' · ')
+                      : membership.label,
+                  color: membership.attention
+                      ? membershipColor(colors, membership)
+                      : null,
+                ),
+                if (checked)
+                  factRow(
+                    'Checked',
+                    checkedAt.toIso8601String().substring(0, 10),
+                  ),
+                if (p.ratingEvidence['supplementDate'] case final date?)
+                  factRow('Supplement', '$date')
+                else if (p.ratingEvidence.isNotEmpty)
+                  factRow(
+                    'Registration',
+                    '${p.ratingEvidence['registrationRating'] ?? p.rating}',
+                  ),
+              ],
+            ),
+            if (p.memberId.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('panel-member-lookup'),
+                  onPressed: looking ? null : lookup,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: Text(looking ? 'Checking…' : 'Refresh from US Chess'),
+                ),
+              ),
+              if (lookupError == 'key')
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Needs a US Chess API key.', style: muted),
+                      const SizedBox(height: 8),
+                      ApiKeyField(onSaved: lookup),
+                    ],
+                  ),
+                )
+              else if (lookupError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    lookupError!,
+                    style: TextStyle(color: colors.error),
+                  ),
+                ),
+              if (member case final m?) ...[
+                const SizedBox(height: 12),
+                Text(
+                  m.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  'Supplement ${m.supplementDate ?? 'date unavailable'}',
+                  style: muted,
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (m.state case final st?
+                        when isStateCode(st) && st != p.state)
+                      ActionChip(
+                        chipAnimationStyle: noChipAnimation,
+                        label: Text('Use state $st'),
+                        onPressed: () => applyMember(
+                          m,
+                          (player) => c.savePlayer(player.copy(state: st)),
+                        ),
+                      ),
+                    if (m.reportName case final rn?
+                        when rn != playerReportName(p))
+                      ActionChip(
+                        chipAnimationStyle: noChipAnimation,
+                        label: Text('Report as $rn'),
+                        tooltip:
+                            'Use the US Chess spelling on the rating report',
+                        onPressed: () => applyMember(
+                          m,
+                          (player) => c.savePlayer(player.copy(reportName: rn)),
+                        ),
+                      ),
+                    if (m.name.isNotEmpty && m.name != p.name)
+                      ActionChip(
+                        chipAnimationStyle: noChipAnimation,
+                        label: Text('Use name ${m.name}'),
+                        onPressed: () => applyMember(
+                          m,
+                          (player) => c.savePlayer(player.copy(name: m.name)),
+                        ),
+                      ),
+                    for (final r in m.ratings.entries)
+                      if (r.value != null)
+                        ActionChip(
+                          chipAnimationStyle: noChipAnimation,
+                          avatar: m.alreadyApplied(p, r.key)
+                              ? const Icon(Icons.check, size: 16)
+                              : null,
+                          label: Text('${r.key} ${r.value}'),
+                          tooltip: 'Review this rating for pairings',
+                          onPressed:
+                              m.alreadyApplied(p, r.key) ||
+                                  (s?.rounds.isNotEmpty ?? false)
+                              ? null
+                              : () => setState(() => pendingRating = r.key),
+                        ),
+                  ],
+                ),
+                if (s?.rounds.isNotEmpty ?? false)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Pairings are posted; the pairing rating stays.',
+                      style: muted,
+                    ),
+                  ),
+                if (pendingRating case final category?) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Confirm ${m.name} (${m.id}): ${p.rating} → ${m.ratings[category]} ($category).',
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: () {
+                      final snapshot = lookupSnapshot;
+                      if (snapshot == null) return;
+                      if (applyMember(
+                        m,
+                        (player) => c.applyReviewedRatings(
+                          snapshot: snapshot,
+                          observations: {player.id: m},
+                          playerIds: {player.id},
+                          category: category,
+                        ),
+                      )) {
+                        setState(() => pendingRating = null);
+                      }
+                    },
+                    child: const Text('Confirm rating change'),
+                  ),
+                ],
+              ],
+            ],
+            const SizedBox(height: 16),
+            field('reportName'),
+          ],
+          summary: checked ? 'Expires ${membership.label}' : membership.label,
+          summaryColor: membershipColor(colors, membership),
+        ),
+        group(
+          'requests',
+          'Pairing requests',
+          [
+            for (final other in avoided)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: InputChip(
+                    label: Text(other.name),
+                    onDeleted: () =>
+                        attempt(() => c.avoidPair(p.id, other.id, false)),
+                    deleteButtonTooltipMessage:
+                        'Allow pairing with ${other.name}',
+                  ),
+                ),
+              ),
+            // Typed, not scrolled: a club event has 100+ names.
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Autocomplete<Player>(
+                key: ValueKey('avoid-${p.id}-${p.avoid.length}'),
+                displayStringForOption: (o) => o.name,
+                optionsBuilder: (value) {
+                  final q = value.text.trim().toLowerCase();
+                  if (q.isEmpty) return const [];
+                  return e.players.where(
+                    (o) =>
+                        o.id != p.id &&
+                        !p.avoid.contains(o.id) &&
+                        o.name.toLowerCase().contains(q),
+                  );
+                },
+                onSelected: (o) =>
+                    attempt(() => c.avoidPair(p.id, o.id, true)),
+                fieldViewBuilder: (context, text, focus, submit) => TextField(
+                  key: const ValueKey('avoid-player'),
+                  controller: text,
+                  focusNode: focus,
+                  decoration: const InputDecoration(
+                    labelText: 'Avoid pairing with',
+                  ),
+                  onSubmitted: (_) => submit(),
+                ),
+              ),
+            ),
+            if (avoided.isNotEmpty && s != null && s.format != Format.swiss)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Everyone meets in a ${s.format == Format.quad ? 'quad' : 'round robin'}; move one of them to keep this.',
+                  style: TextStyle(fontSize: 13, color: attentionColor(colors)),
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
+          summary: avoided.isEmpty
+              ? 'None'
+              : avoided.length <= 2
+              ? 'Avoid ${avoided.map((o) => o.name).join(', ')}'
+              : 'Avoid ${avoided.length} players',
+        ),
+        group('team', 'Team', [field('team')], summary: summaryOf('team')),
+        group('notes', 'Notes', [field('notes')], summary: summaryOf('notes')),
+      ],
+    );
+  }
+}
+
+/// Bye requests as a small table: rounds across, points down (0, ½, 1).
+/// A chosen cell fills and shows its points; choosing it again clears it.
+class ByeGrid extends StatelessWidget {
+  const ByeGrid({
+    required this.rounds,
+    required this.byes,
+    required this.onToggle,
+    super.key,
+  });
+  final List<int> rounds;
+  final Map<int, int> byes;
+
+  /// Called with the round and the bye's points in halves.
+  final void Function(int round, int points) onToggle;
+
+  /// Rows in reading order; points are stored in halves.
+  static const rows = [(0, '0'), (1, '½'), (2, '1')];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final scale = MediaQuery.textScalerOf(context);
+    final cell = scale.scale(32);
+    final caption = TextStyle(
+      fontSize: 12,
+      color: colors.onSurfaceVariant,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    Widget label(String text, {TextStyle? style}) => SizedBox(
+      height: cell,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(text, style: style),
+      ),
+    );
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Table(
+        key: const ValueKey('bye-grid'),
+        defaultColumnWidth: FixedColumnWidth(cell),
+        columnWidths: {0: FixedColumnWidth(scale.scale(64))},
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        children: [
+          TableRow(
+            children: [
+              label('Round', style: caption),
+              for (final r in rounds)
+                SizedBox(
+                  height: scale.scale(24),
+                  child: Center(child: Text('$r', style: caption)),
+                ),
+            ],
+          ),
+          for (final (points, mark) in rows)
+            TableRow(
+              key: ValueKey('panel-bye-$points'),
+              children: [
+                label(
+                  '$mark pt',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+                for (final r in rounds)
+                  ByeCell(
+                    key: ValueKey('bye-$r-$points'),
+                    mark: mark,
+                    selected: byes[r] == points,
+                    label: 'Round $r, $mark-point bye',
+                    onPressed: () => onToggle(r, points),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One cell of the bye grid. Empty until chosen; chosen fills with ink and
+/// shows the points. The ring outside the cell shows keyboard focus.
+class ByeCell extends StatefulWidget {
+  const ByeCell({
+    required this.mark,
+    required this.selected,
+    required this.label,
+    required this.onPressed,
+    super.key,
+  });
+  final String mark;
+  final bool selected;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  State<ByeCell> createState() => _ByeCellState();
+}
+
+class _ByeCellState extends State<ByeCell> {
+  bool focused = false, hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final on = widget.selected;
+    final side = MediaQuery.textScalerOf(context).scale(32);
+    return Semantics(
+      button: true,
+      toggled: on,
+      label: widget.label,
+      excludeSemantics: true,
+      child: FocusableActionDetector(
+        enabled: widget.onPressed != null,
+        mouseCursor: SystemMouseCursors.click,
+        onShowFocusHighlight: (v) => setState(() => focused = v),
+        onShowHoverHighlight: (v) => setState(() => hovered = v),
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onPressed?.call();
+              return null;
+            },
+          ),
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onPressed,
+          child: Container(
+            width: side,
+            height: side,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(6),
+              border: focused
+                  ? Border.all(color: focusRing(colors), width: focusRingWidth)
+                  : null,
+            ),
+            child: Container(
+              width: side - 6,
+              height: side - 6,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: on
+                    ? colors.onSurface
+                    : hovered
+                    ? colors.surfaceContainerHigh
+                    : colors.surface,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(
+                  color: on ? colors.onSurface : colors.outline,
+                ),
+              ),
+              child: on
+                  ? Text(
+                      widget.mark,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: colors.surface,
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

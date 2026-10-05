@@ -1,15 +1,24 @@
 import '../domain/model.dart';
 import 'player_format.dart';
 
-/// What one player's score box shows for a game: 1, 0, ½, 1F, 0F, or blank.
+/// What one player's score box shows for a game: 1, 0, ½, or blank, and
+/// the US Chess letters for unplayed games: X won by forfeit, F forfeited.
 String scoreMark(Outcome o, {required bool white}) => switch (o) {
   Outcome.unreported => '',
   Outcome.draw => '½',
   Outcome.unfinished => '',
   Outcome.disputed => '?',
-  Outcome.doubleForfeit => '0F',
-  _ =>
-    '${(white ? o.whiteScore : o.blackScore) == 2 ? 1 : 0}${o.played ? '' : 'F'}',
+  Outcome.doubleForfeit => 'F',
+  _ when !o.played => (white ? o.whiteScore : o.blackScore) == 2 ? 'X' : 'F',
+  _ => (white ? o.whiteScore : o.blackScore) == 2 ? '1' : '0',
+};
+
+/// A bye as US Chess crosstables print it: B full point, H half point,
+/// U zero (unpaired), with dashes where an opponent number would be.
+String byeMark(int points) => switch (points) {
+  2 => 'B---',
+  1 => 'H---',
+  _ => 'U---',
 };
 
 /// Half-points as words: "½ point", "1 point", "2½ points".

@@ -32,6 +32,12 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
   bool expanded = false, busy = false;
   int generation = 0;
   String? notice, searchError;
+
+  /// The record Check ID found, shown under the buttons.
+  MemberObservation? record;
+
+  /// Whether [record] is a different person than the name typed here.
+  bool mismatch = false;
   List<MemberObservation>? candidates;
   late String input;
 
@@ -62,6 +68,8 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
     generation++;
     busy = false;
     notice = null;
+    record = null;
+    mismatch = false;
     searchError = null;
     candidates = null;
   }
@@ -132,6 +140,8 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
     setState(() {
       busy = true;
       notice = null;
+      record = null;
+      mismatch = false;
       searchError = null;
       candidates = null;
       expanded = false;
@@ -139,32 +149,28 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
     var suggest = false;
     try {
       if (!isMemberId(id)) {
-        notice =
-            'Invalid ID format. US Chess IDs have eight digits; 00000000 is not a member ID.';
+        notice = 'Invalid ID format: US Chess IDs have eight digits';
         suggest = true;
       } else {
         final found = await widget.lookup(id);
         if (!current(token)) return;
         if (found == null || found.id != id || found.name.trim().isEmpty) {
-          notice = 'ID could not be verified. Try again later.';
-        } else if (name.isNotEmpty &&
-            normalizedName(name) != normalizedName(found.name)) {
-          notice =
-              'ID $id belongs to ${found.name}. That differs from $name; review the match.';
-          suggest = true;
+          notice = 'ID could not be verified · try again later';
         } else {
-          notice =
-              'Found ${found.name} · $id${found.state == null ? '' : ' · ${found.state}'}.';
+          record = found;
+          mismatch =
+              name.isNotEmpty &&
+              normalizedName(name) != normalizedName(found.name);
+          suggest = mismatch;
         }
       }
     } on MemberNotFound {
       if (!current(token)) return;
-      notice =
-          'ID $id was not found in US Chess records. Search by name to find a possible correction.';
+      notice = 'ID $id was not found in US Chess records';
       suggest = true;
     } catch (e) {
       if (!current(token)) return;
-      notice = 'ID could not be verified. ${plainMessage(e)}';
+      notice = 'ID could not be verified · ${_trimPeriod(plainMessage(e))}';
     }
     if (!current(token)) return;
     setState(() {
@@ -190,26 +196,37 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
           if (badFormat)
             Text(
               widget.name == null && RegExp('[a-zA-Z]').hasMatch(id)
-                  ? 'Search this name, then select the TD’s US Chess ID.'
-                  : 'Invalid ID format: enter eight digits (not 00000000), or search by name.',
+                  ? 'Search this name, then select the TD’s US Chess ID'
+                  : 'Invalid ID format: enter eight digits, or find by name',
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: [
-              TextButton.icon(
+              OutlinedButton.icon(
                 onPressed: busy ? null : () => startSearch(seed: true),
                 icon: const Icon(Icons.search, size: 18),
                 label: const Text('Find by name'),
               ),
               if (id.isNotEmpty)
-                TextButton(
+                OutlinedButton(
                   onPressed: busy ? null : check,
                   child: const Text('Check ID'),
                 ),
             ],
           ),
+          if (notice != null || expanded || busy) const SizedBox(height: 8),
           if (notice != null) Semantics(liveRegion: true, child: Text(notice!)),
+          if (record case final found?)
+            Semantics(
+              liveRegion: true,
+              child: _RecordCard(
+                record: found,
+                typedName: widget.name?.text.trim() ?? '',
+                mismatch: mismatch,
+              ),
+            ),
           if (expanded) ...[
             TextField(
               key: const ValueKey('member-search-name'),
@@ -242,8 +259,8 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
           if (candidates case final matches?) ...[
             Text(
               matches.isEmpty
-                  ? 'No matches found. Try a different spelling or last name.'
-                  : 'Possible matches — confirm the person before choosing an ID.',
+                  ? 'No matches · try a different spelling or the last name'
+                  : 'Possible matches · confirm the person before choosing an ID',
             ),
             for (final member in matches)
               ListTile(
@@ -266,17 +283,121 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
                       reset();
                       expanded = false;
                       notice =
-                          'Selected ${member.name} · ${member.id}. Save to apply.';
+                          'Selected ${member.name} · ${member.id} · Save to apply';
                     });
                   },
                   child: Text('Use ${member.id}'),
                 ),
               ),
             if (matches.length == 10)
-              const Text(
-                'Showing up to 10 matches. Refine the name if needed.',
-              ),
+              const Text('Showing the first 10 matches · refine the name'),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+String _trimPeriod(String text) =>
+    text.endsWith('.') ? text.substring(0, text.length - 1) : text;
+
+/// What US Chess has on file for a checked ID: a verdict line, then the
+/// record as a small label/value table. Nothing is saved from here.
+class _RecordCard extends StatelessWidget {
+  const _RecordCard({
+    required this.record,
+    required this.typedName,
+    required this.mismatch,
+  });
+  final MemberObservation record;
+  final String typedName;
+  final bool mismatch;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final muted = TextStyle(fontSize: 13, color: colors.onSurfaceVariant);
+    const value = TextStyle(fontSize: 13);
+    final ratings = [
+      for (final (code, label) in const [
+        ('R', 'Regular'),
+        ('Q', 'Quick'),
+        ('B', 'Blitz'),
+      ])
+        (label, record.ratings[code]),
+    ];
+    TableRow row(String label, String text) => TableRow(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 16, bottom: 2),
+          child: Text(label, style: muted),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: Text(text, style: value),
+        ),
+      ],
+    );
+    return Container(
+      key: const ValueKey('member-record'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                mismatch ? Icons.warning_amber_rounded : Icons.check,
+                size: 16,
+                color: mismatch ? colors.error : colors.onSurface,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  mismatch
+                      ? 'ID ${record.id} belongs to ${record.name}, not $typedName'
+                      : 'ID ${record.id} is ${record.name}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: mismatch ? colors.error : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Table(
+            columnWidths: const {
+              0: IntrinsicColumnWidth(),
+              1: FlexColumnWidth(),
+            },
+            children: [
+              if (record.state case final st? when st.isNotEmpty)
+                row('State', st),
+              for (final (label, rating) in ratings)
+                row(label, rating == null ? 'Unrated' : '$rating'),
+              if (record.expiration case final date? when date.isNotEmpty)
+                row(
+                  'Expires',
+                  [
+                    date,
+                    if (record.status case final st?
+                        when st.toLowerCase() != 'active')
+                      st,
+                  ].join(' · '),
+                ),
+              if (record.supplementDate case final date?)
+                row('Supplement', date),
+            ],
+          ),
         ],
       ),
     );

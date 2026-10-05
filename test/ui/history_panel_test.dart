@@ -37,23 +37,26 @@ void main() {
     await tester.tap(find.byTooltip('History (Ctrl+H)'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('history-graph')), findsOneWidget);
-    expect(find.text('Current'), findsOneWidget);
+    expect(find.text('Now'), findsOneWidget);
 
     await tester.tap(find.byKey(ValueKey('history-$paired')));
     await tester.pumpAndSettle();
-    expect(find.text('Recorded play affected'), findsOneWidget);
+    // Consequences are listed before the button that commits them.
+    expect(find.text('Removes recorded play'), findsOneWidget);
     expect(find.text('Quad 1 round 1: 2 results'), findsOneWidget);
+    expect(find.text('Undoes 2 changes'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Removes recorded play')).dy,
+      lessThan(
+        tester.getTopLeft(find.byKey(const ValueKey('history-restore'))).dy,
+      ),
+    );
+    expect(find.byType(Dialog), findsNothing);
+    await tester.ensureVisible(find.byKey(const ValueKey('history-restore')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('history-restore')));
     await tester.pumpAndSettle();
-    expect(c.graph.head, isNot(paired));
-    expect(find.text('Review history change'), findsOneWidget);
-    await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
-    expect(c.event!.games.first.outcome, Outcome.whiteWin);
-    await tester.tap(find.byKey(const ValueKey('history-restore')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('confirm-history-change')));
-    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
     expect(c.graph.head, paired);
     expect(c.event!.games.every((g) => g.outcome == Outcome.unreported), true);
 
@@ -66,17 +69,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.event!.games.first.outcome, Outcome.whiteWin);
 
-    // In the panel, the left arrow steps back like a move list.
+    // Arrow keys only choose; the event moves on Enter.
     await tester.tap(find.byKey(ValueKey('history-${c.graph.head}')));
     await tester.pumpAndSettle();
+    final head = c.graph.head;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pumpAndSettle();
-    expect(c.graph.head, paired);
+    expect(c.graph.head, head);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(c.graph.head, isNot(head));
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 500));
   });
   testWidgets(
-    'details stay under numbered operations and branches can reopen',
+    'details stay under their change and undone changes can come back',
     (tester) async {
       final c = fixture();
       addTearDown(c.dispose);
@@ -92,7 +100,8 @@ void main() {
       await tester.tap(find.byTooltip('History (Ctrl+H)'));
       await tester.pumpAndSettle();
       expect(find.text('Player 02: Round 3 bye (0.5 pt)'), findsOneWidget);
-      expect(find.text('Saved branch · 2 operations'), findsOneWidget);
+      expect(find.text('2 undone changes, kept'), findsOneWidget);
+      expect(find.text('Now'), findsOneWidget);
       expect(find.byKey(ValueKey('history-$tip')), findsNothing);
       expect(find.byKey(ValueKey('history-details-$current')), findsNothing);
 
@@ -102,16 +111,30 @@ void main() {
       await tester.tap(find.byKey(ValueKey('history-$tip')));
       await tester.pumpAndSettle();
       final details = find.byKey(ValueKey('history-details-$tip'));
-      expect(find.text('Undo 1 operation'), findsOneWidget);
-      expect(find.text('Apply 2 operations'), findsOneWidget);
+      expect(find.text('Undoes 1 change'), findsOneWidget);
+      expect(find.text('Brings back 2 changes'), findsOneWidget);
       expect(
-        find.descendant(of: details, matching: find.text('#$current')),
+        find.descendant(
+          of: details,
+          matching: find.text('Player 02: Round 3 bye (0.5 pt)'),
+        ),
         findsOneWidget,
       );
       expect(
-        find.descendant(of: details, matching: find.text('#$first')),
+        find.descendant(
+          of: details,
+          matching: find.text('Player 00: Round 3 bye (0.5 pt)'),
+        ),
         findsOneWidget,
       );
+      // No transaction numbers or git words reach the TD.
+      final history = find.byKey(const ValueKey('history-graph'));
+      for (final word in ['#', 'operation', 'branch', 'Transaction']) {
+        expect(
+          find.descendant(of: history, matching: find.textContaining(word)),
+          findsNothing,
+        );
+      }
       expect(
         tester.getTopLeft(details).dy,
         greaterThan(
@@ -120,10 +143,10 @@ void main() {
       );
       expect(find.text('THIS STEP'), findsNothing);
 
-      await tester.tap(find.byKey(const ValueKey('history-restore')));
+      expect(find.text('Switch to this version'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('history-restore')));
       await tester.pumpAndSettle();
-      expect(c.graph.head, current);
-      await tester.tap(find.byKey(const ValueKey('confirm-history-change')));
+      await tester.tap(find.byKey(const ValueKey('history-restore')));
       await tester.pumpAndSettle();
       expect(c.graph.head, tip);
       expect(c.event!.player('p0').byes[3], 1);
@@ -165,6 +188,46 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(ValueKey('history-details-$selected')), findsNothing);
       expect(c.graph.head, current);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 500));
+    },
+  );
+
+  testWidgets(
+    'an Undo with consequences opens History on that step instead of a dialog',
+    (tester) async {
+      final c = fixture(format: Format.swiss);
+      addTearDown(c.dispose);
+      final id = c.event!.sections.first.id;
+      c.post((await tester.runAsync(() => c.propose(sectionId: id)))!);
+      for (final g in c.event!.sections.first.rounds.first.games) {
+        c.recordResult(g.id, Outcome.whiteWin);
+      }
+      c.post((await tester.runAsync(() => c.propose(sectionId: id)))!);
+      final game = c.event!.games.first;
+      c.correctResult(c.reviewResult(game.id), Outcome.draw);
+      final corrected = c.graph.head!, back = c.graph.back!;
+      await mount(tester, c);
+      expect(find.byKey(const ValueKey('history-graph')), findsNothing);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsNothing);
+      expect(c.graph.head, corrected);
+      expect(find.byKey(ValueKey('history-details-$back')), findsOneWidget);
+      expect(
+        find.text('An earlier result changes while later rounds stay paired'),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(find.byKey(const ValueKey('history-restore')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('history-restore')));
+      await tester.pumpAndSettle();
+      expect(c.graph.head, back);
+      expect(c.event!.games.first.outcome, Outcome.whiteWin);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 500));

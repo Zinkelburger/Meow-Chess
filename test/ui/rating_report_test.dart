@@ -126,7 +126,11 @@ void main() {
     expect(find.byKey(const ValueKey('rating-summary')), findsOneWidget);
     expect(find.textContaining('Regular'), findsWidgets);
 
+    // Missing player states are optional advice, folded until asked for.
     final fill = find.byKey(const ValueKey('fill-states'));
+    expect(fill, findsNothing);
+    await tester.tap(find.byKey(const PageStorageKey('rating-advice-details')));
+    await tester.pump();
     expect(find.text('Use MA for 4 players without a state'), findsOneWidget);
     await tester.tap(fill);
     await tester.pump();
@@ -135,13 +139,11 @@ void main() {
     expect(fill, findsNothing);
 
     // Unfinished rounds still block the export.
-    final create = tester.widget<OutlinedButton>(
-      find.ancestor(
-        of: find.text('Generate DBF files'),
-        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
-      ),
+    final create = tester.widget<ButtonStyleButton>(
+      find.byKey(const ValueKey('generate-dbf')),
     );
     expect(create.onPressed, isNull);
+    expect(find.byKey(const ValueKey('rating-blocked')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

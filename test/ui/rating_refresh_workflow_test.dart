@@ -35,7 +35,7 @@ void main() {
                 calls++;
                 return MemberObservation(
                   id: id,
-                  name: 'Official Name',
+                  name: 'Player',
                   retrievedAt: '2026-10-03',
                   supplementDate: '2026-10-01',
                   ratings: {'R': 2100},
@@ -76,30 +76,50 @@ void main() {
           expect(find.byKey(const ValueKey('rating-review')), findsNothing);
         } else {
           expect(calls, 5);
+          // The review opens at the right; nothing is inserted above the table.
+          expect(find.byKey(const ValueKey('rating-review')), findsOneWidget);
           expect(
-            find.text(
-              'Found ratings for 5 players. 1 missing — see player rows.',
-            ),
+            find.text('5 of 6 players have USCF ratings.'),
             findsOneWidget,
           );
+          expect(find.text('No USCF ID (1)'), findsOneWidget);
+          expect(find.text('Rating on 2026-10-01'), findsOneWidget);
+          expect(find.text('Entered'), findsOneWidget);
+          expect(find.text('USCF name'), findsOneWidget);
           expect(c.event!.players.first.rating, 2000);
           await tester.drag(find.byType(ListView).first, const Offset(0, -650));
           await tester.pumpAndSettle();
-          expect(find.text('UNR → 2100'), findsOneWidget);
+          expect(
+            find.textContaining('2100  from UNR', findRichText: true),
+            findsOneWidget,
+          );
           await tester.drag(find.byType(ListView).first, const Offset(0, 1000));
           await tester.pumpAndSettle();
           final proposal = tester.widget<Container>(
             find.byKey(const ValueKey('rating-proposal-p0')),
           );
           expect(proposal.color, isNotNull);
-          // Player editing occupies the right side while the review stays left.
-          final row = find.byKey(const ValueKey('player-p0'));
-          await tester.tap(row);
-          await tester.pump(const Duration(milliseconds: 50));
-          await tester.tap(row);
+          // Hovering a shaded cell says why it is shaded.
+          expect(
+            find.byTooltip(
+              'Highlighted: large rating change, more than 50 points.\n'
+              'Supplement 2026-10-01',
+            ),
+            findsWidgets,
+          );
+          // Review details stay on one line, so rows keep their height.
+          expect(
+            tester.getSize(find.byKey(const ValueKey('player-p0'))).height,
+            lessThan(40),
+          );
+          // One click opens the player, still fully editable mid-review.
+          await tester.tap(find.byKey(const ValueKey('player-p0')));
           await tester.pumpAndSettle();
           expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
-          expect(find.byKey(const ValueKey('rating-review')), findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('player-rating-review')),
+            findsOneWidget,
+          );
           await tester.enterText(
             find.byKey(const ValueKey('panel-rating')),
             '1700',
@@ -109,25 +129,24 @@ void main() {
           await tester.tap(find.text('Save'));
           await tester.pumpAndSettle();
           expect(c.event!.player('p0').rating, 1700);
-          expect(
-            find.text(
-              'Edited since lookup. Refresh again to review this player.',
-            ),
-            findsOneWidget,
+          expect(find.text('Your edit is kept.'), findsWidgets);
+          await tester.ensureVisible(
+            find.byKey(const ValueKey('back-to-rating-review')),
           );
+          await tester.tap(find.byKey(const ValueKey('back-to-rating-review')));
+          await tester.pumpAndSettle();
           final apply = find.text('Confirm 4 rating changes');
-          await tester.ensureVisible(apply);
           await tester.tap(apply);
           await tester.pumpAndSettle();
           expect(c.event!.player('p0').rating, 1700);
           expect(c.event!.player('p1').rating, 2100);
           expect(c.event!.players.last.rating, 0);
           expect(find.byKey(const ValueKey('rating-review')), findsNothing);
-          expect(find.text('Proposed USCF rating'), findsNothing);
+          expect(find.text('Rating on 2026-10-01'), findsNothing);
           expect(find.byType(SnackBar), findsNothing);
           await tester.pump(const Duration(seconds: 20));
           expect(find.text('Updated 4 USCF ratings.'), findsOneWidget);
-          await tester.tap(find.text('Undo'));
+          await tester.tap(find.byKey(const ValueKey('done-undo')));
           await tester.pumpAndSettle();
           expect(c.event!.player('p0').rating, 1700);
           expect(c.event!.player('p1').rating, 1950);

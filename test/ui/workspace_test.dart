@@ -179,7 +179,6 @@ void main() {
             find.byTooltip('Keyboard shortcuts (F1)'),
             find.byKey(const ValueKey('event-details')),
             find.byTooltip('History (Ctrl+H)'),
-            if (!rounds) find.byTooltip('Find player (Ctrl+L)'),
           ]) {
             await tester.tap(target);
             await tester.pumpAndSettle();
@@ -200,21 +199,26 @@ void main() {
     );
   }
 
-  testWidgets('an empty event opens on Players with file import first', (
+  testWidgets('an empty event opens on Players with Add from URL first', (
     tester,
   ) async {
     final c = TournamentController(SqliteEventRepository(':memory:'))
       ..create('Club night');
     addTearDown(c.dispose);
     await mount(tester, c);
-    expect(find.text('Import file…'), findsOneWidget);
-    expect(find.text('Paste'), findsOneWidget);
     expect(find.text('Overview'), findsNothing);
-    // Registration actions have equal visual weight; posting follows registration.
-    for (final label in ['Import file…', 'Paste', 'Add one player']) {
+    final labels = ['Add from URL', 'Import file…', 'Paste', 'Add one player'];
+    for (final label in labels) {
       expect(find.widgetWithText(OutlinedButton, label), findsOneWidget);
     }
+    // All four fit on one row at a normal window width.
+    final rows = labels.map((l) => tester.getTopLeft(find.text(l)).dy).toSet();
+    expect(rows, hasLength(1));
+    expect(find.byKey(const ValueKey('player-tools')), findsNothing);
     expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('add-from-url')));
+    await tester.pumpAndSettle();
+    expect(find.text('Fetch players'), findsOneWidget);
   });
 
   testWidgets('entry panels focus the first field and support Tab and Enter', (
@@ -321,7 +325,9 @@ void main() {
         Player(id: 'p$i', name: 'Player $i', rating: 2000 - i * 50),
     ]);
     await mount(tester, c);
-    expect(find.text('8 players are not in a section yet.'), findsOneWidget);
+    // Sorting players into sections is its own toolbar step.
+    expect(find.byKey(const ValueKey('open-create-sections')), findsOneWidget);
+    expect(find.byKey(const ValueKey('print-standings')), findsNothing);
     await tester.tap(find.text('Create sections…'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('type-quad')));
@@ -368,7 +374,8 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('2 selected'), findsOneWidget);
+    // Bulk actions open at the right; the table does not move.
+    expect(find.text('2 players selected'), findsOneWidget);
     // Swap: move one Quad 2 player up, then the Quad 1 player down.
     await tester.tap(
       find.descendant(
@@ -398,9 +405,10 @@ void main() {
     // A pre-round move is a roster edit: both stay quads.
     expect([a.format, b.format], [Format.quad, Format.quad]);
     expect(find.textContaining('selected'), findsNothing);
+    expect(find.text('Moved 1 player to ${b.name}.'), findsOneWidget);
   });
   testWidgets(
-    'views keep their section scope; reports have no pairing toolbar',
+    'views keep their section scope; the report covers every section',
     (tester) async {
       final c = fixture();
       addTearDown(c.dispose);
@@ -427,20 +435,13 @@ void main() {
       await tester.tap(find.text('Export'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
-      // The sidebar stays, and choosing a section scopes the printouts.
-      await tester.tap(find.byKey(const ValueKey('section-chip-all')));
+      // The rating report is event-wide, so Export has no section strip;
+      // returning to Pairings brings the strip back.
+      expect(find.byKey(const ValueKey('rating-report')), findsOneWidget);
+      expect(find.byKey(const ValueKey('section-tabs')), findsNothing);
+      await tester.tap(find.text('Pairings').first);
       await tester.pumpAndSettle();
-      expect(
-        find.text('Final standings & printouts · All sections'),
-        findsOneWidget,
-      );
-      final last = c.event!.sections.last;
-      await tester.tap(find.byKey(ValueKey('section-chip-${last.id}')));
-      await tester.pumpAndSettle();
-      expect(
-        find.text('Final standings & printouts · ${last.name}'),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('section-tabs')), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

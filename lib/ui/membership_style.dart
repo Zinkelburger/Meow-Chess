@@ -2,13 +2,15 @@ import '../domain/model.dart';
 import 'package:flutter/material.dart';
 import '../domain/membership.dart';
 
+/// Worth a second look, short of an error. Always paired with words or an icon.
+Color attentionColor(ColorScheme colors) => colors.brightness == Brightness.dark
+    ? const Color(0xffffd966)
+    : const Color(0xff785500);
+
 Color membershipColor(ColorScheme colors, MembershipSummary summary) =>
     switch (summary.severity) {
       MembershipSeverity.error => colors.error,
-      MembershipSeverity.warning =>
-        colors.brightness == Brightness.dark
-            ? const Color(0xffffd966)
-            : const Color(0xff785500),
+      MembershipSeverity.warning => attentionColor(colors),
       MembershipSeverity.normal => colors.onSurfaceVariant,
     };
 
@@ -27,40 +29,35 @@ class MembershipCell extends StatelessWidget {
     final summary = MembershipSummary(player, eventDate: eventDate);
     final colors = Theme.of(context).colorScheme;
     final color = membershipColor(colors, summary);
+    // One line keeps the row height steady; the tooltip has the full detail.
     return Tooltip(
       message: summary.detail,
       child: Padding(
         padding: const EdgeInsets.only(right: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    summary.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: color,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+        child: Text.rich(
+          TextSpan(
+            style: TextStyle(color: color),
+            children: [
+              TextSpan(
+                text: summary.label,
+                style: const TextStyle(
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+              if (summary.warning case final warning?) ...[
+                const TextSpan(text: '  '),
+                TextSpan(
+                  text: warning,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (summary.attention) ...[
-                  const SizedBox(width: 4),
-                  Icon(Icons.warning_amber_rounded, size: 14, color: color),
-                ],
               ],
-            ),
-            if (summary.warning != null)
-              Text(
-                summary.warning!,
-                style: TextStyle(color: color, fontSize: 12),
-              ),
-          ],
+            ],
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );

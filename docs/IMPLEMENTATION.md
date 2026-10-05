@@ -59,7 +59,7 @@ partition and individual Swiss/RR sections; score-Swiss proposals in a backgroun
 isolate; batch posting with revision guards; separate actual round start with
 explicitly assumed finish estimates; manual unstarted pairing edits; Swiss-Sys style per-player score boxes on the Rounds page (1/0/5, W/L/D aliases,
 +/− forfeits; the opponent's box fills in) with repeat suppression and advance after commit; forfeit shortcuts and optional withdrawal; historical
-corrections with reasons and a later-round impact review; all-round browsing;
+corrections with optional notes and a later-round impact review in the docked panel; all-round browsing;
 entry-cell correction and selective history result undo; atomic reopening of an
 explicitly confirmed unstarted round suffix, guarded against recorded play and
 section transfers; separate TD-authorized temporary pairing assumptions;
@@ -108,8 +108,8 @@ using section pairing numbers shown in the # column, independent of sort and
 search. Byes use `B` plus their points; `F` suffixes mark forfeits. Edit requested
 byes in player details, where **None** removes a request. IDs and tiebreaks are
 optional under **View**, alongside the advanced standings filters. Imports and
-spreadsheet paste live in the menu beside **+ Add player**. Bulk actions only
-appear when players are selected.
+spreadsheet paste live in the menu beside **+ Add player**. Ticking players opens their
+bulk actions in the right-hand column, so the table never shifts.
 
 Rounds opens a single section by default. Its full-width table has larger names
 and score boxes, without ratings. Search by player or exact board number. The
@@ -117,10 +117,11 @@ row menu provides mouse entry and **Still playing / clear result**, which return
 both boxes to blank. Keyboard 1/0/5 entry and Delete continue to work. The player
 details header and close button stay visible while its contents scroll.
 
-Select partners and choose **Assign team** to record a shared mixed-doubles team
-name, or edit a player's team in their details. This records membership only;
-it does not implement team-match pairings, prize eligibility, or team scoring.
-Select two players and choose **Do not pair together** for sibling/other requests;
+Select partners and choose **Assign team** to record a shared team name (for
+example mixed-doubles partners), or edit **Team** in their details. It is an
+organizer label only: it does not affect pairings or the US Chess report, and
+team scoring is not implemented. A roster column headed Team imports into it.
+Select two players and choose **Do not pair together** for other requests;
 player details also add and remove these requests. Swiss proposals respect them,
 and impossible requests report a conflict. Quads/round robins check the remaining schedule before posting and report a conflict
 when it requires that meeting, so the TD can separate the

@@ -1,18 +1,11 @@
-import '../application/member_lookup.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../application/tournament_controller.dart';
 import '../application/failures.dart';
 import '../application/diagnostics.dart';
-import '../application/member_lookup_batch.dart';
 import '../domain/model.dart';
-import '../domain/rating_update.dart';
-import '../domain/membership.dart';
-import 'membership_style.dart';
 import '../infrastructure/roster_import.dart';
 import '../infrastructure/web_roster.dart';
-import '../domain/member_observation.dart';
-import '../infrastructure/member_directory.dart';
 import 'side_panel.dart';
 
 String rosterRefreshLabel(Event event) {
@@ -157,8 +150,10 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
   @override
   Widget build(BuildContext context) {
     final r = review;
+    // A first fetch adds the roster; later fetches update it.
+    final first = c.event!.players.isEmpty;
     return SidePanel(
-      title: 'Refresh from URL',
+      title: first ? 'Add from URL' : 'Refresh from URL',
       onClose: widget.onClose,
       footer: [
         if (r != null)
@@ -168,10 +163,6 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
           ),
       ],
       children: [
-        const Text(
-          'Read a registration table from a web link, then confirm the changes to this event.',
-        ),
-        const SizedBox(height: 12),
         TextField(
           key: const ValueKey('roster-url'),
           controller: url,
@@ -184,23 +175,22 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
           onSubmitted: (_) => fetch(),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Boylston: paste an event or entry-list link. Other clubs: paste the page with a Name and Rating table (USCF IDs are optional).',
-        ),
-        const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: busy ? null : fetch,
           icon: const Icon(Icons.refresh, size: 18),
-          label: Text(busy ? 'Reading entry list…' : 'Fetch updates'),
+          label: Text(
+            busy
+                ? 'Reading entry list…'
+                : first
+                ? 'Fetch players'
+                : 'Fetch updates',
+          ),
         ),
         CheckboxListTile(
           key: const ValueKey('import-refresh-ratings'),
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
-          title: const Text('Refresh ratings from USCF'),
-          subtitle: const Text(
-            'Review proposed ratings after import. Players without IDs are skipped.',
-          ),
+          title: const Text('Fetch ratings from USCF'),
           value: refreshRatings,
           onChanged: busy
               ? null
@@ -280,252 +270,4 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
       ],
     );
   }
-}
-
-class RatingsRefreshPanel extends StatefulWidget {
-  const RatingsRefreshPanel({
-    required this.controller,
-    required this.onClose,
-    this.lookup = fetchMember,
-    this.membershipOnly = false,
-    super.key,
-  });
-  const RatingsRefreshPanel.membership({
-    required this.controller,
-    required this.onClose,
-    this.lookup = fetchMembership,
-    super.key,
-  }) : membershipOnly = true;
-  final bool membershipOnly;
-  final TournamentController controller;
-  final VoidCallback onClose;
-  final MemberLookup lookup;
-  @override
-  State<RatingsRefreshPanel> createState() => _RatingsRefreshPanelState();
-}
-
-class _RatingsRefreshPanelState extends State<RatingsRefreshPanel> {
-  final observations = <String, MemberObservation>{};
-  final failures = <String, String>{};
-  final selected = <String>{};
-  Event? snapshot;
-  String category = 'R';
-  bool busy = false, cancelled = false;
-  String? notice;
-  TournamentController get c => widget.controller;
-  @override
-  void initState() {
-    super.initState();
-    loadCategory();
-  }
-
-  Future<void> loadCategory() async {
-    final value = await readRatingCategory();
-    if (mounted && snapshot == null) setState(() => category = value);
-  }
-
-  Future<void> fetch() async {
-    final event = c.event!;
-    setState(() {
-      snapshot = event;
-      observations.clear();
-      failures.clear();
-      selected.clear();
-      busy = true;
-      cancelled = false;
-      notice = null;
-    });
-    try {
-      final outcome = await const MemberLookupBatch().run(
-        event.players,
-        lookup: (id) => widget.lookup(id),
-        isCurrent: () =>
-            mounted &&
-            !cancelled &&
-            c.event?.id == snapshot?.id &&
-            c.event?.revision == snapshot?.revision,
-        onMissingId: (player) => setState(
-          () => failures[player.id] =
-              'No USCF ID — enter one on the player card.',
-        ),
-        onFound: (player, found) {
-          c.recordMembership(event.id, player.id, found.toJson());
-          setState(() {
-            snapshot = c.event!;
-            observations[player.id] = found;
-          });
-        },
-        onFailure: (player, error, _) =>
-            setState(() => failures[player.id] = plainMessage(error)),
-      );
-      if (!mounted) return;
-      if (outcome == MemberBatchOutcome.providerStopped) {
-        notice =
-            'Provider stopped the batch. Completed lookups are available below; retry later.';
-      } else if (outcome == MemberBatchOutcome.cancelled && !cancelled) {
-        notice = 'The event changed. Fetch again to check the current roster.';
-      }
-    } catch (error) {
-      if (mounted) notice = plainMessage(error);
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  @override
-  void dispose() {
-    cancelled = true;
-    super.dispose();
-  }
-
-  void apply() {
-    try {
-      if (c.event!.revision != snapshot!.revision) {
-        throw const TournamentException(
-          'The event changed. Fetch and review ratings again.',
-        );
-      }
-      c.applyReviewedRatings(
-        snapshot: snapshot!,
-        observations: observations,
-        playerIds: selected,
-        category: category,
-      );
-      setState(() {
-        notice =
-            'Saved ${selected.length} supplement ratings locally. Section assignments are unchanged.';
-        snapshot = null;
-        selected.clear();
-      });
-    } catch (e) {
-      setState(() => notice = plainMessage(e));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => SidePanel(
-    title: widget.membershipOnly
-        ? 'Check USCF memberships'
-        : 'Refresh US Chess ratings',
-    onClose: widget.onClose,
-    children: [
-      Text(
-        widget.membershipOnly
-            ? 'Fetch membership expiration dates directly from US Chess for every player in this event. Successful checks are saved automatically, including for unrated players and posted sections.'
-            : 'Fetch dated monthly supplements for every USCF ID. Membership expiration dates are saved automatically. Review the official name and old → new rating, then tick the rating changes you approve.',
-      ),
-      const SizedBox(height: 12),
-      if (!widget.membershipOnly)
-        DropdownButtonFormField<String>(
-          isExpanded: true,
-          initialValue: category,
-          key: ValueKey('refresh-category-$category'),
-          decoration: const InputDecoration(labelText: 'Rating category'),
-          items: const [
-            DropdownMenuItem(value: 'R', child: Text('Regular')),
-            DropdownMenuItem(value: 'Q', child: Text('Quick')),
-            DropdownMenuItem(value: 'B', child: Text('Blitz')),
-          ],
-          onChanged: busy
-              ? null
-              : (v) => setState(() {
-                  category = v!;
-                  selected.clear();
-                }),
-        ),
-      const SizedBox(height: 8),
-      Wrap(
-        spacing: 8,
-        children: [
-          OutlinedButton(
-            onPressed: busy ? null : fetch,
-            child: Text(
-              busy
-                  ? 'Fetched ${observations.length + failures.length} of ${snapshot!.players.length}…'
-                  : widget.membershipOnly
-                  ? 'Fetch memberships'
-                  : 'Fetch monthly supplements',
-            ),
-          ),
-          if (busy)
-            TextButton(
-              onPressed: () => setState(() {
-                cancelled = true;
-                notice = 'Stopped. Completed lookups are available for review.';
-              }),
-              child: const Text('Stop'),
-            ),
-        ],
-      ),
-      if (notice != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Text(notice!),
-        ),
-      if (snapshot != null) ...[
-        const SizedBox(height: 12),
-        if (!widget.membershipOnly)
-          const Text(
-            'Posted sections keep their pairing ratings. Missing ratings never replace a number with zero.',
-          ),
-        for (final p in snapshot!.players)
-          if (observations[p.id] case final m?)
-            if (widget.membershipOnly)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  '${p.name} · ${MembershipSummary(p, eventDate: snapshot!.lastDate).label}',
-                  style: TextStyle(
-                    color: membershipColor(
-                      Theme.of(context).colorScheme,
-                      MembershipSummary(p, eventDate: snapshot!.lastDate),
-                    ),
-                  ),
-                ),
-                subtitle: Text(
-                  'USCF ${m.id}: ${m.name}\n${MembershipSummary(p, eventDate: snapshot!.lastDate).detail}',
-                ),
-              )
-            else
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                value: selected.contains(p.id),
-                onChanged:
-                    busy ||
-                        ratingUpdateProblem(
-                              current: c.event!,
-                              snapshot: snapshot!,
-                              player: c.event!.player(p.id),
-                              observation: m,
-                              category: category,
-                            ) !=
-                            null
-                    ? null
-                    : (value) => setState(() {
-                        value == true
-                            ? selected.add(p.id)
-                            : selected.remove(p.id);
-                      }),
-                title: Text(
-                  '${p.name}: ${p.rating} → ${m.ratings[category] ?? 'unavailable'}',
-                ),
-                subtitle: Text(
-                  'USCF ${m.id}: ${m.name}\nMembership expiration: ${m.expiration ?? 'unavailable'} · ${m.status ?? 'unknown'}\nSupplement ${m.supplementDate ?? 'date unavailable'}${(snapshot!.sectionOf(p.id)?.rounds.isNotEmpty ?? false) ? '\nPairings posted — rating kept.' : ''}',
-                ),
-              )
-          else if (failures[p.id] case final error?)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(p.name),
-              subtitle: Text(error),
-            ),
-        if (!widget.membershipOnly)
-          FilledButton(
-            onPressed: busy || selected.isEmpty ? null : apply,
-            child: Text('Confirm ${selected.length} rating changes'),
-          ),
-      ],
-    ],
-  );
 }

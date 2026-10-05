@@ -46,7 +46,7 @@ const helpArticles = [
       ),
       (
         'Changing a quad',
-        'Before posting, open a player, choose the destination section, and optionally choose a player to swap with. Confirm the move or swap. A swap keeps both quads at four players. A quad that has a different number of players at its first pairing runs as a small Swiss. Once rounds are posted, a roster swap cannot rewrite them.',
+        'Before posting, open a player, choose Move… and the destination section, and optionally choose a player to swap with. Confirm the move or swap. A swap keeps both quads at four players. A quad that has a different number of players at its first pairing runs as a small Swiss. Once rounds are posted, a roster swap cannot rewrite them.',
       ),
       (
         'Related reading',
@@ -66,6 +66,10 @@ const helpArticles = [
       (
         'Odd numbers and missing results',
         'An odd field needs an allocated bye. The app tries to avoid giving a player a second allocated bye. Resolve missing results, or record a director-approved temporary pairing treatment, before posting the next round.',
+      ),
+      (
+        'Requested byes and withdrawals',
+        'Right-click a player and choose Byes…, or open the player. Under Byes, choose the round in the ½ pt, 0 pt or 1 pt row; choose it again to clear. A player leaving after a later round can take zero-point byes for the rounds they will miss. Withdraw, at the top of the player’s card, takes effect from the next unpaired round; Reinstate brings them back.',
       ),
     ],
   ),
@@ -91,7 +95,7 @@ const helpArticles = [
     [
       (
         'First import',
-        'Choose Players → Player tools → Refresh from URL. Paste an HTTPS URL and choose Fetch updates. Boylston accepts either an event page or its entry-list URL. For other clubs, paste the page containing one HTML player table with Name and Rating columns (USCF ID is optional); the generic importer reads that page without finding links to other pages. Review the rows, then confirm changes and save the source. Refresh ratings from USCF is checked by default; uncheck it to skip the optional rating review.',
+        'On an empty event, choose Players → Add from URL; later, choose Player tools → Refresh from URL. Paste an HTTPS URL and choose Fetch players (or Fetch updates). Boylston accepts either an event page or its entry-list URL. For other clubs, paste the page containing one HTML player table with Name and Rating columns (USCF ID is optional); the generic importer reads that page without finding links to other pages. Review the rows, then confirm changes and save the source. Fetch ratings from USCF is checked by default; uncheck it to skip the optional rating review.',
       ),
       (
         'Updating later',
@@ -99,7 +103,7 @@ const helpArticles = [
       ),
       (
         'What the website can tell us',
-        'After import, review proposed USCF ratings in the player table. Changes over 50 points and unrated-to-rated changes are highlighted. Confirm selected ratings or choose Keep current ratings. Double-click a player to edit details on the right. Missing IDs or published ratings leave current values intact. Website section and bye columns are retained in the source record; assign sections and requested byes explicitly in Meow-Chess.',
+        'After import, review proposed USCF ratings in the panel at the right and the player table. Changes over 50 points and unrated-to-rated changes are highlighted, and a USCF name that looks like a different person is flagged and left unticked. Confirm ticked ratings or choose Keep current ratings. Click a player to edit them; the review stays open. Missing IDs or published ratings leave current values intact. Website section and bye columns are retained in the source record; assign sections and requested byes explicitly in Meow-Chess.',
       ),
     ],
   ),
@@ -114,11 +118,11 @@ const helpArticles = [
       ),
       (
         'Refresh one or everyone',
-        'Use Players → Player tools → Refresh from USCF for the whole event, or the refresh arrow beside a player’s US Chess ID for one person. Check the returned official name, ID, category and supplement date. Confirm the rating changes you want in the player table, or keep current ratings. A failed lookup leaves local values intact.',
+        'Use Players → Refresh from USCF for the whole event, or the refresh arrow beside a player’s US Chess ID for one person. Check the returned official name, ID, category and supplement date. Confirm the rating changes you want in the player table, or keep current ratings. A failed lookup leaves local values intact.',
       ),
       (
         'Check USCF membership expiration',
-        'Open a player card to see the saved USCF membership expiration date. Choose Player tools → Check memberships → Fetch memberships to check everyone directly with US Chess, including unrated players and players in posted sections. Successful checks save automatically and also run with successful rating refreshes. Expired dates appear in red with an Expired label. Memberships expiring later this calendar month appear in yellow with Expires this month. Dates before the event ends also receive a warning. Open the player card for provider status and the check time. No date means unknown, not lifetime membership. Failed checks keep the previous observation; changing an ID clears it.',
+        'Open a player card to see the saved USCF membership expiration date. Choose Players → Refresh from USCF to check everyone directly with US Chess, including unrated players and players in posted sections. Expiration dates save automatically, even if you keep current ratings. Expired dates appear in red with an Expired label. Memberships expiring later this calendar month appear in yellow with Expires this month. Dates before the event ends also receive a warning. Open the player card for provider status and the check time. No date means unknown, not lifetime membership. Failed checks keep the previous observation; changing an ID clears it.',
       ),
       (
         'Monthly versus latest',
@@ -136,7 +140,7 @@ const helpArticles = [
   ),
   HelpArticle(
     'players',
-    'Register, move and swap players',
+    'Register and move players',
     'Add a walk-up or adjust section assignments with confirmation.',
     [
       (
@@ -144,8 +148,8 @@ const helpArticles = [
         'On Players, choose Add player. Enter the name, rating (or UNR) and optional eight-digit US Chess ID. Choose the section and Add. This registers the player locally; it does not register them on an external website or collect a payment.',
       ),
       (
-        'Move or swap',
-        'Open a player’s card and choose the destination section. Before rounds are posted, choose a player there to exchange places, or move without a swap. Confirm the proposed change. You can also tick players in All sections and choose Move to, or select two players and choose Swap sections.',
+        'Move a player',
+        'Open a player’s card, choose Move… and pick the destination section, then confirm. You can also tick players and choose Move to. A Swiss only needs a move. When a quad or round robin is involved and neither section is paired, you can instead exchange places with a player there so both stay full, or tick the two players and choose Swap sections.',
       ),
       (
         'After rounds are posted',

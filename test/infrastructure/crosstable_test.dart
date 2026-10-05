@@ -45,7 +45,7 @@ void main() {
     () async {
       final text = crosstable(event);
       final pdf = pdfText(await reportPdf(event, ReportKind.crosstable));
-      for (final cell in ['W2w', 'L1b', 'BYE 0.5']) {
+      for (final cell in ['W2w', 'L1b', 'H---']) {
         expect(text, contains(cell));
         expect(pdf, contains(cell.replaceAll(' ', '')));
       }
@@ -72,7 +72,7 @@ void main() {
           'b',
           numbers,
         ),
-        'F11b',
+        'X1b',
       );
       expect(crosstableCell(event, round.copy(byes: []), 'c', numbers), '--');
       final doubles = round.copy(

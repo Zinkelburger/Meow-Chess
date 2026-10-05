@@ -22,7 +22,7 @@ one undoable event revision. Future updates reuse the saved URL. An empty table
 or failed download cannot clear the event.
 
 Website ratings are retained as reference values with provenance.
-**Refresh ratings from USCF** is checked by default in the URL import panel;
+**Fetch ratings from USCF** is checked by default in the URL import panel;
 uncheck it to skip. After confirming the roster, the optional USCF review runs
 in the player table on the left, leaving the right-hand player editor available. A website update cannot replace an applied monthly supplement
 rating. Refreshes do not regroup sections. Before pairing, remake quads explicitly
@@ -35,9 +35,17 @@ USCF ID, sequentially with a delay and per-player results. Stop leaves completed
 lookups available for review. Throttling/authentication stops the batch; ordinary
 individual failures leave other successful observations usable. Confirm only the
 selected changes, or choose **Keep current ratings** to discard the whole draft.
-Valid proposals start selected, but no pairing rating changes before confirmation.
-Changes of more than 50 points in either direction and unrated-to-rated changes
-are bold and highlighted. Double-click a row to edit its player. Missing IDs,
+The review opens in the right-hand column; the table gains **USCF ID**,
+**Entered**, **Rating on <supplement date>** (with a tick box and the change) and
+**USCF name** columns beside USCF expires and the registration note. Valid
+proposals start ticked, but no pairing rating changes before confirmation. A USCF
+name that looks like a different person (the entered name shares no close word
+with the US Chess last name) is flagged with an icon, listed under **Names to
+check**, and starts unticked. Changes of more than 50 points in either direction
+and unrated-to-rated changes are bold and shaded. Clicking a player opens their
+editable card in place of the review, with that player's proposal under Rating
+and **Back to rating review**; a rating typed there is kept and that row reads
+"Your edit is kept." Missing IDs,
 unrated members, provider failures, and skipped players have explanations and
 recovery options on their rows. No-ID rosters make no lookup requests. Same-value
 ratings can still be confirmed to record verification.
@@ -48,8 +56,8 @@ confirmation. Missing ratings remain unknown. Posted sections keep their pairing
 ratings, and late results cannot override an edited event. Manual rating or ID
 edits clear the old verified-rating attribution.
 
-**Players → Player tools → Check memberships → Fetch memberships** fetches the member profile
-without requiring a rating supplement, so unrated players can be checked too.
+**Players → Refresh from USCF** fetches each member profile along with the rating
+supplement, so membership expiry is saved for everyone found, unrated players included.
 The **USCF expires** column displays the saved date; expired dates are red and
 labelled **Expired**. Memberships expiring later this calendar month are yellow
 and labelled **Expires this month**. Dates before the event's last day also
@@ -59,14 +67,14 @@ flagged as expired for that event. Provider status and the retrieval timestamp a
 the player card and in the date tooltip. Missing dates are unknown, never inferred
 to mean lifetime membership.
 
-Successful membership checks and single-player rating lookups automatically save
-observations separately from pairing ratings. The inline rating review saves
-membership observations with the confirmed rating changes. They work after
+USCF refreshes and single-player rating lookups automatically save membership
+observations separately from pairing ratings, whether or not rating changes are
+confirmed. They work after
 pairings are posted, survive reopening the event, and retain the previous value
 on request failure. Editing a USCF ID clears its membership observation; manual
 rating edits keep it. Membership refreshes do not determine tournament eligibility
 or block pairings. Saved dates are observations as of the displayed check time;
-use Check memberships again to see renewals.
+use Refresh from USCF again to see renewals.
 
 Event details → Data sources sets the default category across events on this
 computer, using the system credential store. Monthly supplement is the available
@@ -88,8 +96,9 @@ section immediately and opens its settings in the right-hand panel. Side games i
 unchecked by default. Right-click a section, or use its visible action menu, to
 rename, configure, combine, or delete an unplayed section. Before play, the Players
 view offers Create sections when players are unassigned, including grouping by
-rating into quads. Refresh from URL and Refresh from USCF (♔) live in
-the global toolbar; posting lives in the Players/Rounds content header.
+rating into quads. Refresh from USCF sits beside Add player in the Players
+toolbar, and Refresh from URL is under Player tools; posting lives in the Pairings
+content header.
 
 Player cards offer a destination and explicit confirmation. Before rounds are
 posted, choose a destination player to exchange roster slots in one atomic swap.

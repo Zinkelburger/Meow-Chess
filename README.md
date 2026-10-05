@@ -4,7 +4,7 @@ An offline-first Flutter desktop tournament director workspace.
 US Chess first; Swiss events, easy quads, reliable identity/rating checks, and
 usable printing. Inspired by SwissSys workflows and Chess Auto Prep V2's UI.
 
-**Meow-Chess 1.2.1** provides an offline desktop workspace for Linux and Windows.
+**Meow-Chess 1.2.2** provides an offline desktop workspace for Linux and Windows.
 Download the installers and portable bundles from [Releases](https://github.com/Zinkelburger/Meow-Chess/releases).
 This release adds complete quad schedules and pairing edits, improves US Chess
 identity and rating review, and preserves reliable history and recovery. Shared
@@ -15,6 +15,11 @@ the native replacement mechanism on sandboxed macOS.
 The 1.2.1 maintenance update protects database recovery files when saving copies,
 rejects stale roster and pairing edits, preserves rating lookups after save
 failures, and durably publishes complete report packages.
+The 1.2.2 update makes F a one-key no-show, prints US Chess result letters
+(X/F forfeits, B---/H---/U--- byes), redesigns the player card with a compact
+bye table and one Move action that keeps quads at four, shows the full US Chess
+record from Check ID, keeps the crosstable and round headings level, and lets
+any on-screen text be selected and copied.
 Federation acceptance and full Swiss priority conformance remain unverified; see
 [implementation status](docs/IMPLEMENTATION.md) and [release qualification](docs/TESTING.md).
 The existing
@@ -85,9 +90,12 @@ Everyone must meet once across the three rounds; changing opponents may require
 adjusting another unplayed round. Rounds with results, start markers or pairing
 assumptions stay locked. Saved edits update future rounds and printed sheets;
 reprint any sheets already distributed. **Undo** restores the previous schedule.
-The quad setup preview only displays the rating groups. **Print section sheets**
-prints one plain result sheet per quad with all round-robin pairings, including
-future rounds. Swiss sections print only the selected posted round. Sheets use
+The quad setup preview only displays the rating groups. **Print player list**
+(Players view, or right-click a section tab) prints each section's players by
+pairing number with rating and US Chess ID; it never depends on pairings.
+Pairing sheets print from the Pairings view: a quad prints its plain result
+sheet with all round-robin pairings, including future rounds, and Swiss sections
+print only the selected posted round. Pairing sheets use
 **Board | Result | White | Black | Result**, with blank result boxes for handwriting
 and unused space left blank. Each section starts on a fresh page; large Swiss
 sections continue onto additional pages as needed. The first print asks for a printer; later prints use the saved device.
@@ -104,14 +112,14 @@ fill missing player states from their USCF IDs. Rating and membership lookups
 also fill missing states automatically; existing states are preserved.
 
 On **Pairings & results**, choose a round number or **Show all rounds** to find an earlier
-game. Choose **Correct a result**, or click a result cell in **Players & standings**, to review
-a correction. The review shows score changes and later rounds: keep their pairings,
-or reopen an unstarted round and all rounds after it. Recorded play and section
-transfers prevent automatic reopening. Reopened rounds are paired again through
-the normal pairing review. The previous version remains in **History**, where a
-single-result transaction also offers **Undo this result** without reversing
-unrelated edits. Restoring multiple transactions previews the whole-event changes
-before confirmation.
+game. Choose **Correct a result**, or click a result cell in **Players & standings**, and the
+correction opens beside the table. Pick who won, see each player's score change, and decide
+what happens to later rounds: keep their pairings, or unpair an unstarted round and all
+rounds after it. Recorded play and section transfers prevent unpairing. A note is optional.
+Unpaired rounds are paired again through the normal pairing review. The previous version
+remains in **History**, where a single-result change also offers **Fix this result**
+without reversing unrelated edits. Selecting any change lists what going back to it would
+undo, and any recorded play it would remove, above the button that does it.
 
 **Import file…** opens a CSV/TSV/text file for review before adding players.
 Choose the delimiter and header setting, then map your columns to name, rating,

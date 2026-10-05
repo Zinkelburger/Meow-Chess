@@ -27,7 +27,7 @@ String? ratingUpdateProblem({
   if (system == null) return 'Choose a recognized rating system.';
   final rating = observation.ratings[system.code];
   if (rating == null || rating <= 0 || rating > 4000) {
-    return 'Unrated / no published ${system.label} rating. Current rating kept.';
+    return 'No ${system.label} rating. Current rating kept.';
   }
   if (observation.supplementDate == null) {
     return 'No dated supplement. Retry later.';

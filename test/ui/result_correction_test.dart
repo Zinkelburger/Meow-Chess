@@ -3,12 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
-import 'package:meow_chess/ui/history_panel.dart';
 import 'package:meow_chess/ui/players_view.dart';
 import 'package:meow_chess/ui/results_view.dart';
-import 'package:meow_chess/ui/result_correction_dialog.dart';
+import 'package:meow_chess/ui/result_correction_panel.dart';
 import 'package:meow_chess/ui/theme.dart';
+import 'package:meow_chess/ui/workspace.dart';
 import '../support.dart';
+import 'dock_host.dart';
 
 Future<void> prepare(WidgetTester tester, TournamentController c) async {
   final id = c.event!.sections.first.id;
@@ -22,27 +23,51 @@ Future<void> prepare(WidgetTester tester, TournamentController c) async {
 Future<void> mount(
   WidgetTester tester,
   TournamentController c,
-  Widget Function() view,
-) async {
-  tester.view.physicalSize = const Size(1400, 1000);
+  Widget Function() view, {
+  Size size = const Size(1400, 1000),
+  double textScale = 1,
+  Brightness brightness = Brightness.light,
+}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     MaterialApp(
-      theme: meowTheme(Brightness.light),
+      theme: meowTheme(brightness),
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
       home: Scaffold(
-        body: ListenableBuilder(listenable: c, builder: (_, _) => view()),
+        body: DockHost(
+          child: ListenableBuilder(listenable: c, builder: (_, _) => view()),
+        ),
       ),
     ),
   );
   await tester.pumpAndSettle();
 }
 
+Widget opener(TournamentController c, String gameId, {Outcome? outcome}) =>
+    Builder(
+      builder: (context) => TextButton(
+        onPressed: () =>
+            openResultCorrection(context, c, gameId, outcome: outcome),
+        child: const Text('Review'),
+      ),
+    );
+
+final panel = find.byKey(const ValueKey('result-correction-review'));
+final save = find.byKey(const ValueKey('apply-correction'));
+bool canSave(WidgetTester tester) =>
+    tester.widget<FilledButton>(save).onPressed != null;
+
 void main() {
-  testWidgets('all rounds groups boards correctly and cancel changes nothing', (
-    tester,
-  ) async {
+  testWidgets('all rounds opens the correction beside the table; closing '
+      'changes nothing and keeps the draft', (tester) async {
     final c = fixture(format: Format.swiss);
     addTearDown(c.dispose);
     await prepare(tester, c);
@@ -70,86 +95,107 @@ void main() {
     await tester.tap(find.byKey(ValueKey('score-${first.id}-w')));
     await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
     await tester.pumpAndSettle();
+    expect(panel, findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+    expect(c.event!.encode(), before);
+    // The table stays usable beside the panel.
     expect(
-      find.byKey(const ValueKey('result-correction-review')),
+      find.byKey(ValueKey('game-${second.id}')).hitTestable(),
       findsOneWidget,
     );
-    expect(c.event!.encode(), before);
+
     await tester.tap(find.byKey(const ValueKey('reopen-round-2')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('result-reason')));
     await tester.enterText(
       find.byKey(const ValueKey('result-reason')),
       'Changed mind',
     );
     await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const ValueKey('apply-correction')))
-          .onPressed,
-      isNull,
-    );
-    await tester.tap(find.text('Cancel'));
+    // Save says why it is unavailable instead of greying out silently.
+    expect(canSave(tester), isFalse);
+    expect(find.textContaining('Confirm that no game'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Close (Esc)'));
     await tester.pumpAndSettle();
+    expect(panel, findsNothing);
     expect(c.event!.encode(), before);
+
+    // Reopening the same game brings the draft back.
+    await tester.tap(find.byKey(ValueKey('score-${first.id}-w')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
+    await tester.pumpAndSettle();
+    expect(find.text('Changed mind'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets(
-    'reopening from correction requires explicit unstarted confirmation',
+    'unpairing later rounds needs the unstarted confirmation; a note is optional',
     (tester) async {
       final c = fixture(format: Format.swiss);
       addTearDown(c.dispose);
       await prepare(tester, c);
       final game = c.event!.games.first;
-      await mount(
-        tester,
-        c,
-        () => Builder(
-          builder: (context) => TextButton(
-            onPressed: () => reviewResultCorrection(
-              context,
-              c,
-              game.id,
-              outcome: Outcome.draw,
-            ),
-            child: const Text('Review'),
-          ),
-        ),
-      );
+      await mount(tester, c, () => opener(c, game.id, outcome: Outcome.draw));
       await tester.tap(find.text('Review'));
       await tester.pumpAndSettle();
+      expect(canSave(tester), isTrue);
+      expect(find.byKey(const ValueKey('correction-score-change')), findsOne);
       await tester.tap(find.byKey(const ValueKey('reopen-round-2')));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byKey(const ValueKey('result-reason')));
-      await tester.enterText(
-        find.byKey(const ValueKey('result-reason')),
-        'Signed draw',
-      );
-      await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<FilledButton>(
-              find.byKey(const ValueKey('apply-correction')),
-            )
-            .onPressed,
-        isNull,
-      );
-      await tester.ensureVisible(
-        find.byKey(const ValueKey('confirm-unstarted')),
-      );
+      expect(canSave(tester), isFalse);
       await tester.tap(find.byKey(const ValueKey('confirm-unstarted')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('apply-correction')));
+      expect(find.text('Save and unpair from round 2'), findsOneWidget);
+      await tester.tap(save);
       await tester.pumpAndSettle();
       expect(c.event!.sections.first.rounds.length, 1);
       expect(c.event!.games.first.outcome, Outcome.draw);
+      expect(find.byKey(const ValueKey('correction-saved')), findsOneWidget);
+      expect(find.textContaining('is now ½–½ (was 1–0)'), findsOneWidget);
+
+      // Undo in the confirmation puts the event and the form back.
+      await tester.tap(find.byKey(const ValueKey('correction-undo')));
+      await tester.pumpAndSettle();
+      expect(c.event!.sections.first.rounds.length, 2);
+      expect(c.event!.games.first.outcome, Outcome.whiteWin);
+      expect(panel, findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );
 
+  testWidgets('results are buttons as well as keys', (tester) async {
+    final c = fixture(format: Format.swiss);
+    addTearDown(c.dispose);
+    await prepare(tester, c);
+    final game = c.event!.games.first;
+    final white = c.event!.player(game.white).name;
+    final black = c.event!.player(game.black).name;
+    await mount(tester, c, () => opener(c, game.id));
+    await tester.tap(find.text('Review'));
+    await tester.pumpAndSettle();
+    expect(find.text('Recorded'), findsOneWidget);
+    expect(canSave(tester), isFalse);
+    expect(find.textContaining('different from the recorded'), findsOneWidget);
+    await tester.tap(find.text('$black won'));
+    await tester.pumpAndSettle();
+    expect(canSave(tester), isTrue);
+    // Forfeits sit behind one disclosure; their keys still work.
+    expect(find.text('$white wins by forfeit'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpadAdd);
+    await tester.pumpAndSettle();
+    expect(find.text('$white wins by forfeit'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
+    await tester.pumpAndSettle();
+    expect(c.event!.games.first.outcome, Outcome.draw);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
-    'entry result opens a review; result keys do not write behind it',
+    'entry result opens the correction; result keys do not write behind it',
     (tester) async {
       final c = fixture(format: Format.swiss);
       addTearDown(c.dispose);
@@ -170,28 +216,27 @@ void main() {
       );
       await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('result-correction-review')),
-        findsOneWidget,
-      );
+      expect(panel, findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
+      await tester.pumpAndSettle();
       expect(c.event!.encode(), before);
       expect(
         find.descendant(
-          of: find.byKey(const ValueKey('result-correction-review')),
-          matching: find.textContaining('Board ${game.board}'),
+          of: panel,
+          matching: find.text('Correct board ${game.board}'),
         ),
         findsOneWidget,
       );
-      await tester.tap(find.text('Cancel'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
+      expect(panel, findsNothing);
       expect(c.event!.encode(), before);
       await tester.pumpWidget(const SizedBox());
     },
   );
 
   testWidgets(
-    'history reverses a selected result without undoing later player edits',
+    'history fixes a selected result without undoing later player edits',
     (tester) async {
       final c = fixture(format: Format.swiss);
       addTearDown(c.dispose);
@@ -200,7 +245,23 @@ void main() {
       c.recordResult(game.id, Outcome.whiteWin);
       final resultNode = c.graph.head!;
       c.savePlayer(c.event!.player('p0').copy(notes: 'Retain this'));
-      await mount(tester, c, () => HistoryPanel(controller: c, onClose: () {}));
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Workspace(
+            controller: c,
+            path: ':memory:',
+            onClose: () {},
+            onTheme: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('History (Ctrl+H)'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(ValueKey('history-$resultNode')));
       await tester.pumpAndSettle();
       expect(find.textContaining('→'), findsWidgets);
@@ -209,65 +270,44 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('history-undo-result')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('apply-correction')));
+      expect(find.byKey(const ValueKey('history-graph')), findsNothing);
+      await tester.tap(save);
       await tester.pumpAndSettle();
       expect(c.event!.games.first.outcome, Outcome.unreported);
       expect(c.event!.player('p0').notes, 'Retain this');
       expect(c.graph.nodes.containsKey(resultNode), true);
+      // Done returns to History.
+      await tester.tap(find.byKey(const ValueKey('correction-done')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('history-graph')), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 500));
     },
   );
 
-  testWidgets('correction review fits narrow windows at double text size', (
+  testWidgets('correction fits narrow windows at double text size', (
     tester,
   ) async {
     final c = fixture(format: Format.swiss);
     addTearDown(c.dispose);
     await prepare(tester, c);
-    tester.view.physicalSize = const Size(680, 650);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
     for (final brightness in Brightness.values) {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: meowTheme(brightness),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(2)),
-            child: child!,
-          ),
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => TextButton(
-                onPressed: () => reviewResultCorrection(
-                  context,
-                  c,
-                  c.event!.games.first.id,
-                  outcome: Outcome.draw,
-                ),
-                child: const Text('Review'),
-              ),
-            ),
-          ),
-        ),
+      await mount(
+        tester,
+        c,
+        () => opener(c, c.event!.games.first.id, outcome: Outcome.draw),
+        size: const Size(900, 650),
+        textScale: 2,
+        brightness: brightness,
       );
       await tester.tap(find.text('Review'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await tester.ensureVisible(find.byKey(const ValueKey('result-reason')));
-      await tester.enterText(
-        find.byKey(const ValueKey('result-reason')),
-        'Scoresheet checked',
-      );
       await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('apply-correction')).hitTestable(),
-        findsOneWidget,
-      );
+      expect(save.hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('Cancel'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       await tester.pumpWidget(const SizedBox());
     }

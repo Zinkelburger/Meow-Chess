@@ -17,6 +17,7 @@ enum RosterField {
   rating,
   memberId,
   club,
+  team,
   state,
   registrationNote,
 }
@@ -42,7 +43,8 @@ class RosterTable {
     RosterField.lastName: ['last', 'lastname', 'surname', 'familyname'],
     RosterField.memberId: ['id', 'uscf', 'uscfid', 'uschessid', 'memberid'],
     RosterField.rating: ['rating', 'rtg', 'uscfrating', 'pairingrating'],
-    RosterField.club: ['club', 'team'],
+    RosterField.club: ['club'],
+    RosterField.team: ['team', 'teamname', 'mixeddoubles'],
     RosterField.state: ['state', 'st'],
     // Boylston labels its free-form registration note column "Byes".
     // Keep it as text; it must never automatically assign requested byes.
@@ -131,6 +133,7 @@ class RosterTable {
                   memberId: member,
                   rating: rating!,
                   club: value(RosterField.club),
+                  team: value(RosterField.team),
                   state: state,
                   registrationNote: value(RosterField.registrationNote),
                   source: raw,

@@ -58,26 +58,20 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('player-tools')));
-    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('refresh-uscf')));
     await tester.pumpAndSettle();
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 600));
     }
     await tester.pumpAndSettle();
+    expect(find.text('2 of 4 players have USCF ratings.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('rating-review')), findsOneWidget);
+    // Unrated at USCF reads as a number; a missing ID stands out.
     expect(
-      find.text('Found ratings for 2 players. 2 missing — see player rows.'),
+      find.textContaining('UNR  keep 1500', findRichText: true),
       findsOneWidget,
     );
-    final playerName = find.text('Maya Patel').first;
-    final position = tester.getCenter(playerName);
-    await tester.tapAt(position, kind: ui.PointerDeviceKind.mouse);
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    await tester.tapAt(position, kind: ui.PointerDeviceKind.mouse);
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
-    expect(find.byKey(const ValueKey('rating-review')), findsOneWidget);
+    expect(find.byKey(const ValueKey('no-id-p3')), findsOneWidget);
     Future<void> capture(String name) async {
       expect(tester.takeException(), isNull);
       final boundary =
@@ -100,6 +94,21 @@ void main() {
     await tester.pumpAndSettle();
     await capture('rating-review-small');
     await tester.binding.setSurfaceSize(const Size(1400, 900));
+    dark.value = false;
+    await tester.pumpAndSettle();
+    // One click opens the player, editable while the review is pending.
+    await tester.tapAt(
+      tester.getCenter(find.text('Maya Patel').first),
+      kind: ui.PointerDeviceKind.mouse,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
+    expect(find.byKey(const ValueKey('player-rating-review')), findsOneWidget);
+    await capture('rating-review-player');
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('back-to-rating-review')),
+    );
+    await tester.tap(find.byKey(const ValueKey('back-to-rating-review')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Keep current ratings'));
     await tester.pumpAndSettle();

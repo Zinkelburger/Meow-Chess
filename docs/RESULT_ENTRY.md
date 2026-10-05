@@ -44,8 +44,9 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 | D or d | Draw | Save and advance immediately |
 | 1 | Win for labelled player | Save and advance immediately; no Enter needed |
 | 0 | Loss for labelled player | Save and advance immediately; no Enter needed |
-| F then 1/W or 0/L | Forfeit win / forfeit loss for labelled player | Save as an unplayed forfeit and advance; legend shows the pending modifier; Escape cancels it |
-| X | Double forfeit | Save both sides unplayed and advance |
+| F | Labelled player is a no-show (forfeit loss; opponent wins by forfeit) | Save as an unplayed forfeit and advance immediately |
+| X | Forfeit win for labelled player | Save as an unplayed forfeit and advance immediately |
+| F on both players of a board | Double forfeit | The second F turns the opponent's forfeit win into a double forfeit |
 | Arrow keys | Navigate cells | No result created by moving focus |
 | Enter on blank | Skip unknown game | Leave unreported and advance |
 | Shift+Enter | Previous result cell | Move backward; an explicit text editor commits only a valid complete value |
@@ -55,7 +56,13 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 | Delete on selected saved result | Clear result deliberately | Restore unreported state with history/undo; review dependencies if necessary |
 | Undo | Revert latest applicable change | Restore both opponents and focus to that game; review historical dependencies |
 
-Show a persistent compact legend: **1 / W win · 0 / L loss · D draw**.
+Show a persistent compact legend: **1 / W win · 0 / L loss · D draw · F no-show**.
+
+Score boxes and crosstables use the US Chess letters for unplayed games:
+**X** won by forfeit, **F** forfeited (both players show F after a double
+forfeit), and byes print without an opponent number as **B---** (full point),
+**H---** (half point) and **U---** (zero point). Played games keep 1, ½ and 0
+on screen and W/D/L with the opponent's number on the printed crosstable.
 Support both the number row and numpad. These keys are commands, not decimal text
 entry: D stores/displays a draw (½). There is no Enter/Tab
 requirement, typing-speed timeout or automatic mode inference for these shortcuts.
@@ -172,7 +179,7 @@ outcome through an explicit action, not overwrite a derived total accidentally.
 | Double-game match with split wins | Two actual games retained; not converted to draws |
 | Keyboard/screen reader at 200% text | Names/perspective announced, focus visible, grid escapable |
 | TD reads “0.5” in the score column and types 0 then 5 | Named typo fixture: the legend and perspective line are tested against it; 0 records a loss and advances; 5 does nothing. One Undo restores both opponents of the changed game. Never infer a grouped mistake from valid keystrokes |
-| F then 1, then X on the next board | Forfeit win and double forfeit recorded as unplayed; rating export excludes both; withdraw offer shown once |
+| X, then F on both players of the next board | Forfeit win and double forfeit recorded as unplayed; rating export excludes both; withdraw offer shown once |
 | Event-wide grid across five sections | Global board order; each section's standings update; no cross-section reciprocal error |
 | Entry abandoned mid-sequence, app restarted | Cursor position and Missing-only filter restored; no result invented (K14) |
 
@@ -189,22 +196,33 @@ selected. Entry result cells open the same review directly; a double-game cell
 first asks which game to correct. Ordinary latest-round keyboard entry remains
 immediate.
 
-The review identifies the section, round, board, colors and game leg, and shows
-old/new outcomes and each player's score contribution. Later rounds default to
-**Keep pairings and results**. **Reopen from round N** selects the entire suffix;
-changing that boundary updates the preview. Reopening requires both no recorded
-play in that suffix and an explicit check that no games have actually started.
-Later section transfers disable automatic reopening and disclose linked sections.
-The correction reason and reopening choice commit in one revision. New pairings
-are generated and reviewed separately; a stale review cannot commit.
+The correction opens in the docked panel beside the table, never a dialog, so
+lookup and the boards stay usable while it is open. It names the section,
+round, board, colors and game leg. Results are buttons named for the players
+("Jamie Patel won", Draw), with forfeits and other outcomes behind one
+disclosure; the usual result keys also select them, and Enter or Ctrl+Enter
+saves. Each player's score change shows before saving. Later paired rounds
+default to **Keep the pairings**; **Unpair from round N** removes that round and
+every later one, and requires both no recorded play in that suffix and an
+explicit check that no games have actually started. Later section transfers
+disable unpairing and name the linked sections. The note is optional. Closing
+keeps the draft. Saving commits the result and unpairing in one revision and
+leaves a confirmation in the panel with Undo and a reminder to reprint posted
+copies. New pairings are created separately; the panel always saves against the
+current revision.
 
-History transaction details show before/after values. A transaction that changed
-only one game's result offers **Undo this result** if that exact game still has
-the recorded outcome. This creates a reviewed correction against current data,
-preserving later roster edits and other results. Compound transactions remain
-atomic. Whole-event restores across multiple transactions or recorded-play losses
-show an impact review first; cancelling changes nothing. Prior versions stay in
-the persistent graph. Printed and exported files need replacement after a change.
+History rows lead with what happened: a result reads as the players and score
+with section, round and board beneath, and the newest change is marked **Now**.
+Selecting a row only shows it. Its details list what moving there undoes or
+brings back and any recorded play it removes, above the button that commits it
+(**Go back to here**, **Redo up to here** or **Switch to this version**). A step
+that changed only one game's result also offers **Fix this result**, which opens
+the correction against current data and keeps later roster edits and other
+results; compound steps remain atomic. Undone work that was replaced is kept
+in a collapsible group. A toolbar Undo or Redo that would remove recorded play
+or change an earlier result under later pairings opens History on that step
+instead of moving. Prior versions stay in the persistent graph. Printed and
+exported files need replacement after a change.
 
 Covered by `test/application/result_correction_test.dart`,
 `test/ui/result_correction_test.dart`, and the native rehearsal in

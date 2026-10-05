@@ -201,23 +201,23 @@ void main() {
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
       expect(attempts, 2);
-      final revision = c.event!.revision;
       c.savePlayer(c.event!.players.first.copy(name: 'Updated'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('print-stale')), findsOneWidget);
-      expect(find.text('Use older revision $revision'), findsOneWidget);
-      await tester.tap(find.text('Use older revision $revision'));
+      expect(find.text('Print older version'), findsOneWidget);
+      await tester.tap(find.text('Print older version'));
       await tester.pumpAndSettle();
-      expect(find.text('Use older revision $revision'), findsNothing);
+      expect(find.text('Print older version'), findsNothing);
       c.savePlayer(c.event!.players.first.copy(name: 'Updated again'));
       await tester.pumpAndSettle();
-      expect(find.text('Use older revision $revision'), findsOneWidget);
+      expect(find.text('Print older version'), findsOneWidget);
       await tester.tap(find.text('Refresh preview'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('print-stale')), findsNothing);
+      // The scope names rounds, not internal revision numbers.
       expect(
-        find.textContaining('Revision ${c.event!.revision}'),
-        findsOneWidget,
+        tester.widget<Text>(find.byKey(const ValueKey('print-scope'))).data,
+        isNot(contains('Revision')),
       );
       expect(attempts, 3);
       await tester.pumpWidget(const SizedBox());
@@ -294,9 +294,7 @@ void main() {
       await mount(tester, workspace(c));
       await tester.tap(find.text('Export').first);
       await tester.pumpAndSettle();
-      final issues = find.byKey(
-        const PageStorageKey('rating-preflight-details'),
-      );
+      final issues = find.byKey(const ValueKey('rating-checks'));
       await tester.ensureVisible(issues);
       await tester.pumpAndSettle();
       final repair = find.byKey(const ValueKey('repair-player-p0-memberId'));

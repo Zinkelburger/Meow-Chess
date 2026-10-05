@@ -316,126 +316,130 @@ class _MeowAppState extends State<MeowApp> {
           )
         : Builder(
             builder: (context) => Scaffold(
-              body: SafeArea(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1120),
-                    child: ListView(
-                      padding: const EdgeInsets.all(40),
-                      children: [
-                        WelcomeBrandHeader(
-                          logoKey: welcomeLogo,
-                          showLogo: launchComplete,
-                          light: light,
-                          onTheme: toggleTheme,
-                        ),
-                        const SizedBox(height: 32),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            FilledButton.icon(
-                              onPressed: () => setState(() {
-                                naming = true;
-                                error = null;
-                              }),
-                              icon: const Icon(Icons.add),
-                              label: const Text('New tournament'),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: choose,
-                              icon: const Icon(Icons.folder_open),
-                              label: const Text('Open event'),
-                            ),
-                          ],
-                        ),
-                        if (naming)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Wrap(
-                              spacing: 12,
-                              runSpacing: 12,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 320,
-                                  child: TextField(
-                                    key: const ValueKey('new-event-name'),
-                                    controller: newName,
-                                    autofocus: true,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Event name',
-                                    ),
-                                    onSubmitted: (_) => create(context),
-                                  ),
-                                ),
-                                FilledButton(
-                                  onPressed: () => create(context),
-                                  child: const Text('Save'),
-                                ),
-                                TextButton(
-                                  onPressed: () => setState(() {
-                                    naming = false;
-                                    newName.clear();
-                                  }),
-                                  child: const Text('Cancel'),
-                                ),
-                              ],
-                            ),
+              body: SelectionArea(
+                child: SafeArea(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1120),
+                      child: ListView(
+                        padding: const EdgeInsets.all(40),
+                        children: [
+                          WelcomeBrandHeader(
+                            logoKey: welcomeLogo,
+                            showLogo: launchComplete,
+                            light: light,
+                            onTheme: toggleTheme,
                           ),
-                        if (error != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 24),
-                            child: Text(
-                              error!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
+                          const SizedBox(height: 32),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: () => setState(() {
+                                  naming = true;
+                                  error = null;
+                                }),
+                                icon: const Icon(Icons.add),
+                                label: const Text('New tournament'),
                               ),
-                            ),
+                              OutlinedButton.icon(
+                                onPressed: choose,
+                                icon: const Icon(Icons.folder_open),
+                                label: const Text('Open event'),
+                              ),
+                            ],
                           ),
-                        const SizedBox(height: 48),
-                        if (recent.isNotEmpty) ...[
-                          Text(
-                            'Recent events',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 12),
-                          for (final filename in recent)
-                            Card(
-                              child: ListTile(
-                                leading: const Icon(Icons.description_outlined),
-                                title: Text(
-                                  p.basenameWithoutExtension(filename),
-                                ),
-                                subtitle: Text(
-                                  '${changed(filename)} · $filename',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      tooltip: 'View in file explorer',
-                                      icon: const Icon(
-                                        Icons.folder_open_outlined,
-                                        size: 18,
+                          if (naming)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Wrap(
+                                spacing: 12,
+                                runSpacing: 12,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 320,
+                                    child: TextField(
+                                      key: const ValueKey('new-event-name'),
+                                      controller: newName,
+                                      autofocus: true,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Event name',
                                       ),
-                                      onPressed: () =>
-                                          reveal(context, filename),
+                                      onSubmitted: (_) => create(context),
                                     ),
-                                    IconButton(
-                                      tooltip: 'Remove from recent events',
-                                      icon: const Icon(Icons.close, size: 18),
-                                      onPressed: () => forget(filename),
-                                    ),
-                                  ],
-                                ),
-                                onTap: () => open(filename),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => create(context),
+                                    child: const Text('Save'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => setState(() {
+                                      naming = false;
+                                      newName.clear();
+                                    }),
+                                    child: const Text('Cancel'),
+                                  ),
+                                ],
                               ),
                             ),
+                          if (error != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 24),
+                              child: Text(
+                                error!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 48),
+                          if (recent.isNotEmpty) ...[
+                            Text(
+                              'Recent events',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 12),
+                            for (final filename in recent)
+                              Card(
+                                child: ListTile(
+                                  leading: const Icon(
+                                    Icons.description_outlined,
+                                  ),
+                                  title: Text(
+                                    p.basenameWithoutExtension(filename),
+                                  ),
+                                  subtitle: Text(
+                                    '${changed(filename)} · $filename',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        tooltip: 'View in file explorer',
+                                        icon: const Icon(
+                                          Icons.folder_open_outlined,
+                                          size: 18,
+                                        ),
+                                        onPressed: () =>
+                                            reveal(context, filename),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Remove from recent events',
+                                        icon: const Icon(Icons.close, size: 18),
+                                        onPressed: () => forget(filename),
+                                      ),
+                                    ],
+                                  ),
+                                  onTap: () => open(filename),
+                                ),
+                              ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),

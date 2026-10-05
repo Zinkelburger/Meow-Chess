@@ -60,7 +60,7 @@ void main() {
       expect(section.rounds.first.games.first.note, 'Checked scoresheet');
       expect(
         c.graph.nodes[c.graph.head]!.action,
-        contains('Keep later pairings'),
+        allOf(contains('½–½'), contains('Checked scoresheet')),
       );
     },
   );

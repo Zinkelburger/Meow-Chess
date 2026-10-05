@@ -6,6 +6,7 @@ import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/ui/results_view.dart';
 import '../support.dart';
+import 'dock_host.dart';
 
 Future<void> mount(
   WidgetTester tester,
@@ -19,9 +20,11 @@ Future<void> mount(
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
-        body: ListenableBuilder(
-          listenable: c,
-          builder: (_, _) => ResultsView(controller: c, sectionId: sectionId),
+        body: DockHost(
+          child: ListenableBuilder(
+            listenable: c,
+            builder: (_, _) => ResultsView(controller: c, sectionId: sectionId),
+          ),
         ),
       ),
     ),
@@ -115,25 +118,29 @@ void main() {
         Outcome.whiteWin,
       );
       expect(
-        find.textContaining('Choose Correct a result to change it'),
+        find.textContaining('choose Correct a result to change it'),
         findsOneWidget,
       );
 
       await tester.tap(find.byKey(const ValueKey('correct-round')));
       await tester.pump();
-      expect(find.textContaining('Correcting round 1'), findsOneWidget);
+      expect(find.textContaining('Correcting'), findsOneWidget);
+      expect(find.byKey(const ValueKey('done-correcting')), findsOneWidget);
       await tester.tap(find.byKey(ValueKey('score-${first.id}-w')));
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
       await tester.pump();
-      // Round 2 is paired, so the correction asks for a reason first.
-      expect(find.byKey(const ValueKey('result-reason')), findsOneWidget);
-      await tester.enterText(
-        find.byKey(const ValueKey('result-reason')),
-        'Scoresheet signed the other way',
+      // Round 2 is paired, so the correction opens beside the table with the
+      // typed result chosen; Enter saves it.
+      expect(
+        find.byKey(const ValueKey('result-correction-review')),
+        findsOneWidget,
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('apply-correction')));
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('correction-saved')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('correction-done')));
       await tester.pumpAndSettle();
       expect(
         c.event!.sections.first.rounds.first.games.first.outcome,
@@ -150,7 +157,7 @@ void main() {
     },
   );
 
-  testWidgets('byes come first, and Swiss boards sit in score groups', (
+  testWidgets('byes come last, and Swiss boards sit in score groups', (
     tester,
   ) async {
     final c = swiss();
@@ -159,13 +166,15 @@ void main() {
     c.post((await tester.runAsync(() => c.propose()))!);
     await mount(tester, c, sectionId: id);
     final bye = c.event!.sections.single.rounds.last.byes.single;
-    final firstGame = c.event!.sections.single.rounds.last.games.first;
+    final lastGame = c.event!.sections.single.rounds.last.games.last;
     expect(
       tester.getTopLeft(find.byKey(ValueKey('bye-${bye.player}'))).dy,
-      lessThan(
-        tester.getTopLeft(find.byKey(ValueKey('game-${firstGame.id}'))).dy,
+      greaterThan(
+        tester.getTopLeft(find.byKey(ValueKey('game-${lastGame.id}'))).dy,
       ),
     );
+    // The score column carries the points; a pairing bye needs no reason.
+    expect(find.textContaining('eligible'), findsNothing);
     // Round 1: everyone is on zero, so there are no groups yet.
     expect(find.text('0 points'), findsNothing);
 

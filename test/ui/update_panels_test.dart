@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/infrastructure/roster_import.dart';
-import 'package:meow_chess/infrastructure/ratings_api.dart';
 import 'package:meow_chess/ui/update_panels.dart';
 import 'package:meow_chess/ui/help_panel.dart';
 import '../support.dart';
@@ -57,56 +56,6 @@ void main() {
         c.event!.players.last.ratingEvidence['kind'],
         'self-reported registration',
       );
-    },
-  );
-  testWidgets(
-    'equal rating can be verified, bulk refresh requires explicit approval',
-    (tester) async {
-      final c = fixture(count: 4);
-      addTearDown(c.dispose);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: RatingsRefreshPanel(
-              controller: c,
-              onClose: () {},
-              lookup: (id) async => MemberObservation(
-                id: id,
-                name: 'Official Name',
-                retrievedAt: '2026-10-03',
-                supplementDate: '2026-10-01',
-                ratings: {'R': 2000},
-                expiration: '2027-12-31',
-                status: 'Active',
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('Fetch monthly supplements'));
-      for (var i = 0; i < 8; i++) {
-        await tester.pump(const Duration(milliseconds: 600));
-      }
-      await tester.pumpAndSettle();
-      expect(c.event!.players.first.ratingEvidence, isEmpty);
-      expect(
-        c.event!.players.first.membershipEvidence['expiration'],
-        '2027-12-31',
-      );
-      final checkbox = find.byType(CheckboxListTile).first;
-      expect(tester.widget<CheckboxListTile>(checkbox).onChanged, isNotNull);
-      await tester.ensureVisible(checkbox);
-      await tester.tap(checkbox);
-      await tester.pump();
-      final confirm = find.text('Confirm 1 rating changes');
-      await tester.ensureVisible(confirm);
-      await tester.tap(confirm);
-      await tester.pumpAndSettle();
-      expect(
-        c.event!.players.first.ratingEvidence['supplementDate'],
-        '2026-10-01',
-      );
-      expect(c.event!.players[1].rating, 1950);
     },
   );
   testWidgets('offline help searches article text and opens quad explanation', (

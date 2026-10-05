@@ -45,7 +45,7 @@ class EventPanelState extends State<EventPanel> {
     ('otherTds', 'Other TDs\' US Chess IDs, comma separated', 1),
     ('affiliate', 'Affiliate ID', 1),
     ('policy', 'Announced conditions', 3),
-    ('notes', 'Private TD notes', 4),
+    ('notes', 'Notes', 4),
   ];
   final text = {for (final f in _fields) f.$1: TextEditingController()};
   String? error;

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../domain/model.dart';
 import '../domain/rating_update.dart';
 import '../domain/member_observation.dart';
+import '../domain/name_match.dart';
 import '../application/member_lookup_batch.dart';
 import '../application/failures.dart';
 import '../application/diagnostics.dart';
@@ -60,11 +61,12 @@ class RatingRefresh extends ChangeNotifier {
     if (controller.event?.id != snapshot?.id) {
       return 'Event changed. Refresh again.';
     }
-    if (old.memberId != p.memberId || old.rating != p.rating) {
-      return 'Edited since lookup. Refresh again to review this player.';
+    if (old.memberId != p.memberId) {
+      return 'USCF ID changed. Refresh again to check it.';
     }
+    if (old.rating != p.rating) return 'Your edit is kept.';
     if (p.memberId.trim().isEmpty) {
-      return 'No USCF ID. Double-click to add one, or keep this rating.';
+      return 'No USCF ID. Click the player to add one, or keep this rating.';
     }
     if (failures[p.id] case final message?) return message;
     final m = observations[p.id];
@@ -81,6 +83,52 @@ class RatingRefresh extends ChangeNotifier {
   }
 
   bool canApply(Player p) => problem(p) == null;
+
+  /// The US Chess name looks like somebody else, which usually means a
+  /// mistyped ID. Such rows start unticked.
+  bool nameMismatch(Player p) {
+    final m = observations[p.id];
+    return m != null &&
+        m.id == p.memberId &&
+        !namesLookAlike(p.name, m.name, lastName: lastNameOf(m.reportName));
+  }
+
+  /// In the review but without an ID to look up.
+  bool missingId(Player p) =>
+      original(p.id) != null && p.memberId.trim().isEmpty;
+
+  /// US Chess answered for this ID but has no rating in the chosen system.
+  bool unratedAtUscf(Player p) {
+    final m = observations[p.id];
+    final rating = proposed(p);
+    return m != null &&
+        m.id == p.memberId &&
+        original(p.id)?.rating == p.rating &&
+        (rating == null || rating <= 0);
+  }
+
+  /// The chosen rating is already the player's verified rating.
+  bool upToDate(Player p) =>
+      observations[p.id]?.alreadyApplied(p, category) ?? false;
+
+  /// Ticked by default: applicable and plainly the same person.
+  bool suggested(Player p) => canApply(p) && !nameMismatch(p);
+
+  /// The supplement most lookups came from, for the column heading.
+  String? get supplementDate {
+    final counts = <String, int>{};
+    for (final m in observations.values) {
+      if (m.supplementDate case final date?) {
+        counts[date] = (counts[date] ?? 0) + 1;
+      }
+    }
+    if (counts.isEmpty) return null;
+    return (counts.entries.toList()..sort((a, b) => b.value - a.value))
+        .first
+        .key;
+  }
+
+  int get checkedCount => observations.length + failures.length;
   bool largeChange(Player p) =>
       (proposed(p) ?? 0) > 0 &&
       (p.rating == 0 || (proposed(p)! - p.rating).abs() > 50);
@@ -146,7 +194,7 @@ class RatingRefresh extends ChangeNotifier {
           final live = controller.event!.players
               .where((x) => x.id == player.id)
               .firstOrNull;
-          if (live != null && canApply(live)) selected.add(live.id);
+          if (live != null && suggested(live)) selected.add(live.id);
           notifyListeners();
         },
         onFailure: (player, error, stack) {
@@ -224,6 +272,16 @@ class RatingRefresh extends ChangeNotifier {
     );
     discard();
     return ids.length;
+  }
+
+  /// Supplements carry every category, so switching only re-reads them.
+  void showCategory(String value) {
+    if (busy || value == category) return;
+    category = value;
+    selected
+      ..clear()
+      ..addAll(controller.event!.players.where(suggested).map((p) => p.id));
+    notifyListeners();
   }
 
   void discard() {

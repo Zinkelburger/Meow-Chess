@@ -125,7 +125,7 @@ void main() {
     expect(find.byKey(const ValueKey('event-complete')), findsOneWidget);
     await tester.tap(find.text('Finish & export'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('report-scope')), findsOneWidget);
+    expect(find.byKey(const ValueKey('rating-report')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -159,7 +159,7 @@ void main() {
     expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
     await tester.tap(find.text('Finish & export'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('report-scope')), findsOneWidget);
+    expect(find.byKey(const ValueKey('rating-report')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 

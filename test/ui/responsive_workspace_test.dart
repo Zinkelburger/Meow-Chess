@@ -106,9 +106,10 @@ void main() {
             await click(find.byKey(const ValueKey('status-backup')));
             expect(find.text('Choose folder…'), findsOneWidget);
           case 'lookup':
-            FocusManager.instance.primaryFocus?.unfocus();
+            await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+            await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+            await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
             await tester.pumpAndSettle();
-            await click(find.byTooltip('Find player (Ctrl+L)'));
             expect(
               tester
                   .widget<EditableText>(
@@ -142,8 +143,7 @@ void main() {
               ),
             );
             await click(find.text('Player 00', findRichText: true).first);
-            final bye = find.byKey(const ValueKey('panel-bye-2'));
-            await click(find.descendant(of: bye, matching: find.text('1/2')));
+            await toggleBye(tester, 2, 1);
             expect(c.event!.player('p0').byes[2], 1);
           case 'report draft':
             await click(find.text('Export').first);

@@ -108,7 +108,7 @@ void main() {
     );
     await tester.tap(find.text('Check ID'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('ID could not be verified.'), findsOneWidget);
+    expect(find.textContaining('ID could not be verified'), findsOneWidget);
     expect(find.textContaining('was not found'), findsNothing);
     expect(id.text, '12345678');
   });
@@ -124,7 +124,9 @@ void main() {
     );
     await tester.tap(find.text('Check ID'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Found Test Member'), findsOneWidget);
+    expect(find.text('ID 00123456 is Test Member'), findsOneWidget);
+    expect(find.text('1500'), findsOneWidget);
+    expect(find.textContaining('.'), findsNothing);
   });
   testWidgets(
     'editing and changing back invalidates pending checks and search',

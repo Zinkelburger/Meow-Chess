@@ -1,17 +1,13 @@
 import '../application/member_lookup.dart';
-import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../application/failures.dart';
 import '../application/member_lookup_batch.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
-import '../infrastructure/reports.dart';
-import '../infrastructure/artifact_save.dart';
 import '../infrastructure/dbf_export.dart';
 import 'dialogs.dart';
 import 'panels.dart';
@@ -24,36 +20,29 @@ import '../infrastructure/member_directory.dart';
 class ReportsView extends StatefulWidget {
   const ReportsView({
     required this.controller,
-    this.sectionId,
     this.onResults,
-    this.onStandings,
     this.onBackups,
     this.memberLookup = fetchMembership,
     super.key,
   });
   final TournamentController controller;
-  final String? sectionId;
   final ValueChanged<String?>? onResults;
-  final VoidCallback? onStandings, onBackups;
+  final VoidCallback? onBackups;
   final MemberLookup memberLookup;
   @override
   State<ReportsView> createState() => _ReportsViewState();
 }
 
 class _ReportsViewState extends State<ReportsView> {
-  String? scope;
   final detailsKey = GlobalKey<ReportDetailsState>();
   final scroll = ScrollController();
-  bool fetchingStates = false;
+  bool fetchingStates = false, showAdvice = false;
   String? stateNotice;
   TournamentController get controller => widget.controller;
   @override
   void initState() {
     super.initState();
-    scope = widget.sectionId;
-    final saved = controller.workspaceState.readMap(
-      'reports-view-${scope ?? "all"}',
-    );
+    final saved = controller.workspaceState.readMap('reports-view');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && scroll.hasClients) {
         scroll.jumpTo(
@@ -65,7 +54,7 @@ class _ReportsViewState extends State<ReportsView> {
       }
     });
     scroll.addListener(() {
-      controller.workspaceState.writeMap('reports-view-${scope ?? "all"}', {
+      controller.workspaceState.writeMap('reports-view', {
         "scroll": scroll.offset,
       });
     });
@@ -133,89 +122,6 @@ class _ReportsViewState extends State<ReportsView> {
           ), sectionSettingsPanel(controller, action.id!, dock.close));
         }
     }
-  }
-
-  Widget finishChecklist(Event e, int issues) {
-    final remaining = e.games.where((g) => !g.outcome.resolved).length;
-    final export = controller.repository
-        .readPreference('lastExport')
-        ?.split('|');
-    final exportRevision = export == null ? null : int.tryParse(export.last);
-    final backup = controller.repository
-        .readPreference('lastBackup')
-        ?.split('|');
-    final backupRevision = backup == null ? null : int.tryParse(backup.first);
-    String revisionState(int? revision, String absent) => revision == null
-        ? absent
-        : revision == e.revision
-        ? 'Current · revision $revision'
-        : 'Revision $revision · newer changes are not included';
-    return ExpansionTile(
-      key: const PageStorageKey('finish-event'),
-      initiallyExpanded:
-          e.sections.isNotEmpty && e.sections.every((s) => s.finished),
-      tilePadding: EdgeInsets.zero,
-      title: const Text('Final review & backup'),
-      children: [
-        for (final (title, detail, action, callback)
-            in <(String, String, String, VoidCallback?)>[
-              (
-                'Results',
-                '$remaining unresolved games · ${e.sections.where((s) => s.finished).length} of ${e.sections.length} sections complete',
-                'Open results',
-                widget.onResults == null ? null : () => widget.onResults!(null),
-              ),
-              (
-                'Standings',
-                'Review final ranks and scores',
-                'Open standings',
-                widget.onStandings,
-              ),
-              (
-                'Tournament checks',
-                issues == 0
-                    ? 'Ready'
-                    : '$issues ${issues == 1 ? 'item needs' : 'items need'} attention',
-                '',
-                null,
-              ),
-              (
-                'DBF files',
-                revisionState(exportRevision, 'Not exported'),
-                '',
-                null,
-              ),
-              (
-                'Backup',
-                controller.backupWarning ??
-                    revisionState(backupRevision, 'No backup recorded'),
-                'Backups',
-                widget.onBackups,
-              ),
-              (
-                'Submission',
-                e.submission.isEmpty ? 'Not recorded' : 'Notes recorded',
-                '',
-                null,
-              ),
-            ])
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Wrap(
-                spacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text('$title: $detail'),
-                  if (callback != null)
-                    TextButton(onPressed: callback, child: Text(action)),
-                ],
-              ),
-            ),
-          ),
-      ],
-    );
   }
 
   Future<void> exportRating(BuildContext context) async {
@@ -320,301 +226,533 @@ class _ReportsViewState extends State<ReportsView> {
           for (final i in all)
             if (!i.blocking) i,
         ];
-    final stateless = _stateless(e);
-    if (scope != null && !e.sections.any((s) => s.id == scope)) scope = null;
     return SingleChildScrollView(
       controller: scroll,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _header(context, e, issues),
+              if (issues.isNotEmpty || advice.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                _checks(context, e, issues, advice),
+              ],
+              const SizedBox(height: 32),
+              ReportDetails(
+                key: detailsKey,
+                controller: controller,
+                onEditEvent: () => repair(
+                  const ReportRepair(
+                    'Edit event details',
+                    ReportDestination.event,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+              _sections(context, e),
+              const SizedBox(height: 32),
+              _afterUpload(context, e),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// What the page is for, whether it can happen yet, and the one action.
+  Widget _header(BuildContext context, Event e, List<ReportIssue> issues) {
+    final theme = Theme.of(context), colors = theme.colorScheme;
+    final muted = TextStyle(color: colors.onSurfaceVariant);
+    final count = reportedSections(e).length;
+    final saved = controller.repository.readPreference('lastExport');
+    return Column(
+      key: const ValueKey('rating-report'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'US Chess rating report',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    issues.isEmpty
+                        ? 'Ready to generate · ${count == 1 ? '1 section' : '$count sections'}'
+                        : '${issues.length} ${issues.length == 1 ? 'problem' : 'problems'} to fix before generating',
+                    key: ValueKey(
+                      issues.isEmpty ? 'rating-ready' : 'rating-blocked',
+                    ),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Creates THEXPORT, TSEXPORT and TDEXPORT.DBF. Not yet tested with the US Chess upload site.',
+                    style: muted,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 24),
+            FilledButton.icon(
+              key: const ValueKey('generate-dbf'),
+              onPressed: issues.isEmpty ? () => exportRating(context) : null,
+              icon: const Icon(Icons.folder_outlined, size: 18),
+              label: const Text('Generate DBF files'),
+            ),
+          ],
+        ),
+        if (saved != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Semantics(
+              liveRegion: true,
+              child: SelectableText(
+                'DBF files saved to ${saved.substring(0, saved.lastIndexOf('|'))}\n'
+                '${saved.split('|').last == '${e.revision}' ? 'Includes the current event revision.' : 'Newer changes are not included. Save again to update the report.'}',
+                style: muted,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Every problem beside the place that fixes it. Optional advice folds
+  /// below so it never competes with what blocks the report.
+  Widget _checks(
+    BuildContext context,
+    Event e,
+    List<ReportIssue> issues,
+    List<ReportIssue> advice,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    final fix = MediaQuery.textScalerOf(context).scale(200);
+    final stateless = _stateless(e);
+    return _Sheet(
+      key: const ValueKey('rating-checks'),
+      children: [
+        _ColumnHeader([
+          const Expanded(child: Text('Problem')),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: fix,
+            child: const Padding(
+              padding: EdgeInsets.only(left: 8),
+              child: Text('Fix'),
+            ),
+          ),
+        ]),
+        for (final issue in issues) _issueRow(issue, fix),
+        if (advice.isNotEmpty) ...[
+          Semantics(
+            button: true,
+            expanded: showAdvice,
+            child: InkWell(
+              key: const PageStorageKey('rating-advice-details'),
+              onTap: () => setState(() => showAdvice = !showAdvice),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerLow.withValues(alpha: 0.5),
+                  border: Border(top: BorderSide(color: colors.outlineVariant)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      showAdvice ? Icons.expand_less : Icons.expand_more,
+                      size: 20,
+                      color: colors.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Optional · ${advice.length}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'US Chess accepts the report without these.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (showAdvice) ...[
+            for (final issue in advice) _issueRow(issue, fix),
+            if (stateless.isNotEmpty)
+              _Ruled(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        if (stateless.any((p) => p.memberId.isNotEmpty))
+                          OutlinedButton.icon(
+                            key: const ValueKey('fetch-states'),
+                            onPressed: fetchingStates ? null : _fetchStates,
+                            icon: const Icon(
+                              Icons.cloud_download_outlined,
+                              size: 18,
+                            ),
+                            label: Text(
+                              fetchingStates
+                                  ? 'Fetching states…'
+                                  : 'Fetch missing states from US Chess',
+                            ),
+                          ),
+                        if (usStates.contains(e.state))
+                          OutlinedButton(
+                            key: const ValueKey('fill-states'),
+                            onPressed: fetchingStates
+                                ? null
+                                : () => _fillStates(e),
+                            child: Text(
+                              'Use ${e.state} for ${stateless.length} ${stateless.length == 1 ? 'player' : 'players'} without a state',
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (stateNotice != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Semantics(
+                          liveRegion: true,
+                          child: SelectableText(stateNotice!),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  /// One or two fixes sit in the Fix column; a fix per player wraps under
+  /// the problem so long player lists stay readable.
+  Widget _issueRow(ReportIssue issue, double fixWidth) {
+    final actions = [
+      for (final action in issue.repairs)
+        TextButton(
+          key: ValueKey(
+            'repair-${action.destination.name}-${action.id}-${action.field}',
+          ),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+          ),
+          onPressed: () => repair(action),
+          child: Text(action.label),
+        ),
+    ];
+    final inline = actions.length <= 2;
+    return _Ruled(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Text(
-            'Finish & export',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Review the tournament, resolve outstanding issues, and generate your final files.',
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Tournament checks',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 4),
-          const Text('Checks and DBF exports cover all sections.'),
-          const SizedBox(height: 12),
-          if (issues.isNotEmpty) _warnings(context, issues),
-          if (advice.isNotEmpty) _warnings(context, advice, optional: true),
-          if (stateNotice != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(stateNotice!),
-            ),
-          if (issues.isEmpty)
-            const ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.fact_check_outlined),
-              title: Text('Ready to export. No blocking issues found.'),
-            ),
-          if (stateless.isNotEmpty && usStates.contains(e.state))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  key: const ValueKey('fill-states'),
-                  onPressed: fetchingStates ? null : () => _fillStates(e),
-                  child: Text(
-                    'Use ${e.state} for ${stateless.length} ${stateless.length == 1 ? 'player' : 'players'} without a state',
-                  ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(issue.message),
                 ),
-              ),
-            ),
-          const SizedBox(height: 24),
-          Text(
-            'US Chess DBF files',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Generate THEXPORT.DBF, TSEXPORT.DBF, and TDEXPORT.DBF for upload to US Chess.\nNot yet tested with the US Chess upload site.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                if (!inline) Wrap(children: actions),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          ReportDetails(key: detailsKey, controller: controller),
-          const SizedBox(height: 12),
-          _summary(context, e),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                onPressed: issues.isEmpty ? () => exportRating(context) : null,
-                icon: const Icon(Icons.folder_outlined),
-                label: const Text('Generate DBF files'),
-              ),
-              // A disabled button says why beside it.
-              if (issues.isNotEmpty)
-                Text(
-                  'Resolve the ${issues.length == 1 ? 'item' : '${issues.length} items'} above first.',
-                  key: const ValueKey('rating-blocked'),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
+          const SizedBox(width: 12),
+          SizedBox(
+            width: fixWidth,
+            child: inline
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: actions,
+                  )
+                : null,
           ),
-          if (controller.repository.readPreference('lastExport')
-              case final saved?)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Semantics(
-                liveRegion: true,
-                child: SelectableText(
-                  'DBF files saved to ${saved.substring(0, saved.lastIndexOf('|'))}\n'
-                  '${saved.split('|').last == '${e.revision}' ? 'Includes the current event revision.' : 'Newer changes are not included. Save again to update the report.'}',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(height: 24),
-          Text(
-            'Final standings & printouts · ${e.sections.where((s) => s.id == scope).firstOrNull?.name ?? 'All sections'}',
-            key: const ValueKey('report-scope'),
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final (kind, label, icon) in [
-                (ReportKind.sections, 'Pairing sheets', Icons.print_outlined),
-                (ReportKind.standings, 'Standings', Icons.leaderboard_outlined),
-                (
-                  ReportKind.crosstable,
-                  'Crosstable',
-                  Icons.table_chart_outlined,
-                ),
-              ])
-                OutlinedButton.icon(
-                  onPressed: e.sections.isEmpty
-                      ? null
-                      : () =>
-                            showPrint(context, e, sectionId: scope, kind: kind),
-                  icon: Icon(icon),
-                  label: Text(label),
-                ),
-              TextButton(
-                onPressed: () async {
-                  try {
-                    await saveArtifact(
-                      'standings-r${e.revision}.csv',
-                      Uint8List.fromList(
-                        utf8.encode(standingsCsv(e, sectionId: scope)),
-                      ),
-                    );
-                  } catch (error) {
-                    if (context.mounted) showFailure(context, error);
-                  }
-                },
-                child: const Text('Save CSV'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  try {
-                    await saveArtifact(
-                      'crosstable-r${e.revision}.txt',
-                      Uint8List.fromList(
-                        crosstable(
-                          e,
-                          asciiOnly: true,
-                          sectionId: scope,
-                        ).codeUnits,
-                      ),
-                    );
-                  } catch (error) {
-                    if (context.mounted) showFailure(context, error);
-                  }
-                },
-                child: const Text('Save text crosstable'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          finishChecklist(e, issues.length),
-          const SizedBox(height: 24),
-          SubmissionNotes(controller: controller),
         ],
       ),
     );
   }
 
-  /// What the report will say about time control and dates, so the TD can
-  /// confirm the rating system before creating files.
-  Widget _summary(BuildContext context, Event e) {
-    final muted = TextStyle(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-    );
-    String describe(String control) {
-      try {
-        final tc = TimeControl.parse(control);
-        return '${tc.reportText}: ${tc.category?.label ?? 'not ratable'} (${tc.totalMinutes} minutes with delay or increment, rule 5C)';
-      } on TournamentException {
-        return '$control: not recognized';
-      }
-    }
-
+  /// The sections the files will contain, and how US Chess will rate each.
+  Widget _sections(BuildContext context, Event e) {
+    final colors = Theme.of(context).colorScheme;
+    final sections = reportedSections(e);
+    final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    const tabular = TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
+    Widget cells(List<Widget> c) => Row(children: c);
+    List<Widget> columns(
+      Widget name,
+      Widget players,
+      Widget rounds,
+      Widget control,
+      Widget rated,
+    ) => [
+      Expanded(child: name),
+      SizedBox(width: 72 * scale, child: players),
+      SizedBox(width: 72 * scale, child: rounds),
+      const SizedBox(width: 16),
+      SizedBox(width: 150 * scale, child: control),
+      SizedBox(width: 190 * scale, child: rated),
+    ];
     return Column(
       key: const ValueKey('rating-summary'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (e.sections.any((s) => s.timeControl.isNotEmpty))
-          for (final section in e.sections)
-            Text(
-              '${section.name}: ${describe(section.effectiveTimeControl(e))}',
-              style: muted,
-            )
-        else
-          Text('Time control ${describe(e.timeControl)}', style: muted),
         Text(
-          e.endDate.isEmpty || e.endDate == e.date
-              ? 'Played on ${e.date}'
-              : 'Played ${e.date} to ${e.endDate}',
-          style: muted,
+          'Sections in the report',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: constraints.maxWidth < 640 * scale
+                  ? 640 * scale
+                  : constraints.maxWidth,
+              child: _Sheet(
+                children: [
+                  _ColumnHeader(
+                    columns(
+                      const Text('Section'),
+                      const Text('Players', textAlign: TextAlign.right),
+                      const Text('Rounds', textAlign: TextAlign.right),
+                      const Text('Time control'),
+                      const Text('Rated as'),
+                    ),
+                  ),
+                  if (sections.isEmpty)
+                    _Ruled(
+                      child: Text(
+                        'No sections with players yet.',
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      ),
+                    ),
+                  for (final s in sections)
+                    _Ruled(
+                      child: cells(() {
+                        final control = s.effectiveTimeControl(e);
+                        String shown = control.isEmpty ? 'None' : control;
+                        String rated;
+                        bool ratable = true;
+                        try {
+                          final tc = TimeControl.parse(control);
+                          shown = tc.reportText;
+                          ratable = tc.category != null;
+                          rated = ratable
+                              ? '${tc.category!.label} · ${tc.totalMinutes} min'
+                              : 'Not ratable';
+                        } on TournamentException {
+                          ratable = false;
+                          rated = 'Not recognized';
+                        }
+                        return columns(
+                          Text(
+                            s.name,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          Text(
+                            '${s.players.toSet().length}',
+                            textAlign: TextAlign.right,
+                            style: tabular,
+                          ),
+                          Text(
+                            '${reportedRounds(s)}',
+                            textAlign: TextAlign.right,
+                            style: tabular,
+                          ),
+                          Text(shown, style: tabular),
+                          Text(
+                            rated,
+                            style: ratable
+                                ? null
+                                : TextStyle(
+                                    color: colors.error,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                          ),
+                        );
+                      }()),
+                    ),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
 
-  /// Show blocking checks up front; keep optional advice available separately.
-  Widget _warnings(
-    BuildContext context,
-    List<ReportIssue> issues, {
-    bool optional = false,
-  }) {
+  /// Keeping the event safe, and recording the upload once it is done.
+  Widget _afterUpload(BuildContext context, Event e) {
+    final colors = Theme.of(context).colorScheme;
+    final backup = controller.repository
+        .readPreference('lastBackup')
+        ?.split('|');
+    final revision = backup == null ? null : int.tryParse(backup.first);
+    final state =
+        controller.backupWarning ??
+        (revision == null
+            ? 'No backup recorded'
+            : revision == e.revision
+            ? 'Up to date'
+            : 'Older · newer changes are not included');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Backup & submission',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              'Backup: $state',
+              key: const ValueKey('backup-state'),
+              style: controller.backupWarning == null
+                  ? null
+                  : TextStyle(color: colors.error),
+            ),
+            if (widget.onBackups != null)
+              OutlinedButton(
+                onPressed: widget.onBackups,
+                child: const Text('Backups'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        SubmissionNotes(controller: controller),
+      ],
+    );
+  }
+}
+
+/// A white ruled sheet, like the Players and Pairings tables.
+class _Sheet extends StatelessWidget {
+  const _Sheet({required this.children, super.key});
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Container(
-      key: ValueKey(optional ? 'rating-advice' : 'rating-warnings'),
-      margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
+        color: colors.surfaceContainerLowest,
         border: Border.all(color: colors.outlineVariant),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(4),
       ),
-      child: ExpansionTile(
-        key: PageStorageKey(
-          optional ? 'rating-advice-details' : 'rating-preflight-details',
-        ),
-        initiallyExpanded: !optional,
-        shape: const Border(),
-        collapsedShape: const Border(),
-        leading: Icon(
-          Icons.info_outline,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+  }
+}
+
+/// The shelf column header shared by every table in the app.
+class _ColumnHeader extends StatelessWidget {
+  const _ColumnHeader(this.cells);
+  final List<Widget> cells;
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      color: colors.surfaceContainerLow,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: DefaultTextStyle.merge(
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
           color: colors.onSurfaceVariant,
-          size: 20,
         ),
-        title: Text(
-          optional
-              ? '${issues.length} optional ${issues.length == 1 ? 'check' : 'checks'}'
-              : '${issues.length} ${issues.length == 1 ? 'item needs' : 'items need'} attention',
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          optional
-              ? 'US Chess accepts the report without these.'
-              : 'Resolve these before generating DBF files.',
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(56, 0, 24, 16),
-        expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (optional &&
-              _stateless(controller.event!).any((p) => p.memberId.isNotEmpty))
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                key: const ValueKey('fetch-states'),
-                onPressed: fetchingStates ? null : _fetchStates,
-                icon: const Icon(Icons.cloud_download_outlined),
-                label: Text(
-                  fetchingStates
-                      ? 'Fetching states…'
-                      : 'Fetch missing states from US Chess',
+        child: Row(children: cells),
+      ),
+    );
+  }
+}
+
+/// A table row with the half-strength hairline rule above it.
+class _Ruled extends StatelessWidget {
+  const _Ruled({required this.child, this.first = false});
+  final Widget child;
+  final bool first;
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      alignment: Alignment.centerLeft,
+      decoration: first
+          ? null
+          : BoxDecoration(
+              border: Border(
+                top: BorderSide(
+                  color: colors.outlineVariant.withValues(alpha: 0.5),
                 ),
               ),
             ),
-          for (final issue in issues)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('• ${issue.message}'),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      for (final action in issue.repairs)
-                        TextButton(
-                          key: ValueKey(
-                            'repair-${action.destination.name}-${action.id}-${action.field}',
-                          ),
-                          onPressed: () => repair(action),
-                          child: Text(action.label),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
+      child: child,
+    );
+  }
+}
+
+/// A label and its value in a two-column table.
+class _Pair extends StatelessWidget {
+  const _Pair(this.label, this.value);
+  final String label;
+  final Widget value;
+  @override
+  Widget build(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+    return Row(
+      children: [
+        SizedBox(
+          width: 120 * scale,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
-        ],
-      ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: value),
+      ],
     );
   }
 }
@@ -622,8 +760,9 @@ class _ReportsViewState extends State<ReportsView> {
 /// Where the event was held and its type, saved with the event. Edits save on
 /// Enter or Save, like the event panel.
 class ReportDetails extends StatefulWidget {
-  const ReportDetails({required this.controller, super.key});
+  const ReportDetails({required this.controller, this.onEditEvent, super.key});
   final TournamentController controller;
+  final VoidCallback? onEditEvent;
   @override
   State<ReportDetails> createState() => ReportDetailsState();
 }
@@ -723,60 +862,123 @@ class ReportDetailsState extends State<ReportDetails> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     final e = c.event!, colors = Theme.of(context).colorScheme;
+    final muted = TextStyle(color: colors.onSurfaceVariant);
+    Widget id(String value) => value.isEmpty
+        ? Text('Not entered', style: muted)
+        : Text(value, style: const TextStyle(fontFamily: 'SourceCodePro'));
     return Column(
       key: const ValueKey('report-details'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DraftStatus(draft: draft),
-        Text('Report details', style: Theme.of(context).textTheme.titleMedium),
-        const Text('City, state and ZIP describe the tournament site.'),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        Row(
           children: [
-            for (final (key, label, width) in _fields)
-              SizedBox(
-                width: width,
-                child: TextField(
-                  key: ValueKey('report-$key'),
-                  controller: text[key],
-                  focusNode: fieldFocus.putIfAbsent(
-                    key,
-                    () => FocusNode(debugLabel: key),
-                  ),
-                  textCapitalization: key == 'state'
-                      ? TextCapitalization.characters
-                      : TextCapitalization.words,
-                  decoration: InputDecoration(labelText: label),
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) => commit(),
+            Expanded(
+              child: Text(
+                'Report details',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            if (widget.onEditEvent != null)
+              TextButton(
+                key: const ValueKey('report-edit-event'),
+                onPressed: widget.onEditEvent,
+                child: const Text('Edit event details'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        _Sheet(
+          children: [
+            _Ruled(first: true, child: _Pair('Event', Text(e.name))),
+            _Ruled(
+              child: _Pair(
+                'Dates',
+                Text(
+                  e.endDate.isEmpty || e.endDate == e.date
+                      ? e.date
+                      : '${e.date} to ${e.endDate}',
                 ),
               ),
-            SizedBox(
-              width: 300,
-              child: DropdownButtonFormField<String>(
-                key: ValueKey('report-level-${e.level}'),
-                focusNode: fieldFocus.putIfAbsent(
-                  'level',
-                  () => FocusNode(debugLabel: 'event type'),
+            ),
+            _Ruled(child: _Pair('Chief TD', id(e.tdId))),
+            if (e.assistantTdId.isNotEmpty)
+              _Ruled(child: _Pair('Assistant TD', id(e.assistantTdId))),
+            _Ruled(child: _Pair('Affiliate', id(e.affiliateId))),
+            _Ruled(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: _Pair(
+                  'Site',
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final (key, label, width) in _fields)
+                        SizedBox(
+                          width: width,
+                          child: TextField(
+                            key: ValueKey('report-$key'),
+                            controller: text[key],
+                            focusNode: fieldFocus.putIfAbsent(
+                              key,
+                              () => FocusNode(debugLabel: key),
+                            ),
+                            textCapitalization: key == 'state'
+                                ? TextCapitalization.characters
+                                : TextCapitalization.words,
+                            decoration: InputDecoration(labelText: label),
+                            onChanged: (_) => setState(() {}),
+                            onSubmitted: (_) => commit(),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-                initialValue: sectionLevels.containsKey(e.level)
-                    ? e.level
-                    : null,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Event type'),
-                items: [
-                  for (final MapEntry(:key, :value) in sectionLevels.entries)
-                    DropdownMenuItem(
-                      value: key,
-                      child: Text(value, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+            _Ruled(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: _Pair(
+                  'Event type',
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Semantics(
+                      label: 'Event type',
+                      child: SizedBox(
+                        width: 300,
+                        child: DropdownButtonFormField<String>(
+                          key: ValueKey('report-level-${e.level}'),
+                          focusNode: fieldFocus.putIfAbsent(
+                            'level',
+                            () => FocusNode(debugLabel: 'event type'),
+                          ),
+                          initialValue: sectionLevels.containsKey(e.level)
+                              ? e.level
+                              : null,
+                          isExpanded: true,
+
+                          items: [
+                            for (final MapEntry(:key, :value)
+                                in sectionLevels.entries)
+                              DropdownMenuItem(
+                                value: key,
+                                child: Text(
+                                  value,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                          onChanged: setLevel,
+                        ),
+                      ),
                     ),
-                ],
-                onChanged: setLevel,
+                  ),
+                ),
               ),
             ),
           ],
@@ -793,7 +995,6 @@ class ReportDetailsState extends State<ReportDetails> {
               spacing: 8,
               children: [
                 FilledButton(onPressed: commit, child: const Text('Save')),
-                const SizedBox(width: 8),
                 TextButton(
                   onPressed: () {
                     draft.reset(stored);
@@ -871,22 +1072,13 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DraftStatus(draft: draft),
-        Text(
-          'Submission notes',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'When you uploaded the report, its reference number, and any corrections.',
-          style: TextStyle(color: colors.onSurfaceVariant),
-        ),
-        const SizedBox(height: 8),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: TextField(
@@ -895,8 +1087,17 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
             focusNode: focus,
             minLines: 3,
             maxLines: 8,
+            decoration: const InputDecoration(
+              labelText: 'Submission notes',
+              alignLabelWithHint: true,
+            ),
             onChanged: (_) => setState(() {}),
           ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'When you uploaded the report, its reference number, and any corrections.',
+          style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
         ),
         if (error != null)
           Padding(
@@ -910,7 +1111,6 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
               spacing: 8,
               children: [
                 FilledButton(onPressed: save, child: const Text('Save')),
-                const SizedBox(width: 8),
                 TextButton(
                   onPressed: () => setState(() {
                     draft.reset(stored);

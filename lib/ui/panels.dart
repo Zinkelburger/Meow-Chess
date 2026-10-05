@@ -12,6 +12,7 @@ import '../domain/model.dart';
 import '../domain/pairing.dart' show pairingFormat;
 import '../domain/us_chess.dart';
 import '../domain/standings.dart';
+import '../infrastructure/artifact_save.dart';
 import '../infrastructure/reports.dart';
 import '../infrastructure/remembered_printing.dart';
 import 'dialogs.dart' show FieldSpec, showFailure;
@@ -889,6 +890,7 @@ class _PrintPanelState extends State<PrintPanel> {
   late _PrintPreviewJob preview = createPreview(widget.event);
   Event get snapshot => preview.event;
   bool printing = false;
+  String? savedPath;
   int? get currentRevision => widget.controller?.event?.revision;
   bool get stale => preview.isStale(currentRevision);
 
@@ -960,22 +962,46 @@ class _PrintPanelState extends State<PrintPanel> {
     preview = createPreview(widget.controller?.event ?? snapshot);
   });
 
+  /// Standings as a spreadsheet or the plain-text crosstable, from the same
+  /// revision as the preview.
+  Future<void> saveFile({required bool csv}) async {
+    final e = snapshot;
+    try {
+      final path = csv
+          ? await saveArtifact(
+              'standings-r${e.revision}.csv',
+              utf8.encode(standingsCsv(e, sectionId: widget.sectionId)),
+            )
+          : await saveArtifact(
+              'crosstable-r${e.revision}.txt',
+              crosstable(
+                e,
+                asciiOnly: true,
+                sectionId: widget.sectionId,
+              ).codeUnits,
+            );
+      if (path != null && mounted) setState(() => savedPath = path);
+    } catch (error) {
+      if (mounted) showFailure(context, error);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final section = snapshot.sections
         .where((s) => s.id == widget.sectionId)
         .firstOrNull;
     final what = switch (widget.kind) {
-      ReportKind.sections ||
-      ReportKind.packet ||
-      ReportKind.pairings => 'Pairing sheets',
+      ReportKind.sections => 'Player list',
+      ReportKind.packet || ReportKind.pairings => 'Pairing sheets',
       ReportKind.standings => 'Standings',
       ReportKind.crosstable => 'Crosstable',
     };
+    final ranking =
+        widget.kind == ReportKind.standings ||
+        widget.kind == ReportKind.crosstable;
     final pairingSheet =
-        widget.kind == ReportKind.sections ||
-        widget.kind == ReportKind.packet ||
-        widget.kind == ReportKind.pairings;
+        widget.kind == ReportKind.packet || widget.kind == ReportKind.pairings;
     final scopedSections = snapshot.sections.where(
       (s) =>
           (widget.sectionId == null || s.id == widget.sectionId) &&
@@ -983,6 +1009,9 @@ class _PrintPanelState extends State<PrintPanel> {
               widget.roundNumbers!.containsKey(s.id)),
     );
     String scopeLabel(Section s) {
+      if (widget.kind == ReportKind.sections) {
+        return '${s.players.length} ${s.players.length == 1 ? 'player' : 'players'}';
+      }
       if (pairingSheet && pairingFormat(s) != Format.swiss && !s.sideGames) {
         return 'All rounds';
       }
@@ -995,7 +1024,6 @@ class _PrintPanelState extends State<PrintPanel> {
     }
 
     final labels = scopedSections.map(scopeLabel).toSet();
-    final roundLabel = labels.length == 1 ? labels.single : 'Selected rounds';
     final canPrint = preview.canPrint(currentRevision);
     return SidePanel(
       key: const ValueKey('print-panel'),
@@ -1016,13 +1044,43 @@ class _PrintPanelState extends State<PrintPanel> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (ranking) ...[
+                          SegmentedButton<ReportKind>(
+                            key: const ValueKey('print-ranking-kind'),
+                            showSelectedIcon: false,
+                            segments: const [
+                              ButtonSegment(
+                                value: ReportKind.standings,
+                                label: Text('Standings'),
+                              ),
+                              ButtonSegment(
+                                value: ReportKind.crosstable,
+                                label: Text('Crosstable'),
+                              ),
+                            ],
+                            selected: {widget.kind},
+                            onSelectionChanged: (kind) => showPrint(
+                              context,
+                              widget.controller?.event ?? snapshot,
+                              sectionId: widget.sectionId,
+                              ceiling: widget.ceiling,
+                              forPrizes: widget.forPrizes,
+                              kind: kind.single,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        // What is on the paper, per section when rounds differ.
                         Text(
-                          '$roundLabel · Revision ${snapshot.revision}',
+                          labels.length == 1
+                              ? labels.single
+                              : [
+                                  for (final s in scopedSections)
+                                    '${s.name}: ${scopeLabel(s)}',
+                                ].join('\n'),
                           key: const ValueKey('print-scope'),
                         ),
-                        if (labels.length > 1)
-                          for (final s in scopedSections)
-                            Text('${s.name}: ${scopeLabel(s)}'),
+                        const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
                           children: [
@@ -1042,6 +1100,30 @@ class _PrintPanelState extends State<PrintPanel> {
                             ),
                           ],
                         ),
+                        if (ranking) ...[
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              TextButton(
+                                key: const ValueKey('save-standings-csv'),
+                                onPressed: () => saveFile(csv: true),
+                                child: const Text('Save CSV'),
+                              ),
+                              TextButton(
+                                key: const ValueKey('save-crosstable-text'),
+                                onPressed: () => saveFile(csv: false),
+                                child: const Text('Save text crosstable'),
+                              ),
+                            ],
+                          ),
+                          if (savedPath != null)
+                            SelectableText(
+                              'Saved to $savedPath',
+                              key: const ValueKey('print-saved'),
+                            ),
+                        ],
                         if (widget.ceiling > 0)
                           Text('Prize class: Under ${widget.ceiling}'),
                         if (widget.forPrizes)
@@ -1066,9 +1148,7 @@ class _PrintPanelState extends State<PrintPanel> {
                                       currentRevision,
                                     ),
                                   ),
-                                  child: Text(
-                                    'Use older revision ${snapshot.revision}',
-                                  ),
+                                  child: const Text('Print older version'),
                                 ),
                             ],
                           ),

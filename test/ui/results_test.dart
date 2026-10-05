@@ -239,13 +239,10 @@ void main() {
       // A row opens player details; the grid itself cannot accept scores.
       await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
       expect(c.event!.player('p0').byes, isEmpty);
-      final bye = find.byKey(const ValueKey('panel-bye-2'));
-      await tester.ensureVisible(bye);
-      await tester.tap(find.descendant(of: bye, matching: find.text('1/2')));
-      await tester.pump();
+      await toggleBye(tester, 2, 1);
       expect(c.event!.player('p0').byes[2], 1);
-      await tester.tap(find.descendant(of: bye, matching: find.text('None')));
-      await tester.pump();
+      // Choosing the same round again clears it.
+      await toggleBye(tester, 2, 1);
       expect(c.event!.player('p0').byes[2], isNull);
       await tester.pumpWidget(const SizedBox());
     },
@@ -341,14 +338,7 @@ void main() {
     await tester.pump();
     expect(c.event!.player(b).rating, 0);
     expect(find.text('UNR'), findsWidgets);
-    await tester.ensureVisible(find.byKey(const ValueKey('panel-bye-2')));
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('panel-bye-2')),
-        matching: find.text('1/2'),
-      ),
-    );
-    await tester.pump();
+    await toggleBye(tester, 2, 1);
     expect(c.event!.player(b).byes[2], 1);
     expect(find.byType(Dialog), findsNothing);
     await tester.tap(find.byTooltip('Close (Esc)'));
@@ -493,7 +483,7 @@ void main() {
     await tester.tap(find.text('Assign team'));
     await tester.pumpAndSettle();
     await tester.enterText(
-      find.widgetWithText(TextField, 'Team name'),
+      find.widgetWithText(TextField, 'Team'),
       'Mixed doubles A',
     );
     await tester.tap(find.text('Save'));

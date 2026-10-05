@@ -61,12 +61,12 @@ void main() {
     expect(find.text('USCF expires'), findsOneWidget);
     expect(find.text('R1'), findsNothing);
     expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
-    expect(find.byKey(const ValueKey('refresh-uscf')), findsNothing);
+    expect(find.byKey(const ValueKey('refresh-uscf')), findsOneWidget);
     await capture('toolbar-sections-wide');
     await tester.tap(find.byKey(const ValueKey('player-tools')));
     await tester.pumpAndSettle();
     expect(find.text('Refresh from URL'), findsOneWidget);
-    expect(find.text('Refresh from USCF'), findsOneWidget);
+    expect(find.text('Import file…'), findsOneWidget);
     await capture('workflow-player-tools');
     await tester.tap(find.byKey(const ValueKey('player-tools')));
     await tester.pumpAndSettle();

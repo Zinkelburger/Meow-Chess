@@ -36,9 +36,9 @@ enum Outcome {
     whiteWin => '1–0',
     draw => '½–½',
     blackWin => '0–1',
-    whiteForfeit => '1F–0F',
-    blackForfeit => '0F–1F',
-    doubleForfeit => '0F–0F',
+    whiteForfeit => 'X–F',
+    blackForfeit => 'F–X',
+    doubleForfeit => 'F–F',
     unfinished => 'Playing',
     disputed => 'Disputed',
   };

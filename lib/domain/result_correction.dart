@@ -78,15 +78,10 @@ class ResultCorrection {
 
   Event apply(
     Outcome outcome, {
-    required String reason,
+    String reason = '',
     int? reopenFrom,
     bool confirmedUnstarted = false,
   }) {
-    if (reason.trim().isEmpty) {
-      throw const TournamentException(
-        'Give a reason for changing this result.',
-      );
-    }
     if (reopenFrom != null &&
         (!canReopenFrom(reopenFrom) || !confirmedUnstarted)) {
       throw const TournamentException(
@@ -111,7 +106,11 @@ class ResultCorrection {
                                         ? g
                                         : g.copy(
                                             outcome: outcome,
-                                            note: reason.trim(),
+                                            // The note is optional; an empty
+                                            // one keeps what the game had.
+                                            note: reason.trim().isEmpty
+                                                ? g.note
+                                                : reason.trim(),
                                             pairingAssumption: outcome.resolved
                                                 ? null
                                                 : g.pairingAssumption,

@@ -87,11 +87,7 @@ void main() {
       final section = event.sections.first;
       final posted = section.copy(rounds: [reportPairingRounds(section).first]);
       final snapshot = event.copy(sections: [posted]);
-      for (final kind in [
-        ReportKind.pairings,
-        ReportKind.sections,
-        ReportKind.packet,
-      ]) {
+      for (final kind in [ReportKind.pairings, ReportKind.packet]) {
         final commands = pdfText(
           await reportPdf(
             snapshot,
@@ -113,6 +109,21 @@ void main() {
       }
     },
   );
+
+  test('player lists print every section player without pairings', () async {
+    final event = sample();
+    final swiss = event.sections.last;
+    expect(swiss.rounds, isEmpty);
+    final commands = pdfText(
+      await reportPdf(event, ReportKind.sections, sectionId: swiss.id),
+    );
+    expect(commands, contains('Players'));
+    for (final id in swiss.players) {
+      expect(commands, contains(event.player(id).name.replaceAll(' ', '')));
+    }
+    expect(commands, isNot(contains('Pairings')));
+    expect(commands, isNot(contains('White')));
+  });
 
   test(
     'larger round robins keep board tables and the selected round',
@@ -377,7 +388,7 @@ void main() {
           ).allMatches(latin1.decode(bytes)).length;
           expect(pages, 3, reason: '$kind, a4=$a4, doubles=$doubles');
           if (Platform.environment['MEOW_PRINT_SAMPLES'] == '1' &&
-              kind == ReportKind.sections &&
+              kind == ReportKind.packet &&
               !a4) {
             Directory('artifacts/print-sheets').createSync(recursive: true);
             File(

@@ -38,7 +38,8 @@ void main() {
     expect(tester.getSize(header).width, tester.getSize(board).width);
     final headerBefore = tester.getRect(header);
     final boardBefore = tester.getRect(board);
-    expect(boardBefore.left - headerBefore.right, 24);
+    // A wide gutter with a hairline separates the crosstable and boards.
+    expect(boardBefore.left - headerBefore.right, 64);
     expect(tester.getSize(board).height, lessThanOrEqualTo(36));
     expect(
       tester.getSize(find.byKey(ValueKey('player-${game.white}'))).height,
@@ -226,7 +227,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('roster shows rating, USCF ID and expiry in adjacent columns', (
+  testWidgets('roster shows USCF ID, rating and expiry in adjacent columns', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 900);
@@ -241,15 +242,63 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(
-      tester.getRect(find.text('Rating')).left,
-      lessThan(tester.getRect(find.text('USCF ID')).left),
+      tester.getRect(find.text('USCF ID')).left,
+      lessThan(tester.getRect(find.text('Rating')).left),
     );
     expect(
-      tester.getRect(find.text('USCF ID')).left,
+      tester.getRect(find.text('Rating')).left,
       lessThan(tester.getRect(find.text('USCF expires')).left),
     );
     expect(find.text(c.event!.players.first.memberId), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('an earlier round keeps both tables on one line', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final c = fixture(count: 4, format: Format.swiss);
+    addTearDown(c.dispose);
+    c.post((await tester.runAsync(() => c.propose()))!);
+    for (final g in c.event!.games) {
+      c.recordResult(g.id, Outcome.whiteWin);
+    }
+    c.post((await tester.runAsync(() => c.propose()))!);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: meowTheme(Brightness.light),
+        home: Scaffold(
+          body: ListenableBuilder(
+            listenable: c,
+            builder: (_, _) => ResultsView(
+              controller: c,
+              sectionId: c.event!.sections.first.id,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('round-selector')),
+        matching: find.text('1'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('past-round-banner')), findsOneWidget);
+    expect(find.byKey(const ValueKey('correct-round')), findsOneWidget);
+    double top(String key) => tester.getTopLeft(find.byKey(ValueKey(key))).dy;
+    expect(top('board-column-header'), top('player-column-header'));
+    expect(
+      tester.getCenter(find.text('Crosstable')).dy,
+      closeTo(
+        tester.getCenter(find.byKey(const ValueKey('round-line'))).dy,
+        1,
+      ),
+    );
   });
 }

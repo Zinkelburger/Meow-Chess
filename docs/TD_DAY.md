@@ -95,10 +95,12 @@ inevitable change safely.
 - “Where am I playing?” Player lookup by name or pairing number shows board,
   color, opponent, score and next-round bye status in a large panel that can face
   the player. It never enters a result (K11).
-- “Can I have a half-point bye in round 3?” Double-click the name → Byes. The
-  event's announced bye deadline is shown at the decision (D01, D02, J02).
-- “I have to leave now.” Withdraw asks whether it starts now or after the current
-  game and shows the unresolved board (D03).
+- “Can I have a half-point bye in round 3?” Right-click the name → Byes…, then
+  round 3 in the ½ pt row. The event's announced bye deadline is shown at the
+  decision (D01, D02, J02).
+- “I have to leave now.” The player card's Withdraw names when it takes effect
+  (“Withdraw after round 2”). Leaving after a later round is zero-point byes for
+  the rounds they will miss (D03).
 - Two players were paired wrong. Edit the posted round, swap, post the replacement
   revision, reprint only that section (P02, P03, K09).
 - A no-show at board 7 after the default wait. Forfeit keystroke, then the offer to

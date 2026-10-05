@@ -66,8 +66,8 @@ void main() {
     await tester.tap(find.byKey(ValueKey('history-$bye')));
     await tester.pumpAndSettle();
     expect(find.text('Diego Alvarez: Round 3 bye (0.5 pt)'), findsOneWidget);
-    expect(find.text('Undo 2 operations'), findsOneWidget);
-    expect(find.text('Saved branch · 2 operations'), findsOneWidget);
+    expect(find.text('Undoes 2 changes'), findsOneWidget);
+    expect(find.text('2 undone changes, kept'), findsOneWidget);
     Future<void> screenshot(String name) async {
       final boundary =
           screenshotKey.currentContext!.findRenderObject()!

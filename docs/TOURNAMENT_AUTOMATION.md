@@ -93,7 +93,9 @@ schemas and revision checks as MCP. EOF closes the event safely.
 - Section settings → **Time control (blank uses event default)**: ladders can
   store different controls. Each section's rating category and printed packet
   use its own effective control.
-- Player details → **Add a separate section entry…**: keeps the original entry.
+- A second entry for the same person in another section (a ladder) keeps the
+  original entry. It is available through the `add_section_entry` automation
+  tool; the player card no longer offers it.
 - Sections → **Pair a side game…**: choose White and Black. Record the main-game
   result/forfeit first if either person is still playing. Main and side scores
   remain independent. Multiple disjoint games can share a side-game round;

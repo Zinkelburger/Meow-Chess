@@ -381,9 +381,10 @@ class _RosterImportPanelState extends State<RosterImportPanel> {
                 tilePadding: EdgeInsets.zero,
                 title: const Text('More fields'),
                 children: [
-                  mapping(RosterField.club, 'Club / team'),
                   mapping(RosterField.state, 'State'),
-                  mapping(RosterField.registrationNote, 'Note'),
+                  mapping(RosterField.team, 'Team'),
+                  mapping(RosterField.club, 'Club'),
+                  mapping(RosterField.registrationNote, 'Registration note'),
                 ],
               ),
               const SizedBox(height: 16),

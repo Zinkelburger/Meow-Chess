@@ -45,14 +45,15 @@ void main() {
   });
 
   test(
-    'split names, tab detection and optional state and club map by header',
+    'split names, tab detection and optional state and team map by header',
     () {
       final rows = parseRoster(
         'Surname\tGiven name\tState\tTeam\tRtg\nLee\tAda\tma\tKnights\tUNR',
       );
       expect(rows.single.player!.name, 'Ada Lee');
       expect(rows.single.player!.state, 'MA');
-      expect(rows.single.player!.club, 'Knights');
+      expect(rows.single.player!.team, 'Knights');
+      expect(rows.single.player!.club, '');
       expect(rows.single.player!.rating, 0);
     },
   );

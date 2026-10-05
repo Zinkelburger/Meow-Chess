@@ -217,7 +217,7 @@ Warm, low-chroma paper greys with a single deep ink-blue for action, defined as 
 ## Typography
 
 **Body Font:** Inter 4.1 (Regular 400, Medium 500, SemiBold 600, Bold 700), bundled.
-**Mono Font:** Source Code Pro Regular, bundled, for US Chess IDs, ratings and history hashes.
+**Mono Font:** Source Code Pro Regular, bundled, for US Chess IDs, ratings and key hints.
 
 **Character:** One neutral grotesque at two scales: compact for operating the tool, oversized for the wall sheet. Figures that line up in columns (board numbers, scores, round facts, standings) use tabular figures.
 
@@ -242,7 +242,7 @@ Warm, low-chroma paper greys with a single deep ink-blue for action, defined as 
 
 A desktop workspace: a 48px-minimum toolbar (editable event name, Players / Rounds / Reports, Refresh from URL / Refresh from USCF, then Help / Keyboard, Undo / Redo / History, Theme / Home). Refresh actions use labeled buttons on wide screens and accessible icon buttons at laptop widths; USCF uses the conventional ♔ glyph. Normal 960px windows retain one toolbar row; enlarged text can use a second row. A legacy practice banner appears only in existing practice files.
 
-The section strip contains navigation only: a permanently pinned All sections tab, horizontally scrolling 15px section labels with 12px status subtitles, and a separate outlined New Section action. Selected tabs use a neutral surface and bottom rule. Right-click a section tab for player moves, swaps, withdrawals, printing, rename/settings, combine, and delete (unplayed sections only). Context menus open instantly; tabs have no visible Actions button. New Section creates an empty Swiss section immediately and opens its right-hand settings, including Side games (off by default). Before play, the Players view offers Create sections for unassigned players, including rating-based quad grouping. Create pairings is one global action for all ready sections; side-game sections offer Pair a side game there. The main view, optional right-hand dock, and saved-status bar complete the workspace.
+The section strip contains navigation only: a permanently pinned All sections tab, horizontally scrolling 15px section labels with 12px status subtitles, and a separate outlined New Section action. Selected tabs use a neutral surface and bottom rule. Right-click a section tab for printing, rename/settings, combine, and delete (unplayed sections only); player actions live on the player. Right-click a player (or press the Menu key or Shift+F10 on a focused row) for Byes…, Move… and Withdraw/Reinstate. There is one Move action: moving in or out of a full, unpaired quad asks which player in the destination exchanges places, so a quad always keeps four; a round robin may optionally exchange; a Swiss simply moves. Context menus open instantly; tabs have no visible Actions button. New Section creates an empty Swiss section immediately and opens its right-hand settings, including Side games (off by default). Before play, the Players view offers Create sections for unassigned players, including rating-based quad grouping. Create pairings is one global action for all ready sections; side-game sections offer Pair a side game there. The main view, optional right-hand dock, and saved-status bar complete the workspace.
 
 Spacing snaps to 4 / 8 / 12 / 16 / 24, with 32 / 40 / 48 for larger separations. The page gutter is 24px; the round header pads 16px top and 8px bottom inside it. Board rows are 52px minimum with 16px horizontal padding; score boxes 64px wide. Side panels sit 24px from the right edge.
 
@@ -273,7 +273,7 @@ Plain and immediate.
 - **Hover / Focus:** colour changes instantly (zero animation, no ripple). Keyboard focus draws a 2px ring in `onSurface` (dark on light paper, light on dark), so it shows on filled buttons too.
 
 ### View tabs
-Player lookup lives in Players and remains available globally with Ctrl+L. Shortcut reference lives behind the keyboard icon; Rounds does not show a permanent hotkey legend. Undo and Redo use straight arrows with action names in accessible tooltips.
+Player lookup opens anywhere with Ctrl+L; Players has only its search box, so the two are not confused. Shortcut reference lives behind the keyboard icon; Rounds does not show a permanent hotkey legend. Undo and Redo use straight arrows with action names in accessible tooltips.
 The toolbar's Players / Rounds / Reports switch. The selected tab inverts: `onSurface` fill with `surface` text. Unselected tabs are plain text.
 
 ### Chips and Segmented buttons
@@ -281,7 +281,7 @@ The toolbar's Players / Rounds / Reports switch. The selected tab inverts: `onSu
 - **State:** selected is the Step surface; focus is the 2px `onSurface` ring. No animation.
 
 ### Inputs / Fields
-- Empty fields have labels and no example placeholders. Saved values and drafts are restored. Searches are compact: 160px section search and 220px player/board search, at the standard 36px control height.
+- Empty fields have labels and no example placeholders. Saved values and drafts are restored. Searches use one shared field labelled **Search**: 200px wide (220px on the roster), locked to the 36px control height, with the clear button's slot always reserved so typing never resizes the box or nudges its neighbours.
 - **Style:** white sheet fill, Ruling Grey border, 6px corners, 8px by 12px padding, dense.
 - **Focus:** 2px Ledger Blue border.
 - **Error:** the problem stays beside the field in the panel, never in a dialog.
@@ -290,22 +290,42 @@ The toolbar's Players / Rounds / Reports switch. The selected tab inverts: `onSu
 24px target, 18px box with 2px corners. Unchecked is a Ruling Grey outline; checked or mixed is a Ledger Blue fill with a white check or dash. Flips instantly; focus is a 2px `onSurface` ring with 4px corners.
 
 ### Score box (signature)
-The heart of the Rounds wall sheet: a 64px by 44px box at each end of a board row holding the result mark (20px SemiBold). Editable boxes are paper with a Ruling Grey border; read-only boxes are Shelf. Focus is a 2px Ledger Blue border. A 12px caption appears for playing, disputed or assumed; disputed marks and captions turn `error`, assumed marks go muted. Keys commit immediately and advance.
+The heart of the Rounds wall sheet: a 64px by 44px box at each end of a board row holding the result mark (20px SemiBold). Editable boxes are paper with a Ruling Grey border; read-only boxes are Shelf. Focus is a 2px Ledger Blue border. A 12px caption appears for playing, disputed or assumed; disputed marks and captions turn `error`, assumed marks go muted. Unplayed games use the US Chess letters: X for a forfeit win and F for a forfeit (no-show); F typed on a player marks them absent, and F on both players is a double forfeit. Crosstable byes read B--- (full), H--- (half) and U--- (zero). Keys commit immediately and advance.
 
 ### Board row and table
 52px ruled rows (hairline at 50%), 19px tabular board number, white on the left and black on the right, row menu at the end. The column header is sticky, on Shelf, 12px. Standings mark shared ranks "T-2".
 
 ### Round header
-26px SemiBold round title with 18px muted tabular facts on the same line; a "Show round" segmented selector when there is more than one round.
+Round title with muted tabular facts and, when there is more than one round, the round chips (1, 2, 3, All) all on one line. The title, the read-only status and the chips each occupy a band one control tall, so the title stays level with the Crosstable title even when the chips wrap. Pane headings are at least one control tall, so a section with round chips and one without (a quad beside a Swiss) start their tables at the same height. Each heading's first line is pinned to a top band one control tall, so when round chips wrap on a narrow pane, the Crosstable title and the round title still share one horizontal axis. Before round 1 the heading reads "Round 1 of N · Not paired yet" and the toolbar stays in place with its filters disabled. The nav row reserves the Create pairings button's height whether or not it is shown.
+
+### Unpaired board sheet
+Before pairings exist, the boards pane shows the empty sheet itself rather than an empty-state message: the column header and one blank row per board the section will need (plus a blank Bye row for an odd count), with inert Shelf score boxes. Posting fills the same rows, so nothing moves.
+
+Byes are listed after the boards. The score column carries the points; a pairing-allocated bye shows only the name, and other byes add a short muted reason ("requested bye", "withdrawn").
 
 ### Banners
-Full-width-in-gutter strips with an icon and words, 4px corners: read-only round (Step, lock icon), correcting a result (errorContainer, edit icon), editing pairings (secondaryContainer, swap icon), post notes (Step, info icon). Each says what state it is and offers the way out ("Done correcting", "Back to round 3").
+Strips with an icon and words, 4px corners, for states that need a sentence: editing pairings (secondaryContainer, swap icon), quad schedule problems (errorContainer), post notes (Step, info icon). On Pairings they sit inside the boards pane above the boards table, never in the heading or toolbar rows the two panes share, so the crosstable beside them never moves. An earlier round is not a banner: the round heading carries a lock icon and "Read-only" (bold "Read-only · choose Correct a result to change it" after a key is typed into a locked box; "Correcting · review each change before saving" in `error` while correcting), and the boards toolbar swaps Edit pairings for **Correct a result** / **Done correcting**. The round chips are the way back to the current round.
 
 ### Side panel and Dock
 White sheet, hairline border, square corners, title row (15px SemiBold) with a close button; Esc closes. 360px for details and short forms; 480px for print and the player lookup, whose answer runs at 26px / 24px so it reads from standing height.
 
+### Player card
+The player panel leads with what TDs decide mid-event: a muted facts line (section · rating, plus a Withdrawn StatusPill) and outlined **Withdraw after round N** / **Reinstate** and **Move…** buttons. Move… opens the move form in place under those buttons on a Shelf inset (Move to, Swap with when a quad needs it, Reason once play has started, then Move / Cancel); there is no Section group. Identity fields (Full name, US Chess ID, Rating, State) stay open, all the same 36px-class field height; the ID field carries no inline icon, and Find by name / Check ID sit under it as outlined buttons. Check ID never saves anything: it shows the US Chess record on a Shelf inset, a bold verdict line ("ID 12345678 is Alex Chen", or in `error` "…belongs to Someone Else, not Alex Chen" with name matches offered below) over a label/value table of State, Regular, Quick, Blitz, Expires and Supplement. Status lines in this area never end in a period. Everything else is a DisclosureGroup: a hairline-ruled header row with a chevron, the 15px title and, when closed, its value as a 13px muted summary at the right edge ("R3 ½", "Not checked", "Lee / Patel"). Groups open and close instantly; a TD's choice is remembered across players. Byes opens by default in a Swiss; US Chess opens itself for a membership warning or a lookup; a report fix opens the group holding its field. Groups: Byes (hidden for a withdrawn player), US Chess, Pairing requests, Team, Notes. Groups carry no explanatory sentences; labels do the work. US Chess is a label/value table at one 13px size (Expires, coloured only when it needs attention, with its warning word; Checked; Supplement or Registration rating), an outlined Refresh from US Chess button, and the Name on rating report field. Save and Discard draft sit in the panel footer whenever a field is edited. Adding a player shows only Name, US Chess ID, Rating and Section, with the rest under More details.
+
+### Bye grid
+A compact table: a 12px muted "Round" header row with the unpaired round numbers across, then rows 0 pt, ½ pt, 1 pt (in that order) of 32px cells. Empty cells are outlined; a chosen cell fills with `onSurface` and shows its points in `surface` (13px SemiBold); choosing it again clears it. Hover is the Step surface; focus is the 2px ring outside the cell. Cells grow with text scale and the table scrolls sideways if rounds run past the panel.
+
+### History
+The History dock is a single timeline rail, newest first. Each row leads with what happened in TD words (a result reads "Alex Chen – Jamie Patel  0–1", with section, round and board beneath in 12px muted); the time shows only where it changes. The current state carries a **Now** StatusPill and a ringed dot; undone steps carry **Undone** and a hollow dot; undone work that was replaced hangs on a second rail in a collapsible group. Selection is the Step surface. Selecting a row expands its consequences inline, then the one action that commits them. No transaction numbers or graph vocabulary appear.
+
+### Result correction
+A docked panel, never a dialog. Results are a ruled radio group named for the players, with key hints at the right edge and the recorded result marked by a StatusPill. The score change sits on a Paper inset in tabular figures. Later paired rounds get a second radio group. The note is optional. Save explains in words why it is unavailable. After saving, the panel confirms the change with Undo and Done.
+
+### Selectable text
+The workspace and welcome screen sit in one selection area: any name, ID, score or message can be dragged over and copied (Ctrl+C), the same as on paper. Buttons, rows and score boxes keep their own clicks and keys.
+
 ### Status bar and messages
-The bottom bar states the save in words ("Event saved 23:39"), at 12px muted. Successful actions use quiet inline text beside the affected content or control, without overlays or timeouts. File confirmations include a selectable path; report status distinguishes the exported revision from newer changes. Import and rating summaries sit above Players with Undo and dismiss controls and clear when the event changes. Skip redundant confirmations when the updated content is sufficient. Withdrawal actions belong beside forfeiting players and remain available while relevant. Undo stays in the toolbar and History. SnackBars are reserved for errors: persistent red, with an icon, copy action and close button, and no timeout. All changes appear without animation.
+The bottom bar states the save in words ("Event saved 23:39"), at 12px muted. Successful actions use quiet inline text beside the affected content or control, without overlays or timeouts. File confirmations include a selectable path; report status distinguishes the exported revision from newer changes. New things appear in the right-hand column, never above a table: the USCF rating review, bulk actions for ticked players, and confirmations of imports, rating updates, moves and withdrawals (a check line with Undo and Done, as in result correction). Undo is offered only while the confirmed change is still the latest; otherwise the panel points to History. Skip redundant confirmations when the updated content is sufficient. Withdrawal actions belong beside forfeiting players and remain available while relevant. Undo stays in the toolbar and History. SnackBars are reserved for errors: persistent red, with an icon, copy action and close button, and no timeout. All changes appear without animation.
 
 ### StatusPill and EmptyState
 StatusPill: 12px text, 4px by 8px padding, 4px corners, Step (neutral) or secondaryContainer (good), always a word, never a dot. EmptyState: centred 40px muted icon, title, body, optional action, max 440px wide.
@@ -338,26 +358,28 @@ The older "V2 dark tokens" in `docs/TD_EXPERIENCE.md` are superseded by this fil
 
 Forms keep partial and invalid input as local drafts, separate from audited event revisions. Save/Add applies the form; Close/Escape preserves it; Discard draft restores the committed record. A failed draft write is visible and retryable. The event save indicator never promises draft durability. Results restore the last board, side, search and scroll per section; historical rounds reopen read-only and newly posted rounds reset the view.
 
-Print previews name their sections, rounds and event revision. They retain their scope while refreshed; event changes disable printing until the TD refreshes or explicitly chooses the older revision. Prize-class filters carry into printed standings. Report blockers link to their repair fields, and the finish-event checklist distinguishes exported revisions, backups and manually recorded submission notes from external acceptance.
+Print previews name their sections and rounds (per section when they differ), never internal revision numbers. They retain their scope while refreshed; event changes disable printing until the TD refreshes or explicitly chooses the older revision. Prize-class filters carry into printed standings. Report blockers link to their repair fields, and the finish-event checklist distinguishes exported revisions, backups and manually recorded submission notes from external acceptance.
 
 ### Reviewed external changes
 
-Website imports, rating updates and player transfers use explicit before/after confirmation in the dock or selection bar. Existing-player website changes start unchecked; missing website entries stay local. Registration ratings are labelled self-reported. Help opens searchable offline articles in the same dock, with contextual pairing explanations. These deliberate confirmation steps supersede the general immediate-edit guidance for these workflows.
+Website imports, rating updates and player transfers use explicit before/after confirmation in the dock or the selection panel. Existing-player website changes start unchecked; missing website entries stay local. Registration ratings are labelled self-reported. Help opens searchable offline articles in the same dock, with contextual pairing explanations. These deliberate confirmation steps supersede the general immediate-edit guidance for these workflows.
 
 ### Players and Pairings workflow (October 3 update)
 
 The top navigation separates **Players**, **Pairings**, and **Reports**, retaining
 the selected section. Players is the roster setup view: names, ratings, USCF
-expiry, registration edits, and section assignment. Its compact **Player tools**
-menu holds Refresh from URL, Refresh from USCF, Check memberships, import/paste,
-and optional rating estimates and IDs. These actions do not live in the global
+expiry, registration edits, and section assignment. An empty roster leads with
+**Add from URL**, then file import, paste, and one player. Once players exist, the
+toolbar shows **Add player** and **Refresh from USCF** (ratings and membership
+expiry in one pass); the compact **Player tools** menu holds Refresh from URL,
+import/paste, and optional rating estimates and IDs. These actions do not live in the global
 toolbar. Players has no round columns, scores, standings, or create-pairings action.
 
 Pairings owns creating rounds, editing boards, entering results, and the
 two always-visible tables. Both tables use the Players table's compact
 14px type, 32px minimum rows, and 24px score fields. On wide windows, equal compact panes
 share heading and toolbar rows so their table headers align even when controls
-wrap. The visible gap is 24px, and the right-hand editor column stays reserved.
+wrap. The panes sit either side of a 40px gutter with a centred hairline (64px between the tables), and the right-hand editor column stays reserved.
 Narrow windows stack boards above the crosstable in one vertically scrolling page.
 There are no view-toggle chips. Missing only is an event-wide saved preference
 that carries across sections. Print packet always opens the preview. Selected
@@ -373,9 +395,25 @@ reserved while closed so opening a player card never reflows the table; it does
 not hold a duplicate pairings list.
 
 Pairings are created in one step for all ready sections; waiting sections keep
-their games. Setup quad previews are read-only. Move, Swap and Withdraw remain
+their games. Setup quad previews are read-only. Move and Withdraw remain
 explicit roster actions. Result entry is typing only: 1/W wins, 0/L loses, and D
 draws. Score cells display 1, 0 or ½ and update the opponent atomically. Crosstable
 rows stay in place during entry. Corrections to dependent rounds retain their
 review. Printer icons use the last selected printer, with a picker on first use
 and preview/settings still available.
+
+### Export view (October 5 update)
+
+Export is only the US Chess rating report, which always covers every
+section, so the section strip is hidden there. The header states readiness
+("6 problems to fix before generating" or "Ready to generate · 2 sections")
+beside the one filled action, Generate DBF files, with the saved path and
+revision below it. A Problem / Fix table lists blocking checks with their
+repair links in the Fix column (per-player links wrap under the problem);
+optional advice folds into an "Optional" group row with its bulk state
+actions. Report details is a label/value table holding the event facts
+(Edit event details opens the dock) and the inline site and event-type
+fields. "Sections in the report" is a table of players, reported rounds,
+time control and rating system. Backup state and submission notes close the
+page. Standings, crosstables and their CSV/text copies live in the standings
+print panel (Standings / Crosstable switch), not on Export.

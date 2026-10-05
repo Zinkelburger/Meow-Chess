@@ -87,20 +87,20 @@ void main() {
     await tester.tap(find.byKey(ValueKey('score-${game.id}-w')));
     await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('result-reason')));
-    await tester.enterText(
-      find.byKey(const ValueKey('result-reason')),
-      'Signed scoresheet confirms the result was reversed. Round 2 has not started.',
-    );
-    await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const ValueKey('reopen-round-2')));
     await tester.tap(find.byKey(const ValueKey('reopen-round-2')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const ValueKey('confirm-unstarted')));
     await tester.tap(find.byKey(const ValueKey('confirm-unstarted')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('correction-outcome')),
+    await tester.enterText(
+      find.byKey(const ValueKey('result-reason')),
+      'Signed scoresheet shows Black won.',
+    );
+    await tester.pumpAndSettle();
+    await tester.fling(
+      find.byKey(const ValueKey('correction-whiteWin')),
+      const Offset(0, 600),
+      2000,
     );
     await tester.pumpAndSettle();
     expect(c.graph.head, before);
@@ -108,10 +108,16 @@ void main() {
     setTheme(() => brightness = Brightness.dark);
     await tester.pumpAndSettle();
     await capture('correction-review-dark');
+    setTheme(() => brightness = Brightness.light);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('apply-correction')));
     await tester.pumpAndSettle();
     expect(c.event!.sections.first.rounds.length, 1);
     expect(c.event!.games.first.outcome, Outcome.blackWin);
+    expect(find.textContaining('Round 2 onward is unpaired'), findsOneWidget);
+    await capture('correction-saved');
+    await tester.tap(find.byKey(const ValueKey('correction-done')));
+    await tester.pumpAndSettle();
     final corrected = c.graph.head!;
     await tester.tap(find.byTooltip('History (Ctrl+H)'));
     await tester.pumpAndSettle();

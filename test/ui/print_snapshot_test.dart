@@ -118,7 +118,7 @@ void main() {
               .onPressed,
           isNull,
         );
-        await tester.tap(find.text('Use older revision ${snapshot.revision}'));
+        await tester.tap(find.text('Print older version'));
         await tester.pump();
         await tester.tap(find.byKey(const ValueKey('print-preview')));
         await tester.pump();
@@ -130,10 +130,7 @@ void main() {
         await tester.pumpAndSettle();
         if (changeAgain) {
           expect(printer.jobs, isEmpty);
-          expect(
-            find.text('Use older revision ${snapshot.revision}'),
-            findsOneWidget,
-          );
+          expect(find.text('Print older version'), findsOneWidget);
         } else {
           expect(printer.jobs, hasLength(1));
           expect(printer.jobs.single.bytes, [1, 2, 3]);
@@ -173,4 +170,30 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+
+  testWidgets('standings preview offers the crosstable and file copies', (
+    tester,
+  ) async {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    final pending = Completer<Uint8List>();
+    Widget panel(ReportKind kind) => MaterialApp(
+      home: Scaffold(
+        body: PrintPanel(
+          event: c.event!,
+          controller: c,
+          kind: kind,
+          onClose: () {},
+          generate: (_) => pending.future,
+        ),
+      ),
+    );
+    await tester.pumpWidget(panel(ReportKind.standings));
+    expect(find.byKey(const ValueKey('print-ranking-kind')), findsOneWidget);
+    expect(find.byKey(const ValueKey('save-standings-csv')), findsOneWidget);
+    expect(find.byKey(const ValueKey('save-crosstable-text')), findsOneWidget);
+    await tester.pumpWidget(panel(ReportKind.packet));
+    expect(find.byKey(const ValueKey('print-ranking-kind')), findsNothing);
+    expect(find.byKey(const ValueKey('save-standings-csv')), findsNothing);
+  });
 }

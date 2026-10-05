@@ -100,30 +100,43 @@ void main() {
         buttons: kSecondaryMouseButton,
       );
       await tester.pump();
-      expect(find.text('Move to section…'), findsOneWidget);
       expect(find.text('Withdraw player…'), findsOneWidget);
-      await tester.tap(find.text('Swap with player…'));
+      expect(find.textContaining('Swap'), findsNothing);
+      // One Move action; a quad asks who takes the player's place.
+      await tester.tap(find.text('Move…'));
       await tester.pumpAndSettle();
       expect(c.event!.revision, revision);
+      await tester.tap(find.byType(DropdownButtonFormField<String>).at(1));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Quad 2').last);
+      await tester.pumpAndSettle();
+      final apply = find.byKey(const ValueKey('apply-player-operation'));
+      expect(tester.widget<FilledButton>(apply).onPressed, isNull);
       await tester.tap(find.byType(DropdownButtonFormField<String>).last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Player 04 · Quad 2').last);
+      await tester.tap(find.text('Player 04 · 1800').last);
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('apply-player-operation')));
       await tester.pumpAndSettle();
       expect(c.event!.sections.first.players, ['p4', 'p1', 'p2', 'p3']);
       expect(c.event!.sections.last.players, ['p0', 'p5', 'p6', 'p7']);
+      // Player actions live on the player, not on the section tab.
       await tester.tap(
         find.byKey(ValueKey('section-chip-${first.id}')),
         buttons: kSecondaryMouseButton,
       );
       await tester.pump();
-      expect(find.text('Print section sheets'), findsNWidgets(2));
-      await tester.tap(find.text('Withdraw / reinstate player…'));
+      expect(find.text('Print player list'), findsNWidgets(2));
+      expect(find.text('Move player…'), findsNothing);
+      expect(find.text('Withdraw / reinstate player…'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(DropdownButtonFormField<String>).last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Player 04').last);
+      await tester.tap(
+        find.byKey(const ValueKey('player-p4')),
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pump();
+      await tester.tap(find.text('Withdraw player…'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('apply-player-operation')));
       await tester.pumpAndSettle();

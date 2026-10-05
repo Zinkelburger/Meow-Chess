@@ -7,9 +7,13 @@ import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
 import '../support.dart';
 
-MemberObservation observation(String id, int? rating) => MemberObservation(
+MemberObservation observation(
+  String id,
+  int? rating, {
+  String name = 'Player',
+}) => MemberObservation(
   id: id,
-  name: 'Official Name',
+  name: name,
   retrievedAt: '2026-10-03',
   supplementDate: '2026-10-01',
   ratings: {'R': rating},
@@ -103,7 +107,10 @@ void main() {
       expect(c.event!.player('p1').state, isEmpty);
       expect(draft.foundCount, 2);
       expect(draft.problem(c.event!.player('p1')), contains('No USCF ID'));
-      expect(draft.problem(c.event!.player('p2')), contains('Unrated'));
+      expect(
+        draft.problem(c.event!.player('p2')),
+        contains('No Regular rating'),
+      );
       draft.select(c.event!.player('p3'), false);
       expect(draft.apply(), 1);
       expect(c.event!.player('p0').rating, 1300);
@@ -217,4 +224,77 @@ void main() {
       expect(limited.problem(c.event!.player('p2')), contains('Not checked'));
     },
   );
+
+  test(
+    'switching category re-reads fetched supplements without a refetch',
+    () async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      var requests = 0;
+      final draft = RatingRefresh(
+        c,
+        lookup: (id) async {
+          requests++;
+          return MemberObservation(
+            id: id,
+            name: 'Player',
+            retrievedAt: '2026-10-03',
+            supplementDate: '2026-10-01',
+            ratings: {'R': 1500, 'Q': 1400},
+          );
+        },
+      );
+      addTearDown(draft.dispose);
+      await draft.fetch();
+      final fetched = requests;
+      final p = c.event!.players.first;
+      draft.showCategory('R');
+      draft.showCategory('Q');
+      expect(requests, fetched);
+      expect(draft.category, 'Q');
+      expect(draft.proposed(p), 1400);
+      expect(draft.selected, contains(p.id));
+    },
+  );
+
+  test(
+    'a USCF name for somebody else starts unticked and is flagged',
+    () async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      final draft = RatingRefresh(
+        c,
+        lookup: (id) async => observation(
+          id,
+          1500,
+          name: id == '12000001' ? 'Daniel Whitfield' : 'Player Zero',
+        ),
+      );
+      addTearDown(draft.dispose);
+      await draft.fetch();
+      final same = c.event!.player('p0'), other = c.event!.player('p1');
+      expect(draft.nameMismatch(same), false);
+      expect(draft.nameMismatch(other), true);
+      // Still applicable when the TD decides the ID is right.
+      expect(draft.canApply(other), true);
+      expect(draft.selected, {'p0', 'p2', 'p3'});
+      draft.select(other, true);
+      expect(draft.approved.map((p) => p.id), ['p0', 'p1', 'p2', 'p3']);
+      expect(draft.supplementDate, '2026-10-01');
+    },
+  );
+
+  test('a rating typed during review is kept, not reported as stale', () async {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    final draft = RatingRefresh(c, lookup: (id) async => observation(id, 1500));
+    addTearDown(draft.dispose);
+    await draft.fetch();
+    c.savePlayer(c.event!.player('p0').copy(rating: 1234));
+    c.savePlayer(c.event!.player('p1').copy(memberId: '99887766'));
+    expect(draft.problem(c.event!.player('p0')), 'Your edit is kept.');
+    expect(draft.problem(c.event!.player('p1')), startsWith('USCF ID changed'));
+    expect(draft.apply(), 2);
+    expect(c.event!.player('p0').rating, 1234);
+  });
 }
