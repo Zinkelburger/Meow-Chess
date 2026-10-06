@@ -4,7 +4,7 @@ An offline-first Flutter desktop tournament director workspace.
 US Chess first; Swiss events, easy quads, reliable identity/rating checks, and
 usable printing. Inspired by SwissSys workflows and Chess Auto Prep V2's UI.
 
-**Meow-Chess 1.2.2** provides an offline desktop workspace for Linux and Windows.
+**Meow-Chess 1.2.3** provides an offline desktop workspace for Linux and Windows.
 Download the installers and portable bundles from [Releases](https://github.com/Zinkelburger/Meow-Chess/releases).
 This release adds complete quad schedules and pairing edits, improves US Chess
 identity and rating review, and preserves reliable history and recovery. Shared
@@ -20,6 +20,12 @@ The 1.2.2 update makes F a one-key no-show, prints US Chess result letters
 bye table and one Move action that keeps quads at four, shows the full US Chess
 record from Check ID, keeps the crosstable and round headings level, and lets
 any on-screen text be selected and copied.
+The 1.2.3 update replaces Create sections and New Section with one New section
+panel that previews every player in each section it will create, opens CSV/TSV
+imports in a spreadsheet-style window (separators, quotes, per-column fields,
+rows already in the event or repeated in the file), quiets the blue buttons to
+one commit action per region, makes every menu open instantly, and fixes
+saving and opening events under the macOS App Sandbox.
 Federation acceptance and full Swiss priority conformance remain unverified; see
 [implementation status](docs/IMPLEMENTATION.md) and [release qualification](docs/TESTING.md).
 The existing

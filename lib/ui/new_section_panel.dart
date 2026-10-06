@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
-import '../domain/pairing.dart' show quadGroupSizes;
+import '../domain/pairing.dart' show planQuads;
 import '../domain/us_chess.dart' show TimeControl;
 import 'drafts.dart';
 import 'player_format.dart';
@@ -14,6 +14,44 @@ import 'theme.dart';
 
 /// Who a new section takes from the roster.
 enum NewSectionPool { ticked, unassigned, everyone, none }
+
+typedef _Group = ({String name, Format format, List<Player> players});
+
+/// The roster sorted by who can go in a new section, read in one pass.
+class _Pools {
+  _Pools(Event e, Set<String> tickedIds) {
+    for (final s in e.sections) {
+      for (final id in s.players) {
+        sectionOf[id] = s;
+      }
+    }
+    for (final p in e.players) {
+      final from = sectionOf[p.id], chosen = tickedIds.contains(p.id);
+      if (p.withdrawn) {
+        if (chosen) withdrawnTicked++;
+      } else if (from != null && from.rounds.isNotEmpty) {
+        if (chosen) pairedTicked++;
+      } else {
+        everyone.add(p);
+        if (from == null) unassigned.add(p);
+        if (chosen) ticked.add(p);
+      }
+    }
+  }
+
+  final sectionOf = <String, Section>{};
+  final ticked = <Player>[], unassigned = <Player>[], everyone = <Player>[];
+
+  /// Ticked players who cannot move: withdrawn, or in a paired section.
+  int withdrawnTicked = 0, pairedTicked = 0;
+
+  List<Player> of(NewSectionPool? pool) => switch (pool) {
+    NewSectionPool.ticked => ticked,
+    NewSectionPool.unassigned => unassigned,
+    NewSectionPool.everyone => everyone,
+    NewSectionPool.none || null => const [],
+  };
+}
 
 /// The one way to make sections: choose who goes in, how they play, and
 /// see every player who will land in each new section before creating it.
@@ -83,7 +121,7 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
     // out; otherwise an empty section.
     pool = widget.ticked.isNotEmpty
         ? NewSectionPool.ticked
-        : unassigned.isNotEmpty
+        : pools.unassigned.isNotEmpty
         ? NewSectionPool.unassigned
         : format == Format.quad
         ? null
@@ -97,7 +135,7 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
     if (old.ticked.isEmpty && widget.ticked.isNotEmpty) {
       pool = NewSectionPool.ticked;
     } else if (widget.ticked.isEmpty && pool == NewSectionPool.ticked) {
-      pool = unassigned.isNotEmpty
+      pool = pools.unassigned.isNotEmpty
           ? NewSectionPool.unassigned
           : format == Format.quad
           ? null
@@ -126,77 +164,26 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
 
   Event get e => c.event!;
 
-  /// Whether [id] can be put in a new section now.
-  bool movable(String id) {
-    final p = e.player(id);
-    return !p.withdrawn && (e.sectionOf(id)?.rounds.isEmpty ?? true);
-  }
-
-  List<String> get unassigned => [
-    for (final p in e.players)
-      if (!p.withdrawn && e.sectionOf(p.id) == null) p.id,
-  ];
-
-  List<String> get everyone => [
-    for (final p in e.players)
-      if (movable(p.id)) p.id,
-  ];
-
-  List<String> get ticked => [
-    for (final p in e.players)
-      if (widget.ticked.contains(p.id) && movable(p.id)) p.id,
-  ];
-
-  List<String> entrants(NewSectionPool? pool) => switch (pool) {
-    NewSectionPool.ticked => ticked,
-    NewSectionPool.unassigned => unassigned,
-    NewSectionPool.everyone => everyone,
-    NewSectionPool.none || null => const [],
-  };
+  _Pools get pools => _Pools(e, widget.ticked);
 
   /// The groups this would create: name, format and players in order.
-  List<(String, Format, List<Player>)> preview(List<String> ids) {
-    final players = [for (final id in ids) e.player(id)];
+  /// Sections in [emptied] give up their names.
+  List<_Group> preview(List<Player> players, Set<String> emptied) {
     if (format != Format.quad) {
-      return [(name.text.trim(), format, players)];
+      return [(name: name.text.trim(), format: format, players: players)];
     }
     if (players.length < 4) return const [];
-    players.sort((a, b) {
-      final c = b.rating.compareTo(a.rating);
-      return c != 0 ? c : a.name.compareTo(b.name);
-    });
-    final chosen = ids.toSet();
-    final taken = {
-      for (final s in e.sections)
-        if (!s.players.every(chosen.contains) || s.players.isEmpty) s.name,
-    };
-    final groups = <(String, Format, List<Player>)>[];
-    var number = 1, offset = 0;
-    for (final size in quadGroupSizes(players.length)) {
-      var label = 'Bottom Swiss';
-      if (size == 4) {
-        while (taken.contains('Quad $number')) {
-          number++;
-        }
-        label = 'Quad $number';
-      } else {
-        for (var n = 2; taken.contains(label); n++) {
-          label = 'Bottom Swiss $n';
-        }
-      }
-      taken.add(label);
-      groups.add((
-        label,
-        size == 4 ? Format.quad : Format.swiss,
-        players.skip(offset).take(size).toList(),
-      ));
-      offset += size;
-    }
-    return groups;
+    return planQuads(
+      players,
+      taken: [
+        for (final s in e.sections)
+          if (!emptied.contains(s.id)) s.name,
+      ],
+    );
   }
 
   void create() {
-    final ids = entrants(pool);
+    final ids = [for (final p in pools.of(pool)) p.id];
     try {
       if (pool == null) {
         throw const TournamentException('Choose who goes in the section.');
@@ -244,15 +231,23 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final muted = TextStyle(fontSize: 13, color: colors.onSurfaceVariant);
-    final ids = entrants(pool);
+    final pools = this.pools;
+    final entrants = pools.of(pool);
     final quads = format == Format.quad;
-    final paired = widget.ticked.length - ticked.length;
-    final groups = quads && ids.length < 4 ? null : preview(ids);
-    final chosen = ids.toSet();
+    final emptiedIds = sectionsEmptiedBy(e, {for (final p in entrants) p.id});
+    final groups = quads && entrants.length < 4
+        ? null
+        : preview(entrants, emptiedIds);
     final emptied = [
       for (final s in e.sections)
-        if (s.players.isNotEmpty && s.players.every(chosen.contains)) s.name,
+        if (emptiedIds.contains(s.id)) s.name,
     ];
+    final cannotMove = [
+      if (pools.pairedTicked > 0)
+        '${pools.pairedTicked} in paired sections stay where they are',
+      if (pools.withdrawnTicked > 0)
+        '${pools.withdrawnTicked} withdrawn ${pools.withdrawnTicked == 1 ? 'is' : 'are'} left out',
+    ].join(' · ');
     Widget heading(String text) => Padding(
       padding: const EdgeInsets.only(top: 20, bottom: 8),
       child: Text(text, style: Theme.of(context).textTheme.titleMedium),
@@ -273,7 +268,7 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
         onSubmitted: (_) => create(),
       ),
     );
-    final count = ids.length;
+    final count = entrants.length;
     final createLabel = quads
         ? groups == null || groups.isEmpty
               ? 'Create quads'
@@ -323,12 +318,12 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
             _Choice(
               key: const ValueKey('pool-ticked'),
               label: 'Ticked players',
-              count: ticked.length,
+              count: pools.ticked.length,
               detail: widget.ticked.isEmpty
                   ? 'Tick players in the table to choose them'
-                  : paired > 0
-                  ? '$paired in paired sections stay where they are'
-                  : null,
+                  : cannotMove.isEmpty
+                  ? null
+                  : cannotMove,
               selected: pool == NewSectionPool.ticked,
               onTap: widget.ticked.isEmpty
                   ? null
@@ -337,17 +332,17 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
             _Choice(
               key: const ValueKey('pool-unassigned'),
               label: 'Everyone not in a section',
-              count: unassigned.length,
+              count: pools.unassigned.length,
               selected: pool == NewSectionPool.unassigned,
-              onTap: unassigned.isEmpty
+              onTap: pools.unassigned.isEmpty
                   ? null
                   : () => setState(() => pool = NewSectionPool.unassigned),
             ),
-            if (everyone.length > unassigned.length)
+            if (pools.everyone.length > pools.unassigned.length)
               _Choice(
                 key: const ValueKey('pool-everyone'),
                 label: 'Everyone not yet paired',
-                count: everyone.length,
+                count: pools.everyone.length,
                 detail: 'Takes players out of their current sections',
                 selected: pool == NewSectionPool.everyone,
                 onTap: () => setState(() => pool = NewSectionPool.everyone),
@@ -385,11 +380,11 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
             // Quads need players; fall back to the likeliest group.
             if (format == Format.quad &&
                 (pool == null || pool == NewSectionPool.none)) {
-              pool = ticked.isNotEmpty
+              pool = pools.ticked.isNotEmpty
                   ? NewSectionPool.ticked
-                  : unassigned.isNotEmpty
+                  : pools.unassigned.isNotEmpty
                   ? NewSectionPool.unassigned
-                  : everyone.isNotEmpty
+                  : pools.everyone.isNotEmpty
                   ? NewSectionPool.everyone
                   : null;
             }
@@ -473,7 +468,7 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
             style: TextStyle(color: colors.error),
           )
         else ...[
-          for (final (title, _, players) in groups)
+          for (final (name: title, format: _, :players) in groups)
             _PreviewGroup(
               title: quads
                   ? title
@@ -481,7 +476,7 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
                   ? 'New section'
                   : title,
               players: players,
-              sectionOf: (id) => e.sectionOf(id)?.name,
+              sectionOf: (id) => pools.sectionOf[id]?.name,
             ),
           const SizedBox(height: 8),
           Text(

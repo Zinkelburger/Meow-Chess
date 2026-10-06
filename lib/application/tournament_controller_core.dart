@@ -456,49 +456,35 @@ class TournamentControllerCore extends ChangeNotifier {
     change('Make quads', event!.copy(sections: sections));
   }
 
-  /// The first board after every existing section's boards.
-  int get nextBoardStart => event!.sections.fold(1, (int max, Section s) {
-    final end = s.boardStart + (s.players.length + 1) ~/ 2;
-    return end > max ? end : max;
-  });
-
-  /// Returns the new section's id.
-  String addSection(
+  void addSection(
     String name,
     Format format,
     int rounds, {
     bool doubleGames = false,
-    bool sideGames = false,
     bool assignUnassigned = true,
-    int? boardStart,
-    String timeControl = '',
   }) {
     final e = event!;
     final free = e.players
         .where((p) => !p.withdrawn && e.sectionOf(p.id) == null)
         .map((p) => p.id)
         .toList();
-    final id = newId();
     change(
       'Create $name',
       e.copy(
         sections: [
           ...e.sections,
           Section(
-            id: id,
+            id: newId(),
             name: name,
             players: assignUnassigned ? free : [],
             format: format,
             plannedRounds: rounds,
-            boardStart: boardStart ?? nextBoardStart,
+            boardStart: nextBoard(e.sections),
             doubleGames: doubleGames,
-            sideGames: sideGames,
-            timeControl: timeControl,
           ),
         ],
       ),
     );
-    return id;
   }
 
   /// Puts exactly [players] into new sections before they play: one
@@ -530,10 +516,7 @@ class TournamentControllerCore extends ChangeNotifier {
         );
       }
     }
-    final emptied = {
-      for (final s in e.sections)
-        if (s.players.isNotEmpty && s.players.every(pool.contains)) s.id,
-    };
+    final emptied = sectionsEmptiedBy(e, pool);
     final kept = [
       for (final s in e.sections)
         if (!emptied.contains(s.id))
@@ -545,12 +528,7 @@ class TournamentControllerCore extends ChangeNotifier {
                 )
               : s,
     ];
-    int board =
-        boardStart ??
-        kept.fold(1, (int max, Section s) {
-          final end = s.boardStart + (s.players.length + 1) ~/ 2;
-          return end > max ? end : max;
-        });
+    var board = boardStart ?? nextBoard(kept);
     final entrants = [
       for (final p in e.players)
         if (pool.contains(p.id)) p,
@@ -558,44 +536,19 @@ class TournamentControllerCore extends ChangeNotifier {
     final created = <Section>[];
     String label;
     if (format == Format.quad) {
-      entrants.sort((a, b) {
-        final c = b.rating.compareTo(a.rating);
-        return c != 0
-            ? c
-            : a.name.compareTo(b.name) != 0
-            ? a.name.compareTo(b.name)
-            : a.id.compareTo(b.id);
-      });
-      final sizes = quadGroupSizes(entrants.length);
-      final taken = kept.map((s) => s.name).toSet();
-      var number = 1;
-      var offset = 0;
-      for (final size in sizes) {
-        String sectionName;
-        if (size == 4) {
-          while (taken.contains('Quad $number')) {
-            number++;
-          }
-          sectionName = 'Quad $number';
-        } else {
-          sectionName = 'Bottom Swiss';
-          for (var n = 2; taken.contains(sectionName); n++) {
-            sectionName = 'Bottom Swiss $n';
-          }
-        }
-        taken.add(sectionName);
+      final groups = planQuads(entrants, taken: kept.map((s) => s.name));
+      for (final group in groups) {
         created.add(
           Section(
             id: newId(),
-            name: sectionName,
-            players: [for (final p in entrants.skip(offset).take(size)) p.id],
-            format: size == 4 ? Format.quad : Format.swiss,
+            name: group.name,
+            players: [for (final p in group.players) p.id],
+            format: group.format,
             boardStart: board,
             timeControl: timeControl,
           ),
         );
-        offset += size;
-        board += (size + 1) ~/ 2;
+        board += (group.players.length + 1) ~/ 2;
       }
       label = 'Make ${created.length} sections';
     } else {

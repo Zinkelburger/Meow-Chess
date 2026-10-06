@@ -88,4 +88,13 @@ void main() {
     );
     expect(parseRoster('').isEmpty, true);
   });
+
+  test('a quote after padding spaces still opens a quoted cell', () {
+    expect(splitDelimited('12345678, "Smith, John", 1500', separators: {','}), [
+      ['12345678', 'Smith, John', ' 1500'],
+    ]);
+    expect(splitDelimited('a,b "c', separators: {','}), [
+      ['a', 'b "c'],
+    ]);
+  });
 }

@@ -1,7 +1,7 @@
 name: meow_chess
 description: An offline tournament director workspace.
 publish_to: none
-version: 1.2.2+6
+version: 1.2.3+7
 environment:
   sdk: ^3.11.0
 dependencies:

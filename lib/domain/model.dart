@@ -643,6 +643,18 @@ String? removeBlocker(Event e, String playerId) {
   return null;
 }
 
+/// The first board after every board [sections] use.
+int nextBoard(Iterable<Section> sections) => sections.fold(1, (max, s) {
+  final end = s.boardStart + (s.players.length + 1) ~/ 2;
+  return end > max ? end : max;
+});
+
+/// Ids of the sections that moving all of [players] out would leave empty.
+Set<String> sectionsEmptiedBy(Event e, Set<String> players) => {
+  for (final s in e.sections)
+    if (s.players.isNotEmpty && s.players.every(players.contains)) s.id,
+};
+
 /// Which of [incoming] are new to a roster of [existing] players, in order.
 /// A member ID is identity; a name only identifies someone when either side
 /// lacks an ID, so two members who share a name are both admitted.

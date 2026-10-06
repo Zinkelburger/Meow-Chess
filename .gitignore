@@ -17,3 +17,6 @@ dist/
 flatpak-build/
 flatpak-repo/
 .flatpak-builder/
+
+# Local Claude Code settings and installed skills
+.claude/

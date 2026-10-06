@@ -7,9 +7,21 @@ import '../domain/model.dart';
 import 'select.dart';
 import 'theme.dart';
 
-/// Imports roster text and returns a one-line summary.
-String importRoster(TournamentController c, String source) {
-  return importRosterRows(c, parseRoster(source));
+/// Lines of [rows] that importing into [roster] would leave out: those
+/// matching someone already in the event, and those repeating an earlier
+/// row of the same file.
+({Set<int> inEvent, Set<int> repeated}) skippedLines(
+  Iterable<Player> roster,
+  List<ImportRow> rows,
+) {
+  final fresh = newEntries(roster, [for (final r in rows) ?r.player]).toSet();
+  final inEvent = <int>{}, repeated = <int>{};
+  for (final r in rows) {
+    final p = r.player;
+    if (p == null || fresh.contains(p)) continue;
+    (newEntries(roster, [p]).isEmpty ? inEvent : repeated).add(r.line);
+  }
+  return (inEvent: inEvent, repeated: repeated);
 }
 
 /// Commits the same interpreted rows that were reviewed in the preview.
@@ -18,11 +30,13 @@ String importRosterRows(TournamentController c, List<ImportRow> rows) {
   if (valid.isEmpty) {
     throw const TournamentException('No players found.');
   }
+  final (:inEvent, :repeated) = skippedLines(c.event!.players, rows);
   final skipped = c.importPlayers(valid.map((r) => r.player!).toList());
   final bad = rows.where((r) => r.error != null).map((r) => r.line).toList();
   return [
     'Imported ${valid.length - skipped} players',
-    if (skipped > 0) '$skipped already in the event',
+    if (inEvent.isNotEmpty) '${inEvent.length} already in the event',
+    if (repeated.isNotEmpty) '${repeated.length} repeated in the file',
     if (bad.isNotEmpty) '${bad.length} unreadable (line ${bad.join(', ')})',
   ].join(' · ');
 }
@@ -89,8 +103,11 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   late RosterTable table;
   late bool hasHeader;
   late Map<RosterField, int> columns;
+
+  /// Choices the TD made, kept when the separator settings change.
+  bool headerChosen = false, columnsChosen = false;
   List<ImportRow> rows = [];
-  Set<int> existingLines = {};
+  Set<int> existingLines = {}, repeatedLines = {};
   String? importError;
   bool skipInvalid = false, onlyProblems = false;
 
@@ -123,8 +140,13 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
       quote: quote,
       merge: merge,
     );
-    hasHeader = table.suggestsHeader;
-    suggestColumns();
+    if (!headerChosen) hasHeader = table.suggestsHeader;
+    if (columnsChosen) {
+      columns.removeWhere((_, i) => i >= table.columnCount);
+      interpret();
+    } else {
+      suggestColumns();
+    }
   }
 
   void suggestColumns() {
@@ -140,13 +162,9 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   void interpret() {
     importError = null;
     rows = table.interpret(hasHeader: hasHeader, columns: columns);
-    final fresh = newEntries(widget.controller.event!.players, [
-      for (final r in rows) ?r.player,
-    ]).toSet();
-    existingLines = {
-      for (final r in rows)
-        if (r.player != null && !fresh.contains(r.player)) r.line,
-    };
+    final skipped = skippedLines(widget.controller.event!.players, rows);
+    existingLines = skipped.inEvent;
+    repeatedLines = skipped.repeated;
     if (!rows.any((r) => r.error != null)) onlyProblems = false;
   }
 
@@ -160,6 +178,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   /// Points column [index] at [field], taking it from any other column.
   /// A full name and first/last names are alternatives.
   void assign(int index, RosterField? field) => setState(() {
+    columnsChosen = true;
     columns.removeWhere((f, i) => i == index);
     if (field != null) {
       columns[field] = index;
@@ -198,7 +217,8 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
     final colors = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
     final invalid = rows.where((r) => r.error != null).length;
-    final ready = rows.length - invalid - existingLines.length;
+    final ready =
+        rows.length - invalid - existingLines.length - repeatedLines.length;
     final problem = mappingError;
     final canImport =
         problem == null && ready > 0 && (invalid == 0 || skipInvalid);
@@ -453,8 +473,9 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
                 hasHeader,
                 (v) => setState(() {
                   hasHeader = v;
+                  headerChosen = true;
                   skipInvalid = false;
-                  suggestColumns();
+                  columnsChosen ? interpret() : suggestColumns();
                 }),
               ),
             ],
@@ -512,13 +533,16 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
           ],
         );
       }
+      final skipped = existingLines.contains(line)
+          ? 'Already in the event'
+          : repeatedLines.contains(line)
+          ? 'Repeats an earlier row'
+          : null;
       return Text(
-        existingLines.contains(line) ? 'Already in the event' : 'New player',
+        skipped ?? 'New player',
         style: TextStyle(
           fontSize: 13,
-          color: existingLines.contains(line)
-              ? colors.onSurfaceVariant
-              : colors.onSurface,
+          color: skipped != null ? colors.onSurfaceVariant : colors.onSurface,
         ),
       );
     }
@@ -693,11 +717,12 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
     bool canImport,
   ) {
     final colors = Theme.of(context).colorScheme;
-    final existing = existingLines.length;
+    final existing = existingLines.length, repeated = repeatedLines.length;
     final message = problem ?? importError;
     final summary = [
       '$ready new ${ready == 1 ? 'player' : 'players'}',
       if (existing > 0) '$existing already in the event',
+      if (repeated > 0) '$repeated repeated in the file',
       if (invalid > 0)
         '$invalid ${invalid == 1 ? 'row needs' : 'rows need'} attention',
     ].join(' · ');

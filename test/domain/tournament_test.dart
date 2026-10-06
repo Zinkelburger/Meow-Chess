@@ -328,4 +328,15 @@ void main() {
       expect(estimateRoundFinish('40/90 SD/30', start), isNull);
     },
   );
+
+  test('planned quads skip taken names in any case and seed stably', () {
+    final players = [
+      for (var i = 0; i < 9; i++)
+        Player(id: 'p${8 - i}', name: 'Guest', rating: i < 2 ? 1500 : 1000),
+    ];
+    final groups = planQuads(players, taken: ['quad 1', 'BOTTOM SWISS']);
+    expect(groups.map((g) => g.name), ['Quad 2', 'Bottom Swiss 2']);
+    expect(groups.first.players.map((p) => p.id), ['p7', 'p8', 'p0', 'p1']);
+    expect(groups.last.format, Format.swiss);
+  });
 }

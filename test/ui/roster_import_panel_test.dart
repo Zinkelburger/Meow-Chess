@@ -205,4 +205,57 @@ void main() {
     expect(summary(tester), '1 new player · 1 already in the event');
     expect(find.text('Import 1 player'), findsOneWidget);
   });
+
+  testWidgets('a row repeating an earlier row is not "in the event"', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 850);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    final result = await open(
+      tester,
+      c,
+      'Name,Rating\nJane Doe,1500\nNew Kid,900\nJane Doe,1500',
+    );
+    expect(find.text('Already in the event'), findsNothing);
+    expect(find.text('Repeats an earlier row'), findsOneWidget);
+    expect(summary(tester), '2 new players · 1 repeated in the file');
+    await tester.tap(importButton);
+    await tester.pumpAndSettle();
+    expect(result.single, 'Imported 2 players · 1 repeated in the file');
+  });
+
+  testWidgets('changing separators keeps the columns the TD chose', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 850);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    await open(tester, c, 'Ada,,1500\nBo,,1400');
+    await chooseOption(tester, column(1), 'Don’t import');
+    await chooseOption(tester, column(2), 'Rating');
+    await tester.tap(find.byKey(const ValueKey('import-header')));
+    await tester.pumpAndSettle();
+    expect(summary(tester), '1 new player');
+    await tester.enterText(
+      find.byKey(const ValueKey('import-other-separator')),
+      '~',
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: column(2), matching: find.text('Rating')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: column(1), matching: find.text('Don’t import')),
+      findsOneWidget,
+    );
+    expect(summary(tester), '1 new player');
+  });
 }

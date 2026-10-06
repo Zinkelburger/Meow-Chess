@@ -32,7 +32,7 @@ where Meow Chess is not installed (the script refuses to run otherwise). Run
 it from a checkout, because it needs `smoke_windows.ps1` beside it:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\test_windows_installer.ps1 -Setup meow-chess-v1.2.2-windows-setup.exe
+powershell -ExecutionPolicy Bypass -File scripts\test_windows_installer.ps1 -Setup meow-chess-v1.2.3-windows-setup.exe
 ```
 
 The pinned Flutter SDK and committed pubspec.lock are shared across the matrix.

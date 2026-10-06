@@ -417,7 +417,7 @@ class _WorkspaceState extends State<Workspace> {
         onRefreshRoster: refreshRoster,
         onRefreshRatings: startRatingRefresh,
         newSectionRequested: newSectionRequested,
-        onNewSectionShown: () => newSectionRequested = false,
+        onNewSectionShown: () => setState(() => newSectionRequested = false),
         onSectionsCreated: sectionsCreated,
       ),
       TaskView.results => ResultsView(

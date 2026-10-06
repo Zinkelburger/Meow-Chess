@@ -214,6 +214,8 @@ List<List<String>> splitDelimited(
         cell.write(ch);
       }
     } else if (quote != null && ch == quote && !cellStarted) {
+      // `a, "b, c"`: spaces before an opening quote are padding.
+      cell.clear();
       quoted = cellStarted = true;
     } else if (separators.contains(ch)) {
       endCell();
@@ -227,7 +229,7 @@ List<List<String>> splitDelimited(
       endRow();
     } else {
       cell.write(ch);
-      cellStarted = true;
+      if (ch != ' ' && ch != '\t') cellStarted = true;
     }
   }
   if (cell.isNotEmpty || row.isNotEmpty) endRow();

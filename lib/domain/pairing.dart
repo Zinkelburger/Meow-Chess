@@ -18,37 +18,65 @@ List<int> quadGroupSizes(int n) {
       : [...List.filled((n - 4 - remainder) ~/ 4, 4), 4 + remainder];
 }
 
+/// Quad seeding order: rating high to low, then name, then id.
+int quadOrder(Player a, Player b) {
+  final c = b.rating.compareTo(a.rating);
+  if (c != 0) return c;
+  final n = a.name.compareTo(b.name);
+  return n != 0 ? n : a.id.compareTo(b.id);
+}
+
+/// Groups [players] by rating into quads, with five to seven left over in a
+/// small Swiss. Names skip any in [taken], compared case-insensitively.
+List<({String name, Format format, List<Player> players})> planQuads(
+  Iterable<Player> players, {
+  Iterable<String> taken = const [],
+}) {
+  final pool = players.toList()..sort(quadOrder);
+  final used = {for (final name in taken) name.toLowerCase()};
+  String free(String Function(int n) name, int from) {
+    var n = from;
+    while (used.contains(name(n).toLowerCase())) {
+      n++;
+    }
+    used.add(name(n).toLowerCase());
+    return name(n);
+  }
+
+  var offset = 0;
+  return [
+    for (final size in quadGroupSizes(pool.length))
+      (
+        name: size == 4
+            ? free((n) => 'Quad $n', 1)
+            : free((n) => n == 1 ? 'Bottom Swiss' : 'Bottom Swiss $n', 1),
+        format: size == 4 ? Format.quad : Format.swiss,
+        players: pool.sublist(offset, offset += size),
+      ),
+  ];
+}
+
 List<Section> makeQuads(Event e, String Function() id) {
   if (e.sections.any((s) => s.rounds.isNotEmpty)) {
     throw const TournamentException(
       'Rounds are already posted. Move or combine entries with an explicit transition instead.',
     );
   }
-  final pool = e.players.where((p) => !p.withdrawn).toList()
-    ..sort((a, b) {
-      final c = b.rating.compareTo(a.rating);
-      return c != 0
-          ? c
-          : a.name.compareTo(b.name) != 0
-          ? a.name.compareTo(b.name)
-          : a.id.compareTo(b.id);
-    });
-  final sizes = quadGroupSizes(pool.length);
-  var offset = 0, board = 1;
-  return sizes.indexed.map((item) {
-    final (i, size) = item;
-    final group = pool.skip(offset).take(size).map((p) => p.id).toList();
-    offset += size;
-    final section = Section(
-      id: id(),
-      name: size == 4 ? 'Quad ${i + 1}' : 'Bottom Swiss',
-      players: group,
-      format: size == 4 ? Format.quad : Format.swiss,
-      boardStart: board,
+  final sections = <Section>[];
+  var board = 1;
+  for (final group in planQuads(e.players.where((p) => !p.withdrawn))) {
+    sections.add(
+      Section(
+        id: id(),
+        name: group.name,
+        players: [for (final p in group.players) p.id],
+        format: group.format,
+        boardStart: board,
+      ),
     );
-    board += (size + 1) ~/ 2;
-    return section;
-  }).toList();
+    board += (group.players.length + 1) ~/ 2;
+  }
+  return sections;
 }
 
 /// Explicit player requests are independent of team membership.

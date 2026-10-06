@@ -627,6 +627,24 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('New section opens again after Cancel', (tester) async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    await mount(tester, c);
+    final panel = find.byKey(const ValueKey('new-section-panel'));
+    for (var i = 0; i < 2; i++) {
+      await tester.tap(find.byKey(const ValueKey('new-section')));
+      await tester.pumpAndSettle();
+      expect(panel, findsOneWidget);
+      await tester.tap(
+        find.descendant(of: panel, matching: find.text('Cancel')),
+      );
+      await tester.pumpAndSettle();
+      expect(panel, findsNothing);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('section context menu deletes unplayed sections with undo', (
     tester,
   ) async {
