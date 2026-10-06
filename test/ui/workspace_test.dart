@@ -291,22 +291,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('confirm-roster-import')), findsOneWidget);
     expect(c.event!.players.length, 1);
-    await tester.tap(find.byTooltip('Close (Esc)'));
+    // The review is a window over the workspace; closing it returns to
+    // the pasted rows.
+    await tester.tap(find.byTooltip('Close (Esc)').last);
     await tester.pumpAndSettle();
     expectFocused('paste-roster');
     await tester.tap(find.byTooltip('Close (Esc)'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Create sections…'));
+    await tester.tap(find.byKey(const ValueKey('new-section')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('type-swiss')));
-    await tester.pumpAndSettle();
-    expectFocused('field-name');
+    expectFocused('new-section-name');
     tester.testTextInput.updateEditingValue(
       const TextEditingValue(text: 'Open'),
     );
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pumpAndSettle();
-    expectFocused('field-rounds');
+    expectFocused('new-section-rounds');
     tester.testTextInput.updateEditingValue(const TextEditingValue(text: '3'));
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
@@ -325,14 +325,13 @@ void main() {
         Player(id: 'p$i', name: 'Player $i', rating: 2000 - i * 50),
     ]);
     await mount(tester, c);
-    // Sorting players into sections is its own toolbar step.
-    expect(find.byKey(const ValueKey('open-create-sections')), findsOneWidget);
+    // Sections come from the one New section action beside the tabs.
+    expect(find.text('Create sections…'), findsNothing);
     expect(find.byKey(const ValueKey('print-standings')), findsNothing);
-    await tester.tap(find.text('Create sections…'));
+    await tester.tap(find.byKey(const ValueKey('new-section')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('type-quad')));
+    await tester.tap(find.text('Quads'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Create 2 sections'));
     await tester.tap(find.text('Create 2 sections'));
     await tester.pumpAndSettle();
     expect(c.event!.sections.map((s) => s.name), ['Quad 1', 'Quad 2']);
@@ -354,7 +353,7 @@ void main() {
     );
   });
 
-  testWidgets('ticked players move between sections after confirmation', (
+  testWidgets('ticked players move between sections at once before play', (
     tester,
   ) async {
     final c = fixture();
@@ -386,8 +385,17 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(ValueKey('move-to-${quad1.id}')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Move').last);
-    await tester.pumpAndSettle();
+    // Before play a move is a roster edit: no confirm step, Undo beside it,
+    // and the quad left at five says so.
+    expect(find.text('Players moved'), findsOneWidget);
+    expect(
+      find.textContaining(
+        '${quad1.name} now has 5 players. '
+        '${quad2.name} now has 3 players. A quad needs four.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('done-undo')), findsOneWidget);
     await tester.tap(
       find.descendant(
         of: find.byKey(ValueKey('player-${quad1.players.first}')),
@@ -397,8 +405,6 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(ValueKey('move-to-${quad2.id}')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Move').last);
-    await tester.pumpAndSettle();
     final [a, b] = c.event!.sections;
     expect(a.players, [...quad1.players.skip(1), quad2.players.first]);
     expect(b.players, [...quad2.players.skip(1), quad1.players.first]);
@@ -407,6 +413,94 @@ void main() {
     expect(find.textContaining('selected'), findsNothing);
     expect(find.text('Moved 1 player to ${b.name}.'), findsOneWidget);
   });
+  testWidgets('shift-click ticks a range; right-click acts on all of it', (
+    tester,
+  ) async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    await mount(tester, c);
+    final [quad1, quad2] = c.event!.sections;
+    Finder box(String id) => find.descendant(
+      of: find.byKey(ValueKey('player-$id')),
+      matching: find.byType(PlainCheckbox),
+    );
+    await tester.tap(box(quad1.players[1]));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.tap(box(quad2.players[0]));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(find.text('4 players selected'), findsOneWidget);
+    // Right-clicking a ticked row offers the move for the whole selection.
+    await tester.tap(
+      find.byKey(ValueKey('player-${quad1.players[2]}')),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pump();
+    expect(find.text('Move 4 players to'), findsOneWidget);
+    // The same words as the selection panel's button.
+    expect(find.text('Remove 4 players'), findsNWidgets(2));
+    expect(find.text('Byes…'), findsNothing);
+    await tester.tap(find.text(quad2.name).last);
+    await tester.pumpAndSettle();
+    expect(c.event!.sections.last.players, hasLength(7));
+    expect(find.text('Players moved'), findsOneWidget);
+  });
+
+  testWidgets('ticked players are removed at once, with Undo', (tester) async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    await mount(tester, c);
+    final quad1 = c.event!.sections.first;
+    for (final id in quad1.players.take(2)) {
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(ValueKey('player-$id')),
+          matching: find.byType(PlainCheckbox),
+        ),
+      );
+    }
+    await tester.pump();
+    expect(find.byKey(const ValueKey('selection-withdraw')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('selection-remove')));
+    await tester.pumpAndSettle();
+    expect(c.event!.players, hasLength(6));
+    expect(find.text('Players removed'), findsOneWidget);
+    expect(find.textContaining('selected'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('done-undo')));
+    await tester.pumpAndSettle();
+    expect(c.event!.sections.first.players, quad1.players);
+    // Delete on a focused row removes that player too.
+    Focus.of(
+      tester.element(find.text(c.event!.player(quad1.players.last).name)),
+    ).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pumpAndSettle();
+    expect(c.event!.players.any((p) => p.id == quad1.players.last), false);
+  });
+
+  testWidgets('the card offers Remove until the section is paired', (
+    tester,
+  ) async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    await mount(tester, c);
+    await tester.tap(find.text('Player 00'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('panel-withdraw')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('panel-remove')));
+    await tester.pumpAndSettle();
+    expect(find.text('Player removed'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('done-undo')));
+    await tester.pumpAndSettle();
+    c.post((await tester.runAsync(() => c.propose()))!);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Player 00'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('panel-remove')), findsNothing);
+    expect(find.byKey(const ValueKey('panel-withdraw')), findsOneWidget);
+  });
+
   testWidgets(
     'views keep their section scope; the report covers every section',
     (tester) async {
@@ -472,48 +566,66 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'New Section creates immediately and settings support side games',
-    (tester) async {
-      final c = fixture();
-      addTearDown(c.dispose);
-      await mount(tester, c);
-      final count = c.event!.sections.length;
-      await tester.tap(find.byKey(const ValueKey('new-section')));
-      await tester.pumpAndSettle();
-      expect(c.event!.sections.length, count + 1);
-      final created = c.event!.sections.last;
-      expect(created.name, 'Section 1');
-      expect(created.players, isEmpty);
-      expect(created.sideGames, false);
-      expect(
-        find.byKey(ValueKey('section-settings-${created.id}')),
-        findsOneWidget,
-      );
-      await tester.enterText(
-        find.byKey(const ValueKey('field-name')),
-        'Extra games',
-      );
-      await tester.tap(find.byKey(const ValueKey('field-sideGames')));
-      await tester.ensureVisible(find.text('Save'));
-      await tester.tap(find.text('Save'));
-      await tester.pumpAndSettle();
-      expect(c.event!.sections.last.name, 'Extra games');
-      expect(c.event!.sections.last.sideGames, true);
-      await tester.tap(find.text('Pairings').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('pair-side-game')));
-      await tester.pumpAndSettle();
-      expect(find.text('Pair a side game'), findsWidgets);
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('new-section')));
-      await tester.pumpAndSettle();
-      expect(c.event!.sections.last.name, 'Section 1');
-      expect(c.event!.sections.last.sideGames, false);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('New Section creates nothing until the form is submitted', (
+    tester,
+  ) async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    await mount(tester, c);
+    final count = c.event!.sections.length;
+    await tester.tap(find.byKey(const ValueKey('new-section')));
+    await tester.pumpAndSettle();
+    expect(c.event!.sections.length, count);
+    expect(find.byKey(const ValueKey('new-section-panel')), findsOneWidget);
+    // Everyone already has a section and nobody is ticked: it starts empty.
+    expect(find.text('Create empty section'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('new-section-rounds')),
+      '4',
+    );
+    await tester.tap(find.byKey(const ValueKey('create-section')));
+    await tester.pumpAndSettle();
+    expect(c.event!.sections.length, count);
+    expect(find.text('Enter the section name.'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('new-section-name')),
+      'Extra games',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('new-section-more')));
+    await tester.tap(find.byKey(const ValueKey('new-section-more')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('new-section-side-games')),
+    );
+    await tester.tap(find.byKey(const ValueKey('new-section-side-games')));
+    await tester.tap(find.byKey(const ValueKey('create-section')));
+    await tester.pumpAndSettle();
+    expect(c.event!.sections.length, count + 1);
+    final created = c.event!.sections.last;
+    expect(created.name, 'Extra games');
+    expect(created.players, isEmpty);
+    expect(created.sideGames, true);
+    expect(created.plannedRounds, 4);
+    expect(find.byKey(const ValueKey('new-section-panel')), findsNothing);
+    await tester.tap(find.text('Pairings').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pair-side-game')));
+    await tester.pumpAndSettle();
+    expect(find.text('Pair a side game'), findsWidgets);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('new-section')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('new-section-name')))
+          .controller!
+          .text,
+      isEmpty,
+    );
+    expect(c.event!.sections.length, count + 1);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('section context menu deletes unplayed sections with undo', (
     tester,

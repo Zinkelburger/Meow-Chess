@@ -99,9 +99,12 @@ void main() {
       lessThan(tester.getCenter(find.byKey(const ValueKey('section-tabs'))).dy),
     );
     await capture('toolbar-sections-small');
+    final sections = c.event!.sections.length;
     await tester.tap(find.byKey(const ValueKey('new-section')));
     await tester.pumpAndSettle();
-    expect(c.event!.sections.last.name, 'Section 1');
+    // The panel says who goes in; nothing is created yet.
+    expect(find.byKey(const ValueKey('new-section-panel')), findsOneWidget);
+    expect(c.event!.sections.length, sections);
     await capture('toolbar-section-editor');
     await tester.tap(find.byTooltip('Close (Esc)').last);
     dark.value = true;

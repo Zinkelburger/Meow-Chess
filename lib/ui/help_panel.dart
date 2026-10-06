@@ -42,7 +42,7 @@ const helpArticles = [
       ),
       (
         'Edit opponents and colors',
-        'Choose Edit quad pairings beside New Section, then select the quad. Each round shows White and Black on both boards. Choose a player to exchange places in that round, or choose Flip colors. When changing opponents, adjust the other unplayed round too so everyone meets once. Save pairings updates posted games, future pairings and printed sheets together. Reprint sheets already handed out. Rounds with results, a start marker or pairing assumptions are locked; other rounds remain editable. Undo restores the previous schedule.',
+        'Choose Edit quad pairings beside New section, then select the quad. Each round shows White and Black on both boards. Choose a player to exchange places in that round, or choose Flip colors. When changing opponents, adjust the other unplayed round too so everyone meets once. Save pairings updates posted games, future pairings and printed sheets together. Reprint sheets already handed out. Rounds with results, a start marker or pairing assumptions are locked; other rounds remain editable. Undo restores the previous schedule.',
       ),
       (
         'Changing a quad',
@@ -140,8 +140,8 @@ const helpArticles = [
   ),
   HelpArticle(
     'players',
-    'Register and move players',
-    'Add a walk-up or adjust section assignments with confirmation.',
+    'Register, move and remove players',
+    'Add a walk-up, change sections, or take out an entry that never played.',
     [
       (
         'Register a player',
@@ -149,7 +149,11 @@ const helpArticles = [
       ),
       (
         'Move a player',
-        'Open a player’s card, choose Move… and pick the destination section, then confirm. You can also tick players and choose Move to. A Swiss only needs a move. When a quad or round robin is involved and neither section is paired, you can instead exchange places with a player there so both stay full, or tick the two players and choose Swap sections.',
+        'Open a player’s card, choose Move… and pick the destination section, then confirm. To move several players, tick them and choose a section under Move to section, or right-click one of the ticked players. Shift-click ticks every row between two players; the box on a section’s header row ticks the whole section. Before play, a move of ticked players happens at once and the panel offers Undo. A Swiss only needs a move. When a quad or round robin is involved and neither section is paired, you can instead exchange places with a player there so both stay full, or tick the two players and choose Swap sections.',
+      ),
+      (
+        'Remove a player',
+        'Until a player’s section is paired, Remove from event takes them out entirely, as if they never registered. It is on the player’s card and in the right-click menu, works on ticked players, and Delete on a focused row does the same. Undo brings them back. Once their section is paired the same button reads Withdraw, so their games stay in the record; unpairing the section makes Remove available again.',
       ),
       (
         'After rounds are posted',

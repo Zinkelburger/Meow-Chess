@@ -496,7 +496,7 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
                   label: const Text('Undo'),
                 ),
               const Spacer(),
-              FilledButton(
+              OutlinedButton(
                 key: const ValueKey('correction-done'),
                 autofocus: true,
                 onPressed: widget.onClose,

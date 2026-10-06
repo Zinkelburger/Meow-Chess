@@ -24,10 +24,21 @@ class PasteRosterPanelState extends State<PasteRosterPanel> {
   late final text = TextEditingController(
     text: widget.controller.workspaceState.read('import-draft') ?? '',
   );
-  bool reviewing = false;
 
-  void review() {
-    if (text.text.trim().isNotEmpty) setState(() => reviewing = true);
+  /// Reviews the pasted rows in the import window; the draft stays until
+  /// they are imported.
+  Future<void> review() async {
+    if (text.text.trim().isEmpty) return;
+    final summary = await showRosterImport(
+      context,
+      controller: widget.controller,
+      source: text.text,
+      filename: 'Pasted rows',
+    );
+    if (summary == null || !mounted) return;
+    widget.controller.workspaceState.write('import-draft', '');
+    text.clear();
+    widget.onImported(summary);
   }
 
   @override
@@ -38,19 +49,6 @@ class PasteRosterPanelState extends State<PasteRosterPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (reviewing) {
-      return RosterImportPanel(
-        controller: widget.controller,
-        source: text.text,
-        filename: 'Pasted spreadsheet',
-        onClose: () => setState(() => reviewing = false),
-        onImported: (summary) {
-          widget.controller.workspaceState.write('import-draft', '');
-          text.clear();
-          widget.onImported(summary);
-        },
-      );
-    }
     final colors = Theme.of(context).colorScheme;
     final draftError =
         widget.controller.workspaceState.failures['import-draft'];

@@ -616,6 +616,64 @@ class Event {
   factory Event.decode(String source) => Event.fromJson(jsonDecode(source));
 }
 
+/// Why [playerId] can no longer be removed from the event, or null while
+/// they can. Removal is only for entries that never took part: once their
+/// section is paired, or a round anywhere names them, they withdraw instead.
+/// Unpairing the section makes them removable again.
+String? removeBlocker(Event e, String playerId) {
+  final p = e.player(playerId), s = e.sectionOf(playerId);
+  if (s != null && s.rounds.isNotEmpty) {
+    return '${s.name} has been paired. Withdraw ${p.name} instead.';
+  }
+  final named = e.sections
+      .expand((s) => s.rounds)
+      .any(
+        (r) =>
+            r.byes.any((b) => b.player == playerId) ||
+            r.games.any((g) => g.white == playerId || g.black == playerId),
+      );
+  final transferred = e.transitions.any(
+    (t) =>
+        (t['effectiveRound'] as int) > 1 &&
+        (t['players'] as List).contains(playerId),
+  );
+  if (named || transferred) {
+    return '${p.name} has played in this event. Withdraw them instead.';
+  }
+  return null;
+}
+
+/// Which of [incoming] are new to a roster of [existing] players, in order.
+/// A member ID is identity; a name only identifies someone when either side
+/// lacks an ID, so two members who share a name are both admitted.
+List<Player> newEntries(Iterable<Player> existing, Iterable<Player> incoming) {
+  final ids = {
+    for (final p in existing)
+      if (p.memberId.isNotEmpty) p.memberId,
+  };
+  // Name -> whether every entry with that name has a member ID.
+  final names = <String, bool>{};
+  void remember(Player p) {
+    final key = p.name.trim().toLowerCase();
+    names[key] = (names[key] ?? true) && p.memberId.isNotEmpty;
+  }
+
+  existing.forEach(remember);
+  final additions = <Player>[];
+  for (final player in incoming) {
+    if (player.memberId.isNotEmpty && ids.contains(player.memberId)) continue;
+    final allIdentified = names[player.name.trim().toLowerCase()];
+    if (allIdentified != null &&
+        !(allIdentified && player.memberId.isNotEmpty)) {
+      continue;
+    }
+    if (player.memberId.isNotEmpty) ids.add(player.memberId);
+    remember(player);
+    additions.add(player);
+  }
+  return additions;
+}
+
 class TournamentException implements Exception {
   const TournamentException(this.message);
   final String message;

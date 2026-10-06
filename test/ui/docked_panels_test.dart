@@ -10,6 +10,7 @@ import 'package:meow_chess/ui/results_view.dart';
 import 'package:meow_chess/ui/theme.dart';
 import 'package:meow_chess/ui/workspace.dart';
 import '../support.dart';
+import 'package:meow_chess/ui/select.dart';
 
 Future<void> mountWorkspace(WidgetTester tester, TournamentController c) async {
   tester.view.physicalSize = const Size(1400, 1000);
@@ -54,7 +55,7 @@ void expectFieldFocus(WidgetTester tester, String key) {
 }
 
 void main() {
-  testWidgets('quad preview clicks do not change rating groups', (
+  testWidgets('New section previews rating quads before creating them', (
     tester,
   ) async {
     final c = TournamentController(SqliteEventRepository(':memory:'))
@@ -65,25 +66,34 @@ void main() {
         Player(id: 'p$i', name: 'Player $i', rating: 2000 - i * 50),
     ]);
     await mountWorkspace(tester, c);
-    await tester.tap(find.text('Create sections…'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('type-quad')));
+    // There is one way to make sections, and it is not a filled button.
+    expect(find.text('Create sections…'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('new-section')));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
-    // Clicking the read-only preview cannot exchange players.
-    await tester.ensureVisible(find.byKey(const ValueKey('quad-player-p3')));
-    await tester.tap(find.byKey(const ValueKey('quad-player-p3')));
-    await tester.pump();
-    await tester.ensureVisible(find.byKey(const ValueKey('quad-player-p4')));
-    await tester.tap(find.byKey(const ValueKey('quad-player-p4')));
-    await tester.pump();
-    await tester.ensureVisible(find.byKey(const ValueKey('create-sections')));
-    await tester.tap(find.byKey(const ValueKey('create-sections')));
+    // Nobody is ticked, so everyone not in a section goes in.
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('pool-unassigned'))),
+      isSemantics(
+        label: 'Everyone not in a section, 8 players',
+        isChecked: true,
+        hasTapAction: true,
+      ),
+    );
+    await tester.tap(find.text('Quads'));
+    await tester.pumpAndSettle();
+    // Every player is listed under the quad they will play in.
+    expect(find.text('Goes in · 2 sections'), findsOneWidget);
+    for (var i = 0; i < 8; i++) {
+      expect(find.text('Player $i'), findsWidgets);
+    }
+    expect(c.event!.sections, isEmpty);
+    await tester.tap(find.byKey(const ValueKey('create-section')));
     await tester.pumpAndSettle();
     expect(c.event!.sections.first.players, ['p0', 'p1', 'p2', 'p3']);
     expect(c.event!.sections.last.players, ['p4', 'p5', 'p6', 'p7']);
     // The panel closes once the sections exist.
-    expect(find.byKey(const ValueKey('type-quad')), findsNothing);
+    expect(find.byKey(const ValueKey('new-section-panel')), findsNothing);
   });
 
   testWidgets(
@@ -100,22 +110,26 @@ void main() {
         buttons: kSecondaryMouseButton,
       );
       await tester.pump();
-      expect(find.text('Withdraw player…'), findsOneWidget);
+      // Nobody has played, so the status action removes rather than withdraws.
+      expect(find.text('Remove from event'), findsOneWidget);
+      expect(find.textContaining('Withdraw'), findsNothing);
       expect(find.textContaining('Swap'), findsNothing);
       // One Move action; a quad asks who takes the player's place.
       await tester.tap(find.text('Move…'));
       await tester.pumpAndSettle();
       expect(c.event!.revision, revision);
-      await tester.tap(find.byType(DropdownButtonFormField<String>).at(1));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Quad 2').last);
-      await tester.pumpAndSettle();
+      await chooseOption(
+        tester,
+        find.byType(PlainSelect<String?>).at(1),
+        'Quad 2',
+      );
       final apply = find.byKey(const ValueKey('apply-player-operation'));
       expect(tester.widget<FilledButton>(apply).onPressed, isNull);
-      await tester.tap(find.byType(DropdownButtonFormField<String>).last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Player 04 · 1800').last);
-      await tester.pumpAndSettle();
+      await chooseOption(
+        tester,
+        find.byType(PlainSelect<String?>).last,
+        'Player 04 · 1800',
+      );
       await tester.tap(find.byKey(const ValueKey('apply-player-operation')));
       await tester.pumpAndSettle();
       expect(c.event!.sections.first.players, ['p4', 'p1', 'p2', 'p3']);
@@ -136,11 +150,19 @@ void main() {
         buttons: kSecondaryMouseButton,
       );
       await tester.pump();
-      await tester.tap(find.text('Withdraw player…'));
+      await tester.tap(find.text('Remove from event'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('apply-player-operation')));
+      expect(c.event!.players.any((p) => p.id == 'p4'), false);
+      expect(
+        find.text(
+          'Removed Player 04 from the event. '
+          '${first.name} now has 3 players. A quad needs four.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('done-undo')));
       await tester.pumpAndSettle();
-      expect(c.event!.player('p4').withdrawn, true);
+      expect(c.event!.sections.first.players, ['p4', 'p1', 'p2', 'p3']);
       await tester.pumpWidget(const SizedBox());
     },
   );

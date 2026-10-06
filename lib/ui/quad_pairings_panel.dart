@@ -8,6 +8,7 @@ import '../domain/model.dart';
 import '../domain/pairing.dart';
 import 'panels.dart';
 import 'side_panel.dart';
+import 'select.dart';
 
 void showQuadPairingsEditor(
   BuildContext context,
@@ -166,15 +167,11 @@ class _QuadPairingsPanelState extends State<QuadPairingsPanel> {
         TextButton(onPressed: widget.onClose, child: const Text('Cancel')),
       ],
       children: [
-        DropdownButtonFormField<String>(
+        PlainSelect<String?>(
           key: ValueKey(('quad-editor-section', sectionId)),
-          initialValue: s?.id,
-          decoration: const InputDecoration(labelText: 'Quad'),
-          isExpanded: true,
-          items: [
-            for (final q in quads)
-              DropdownMenuItem(value: q.id, child: Text(q.name)),
-          ],
+          value: s?.id,
+          label: 'Quad',
+          options: [for (final q in quads) SelectOption(q.id, q.name)],
           onChanged: (id) {
             if (id != null) {
               setState(() => load(quads.firstWhere((q) => q.id == id)));
@@ -236,33 +233,22 @@ class _QuadPairingsPanelState extends State<QuadPairingsPanel> {
                   for (var color = 0; color < 2; color++) ...[
                     if (color == 1) const SizedBox(width: 8),
                     Expanded(
-                      child: DropdownButtonFormField<String>(
+                      child: PlainSelect<String>(
                         key: ValueKey((
                           'quad-seat',
                           r,
                           b * 2 + color,
                           pairings[r][b * 2 + color],
                         )),
-                        initialValue: pairings[r][b * 2 + color],
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: color == 0 ? 'White' : 'Black',
-                        ),
-                        items: [
+                        value: pairings[r][b * 2 + color],
+                        label: color == 0 ? 'White' : 'Black',
+                        options: [
                           for (final id in s.players)
-                            DropdownMenuItem(
-                              value: id,
-                              child: Text(
-                                c.event!.player(id).name,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
+                            SelectOption(id, c.event!.player(id).name),
                         ],
                         onChanged: locked(s, r)
                             ? null
-                            : (id) {
-                                if (id != null) swap(r, b * 2 + color, id);
-                              },
+                            : (id) => swap(r, b * 2 + color, id),
                       ),
                     ),
                   ],

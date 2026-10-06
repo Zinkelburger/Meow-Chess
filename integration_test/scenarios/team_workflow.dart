@@ -48,15 +48,20 @@ void registerTeamWorkflowTests() {
       await tester.tap(find.byKey(const ValueKey('confirm-roster-import')));
       await tester.pumpAndSettle();
       expect(c.event!.players, hasLength(6));
-      await tester.tap(find.text('Create sections…'));
+      await tester.tap(find.byKey(const ValueKey('new-section')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('type-swiss')));
+      await tester.tap(find.text('Swiss'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const ValueKey('field-name')), 'Open');
-      await tester.enterText(find.byKey(const ValueKey('field-rounds')), '3');
-      await tester.ensureVisible(find.byKey(const ValueKey('create-sections')));
+      await tester.enterText(
+        find.byKey(const ValueKey('new-section-name')),
+        'Open',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('new-section-rounds')),
+        '3',
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('create-sections')));
+      await tester.tap(find.byKey(const ValueKey('create-section')));
       await tester.pumpAndSettle();
       expect(c.event!.sections.single.format, Format.swiss);
       // The first and fourth seeds would normally meet in round one.

@@ -200,7 +200,7 @@ void main() {
       ),
     );
     await tester.pumpWidget(
-      host(PlayersView(controller: c, onAddSections: () {})),
+      host(PlayersView(controller: c, onSectionsCreated: (_) {})),
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -408,6 +408,13 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.delete);
       await tester.pump();
       expect(c.event!.games.first.outcome, Outcome.unreported);
+      // Clearing keeps the cursor on the board, even on an empty one.
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
+      await tester.pump();
+      expect(c.event!.games.first.outcome, Outcome.whiteWin);
+      expect(c.event!.games.elementAt(1).outcome, Outcome.blackWin);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 500));
     },

@@ -336,6 +336,102 @@ void main() {
     });
   });
 
+  group('removing players', () {
+    test('takes an unplayed entry and every reference to it out', () {
+      final c = fixture();
+      addTearDown(c.dispose);
+      c.avoidPair('p0', 'p5', true);
+      final quad = c.event!.sections.first;
+      c.change(
+        'Manual schedule',
+        c.event!.copy(
+          sections: [
+            quad.copy(
+              quadPairings: [
+                [0, 1, 2, 3],
+                [0, 2, 1, 3],
+                [0, 3, 1, 2],
+              ],
+            ),
+            ...c.event!.sections.skip(1),
+          ],
+        ),
+      );
+      c.removePlayers(['p0', 'p1']);
+      final e = c.event!;
+      expect(e.players.map((p) => p.id), isNot(contains('p0')));
+      expect(e.sections.first.players, ['p2', 'p3']);
+      // Roster slots shifted, so the manual schedule no longer applies.
+      expect(e.sections.first.quadPairings, isEmpty);
+      expect(e.players.every((p) => !p.avoid.contains('p0')), true);
+      expect(c.repository.load()!.encode(), e.encode());
+      c.undo();
+      expect(c.event!.sections.first.players, quad.players);
+    });
+
+    test(
+      'is refused once the section is paired, until it is unpaired',
+      () async {
+        final c = fixture(format: Format.swiss);
+        addTearDown(c.dispose);
+        final first = c.event!.sections.first, last = c.event!.sections.last;
+        c.post(await c.propose(sectionId: first.id));
+        expectUnchanged(
+          c,
+          () => expect(
+            () => c.removePlayers([first.players.first]),
+            refuses('Withdraw Player 00 instead'),
+          ),
+        );
+        // Another section's entrants are still removable.
+        c.removePlayers([last.players.first]);
+        c.undo();
+        c.undo();
+        expect(c.event!.sections.first.rounds, isEmpty);
+        c.removePlayers([first.players.first]);
+        expect(c.event!.sections.first.players, hasLength(3));
+      },
+    );
+
+    test('an entry who played elsewhere is withdrawn, not removed', () async {
+      final c = fixture(format: Format.swiss);
+      addTearDown(c.dispose);
+      await playRound(c);
+      // Their games stay in the first section's history wherever they sit now.
+      final [a, b] = c.event!.sections;
+      c.change(
+        'Detach',
+        c.event!.copy(
+          sections: [
+            a.copy(players: a.players.skip(1).toList()),
+            b,
+            Section(
+              id: 'late',
+              name: 'Late',
+              players: const ['p0'],
+              format: Format.swiss,
+              plannedRounds: 3,
+              boardStart: 20,
+            ),
+          ],
+        ),
+      );
+      expect(removeBlocker(c.event!, 'p0'), contains('has played'));
+      expect(() => c.removePlayers(['p0']), refuses('Withdraw them instead'));
+    });
+
+    test('withdrawing several players is one undoable change', () {
+      final c = fixture();
+      addTearDown(c.dispose);
+      final history = c.repository.history().length;
+      c.setWithdrawn(['p0', 'p1', 'p2'], true);
+      expect(c.repository.history().length, history + 1);
+      expect(c.event!.players.where((p) => p.withdrawn), hasLength(3));
+      c.undo();
+      expect(c.event!.players.where((p) => p.withdrawn), isEmpty);
+    });
+  });
+
   group('undo', () {
     test('walks back one command at a time and stops at creation', () {
       final c = blank();
@@ -456,4 +552,57 @@ void main() {
       );
     },
   );
+
+  test('createSections takes exactly the chosen players', () {
+    final c = fixture(count: 8);
+    addTearDown(c.dispose);
+    final [quad1, quad2] = c.event!.sections;
+    // Two from each quad into a new Swiss; everyone else stays put.
+    final chosen = [quad1.players[0], quad1.players[1], quad2.players[2]];
+    final [id] = c.createSections(
+      chosen,
+      format: Format.swiss,
+      name: 'Reserve',
+      rounds: 4,
+    );
+    final reserve = c.event!.sections.firstWhere((s) => s.id == id);
+    expect(reserve.players.toSet(), chosen.toSet());
+    expect(reserve.plannedRounds, 4);
+    expect(c.event!.sections.first.players, quad1.players.skip(2));
+    expect(c.event!.sections[1].players, hasLength(3));
+    expect(
+      () => c.createSections([], format: Format.swiss, name: 'reserve'),
+      refuses('already a section called'),
+    );
+    c.undo();
+    expect(c.event!.sections.map((s) => s.players.length), [4, 4]);
+
+    // Re-making quads from everyone empties and replaces the old ones.
+    final everyone = [for (final p in c.event!.players) p.id];
+    final ids = c.createSections(everyone, format: Format.quad);
+    expect(ids, hasLength(2));
+    expect(c.event!.sections.map((s) => s.name), ['Quad 1', 'Quad 2']);
+    expect(c.event!.sections.every((s) => ids.contains(s.id)), true);
+    expect(c.event!.sections.first.boardStart, 1);
+    expect(c.event!.sections.last.boardStart, 3);
+
+    // An empty section, then players in a paired section are refused.
+    c.createSections([], format: Format.swiss, name: 'Side', rounds: 3);
+    expect(c.event!.sections.last.players, isEmpty);
+  });
+
+  test('createSections refuses players whose section is paired', () async {
+    final c = fixture(count: 4, format: Format.swiss);
+    addTearDown(c.dispose);
+    c.post(await c.propose());
+    final paired = c.event!.sections.single.players.first;
+    expectUnchanged(
+      c,
+      () => c.createSections([paired], format: Format.swiss, name: 'X'),
+    );
+    expect(
+      () => c.createSections([paired], format: Format.swiss, name: 'X'),
+      refuses('has been paired'),
+    );
+  });
 }

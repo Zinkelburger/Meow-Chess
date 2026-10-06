@@ -429,30 +429,7 @@ class TournamentControllerCore extends ChangeNotifier {
   /// lacks an ID, so two members who share a name are both admitted.
   int importPlayers(List<Player> players) {
     final e = event!;
-    final ids = e.players
-        .where((p) => p.memberId.isNotEmpty)
-        .map((p) => p.memberId)
-        .toSet();
-    // Name -> whether every entry with that name has a member ID.
-    final names = <String, bool>{};
-    void remember(Player p) {
-      final key = p.name.trim().toLowerCase();
-      names[key] = (names[key] ?? true) && p.memberId.isNotEmpty;
-    }
-
-    e.players.forEach(remember);
-    final additions = <Player>[];
-    for (final player in players) {
-      if (player.memberId.isNotEmpty && ids.contains(player.memberId)) continue;
-      final allIdentified = names[player.name.trim().toLowerCase()];
-      if (allIdentified != null &&
-          !(allIdentified && player.memberId.isNotEmpty)) {
-        continue;
-      }
-      if (player.memberId.isNotEmpty) ids.add(player.memberId);
-      remember(player);
-      additions.add(player);
-    }
+    final additions = newEntries(e.players, players);
     if (additions.isEmpty) {
       throw const TournamentException(
         'No new entries. Existing names and IDs are preserved.',
@@ -479,39 +456,178 @@ class TournamentControllerCore extends ChangeNotifier {
     change('Make quads', event!.copy(sections: sections));
   }
 
-  void addSection(
+  /// The first board after every existing section's boards.
+  int get nextBoardStart => event!.sections.fold(1, (int max, Section s) {
+    final end = s.boardStart + (s.players.length + 1) ~/ 2;
+    return end > max ? end : max;
+  });
+
+  /// Returns the new section's id.
+  String addSection(
     String name,
     Format format,
     int rounds, {
     bool doubleGames = false,
+    bool sideGames = false,
     bool assignUnassigned = true,
+    int? boardStart,
+    String timeControl = '',
   }) {
     final e = event!;
     final free = e.players
         .where((p) => !p.withdrawn && e.sectionOf(p.id) == null)
         .map((p) => p.id)
         .toList();
-    final nextBoard = e.sections.fold(1, (int max, Section s) {
-      final end = s.boardStart + (s.players.length + 1) ~/ 2;
-      return end > max ? end : max;
-    });
+    final id = newId();
     change(
       'Create $name',
       e.copy(
         sections: [
           ...e.sections,
           Section(
-            id: newId(),
+            id: id,
             name: name,
             players: assignUnassigned ? free : [],
             format: format,
             plannedRounds: rounds,
-            boardStart: nextBoard,
+            boardStart: boardStart ?? nextBoardStart,
             doubleGames: doubleGames,
+            sideGames: sideGames,
+            timeControl: timeControl,
           ),
         ],
       ),
     );
+    return id;
+  }
+
+  /// Puts exactly [players] into new sections before they play: one
+  /// [format] section called [name], or for [Format.quad] groups of four by
+  /// rating with any leftovers in a small Swiss. Players leave the unpaired
+  /// sections they were in, and a section left empty by this is removed.
+  /// An empty [players] makes an empty section. Returns the new ids.
+  List<String> createSections(
+    List<String> players, {
+    required Format format,
+    String name = '',
+    int rounds = 3,
+    bool doubleGames = false,
+    bool sideGames = false,
+    int? boardStart,
+    String timeControl = '',
+  }) {
+    final e = event!, pool = players.toSet();
+    for (final id in pool) {
+      final p = e.player(id), from = e.sectionOf(id);
+      if (p.withdrawn) {
+        throw TournamentException(
+          '${p.name} has withdrawn. Reinstate them first.',
+        );
+      }
+      if (from != null && from.rounds.isNotEmpty) {
+        throw TournamentException(
+          '${from.name} has been paired. Move ${p.name} from there instead.',
+        );
+      }
+    }
+    final emptied = {
+      for (final s in e.sections)
+        if (s.players.isNotEmpty && s.players.every(pool.contains)) s.id,
+    };
+    final kept = [
+      for (final s in e.sections)
+        if (!emptied.contains(s.id))
+          s.players.any(pool.contains)
+              // A manual quad schedule names roster slots, which shift.
+              ? s.copy(
+                  players: s.players.where((id) => !pool.contains(id)).toList(),
+                  quadPairings: const [],
+                )
+              : s,
+    ];
+    int board =
+        boardStart ??
+        kept.fold(1, (int max, Section s) {
+          final end = s.boardStart + (s.players.length + 1) ~/ 2;
+          return end > max ? end : max;
+        });
+    final entrants = [
+      for (final p in e.players)
+        if (pool.contains(p.id)) p,
+    ];
+    final created = <Section>[];
+    String label;
+    if (format == Format.quad) {
+      entrants.sort((a, b) {
+        final c = b.rating.compareTo(a.rating);
+        return c != 0
+            ? c
+            : a.name.compareTo(b.name) != 0
+            ? a.name.compareTo(b.name)
+            : a.id.compareTo(b.id);
+      });
+      final sizes = quadGroupSizes(entrants.length);
+      final taken = kept.map((s) => s.name).toSet();
+      var number = 1;
+      var offset = 0;
+      for (final size in sizes) {
+        String sectionName;
+        if (size == 4) {
+          while (taken.contains('Quad $number')) {
+            number++;
+          }
+          sectionName = 'Quad $number';
+        } else {
+          sectionName = 'Bottom Swiss';
+          for (var n = 2; taken.contains(sectionName); n++) {
+            sectionName = 'Bottom Swiss $n';
+          }
+        }
+        taken.add(sectionName);
+        created.add(
+          Section(
+            id: newId(),
+            name: sectionName,
+            players: [for (final p in entrants.skip(offset).take(size)) p.id],
+            format: size == 4 ? Format.quad : Format.swiss,
+            boardStart: board,
+            timeControl: timeControl,
+          ),
+        );
+        offset += size;
+        board += (size + 1) ~/ 2;
+      }
+      label = 'Make ${created.length} sections';
+    } else {
+      final title = name.trim();
+      if (title.isEmpty) {
+        throw const TournamentException('Enter the section name.');
+      }
+      if (kept.any((s) => s.name.toLowerCase() == title.toLowerCase())) {
+        throw TournamentException('There is already a section called $title.');
+      }
+      if (rounds < 1 || rounds > 32) {
+        throw const TournamentException(
+          'Number of rounds must be between 1 and 32.',
+        );
+      }
+      created.add(
+        Section(
+          id: newId(),
+          name: title,
+          players: [for (final p in entrants) p.id],
+          format: format,
+          plannedRounds: rounds,
+          boardStart: board,
+          doubleGames: doubleGames,
+          sideGames: sideGames,
+          timeControl: timeControl,
+        ),
+      );
+      label = 'Create $title';
+    }
+    change(label, e.copy(sections: [...kept, ...created]));
+    return [for (final s in created) s.id];
   }
 
   /// Removing an unplayed section keeps its entrants in the event roster.
@@ -994,6 +1110,82 @@ class TournamentControllerCore extends ChangeNotifier {
                       : id,
               ],
             ),
+        ],
+      ),
+    );
+  }
+
+  /// Withdraws or reinstates several players as one undoable change.
+  void setWithdrawn(Iterable<String> ids, bool withdrawn) {
+    final e = event!, chosen = ids.toSet();
+    for (final id in chosen) {
+      e.player(id);
+    }
+    final verb = withdrawn ? 'Withdraw' : 'Reinstate';
+    change(
+      chosen.length == 1
+          ? '$verb ${e.player(chosen.single).name}'
+          : '$verb ${chosen.length} players',
+      e.copy(
+        players: [
+          for (final p in e.players)
+            chosen.contains(p.id) ? p.copy(withdrawn: withdrawn) : p,
+        ],
+      ),
+    );
+  }
+
+  /// Takes entries that never played out of the event entirely, along with
+  /// every reference to them. Played entries are withdrawn instead.
+  void removePlayers(Iterable<String> ids) {
+    final e = event!, gone = ids.toSet();
+    if (gone.isEmpty) return;
+    for (final id in gone) {
+      if (removeBlocker(e, id) case final problem?) {
+        throw TournamentException(problem);
+      }
+    }
+    final touched = {
+      for (final s in e.sections)
+        if (s.players.any(gone.contains)) s.id,
+    };
+    change(
+      gone.length == 1
+          ? 'Remove ${e.player(gone.single).name}'
+          : 'Remove ${gone.length} players',
+      e.copy(
+        players: [
+          for (final p in e.players)
+            if (!gone.contains(p.id))
+              p.avoid.any(gone.contains)
+                  ? p.copy(avoid: p.avoid.difference(gone))
+                  : p,
+        ],
+        sections: [
+          for (final s in e.sections)
+            touched.contains(s.id)
+                // A manual quad schedule names roster slots, which shift.
+                ? s.copy(
+                    players: s.players
+                        .where((id) => !gone.contains(id))
+                        .toList(),
+                    quadPairings: const [],
+                  )
+                : s,
+        ],
+        // Only pre-play moves can name them; drop them from those records.
+        transitions: [
+          for (final t in e.transitions)
+            if (!(t['players'] as List).any(gone.contains))
+              t
+            else if ((t['players'] as List).any((id) => !gone.contains(id)))
+              {
+                ...t,
+                'players': [
+                  for (final id in t['players'] as List)
+                    if (!gone.contains(id)) id,
+                ],
+              },
         ],
       ),
     );

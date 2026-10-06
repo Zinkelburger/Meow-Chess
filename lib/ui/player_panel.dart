@@ -20,6 +20,7 @@ import 'side_panel.dart';
 import 'player_format.dart';
 import 'rating_refresh.dart';
 import 'rating_review_panel.dart';
+import 'select.dart';
 
 class PlayerPanel extends StatefulWidget {
   const PlayerPanel({
@@ -33,9 +34,14 @@ class PlayerPanel extends StatefulWidget {
     this.focusField,
     this.ratingReview,
     this.onBackToReview,
+    this.onRemoved,
     super.key,
   });
   final TournamentController controller;
+
+  /// Confirms a removal with Undo; the card closes either way, since the
+  /// player is gone.
+  final ActionDone? onRemoved;
   final String? focusField;
 
   /// An open USCF rating review. The player stays fully editable; this
@@ -595,18 +601,13 @@ class PlayerPanelState extends State<PlayerPanel> {
           if (c.event!.sections.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 12),
-              child: DropdownButtonFormField<String?>(
+              child: PlainSelect<String?>(
                 key: const ValueKey('panel-join-section'),
-                initialValue: joinSection,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Section'),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('Not in a section yet'),
-                  ),
-                  for (final s in c.event!.sections)
-                    DropdownMenuItem(value: s.id, child: Text(s.name)),
+                value: joinSection,
+                label: 'Section',
+                options: [
+                  const SelectOption(null, 'Not in a section yet'),
+                  for (final s in c.event!.sections) SelectOption(s.id, s.name),
                 ],
                 onChanged: (v) => setState(() {
                   joinSection = v;
@@ -737,17 +738,23 @@ class PlayerPanelState extends State<PlayerPanel> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            OutlinedButton(
-              key: const ValueKey('panel-withdraw'),
-              onPressed: () => attempt(
-                () => c.savePlayer(fresh.copy(withdrawn: !p.withdrawn)),
+            for (final action in statusActions(e, [p.id]))
+              OutlinedButton(
+                key: ValueKey('panel-${action.name}'),
+                onPressed: () {
+                  late ({String title, String message}) done;
+                  if (!attempt(() => done = applyStatus(c, action, [p.id]))) {
+                    return;
+                  }
+                  if (action != StatusAction.remove) return;
+                  if (widget.onRemoved case final removed?) {
+                    removed(done.title, done.message);
+                  } else {
+                    close();
+                  }
+                },
+                child: Text(statusLabel(e, action, [p.id])),
               ),
-              child: Text(
-                p.withdrawn
-                    ? 'Reinstate'
-                    : ['Withdraw', ?withdrawAfter(e, p.id)].join(' '),
-              ),
-            ),
             if (e.sections.length > (s == null ? 0 : 1))
               OutlinedButton(
                 key: const ValueKey('panel-move'),
@@ -804,25 +811,16 @@ class PlayerPanelState extends State<PlayerPanel> {
         const SizedBox(height: 8),
         // Withdrawn players take zero-point byes; the pill already says so.
         if (open.isNotEmpty && !p.withdrawn)
-          group(
-            'byes',
-            'Byes',
-            [
-              ByeGrid(
-                rounds: open,
-                byes: p.byes,
-                onToggle: (r, points) => attempt(
-                  () => c.reserveBye(
-                    p.id,
-                    r,
-                    p.byes[r] == points ? -1 : points,
-                  ),
-                ),
+          group('byes', 'Byes', [
+            ByeGrid(
+              rounds: open,
+              byes: p.byes,
+              onToggle: (r, points) => attempt(
+                () => c.reserveBye(p.id, r, p.byes[r] == points ? -1 : points),
               ),
-              const SizedBox(height: 8),
-            ],
-            summary: byes.isEmpty ? 'None' : byes.join(' · '),
-          ),
+            ),
+            const SizedBox(height: 8),
+          ], summary: byes.isEmpty ? 'None' : byes.join(' · ')),
         group(
           'uschess',
           'US Chess',
@@ -1025,8 +1023,7 @@ class PlayerPanelState extends State<PlayerPanel> {
                         o.name.toLowerCase().contains(q),
                   );
                 },
-                onSelected: (o) =>
-                    attempt(() => c.avoidPair(p.id, o.id, true)),
+                onSelected: (o) => attempt(() => c.avoidPair(p.id, o.id, true)),
                 fieldViewBuilder: (context, text, focus, submit) => TextField(
                   key: const ValueKey('avoid-player'),
                   controller: text,

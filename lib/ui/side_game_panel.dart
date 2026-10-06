@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import 'side_panel.dart';
+import 'select.dart';
 
 /// Side games use explicit opponents, independent of main-section pairings.
 class SideGamePanel extends StatefulWidget {
@@ -51,18 +52,11 @@ class _SideGamePanelState extends State<SideGamePanel> {
     Widget choose(String label, String? value, ValueChanged<String?> change) =>
         Padding(
           padding: const EdgeInsets.only(top: 12),
-          child: DropdownButtonFormField<String>(
+          child: PlainSelect<String?>(
             key: ValueKey('side-game-${label.toLowerCase()}'),
-            initialValue: value,
-            isExpanded: true,
-            decoration: InputDecoration(labelText: label),
-            items: [
-              for (final p in players)
-                DropdownMenuItem(
-                  value: p.id,
-                  child: Text(p.name, overflow: TextOverflow.ellipsis),
-                ),
-            ],
+            value: value,
+            label: label,
+            options: [for (final p in players) SelectOption(p.id, p.name)],
             onChanged: change,
           ),
         );
@@ -76,14 +70,17 @@ class _SideGamePanelState extends State<SideGamePanel> {
         choose('White', white, (v) => setState(() => white = v)),
         choose('Black', black, (v) => setState(() => black = v)),
         if (e.sections.where((s) => s.sideGames).length > 1)
-          DropdownButtonFormField<String>(
-            decoration: const InputDecoration(labelText: 'Side-games section'),
-            initialValue: section,
-            items: [
-              for (final s in e.sections.where((s) => s.sideGames))
-                DropdownMenuItem(value: s.id, child: Text(s.name)),
-            ],
-            onChanged: (v) => setState(() => section = v),
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: PlainSelect<String?>(
+              label: 'Side-games section',
+              value: section,
+              options: [
+                for (final s in e.sections.where((s) => s.sideGames))
+                  SelectOption(s.id, s.name),
+              ],
+              onChanged: (v) => setState(() => section = v),
+            ),
           ),
         if (error != null)
           Padding(

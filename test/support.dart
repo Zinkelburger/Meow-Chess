@@ -73,3 +73,17 @@ Future<void> toggleBye(WidgetTester tester, int round, int points) async {
   await tester.tap(bye);
   await tester.pump();
 }
+
+/// Opens a [PlainSelect] and picks the option labelled [label].
+Future<void> chooseOption(
+  WidgetTester tester,
+  Finder field,
+  String label,
+) async {
+  await tester.ensureVisible(field);
+  await tester.pumpAndSettle();
+  await tester.tap(field);
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(MenuItemButton, label).last);
+  await tester.pumpAndSettle();
+}

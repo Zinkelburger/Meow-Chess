@@ -27,6 +27,7 @@ import 'player_format.dart';
 import 'player_panel.dart';
 import 'paste_roster_panel.dart';
 import 'pane_controls.dart';
+import 'new_section_panel.dart';
 
 class PlayersView extends StatefulWidget {
   const PlayersView({
@@ -34,7 +35,9 @@ class PlayersView extends StatefulWidget {
     this.sectionId,
     this.onRefreshRoster,
     this.onRefreshRatings,
-    this.onAddSections,
+    this.newSectionRequested = false,
+    this.onNewSectionShown,
+    this.onSectionsCreated,
     this.ratingRefresh,
     this.roundAction,
     this.standingsOnly = false,
@@ -45,7 +48,12 @@ class PlayersView extends StatefulWidget {
   final TournamentController controller;
   final String? sectionId;
   final VoidCallback? onRefreshRoster, onRefreshRatings;
-  final VoidCallback? onAddSections;
+
+  /// The workspace's New section button was pressed: open (or close) the
+  /// New section panel, then report it with [onNewSectionShown].
+  final bool newSectionRequested;
+  final VoidCallback? onNewSectionShown;
+  final ValueChanged<List<String>>? onSectionsCreated;
   final RatingRefresh? ratingRefresh;
   final Widget? roundAction;
   final bool standingsOnly;
@@ -69,7 +77,6 @@ class _PlayersViewState extends State<PlayersView> {
   /// What the right-hand column shows. New things appear there, never
   /// above the table, so rows stay where the TD left them.
   _Side? side;
-  String? importSource, importFilename;
 
   /// A finished action, confirmed at the right with Undo and Done.
   String? doneTitle, doneMessage;
@@ -120,6 +127,23 @@ class _PlayersViewState extends State<PlayersView> {
   }
 
   void clearSelection() => tick(selected.toList(), false);
+
+  /// The row last ticked or unticked by hand, where a Shift-click range
+  /// starts.
+  String? anchor;
+
+  /// Shift-click ticks or unticks every visible row from the last one.
+  void tickRow(String id, bool value) {
+    final ids = [for (final p in order) p.id];
+    final from = anchor == null ? -1 : ids.indexOf(anchor!);
+    final to = ids.indexOf(id);
+    if (HardwareKeyboard.instance.isShiftPressed && from >= 0 && to >= 0) {
+      tick(ids.sublist(math.min(from, to), math.max(from, to) + 1), value);
+    } else {
+      tick([id], value);
+    }
+    anchor = id;
+  }
 
   /// Whether a rating review was open when last seen.
   bool reviewing = false;
@@ -299,8 +323,7 @@ class _PlayersViewState extends State<PlayersView> {
     side = _Side.values.where((v) => v.name == saved['side']).firstOrNull;
     selected.addAll((saved['selected'] as List? ?? []).whereType<String>());
     reviewing = refreshDraft != null;
-    if (side == _Side.fileImport ||
-        side == _Side.done ||
+    if (side == _Side.done ||
         (side == _Side.ratingReview && !reviewing) ||
         (side == _Side.selection && selected.isEmpty)) {
       side = null;
@@ -329,7 +352,23 @@ class _PlayersViewState extends State<PlayersView> {
       } else {
         resultFocus[activeResult]?.requestFocus();
       }
+      answerNewSection();
     });
+  }
+
+  void answerNewSection() {
+    if (!widget.newSectionRequested || !mounted) return;
+    widget.onNewSectionShown?.call();
+    showSide(side == _Side.newSection ? restingSide : _Side.newSection);
+  }
+
+  void sectionsCreated(List<String> ids) {
+    setState(() {
+      selected.clear();
+      side = null;
+    });
+    if (Dock.maybeOf(context)?.id == panelOwner) Dock.maybeOf(context)?.close();
+    widget.onSectionsCreated?.call(ids);
   }
 
   /// Starting a review opens it at the right; finishing it closes it.
@@ -359,6 +398,9 @@ class _PlayersViewState extends State<PlayersView> {
   @override
   void didUpdateWidget(covariant PlayersView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.newSectionRequested && !oldWidget.newSectionRequested) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => answerNewSection());
+    }
     if (oldWidget.ratingRefresh != widget.ratingRefresh) {
       oldWidget.ratingRefresh?.removeListener(refreshRatingsView);
       widget.ratingRefresh?.addListener(refreshRatingsView);
@@ -427,11 +469,13 @@ class _PlayersViewState extends State<PlayersView> {
       if (file == null || !mounted) return;
       final source = await file.readAsString();
       if (!mounted) return;
-      setState(() {
-        importSource = source;
-        importFilename = file.name;
-      });
-      showSide(_Side.fileImport);
+      final summary = await showRosterImport(
+        context,
+        controller: c,
+        source: source,
+        filename: file.name,
+      );
+      if (summary != null && mounted) imported(summary);
     } catch (e) {
       if (mounted) showFailure(context, e);
     }
@@ -456,24 +500,31 @@ class _PlayersViewState extends State<PlayersView> {
       ? child
       : PlayerDetailsLayout(expandContent: true, panel: panel, child: child);
 
-  /// Moves the ticked players. Once play has started a reason is asked for
-  /// in the selection bar first.
+  /// Moves the ticked players. Before play that is a roster edit and
+  /// happens at once, with Undo; once a section involved has been paired the
+  /// move is a transfer, reviewed with a reason in the selection panel first.
   void moveSelected(String targetId, {String reason = ''}) {
-    if (moveTo != targetId) {
+    final e = c.event!;
+    final played = e.sections
+        .where((s) => s.id == targetId || s.players.any(selected.contains))
+        .any((s) => s.rounds.isNotEmpty);
+    final staged = moveTo == targetId;
+    if (played && !staged) {
       setState(() {
         moveTo = targetId;
-        moveRevision = c.event!.revision;
+        moveRevision = e.revision;
       });
       return;
     }
     try {
-      if (moveRevision != null && moveRevision != c.event!.revision) {
+      if (staged && moveRevision != e.revision) {
         moveTo = null;
         throw const TournamentException(
           'The event changed. Choose the destination and review again.',
         );
       }
       final count = selected.length;
+      final sources = {for (final id in selected) ?e.sectionOf(id)?.id};
       c.movePlayers(selected.toList(), targetId, reason: reason);
       setState(() {
         selected.clear();
@@ -482,8 +533,11 @@ class _PlayersViewState extends State<PlayersView> {
       moveReason.clear();
       showDone(
         'Players moved',
-        'Moved $count ${count == 1 ? 'player' : 'players'} to '
-            '${c.event!.sections.firstWhere((s) => s.id == targetId).name}.',
+        [
+          'Moved $count ${count == 1 ? 'player' : 'players'} to '
+              '${c.event!.sections.firstWhere((s) => s.id == targetId).name}.',
+          ?rosterNote(c.event!, {...sources, targetId}),
+        ].join(' '),
       );
     } catch (e) {
       showFailure(context, e);
@@ -495,21 +549,34 @@ class _PlayersViewState extends State<PlayersView> {
     moveSelected(moveTo!, reason: reason);
   }
 
-  void withdrawSelected(bool withdrawn) {
+  /// Removes, withdraws or reinstates players, then confirms it with Undo.
+  /// Acting on the ticked players clears the ticks.
+  void applyStatusTo(StatusAction action, List<String> ids) {
     try {
-      final count = selected.length;
-      for (final id in selected.toList()) {
-        c.savePlayer(c.event!.player(id).copy(withdrawn: withdrawn));
+      final done = applyStatus(c, action, ids);
+      if (ids.toSet().containsAll(selected)) {
+        setState(() {
+          selected.clear();
+          moveTo = null;
+          swapping = false;
+        });
       }
-      setState(selected.clear);
-      showDone(
-        withdrawn ? 'Players withdrawn' : 'Players reinstated',
-        '${withdrawn ? 'Withdrew' : 'Reinstated'} $count '
-        '${count == 1 ? 'player' : 'players'}.',
-      );
+      showDone(done.title, done.message);
     } catch (e) {
       showFailure(context, e);
     }
+  }
+
+  /// Delete on a focused row removes it, or every ticked player when it is
+  /// one of them. Played players are withdrawn instead, never by a key.
+  void removeFromKey(String id) {
+    final e = c.event!;
+    final ids = selected.contains(id) ? selected.toList() : [id];
+    final blocked = ids.map((id) => removeBlocker(e, id)).nonNulls.firstOrNull;
+    if (blocked != null) {
+      return showFailure(context, TournamentException(blocked));
+    }
+    applyStatusTo(StatusAction.remove, ids);
   }
 
   /// Names a team for the ticked players, beside the table.
@@ -561,6 +628,7 @@ class _PlayersViewState extends State<PlayersView> {
         focusField: openFocus,
         ratingReview: widget.standingsOnly ? null : refreshDraft,
         onBackToReview: () => showSide(_Side.ratingReview),
+        onRemoved: showDone,
         onClose: closeSide,
       ),
       _Side.add => PlayerPanel(
@@ -574,15 +642,13 @@ class _PlayersViewState extends State<PlayersView> {
         onClose: closeSide,
         onImported: imported,
       ),
-      _Side.fileImport => RosterImportPanel(
-        key: ValueKey((importFilename, importSource)),
-        controller: c,
-        source: importSource!,
-        filename: importFilename!,
-        onClose: closeSide,
-        onImported: imported,
-      ),
       _Side.team => teamPanel(),
+      _Side.newSection => NewSectionPanel(
+        controller: c,
+        ticked: {...selected},
+        onCreated: sectionsCreated,
+        onClose: closeSide,
+      ),
       _Side.selection => _selectionPanel(context),
       _Side.ratingReview => RatingReviewPanel(
         draft: refreshDraft!,
@@ -659,7 +725,6 @@ class _PlayersViewState extends State<PlayersView> {
         );
       }
     }
-    final unassigned = e.players.where((p) => e.sectionOf(p.id) == null).length;
     final shown = groups.fold(0, (int n, g) => n + g.$2.length);
     rounds = !widget.standingsOnly
         ? 0
@@ -809,28 +874,18 @@ class _PlayersViewState extends State<PlayersView> {
                             runSpacing: 8,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              // Sorting players into sections is the next
-                              // step while anyone is left out.
-                              if (unassigned > 0 &&
-                                  widget.onAddSections != null)
-                                FilledButton(
-                                  key: const ValueKey('open-create-sections'),
-                                  onPressed: widget.onAddSections,
-                                  child: const Text('Create sections…'),
-                                ),
                               OutlinedButton.icon(
                                 onPressed: () => showSide(_Side.add),
                                 icon: const Icon(Icons.add, size: 18),
                                 label: const Text('Add player'),
                               ),
                               if (widget.onRefreshRatings != null)
-                                OutlinedButton.icon(
+                                OutlinedButton(
                                   key: const ValueKey('refresh-uscf'),
                                   onPressed: refreshDraft == null
                                       ? widget.onRefreshRatings
                                       : () => showSide(_Side.ratingReview),
-                                  icon: const Icon(Icons.refresh, size: 18),
-                                  label: const Text('Refresh from USCF'),
+                                  child: const Text('Refresh from USCF'),
                                 ),
                               _playerTools(context),
                             ],
@@ -1061,7 +1116,6 @@ class _PlayersViewState extends State<PlayersView> {
     final e = c.event!, colors = Theme.of(context).colorScheme;
     final muted = TextStyle(fontSize: 13, color: colors.onSurfaceVariant);
     final ids = selected.toList();
-    final allWithdrawn = ids.every((id) => e.player(id).withdrawn);
     final names = ids.map((id) => e.player(id).name).toList();
     Widget heading(String text) => Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 8),
@@ -1085,8 +1139,8 @@ class _PlayersViewState extends State<PlayersView> {
               : '${names.take(5).join(', ')} and ${names.length - 5} more',
           style: muted,
         ),
-        if (e.sections.isNotEmpty) ...[
-          heading('Move to section'),
+        ...[
+          heading(e.sections.isEmpty ? 'Put in a section' : 'Move to section'),
           if (moveTo != null) ...[
             Text(
               'Move to ${e.sections.firstWhere((s) => s.id == moveTo).name}?',
@@ -1096,9 +1150,7 @@ class _PlayersViewState extends State<PlayersView> {
               key: const ValueKey('move-reason'),
               controller: moveReason,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Reason (required after play)',
-              ),
+              decoration: const InputDecoration(labelText: 'Reason'),
               onSubmitted: (_) => confirmMove(),
             ),
             const SizedBox(height: 8),
@@ -1122,11 +1174,35 @@ class _PlayersViewState extends State<PlayersView> {
                   ActionChip(
                     chipAnimationStyle: noChipAnimation,
                     key: ValueKey('move-to-${s.id}'),
-                    label: Text(s.name),
+                    tooltip:
+                        '${s.name} has ${s.players.length} '
+                        '${s.players.length == 1 ? 'player' : 'players'}',
+                    label: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(text: s.name),
+                          TextSpan(
+                            text: '  ${s.players.length}',
+                            style: muted.copyWith(
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     onPressed: selected.every(s.players.contains)
                         ? null
                         : () => moveSelected(s.id),
                   ),
+                ActionChip(
+                  chipAnimationStyle: noChipAnimation,
+                  key: const ValueKey('selection-new-section'),
+                  avatar: Icon(Icons.add, size: 18, color: colors.onSurface),
+                  label: const Text('New section…'),
+                  onPressed: () => showSide(_Side.newSection),
+                ),
               ],
             ),
         ],
@@ -1176,10 +1252,12 @@ class _PlayersViewState extends State<PlayersView> {
               icon: const Icon(Icons.group_outlined, size: 18),
               label: const Text('Assign team'),
             ),
-            OutlinedButton(
-              onPressed: () => withdrawSelected(!allWithdrawn),
-              child: Text(allWithdrawn ? 'Reinstate' : 'Withdraw'),
-            ),
+            for (final action in statusActions(e, ids))
+              OutlinedButton(
+                key: ValueKey('selection-${action.name}'),
+                onPressed: () => applyStatusTo(action, ids),
+                child: Text(statusLabel(e, action, ids)),
+              ),
           ],
         ),
       ],
@@ -1212,7 +1290,7 @@ class _PlayersViewState extends State<PlayersView> {
                 label: const Text('Undo'),
               ),
             const Spacer(),
-            FilledButton(
+            OutlinedButton(
               key: const ValueKey('done-close'),
               autofocus: true,
               onPressed: closeSide,
@@ -1530,129 +1608,144 @@ class _PlayersViewState extends State<PlayersView> {
       p.id,
       at,
       onByes: (id) => openPlayer(id, focus: 'byes'),
+      group: selected,
+      onMoveGroup: moveSelected,
+      onStatus: applyStatusTo,
     );
+    final ticked = selected.contains(p.id);
     return ContextMenuKeys(
       onMenu: menu,
-      child: InkWell(
-        key: ValueKey('player-${p.id}'),
-        onSecondaryTapDown: (details) => menu(details.globalPosition),
-        onTap: () => openPlayer(p.id),
-        child: Container(
-          constraints: widget.standingsOnly
-              ? const BoxConstraints(minHeight: 32)
-              : null,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: open == p.id ? colors.primary.withValues(alpha: 0.1) : null,
-            border: Border(
-              bottom: BorderSide(
-                color: colors.outlineVariant.withValues(alpha: 0.5),
+      child: CallbackShortcuts(
+        bindings: {
+          if (!widget.standingsOnly)
+            const SingleActivator(LogicalKeyboardKey.delete): () =>
+                removeFromKey(p.id),
+        },
+        child: InkWell(
+          key: ValueKey('player-${p.id}'),
+          onSecondaryTapDown: (details) => menu(details.globalPosition),
+          onTap: () => openPlayer(p.id),
+          child: Container(
+            constraints: widget.standingsOnly
+                ? const BoxConstraints(minHeight: 32)
+                : null,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: open == p.id
+                  ? colors.primary.withValues(alpha: 0.1)
+                  : ticked
+                  ? colors.surfaceContainerHigh
+                  : null,
+              border: Border(
+                bottom: BorderSide(
+                  color: colors.outlineVariant.withValues(alpha: 0.5),
+                ),
               ),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  if (widget.onPlayer == null)
-                    SizedBox(
-                      width: _columnWidth(context, _check),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: PlainCheckbox(
-                          label: 'Select ${p.name}',
-                          value: selected.contains(p.id),
-                          onChanged: (v) => tick([p.id], v == true),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    if (widget.onPlayer == null)
+                      SizedBox(
+                        width: _columnWidth(context, _check),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: PlainCheckbox(
+                            label: 'Select ${p.name}',
+                            value: ticked,
+                            onChanged: (v) => tickRow(p.id, v == true),
+                          ),
                         ),
                       ),
+                    KeyedSubtree(
+                      key: ValueKey('number-${p.id}'),
+                      child: cell(_number, number, muted),
                     ),
-                  KeyedSubtree(
-                    key: ValueKey('number-${p.id}'),
-                    child: cell(_number, number, muted),
-                  ),
-                  Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: p.name,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: p.withdrawn
-                                  ? colors.onSurfaceVariant
-                                  : null,
-                              decoration: p.withdrawn
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
-                          ),
-                          if (p.team.isNotEmpty)
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
                             TextSpan(
-                              text: '  · ${p.team}',
-                              style: muted.copyWith(fontSize: 12),
+                              text: p.name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: p.withdrawn
+                                    ? colors.onSurfaceVariant
+                                    : null,
+                                decoration: p.withdrawn
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
                             ),
-                          if (p.withdrawn)
-                            TextSpan(
-                              text: '  withdrawn',
-                              style: muted.copyWith(fontSize: 12),
-                            ),
-                        ],
+                            if (p.team.isNotEmpty)
+                              TextSpan(
+                                text: '  · ${p.team}',
+                                style: muted.copyWith(fontSize: 12),
+                              ),
+                            if (p.withdrawn)
+                              TextSpan(
+                                text: '  withdrawn',
+                                style: muted.copyWith(fontSize: 12),
+                              ),
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  if (showsIds)
-                    cell(
-                      _id,
-                      p.memberId.isEmpty ? '—' : p.memberId,
-                      muted.copyWith(fontFamily: 'SourceCodePro'),
-                    ),
-                  if (!widget.standingsOnly)
-                    cell(
-                      _rating,
-                      ratingText(p.rating),
-                      const TextStyle(fontFamily: 'SourceCodePro'),
-                    ),
-                  if (refreshDraft case final draft?) ...[
-                    _proposedRatingCell(context, p, draft),
-                    _uscfNameCell(context, p, draft),
+                    if (showsIds)
+                      cell(
+                        _id,
+                        p.memberId.isEmpty ? '—' : p.memberId,
+                        muted.copyWith(fontFamily: 'SourceCodePro'),
+                      ),
+                    if (!widget.standingsOnly)
+                      cell(
+                        _rating,
+                        ratingText(p.rating),
+                        const TextStyle(fontFamily: 'SourceCodePro'),
+                      ),
+                    if (refreshDraft case final draft?) ...[
+                      _proposedRatingCell(context, p, draft),
+                      _uscfNameCell(context, p, draft),
+                    ],
+                    if (showRatingPreview) _ratingPreviewCell(context, p, s),
+                    if (!widget.standingsOnly)
+                      SizedBox(
+                        width: _columnWidth(context, _membership),
+                        child: MembershipCell(
+                          player: p,
+                          eventDate: c.event!.lastDate,
+                        ),
+                      ),
+                    if (!widget.standingsOnly)
+                      Tooltip(
+                        message: p.registrationNote,
+                        child: cell(
+                          _note,
+                          p.registrationNote.isEmpty ? '—' : p.registrationNote,
+                          muted,
+                        ),
+                      ),
+                    for (var r = 1; r <= rounds; r++)
+                      _roundCell(context, p, s, r),
+                    if (scores) ...[
+                      SizedBox(
+                        width: _columnWidth(context, _points),
+                        child: Text(
+                          standing == null ? '' : halves(standing.points),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
                   ],
-                  if (showRatingPreview) _ratingPreviewCell(context, p, s),
-                  if (!widget.standingsOnly)
-                    SizedBox(
-                      width: _columnWidth(context, _membership),
-                      child: MembershipCell(
-                        player: p,
-                        eventDate: c.event!.lastDate,
-                      ),
-                    ),
-                  if (!widget.standingsOnly)
-                    Tooltip(
-                      message: p.registrationNote,
-                      child: cell(
-                        _note,
-                        p.registrationNote.isEmpty ? '—' : p.registrationNote,
-                        muted,
-                      ),
-                    ),
-                  for (var r = 1; r <= rounds; r++)
-                    _roundCell(context, p, s, r),
-                  if (scores) ...[
-                    SizedBox(
-                      width: _columnWidth(context, _points),
-                      child: Text(
-                        standing == null ? '' : halves(standing.points),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1882,7 +1975,7 @@ String formatName(Format f) => switch (f) {
 /// save on Enter, on Save, when another player is opened, or when the panel
 /// closes. Byes, section and withdrawal apply at once.
 enum _Side {
-  fileImport,
+  newSection,
   player,
   add,
   paste,

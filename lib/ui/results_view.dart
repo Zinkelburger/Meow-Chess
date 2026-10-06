@@ -318,7 +318,12 @@ class ResultsViewState extends State<ResultsView> {
   }
 
   /// After a result: the next board still missing one, same side.
-  void advance(String gameId, bool white) {
+  /// Clearing a result keeps the cursor where it is.
+  void advance(String gameId, bool white, Outcome outcome) {
+    if (outcome == Outcome.unreported) {
+      focusBox(gameId, white);
+      return;
+    }
     final all = visibleRows();
     final i = all.indexWhere((r) => r.game.id == gameId);
     final next = all
@@ -344,7 +349,7 @@ class ResultsViewState extends State<ResultsView> {
       return;
     }
     if (row.game.outcome == outcome) {
-      advance(row.game.id, white);
+      advance(row.game.id, white, outcome);
       return;
     }
     if (c.correctionHasDependencies(row.game.id)) {
@@ -374,7 +379,7 @@ class ResultsViewState extends State<ResultsView> {
       c.recordResult(row.game.id, outcome, reason: why);
       if (!mounted) return;
       setState(() {});
-      advance(row.game.id, white);
+      advance(row.game.id, white, outcome);
     } catch (e) {
       if (mounted) showFailure(context, e);
     } finally {
@@ -865,7 +870,7 @@ class ResultsViewState extends State<ResultsView> {
         children: [
           search,
           if (viewingPast && correcting)
-            FilledButton(
+            OutlinedButton(
               key: const ValueKey('done-correcting'),
               onPressed: () => setState(() => correcting = nudged = false),
               child: const Text('Done correcting'),
@@ -971,7 +976,7 @@ class ResultsViewState extends State<ResultsView> {
             style: TextStyle(color: colors.onSecondaryContainer),
           ),
           const SizedBox(width: 8),
-          FilledButton(
+          OutlinedButton(
             onPressed: () => setState(() {
               swapping = false;
               swapPick = null;

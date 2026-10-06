@@ -95,11 +95,11 @@ void main() {
             await tester.pumpAndSettle();
             expect(find.byKey(const ValueKey('history-graph')), findsNothing);
           case 'new sections':
+            final count = c.event!.sections.length;
             await click(find.byKey(const ValueKey('new-section')));
-            final created = c.event!.sections.last;
-            expect(created.players, isEmpty);
+            expect(c.event!.sections.length, count);
             expect(
-              find.byKey(ValueKey('section-settings-${created.id}')),
+              find.byKey(const ValueKey('new-section-panel')),
               findsOneWidget,
             );
           case 'backups':

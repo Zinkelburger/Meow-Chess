@@ -83,7 +83,7 @@ retain their review step.
 for results are left alone. There is no separate start-round step.
 
 Right-click a player or section tab for **Move**, **Swap**, and **Withdraw**.
-Choose **Edit quad pairings** beside **New Section** to change opponents or flip
+Choose **Edit quad pairings** beside **New section** to change opponents or flip
 colors within a quad. Select players in each round, then **Save pairings**.
 Everyone must meet once across the three rounds; changing opponents may require
 adjusting another unplayed round. Rounds with results, start markers or pairing
@@ -120,11 +120,15 @@ remains in **History**, where a single-result change also offers **Fix this resu
 without reversing unrelated edits. Selecting any change lists what going back to it would
 undo, and any recorded play it would remove, above the button that does it.
 
-**Import file…** opens a CSV/TSV/text file for review before adding players.
-Choose the delimiter and header setting, then map your columns to name, rating,
-and USCF ID (with optional split names, club/team, and state). The preview updates
-as you change settings. Invalid rows must be fixed or explicitly skipped;
-**Paste** uses the same review flow. Imports can be undone.
+**Import file…** opens the file in an import window before adding players. The
+separator is detected; as in a spreadsheet's text import you can tick Comma, Tab,
+Semicolon or Space, type any other separator characters, choose the quote
+character, merge repeated separators and say whether the first row holds column
+names. Every row is shown in a grid with a field picker above each column (Name,
+First/Last name, Rating, US Chess ID, State, Team, Club, Registration note, or
+Don't import), and a status for each row: new, already in the event, or the
+problem to fix. Invalid rows must be fixed or explicitly left out; **Paste** uses
+the same window. Imports can be undone.
 
 **Refresh from URL** accepts Boylston event or entry-list links. For other clubs,
 paste a page containing a Name, Rating and USCF ID table, then review and confirm

@@ -16,6 +16,7 @@ import 'event_panel.dart';
 import 'player_panel.dart';
 import 'side_panel.dart';
 import '../infrastructure/member_directory.dart';
+import 'select.dart';
 
 class ReportsView extends StatefulWidget {
   const ReportsView({
@@ -951,27 +952,19 @@ class ReportDetailsState extends State<ReportDetails> {
                       label: 'Event type',
                       child: SizedBox(
                         width: 300,
-                        child: DropdownButtonFormField<String>(
+                        child: PlainSelect<String?>(
                           key: ValueKey('report-level-${e.level}'),
                           focusNode: fieldFocus.putIfAbsent(
                             'level',
                             () => FocusNode(debugLabel: 'event type'),
                           ),
-                          initialValue: sectionLevels.containsKey(e.level)
+                          value: sectionLevels.containsKey(e.level)
                               ? e.level
                               : null,
-                          isExpanded: true,
-
-                          items: [
+                          options: [
                             for (final MapEntry(:key, :value)
                                 in sectionLevels.entries)
-                              DropdownMenuItem(
-                                value: key,
-                                child: Text(
-                                  value,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
+                              SelectOption(key, value),
                           ],
                           onChanged: setLevel,
                         ),

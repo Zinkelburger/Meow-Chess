@@ -232,6 +232,13 @@ class TournamentTools {
         write: true,
       ),
       tool(
+        'remove_players',
+        'Remove entries that never played. Once their section is paired, withdraw them with update_player instead.',
+        {'players': _array(_string())},
+        required: ['players'],
+        write: true,
+      ),
+      tool(
         'reserve_bye',
         'Reserve a future bye: points 0, 1, 2 mean zero, half, full point.',
         {
@@ -600,6 +607,8 @@ class TournamentTools {
           args['sectionId'],
           reason: args['reason'] ?? '',
         );
+      case 'remove_players':
+        controller.removePlayers(List<String>.from(args['players']));
       case 'reserve_bye':
         controller.reserveBye(args['playerId'], args['round'], args['points']);
       case 'propose_pairings':

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../application/failures.dart';
 import '../infrastructure/member_directory.dart';
+import 'select.dart';
 
 /// An inline field for the US Chess API key. The key is kept in the system
 /// keychain, not in the event file.
@@ -113,17 +114,16 @@ class _RatingSettingsState extends State<RatingSettings> {
     children: [
       const Text('Rating defaults · all events'),
       const SizedBox(height: 8),
-      DropdownButtonFormField<String>(
-        isExpanded: true,
+      PlainSelect<String>(
         key: ValueKey('rating-default-$category'),
-        initialValue: category,
-        decoration: const InputDecoration(labelText: 'Default rating category'),
-        items: const [
-          DropdownMenuItem(value: 'R', child: Text('Regular')),
-          DropdownMenuItem(value: 'Q', child: Text('Quick')),
-          DropdownMenuItem(value: 'B', child: Text('Blitz')),
+        value: category,
+        label: 'Default rating category',
+        options: const [
+          SelectOption('R', 'Regular'),
+          SelectOption('Q', 'Quick'),
+          SelectOption('B', 'Blitz'),
         ],
-        onChanged: (value) => save(value!),
+        onChanged: save,
       ),
       if (error != null) Text(error!),
     ],

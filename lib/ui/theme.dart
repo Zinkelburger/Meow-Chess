@@ -128,6 +128,9 @@ ThemeData meowTheme(Brightness brightness) {
             textStyle: buttonText,
             shape: shape,
             backgroundColor: colors.surfaceContainerLowest,
+            // Ink, not blue: only the one filled button per region says
+            // "act here".
+            foregroundColor: colors.onSurface,
           ).copyWith(
             side: focusSide(colors, rest: BorderSide(color: colors.outline)),
           ),
@@ -169,6 +172,54 @@ ThemeData meowTheme(Brightness brightness) {
         (states) => states.contains(WidgetState.focused)
             ? BorderSide(color: focusRing(colors), width: focusRingWidth)
             : BorderSide(color: colors.outline),
+      ),
+    ),
+    // Menus open instantly as a flat, bordered sheet: no shadow, no grow.
+    menuTheme: MenuThemeData(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(colors.surfaceContainerLowest),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        elevation: const WidgetStatePropertyAll(0),
+        side: WidgetStatePropertyAll(BorderSide(color: colors.outline)),
+        shape: const WidgetStatePropertyAll(shape),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(vertical: 4),
+        ),
+      ),
+    ),
+    menuButtonTheme: MenuButtonThemeData(
+      style:
+          MenuItemButton.styleFrom(
+            animationDuration: instant,
+            minimumSize: const Size(0, 32),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            textStyle: const TextStyle(fontFamily: 'Inter', fontSize: 14),
+            foregroundColor: colors.onSurface,
+            iconColor: colors.onSurface,
+          ).copyWith(
+            backgroundColor: WidgetStateProperty.resolveWith(
+              (states) =>
+                  states.contains(WidgetState.focused) ||
+                      states.contains(WidgetState.hovered)
+                  ? colors.surfaceContainerHigh
+                  : null,
+            ),
+            overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+            // The highlighted row is the focus, as in a native menu.
+            side: const WidgetStatePropertyAll(BorderSide.none),
+          ),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: colors.surfaceContainerLowest,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      menuPadding: const EdgeInsets.symmetric(vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(4)),
+        side: BorderSide(color: colors.outline),
+      ),
+      labelTextStyle: WidgetStatePropertyAll(
+        TextStyle(fontFamily: 'Inter', fontSize: 14, color: colors.onSurface),
       ),
     ),
     tooltipTheme: const TooltipThemeData(

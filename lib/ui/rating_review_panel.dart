@@ -7,6 +7,7 @@ import 'player_format.dart';
 import 'rating_refresh.dart';
 import 'side_panel.dart';
 import 'theme.dart';
+import 'select.dart';
 
 String _system(String category) =>
     RatingSystem.parse(category)?.label ?? category;
@@ -91,19 +92,15 @@ class RatingReviewPanel extends StatelessWidget {
               Text(notice),
             ],
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
+            PlainSelect<String>(
               key: const ValueKey('rating-review-system'),
-              initialValue: draft.category,
-              decoration: const InputDecoration(labelText: 'Rating system'),
-              items: [
+              value: draft.category,
+              label: 'Rating system',
+              options: [
                 for (final s in RatingSystem.values)
-                  DropdownMenuItem(value: s.code, child: Text(s.label)),
+                  SelectOption(s.code, s.label),
               ],
-              onChanged: draft.busy
-                  ? null
-                  : (value) {
-                      if (value != null) draft.showCategory(value);
-                    },
+              onChanged: draft.busy ? null : draft.showCategory,
             ),
             const SizedBox(height: 12),
             Wrap(

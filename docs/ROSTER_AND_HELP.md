@@ -91,12 +91,14 @@ labelled live/unofficial. See [US Chess research](../research/notes/US_CHESS_API
 ## Sections and help
 
 Section navigation uses compact horizontal tabs and preserves per-section workspace state.
-All sections stays pinned; there is no section search. New Section creates an empty
-section immediately and opens its settings in the right-hand panel. Side games is
-unchecked by default. Right-click a section, or use its visible action menu, to
-rename, configure, combine, or delete an unplayed section. Before play, the Players
-view offers Create sections when players are unassigned, including grouping by
-rating into quads. Refresh from USCF sits beside Add player in the Players
+All sections stays pinned; there is no section search. **New section** (beside the
+tabs, or in the panel for ticked players) is the one way to make sections. Its
+panel asks who goes in (the ticked players, everyone not in a section, everyone
+not yet paired, or no one yet), the format (quads by rating, Swiss or round
+robin) and lists every player under the section they will land in before
+anything is created. Ticking rows while it is open updates that list. Side games
+is unchecked by default. Right-click a section, or use its visible action menu, to
+rename, configure, combine, or delete an unplayed section. Refresh from USCF sits beside Add player in the Players
 toolbar, and Refresh from URL is under Player tools; posting lives in the Pairings
 content header.
 

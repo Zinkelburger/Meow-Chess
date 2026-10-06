@@ -9,6 +9,7 @@ import 'package:meow_chess/ui/players_view.dart';
 import 'package:meow_chess/ui/theme.dart';
 
 import '../support.dart';
+import 'package:meow_chess/ui/select.dart';
 
 Future<void> mountPlayers(WidgetTester tester, c) async {
   tester.view.physicalSize = const Size(1400, 900);
@@ -82,9 +83,7 @@ void main() {
     expect(swapNeeded(e, quad1.copy(format: Format.swiss), rr), false);
   });
 
-  testWidgets('a Swiss row menu offers Byes and Move', (
-    tester,
-  ) async {
+  testWidgets('a Swiss row menu offers Byes and Move', (tester) async {
     final c = fixture(format: Format.swiss);
     addTearDown(c.dispose);
     await mountPlayers(tester, c);
@@ -164,10 +163,11 @@ void main() {
     final confirm = find.byKey(const ValueKey('panel-confirm-move'));
     expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
     expect(find.text('No one'), findsNothing);
-    await tester.tap(find.byType(DropdownButtonFormField<String>).last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Player 04 · 1800').last);
-    await tester.pumpAndSettle();
+    await chooseOption(
+      tester,
+      find.byType(PlainSelect<String?>).last,
+      'Player 04 · 1800',
+    );
     await tester.tap(confirm);
     await tester.pump();
     expect(c.event!.sections.first.players, ['p4', 'p1', 'p2', 'p3']);

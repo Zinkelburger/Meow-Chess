@@ -107,7 +107,7 @@ void main() {
     await tester.tap(seat);
     await tester.pumpAndSettle();
     await tester.tap(
-      find.text(c.event!.player(pairs[1].$1!).name).hitTestable().last,
+      find.widgetWithText(MenuItemButton, c.event!.player(pairs[1].$1!).name),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('save-quad-pairings')));

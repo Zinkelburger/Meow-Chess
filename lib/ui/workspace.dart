@@ -168,20 +168,17 @@ class _WorkspaceState extends State<Workspace> {
     c.workspaceState.write('view', '${sectionId ?? ''}|${view.name}');
   }
 
+  /// Asks the Players view to open (or close) its New section panel, where
+  /// ticked rows choose who goes in.
+  bool newSectionRequested = false;
+
   void newSection() {
-    try {
-      var number = 1;
-      final names = c.event!.sections.map((s) => s.name).toSet();
-      while (names.contains('Section $number')) {
-        number++;
-      }
-      c.addSection('Section $number', Format.swiss, 3, assignUnassigned: false);
-      pickSection(c.event!.sections.last.id, next: TaskView.players);
-      sectionSettings();
-    } catch (e) {
-      showFailure(context, e);
-    }
+    if (view != TaskView.players) go(TaskView.players);
+    setState(() => newSectionRequested = true);
   }
+
+  void sectionsCreated(List<String> ids) =>
+      pickSection(ids.length == 1 ? ids.single : null, next: TaskView.players);
 
   void refreshRoster() => dock.show(
     'web-roster',
@@ -230,18 +227,6 @@ class _WorkspaceState extends State<Workspace> {
       showFailure(context, e);
     }
   }
-
-  void addSections() => dock.show(
-    'new-sections',
-    NewSectionsPanel(
-      controller: c,
-      onCreated: () {
-        dock.close();
-        pickSection(null, next: TaskView.players);
-      },
-      onClose: dock.close,
-    ),
-  );
 
   /// Pairs and posts the next round in [sectionId], or in every section
   /// that is ready. Anything worth checking stays on screen until dismissed.
@@ -431,9 +416,9 @@ class _WorkspaceState extends State<Workspace> {
         ratingRefresh: ratingRefresh,
         onRefreshRoster: refreshRoster,
         onRefreshRatings: startRatingRefresh,
-        onAddSections: e.sections.any((s) => s.rounds.isNotEmpty)
-            ? null
-            : addSections,
+        newSectionRequested: newSectionRequested,
+        onNewSectionShown: () => newSectionRequested = false,
+        onSectionsCreated: sectionsCreated,
       ),
       TaskView.results => ResultsView(
         key: resultsKeys.putIfAbsent(
@@ -964,7 +949,7 @@ class _WorkspaceState extends State<Workspace> {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle_outline, size: 18, color: colors.primary),
+          Icon(Icons.check_circle_outline, size: 18, color: colors.onSurface),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
@@ -1130,7 +1115,7 @@ class _WorkspaceState extends State<Workspace> {
             key: const ValueKey('new-section'),
             onPressed: newSection,
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('New Section'),
+            label: const Text('New section'),
           ),
           if (e.sections.any(hasFixedQuadSchedule)) ...[
             const SizedBox(width: 8),
@@ -1369,7 +1354,7 @@ class _WorkspaceState extends State<Workspace> {
   if (scope.isEmpty) {
     return (
       label: null,
-      why: 'Create sections on the Players page first.',
+      why: 'Choose New section to put players in a section first.',
       complete: false,
     );
   }

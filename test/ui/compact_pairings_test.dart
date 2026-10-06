@@ -254,9 +254,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('an earlier round keeps both tables on one line', (
-    tester,
-  ) async {
+  testWidgets('an earlier round keeps both tables on one line', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -295,10 +293,7 @@ void main() {
     expect(top('board-column-header'), top('player-column-header'));
     expect(
       tester.getCenter(find.text('Crosstable')).dy,
-      closeTo(
-        tester.getCenter(find.byKey(const ValueKey('round-line'))).dy,
-        1,
-      ),
+      closeTo(tester.getCenter(find.byKey(const ValueKey('round-line'))).dy, 1),
     );
   });
 }
