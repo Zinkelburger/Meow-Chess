@@ -33,7 +33,16 @@ class SqliteEventRepository implements EventRepository {
         _validateExistingSchema(version);
         current = load();
       }
-      _db.execute('PRAGMA journal_mode = WAL');
+      try {
+        _db.execute('PRAGMA journal_mode = WAL');
+      } on SqliteException {
+        // WAL (and every rollback journal mode) creates a sibling file next to
+        // this one. A macOS App Sandbox grant for a single externally-chosen
+        // file does not cover creating that new filename in its folder, so
+        // fall back to an in-memory journal, which stays within the file
+        // already granted.
+        _db.execute('PRAGMA journal_mode = MEMORY');
+      }
       _db.execute('PRAGMA synchronous = FULL');
       _db.execute('BEGIN EXCLUSIVE');
       _db.execute(
