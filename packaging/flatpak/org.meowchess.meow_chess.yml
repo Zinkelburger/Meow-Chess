@@ -9,11 +9,13 @@
 # named after the app-id), so .meow files open here once it is installed.
 app-id: org.meowchess.meow_chess
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+# Keep on a supported freedesktop branch (one per August, each maintained for
+# about two years); the release workflow installs whatever is named here.
+runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
 command: meow_chess
 # Older flatpak-builder (Ubuntu 22.04's, which release CI uses for its glibc
-# floor) cannot run the 24.08 runtime's appstream compose step. Skipping it
+# floor) cannot run newer runtimes' appstream compose step. Skipping it
 # costs a sideloaded bundle nothing: the metainfo, desktop entry, icon and
 # MIME type are still installed and exported.
 appstream-compose: false
@@ -33,6 +35,8 @@ finish-args:
   - --filesystem=/run/media
   # Saved credentials (flutter_secure_storage uses the Secret Service).
   - --talk-name=org.freedesktop.secrets
+  # "Show in folder" asks the file manager to reveal the event file.
+  - --talk-name=org.freedesktop.FileManager1
 modules:
   - name: meow-chess
     buildsystem: simple

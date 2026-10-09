@@ -24,6 +24,12 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
 
+  // A second instance forwards its files with WM_COPYDATA (see
+  // single_instance.h); let it through UIPI even when the two processes run
+  // at different integrity levels.
+  ::ChangeWindowMessageFilterEx(GetHandle(), WM_COPYDATA, MSGFLT_ALLOW,
+                                nullptr);
+
   RECT frame = GetClientArea();
 
   // The size here must match the window dimensions to avoid unnecessary surface

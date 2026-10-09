@@ -85,6 +85,36 @@ static void run_helper(const gchar* program, const gchar* argument) {
                 nullptr, nullptr, nullptr, nullptr);
 }
 
+// |value| as one quoted argument of a desktop entry's Exec key, or nullptr
+// when it holds a character that cannot be written there. Shell quoting is
+// not valid in Exec: the spec wants double quotes with " ` $ \ escaped and %
+// doubled, and the key-file layer then removes one level of backslashes.
+// Matches exec_argument in tools/install_linux_launcher.py.
+static gchar* desktop_exec_quote(const gchar* value) {
+  if (strpbrk(value, "\n\r\t=") != nullptr) return nullptr;
+  GString* quoted = g_string_new("\"");
+  for (const gchar* c = value; *c != '\0'; ++c) {
+    switch (*c) {
+      case '%':
+        g_string_append(quoted, "%%");
+        break;
+      case '\\':
+        g_string_append(quoted, "\\\\\\\\");
+        break;
+      case '"':
+      case '`':
+      case '$':
+        g_string_append(quoted, "\\\\");
+        g_string_append_c(quoted, *c);
+        break;
+      default:
+        g_string_append_c(quoted, *c);
+    }
+  }
+  g_string_append_c(quoted, '"');
+  return g_string_free(quoted, FALSE);
+}
+
 static void install_desktop_files() {
   g_autofree gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
   if (exe_path == nullptr) return;
@@ -115,7 +145,8 @@ static void install_desktop_files() {
   // Absolute Exec path, refreshed every launch so the entry keeps working
   // if the user moves the unzipped app folder. %f is the file the desktop
   // was asked to open with us.
-  g_autofree gchar* exec_quoted = g_shell_quote(exe_path);
+  g_autofree gchar* exec_quoted = desktop_exec_quote(exe_path);
+  if (exec_quoted == nullptr) return;
   g_autofree gchar* desktop_data = g_strdup_printf(
       "[Desktop Entry]\n"
       "Type=Application\n"

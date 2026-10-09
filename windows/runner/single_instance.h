@@ -10,9 +10,11 @@
 // double-clicked .meow; a process that finds the app already running hands
 // that instance its files (or just raises it) and exits.
 
-// Tries to become the app's instance. Returns true when this process is it.
-// Returns false when another instance is running and has been given |paths|
-// (UTF-8) — the caller should exit without creating a window.
+// Tries to become the app's instance. Returns true when this process is it,
+// or keeps to itself (Debug builds, MEOW_CHESS_NEW_INSTANCE=1), or could not
+// hand |paths| over. Returns false when another instance is running and has
+// been given |paths| (UTF-8) — the caller should exit without creating a
+// window.
 bool ClaimSingleInstance(const std::vector<std::string>& paths);
 
 // dwData of the WM_COPYDATA message carrying forwarded paths.

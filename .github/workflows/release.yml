@@ -88,8 +88,11 @@ jobs:
 
       - name: Build Flatpak bundle
         run: |
+          # The runtime branch the manifest names, so the two never drift apart.
+          BRANCH="$(sed -n "s/^runtime-version: '\(.*\)'$/\1/p" packaging/flatpak/org.meowchess.meow_chess.yml)"
+          test -n "$BRANCH"
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
+          flatpak install --user -y flathub "org.freedesktop.Platform//$BRANCH" "org.freedesktop.Sdk//$BRANCH"
           flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=flatpak-repo flatpak-build \
             packaging/flatpak/org.meowchess.meow_chess.yml
           flatpak build-bundle flatpak-repo \
@@ -104,6 +107,49 @@ jobs:
             meow-chess-${{ github.ref_name }}-linux-x86_64.rpm
             meow-chess-${{ github.ref_name }}-linux.flatpak
 
+  # The .rpm is built on Ubuntu; install it where it is meant to go, so its
+  # Requires must resolve from the distribution's own repositories. Flatpak is
+  # not install-tested: it needs a session bus and a second runtime download,
+  # and flatpak-builder already validated its manifest and exports.
+  test-rpm:
+    needs: build-linux
+    name: Install the .rpm (${{ matrix.image }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: fedora:latest
+            install: dnf install -y
+          - image: opensuse/tumbleweed:latest
+            install: zypper --non-interactive install --allow-unsigned-rpm
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-build
+
+      - name: Install the .rpm and check the files and libraries
+        run: |
+          # grep is for the checks below; minimal images may not have it.
+          ${{ matrix.install }} grep ./meow-chess-${{ github.ref_name }}-linux-x86_64.rpm
+          test -x "$(readlink -f /usr/bin/meow_chess)"
+          test -s /usr/share/mime/packages/org.meowchess.meow_chess.xml
+          test -s /usr/share/icons/hicolor/256x256/apps/org.meowchess.meow_chess.png
+          grep -Fx 'MimeType=application/x-meow-chess;' \
+            /usr/share/applications/org.meowchess.meow_chess.desktop
+          # Every host library the app and the plugins it links load came in
+          # with the package's Requires. The loader lists them itself, so ldd
+          # need not be installed.
+          if ! listing="$(/lib64/ld-linux-x86-64.so.2 --list /opt/meow-chess/meow_chess)" ||
+              grep 'not found' <<<"$listing"; then
+            echo "::error::meow_chess has unresolved libraries"
+            exit 1
+          fi
+
   build-windows:
     needs: quality-gate
     uses: ./.github/workflows/windows-build.yml
@@ -111,7 +157,7 @@ jobs:
       version: ${{ github.ref_name }}
 
   release:
-    needs: [build-linux, build-windows]
+    needs: [build-linux, test-rpm, build-windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

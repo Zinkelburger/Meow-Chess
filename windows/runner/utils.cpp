@@ -62,6 +62,23 @@ std::wstring Utf16FromUtf8(const std::string& utf8_string) {
   return utf16_string;
 }
 
+namespace {
+
+// |path| (absolute) in the \\?\ form, which Win32 file calls accept past
+// MAX_PATH even when the system's long-path opt-in is off.
+std::wstring ExtendedLengthPath(const std::wstring& path) {
+  if (path.size() < MAX_PATH || path.rfind(L"\\\\?\\", 0) == 0 ||
+      path.rfind(L"\\\\.\\", 0) == 0) {
+    return path;
+  }
+  if (path.rfind(L"\\\\", 0) == 0) {
+    return L"\\\\?\\UNC\\" + path.substr(2);
+  }
+  return L"\\\\?\\" + path;
+}
+
+}  // namespace
+
 std::vector<std::string> FileArguments(
     const std::vector<std::string>& arguments) {
   std::vector<std::string> paths;
@@ -78,7 +95,7 @@ std::vector<std::string> FileArguments(
     if (written == 0 || written >= needed) continue;
     full.resize(written);
 
-    DWORD attributes = ::GetFileAttributesW(full.c_str());
+    DWORD attributes = ::GetFileAttributesW(ExtendedLengthPath(full).c_str());
     if (attributes == INVALID_FILE_ATTRIBUTES ||
         (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
       continue;

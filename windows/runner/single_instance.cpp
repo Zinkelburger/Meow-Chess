@@ -7,8 +7,31 @@ namespace {
 // Per-session, so two users on one machine each get their own instance.
 constexpr wchar_t kMutexName[] = L"Local\\MeowChess.Instance";
 
-// Held for the life of the process; the OS releases it on exit.
+// Held by every running copy, including one that keeps to itself, so the
+// uninstaller (packaging/windows/installer.iss) can tell the app is open.
+constexpr wchar_t kRunningMutexName[] = L"Local\\MeowChess.Running";
+
+// Held for the life of the process; the OS releases them on exit.
 HANDLE g_instance_mutex = nullptr;
+HANDLE g_running_mutex = nullptr;
+
+// How long a forwarded WM_COPYDATA may take before the running instance is
+// treated as unreachable.
+constexpr UINT kForwardTimeoutMs = 5000;
+
+// Debug builds stay independent so `flutter run` and integration tests never
+// hand off to an open copy; MEOW_CHESS_NEW_INSTANCE=1 does the same for a
+// release build. Mirrors linux/runner/my_application.cc.
+bool WantsOwnInstance() {
+#ifdef _DEBUG
+  return true;
+#else
+  wchar_t value[2] = {};
+  DWORD length =
+      ::GetEnvironmentVariableW(L"MEOW_CHESS_NEW_INSTANCE", value, 2);
+  return length == 1 && value[0] == L'1';
+#endif
+}
 
 // The running instance may still be starting up (two files double-clicked
 // together), so give its window a moment to appear.
@@ -24,6 +47,9 @@ HWND FindRunningInstance() {
 }  // namespace
 
 bool ClaimSingleInstance(const std::vector<std::string>& paths) {
+  g_running_mutex = ::CreateMutexW(nullptr, FALSE, kRunningMutexName);
+  if (WantsOwnInstance()) return true;
+
   g_instance_mutex = ::CreateMutexW(nullptr, FALSE, kMutexName);
   if (g_instance_mutex == nullptr ||
       ::GetLastError() != ERROR_ALREADY_EXISTS) {
@@ -47,7 +73,15 @@ bool ClaimSingleInstance(const std::vector<std::string>& paths) {
     data.dwData = kOpenFilesCopyData;
     data.cbData = static_cast<DWORD>(payload.size());
     data.lpData = const_cast<char*>(payload.data());
-    ::SendMessageW(target, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&data));
+    DWORD_PTR handled = 0;
+    LRESULT sent = ::SendMessageTimeoutW(
+        target, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&data),
+        SMTO_ABORTIFHUNG | SMTO_BLOCK, kForwardTimeoutMs, &handled);
+    if (sent == 0 || handled == 0) {
+      // Hung, blocked, or not taking files yet: open them here instead of
+      // dropping them.
+      return true;
+    }
   }
 
   if (::IsIconic(target)) ::ShowWindow(target, SW_RESTORE);

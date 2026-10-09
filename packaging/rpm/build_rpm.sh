@@ -26,7 +26,9 @@ STAGE="$TOP/stage"
 
 # AutoReqProv is off on purpose: rpm would otherwise turn every library the
 # bundle carries (pdfium, sqlite, the JNI shim's optional libjvm) into a
-# Requires no repository provides. These are the real host dependencies.
+# Requires no repository provides. These are the real host dependencies,
+# named by soname so they resolve on Fedora (gtk3, libsecret, ...) and
+# openSUSE (libgtk-3-0, libsecret-1-0, ...) alike.
 cat > "$TOP/meow-chess.spec" <<SPEC
 %global debug_package %{nil}
 %global __os_install_post %{nil}
@@ -39,11 +41,12 @@ License:        AGPL-3.0-or-later
 URL:            https://github.com/Zinkelburger/Meow-Chess
 BuildArch:      x86_64
 AutoReqProv:    no
-Requires:       gtk3
-Requires:       glib2
-Requires:       libsecret
-Requires:       json-glib
-Requires:       libstdc++
+Requires:       libgtk-3.so.0()(64bit)
+Requires:       libglib-2.0.so.0()(64bit)
+Requires:       libsecret-1.so.0()(64bit)
+Requires:       libepoxy.so.0()(64bit)
+Requires:       libfontconfig.so.1()(64bit)
+Requires:       libstdc++.so.6()(64bit)
 
 %description
 An offline tournament director workspace. Each event is saved as a .meow

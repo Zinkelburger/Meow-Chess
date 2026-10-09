@@ -17,16 +17,17 @@ struct _MyApplication {
 };
 
 // The files among |arguments|: anything that is not a flag and names an
-// existing regular file. Relative paths are made absolute here, while the
-// working directory is still the one the file was named in.
+// existing regular file, as a path or a file:// URI (what file managers pass
+// for %U). Relative paths are made absolute here, while the working directory
+// is still the one the file was named in.
 static std::vector<std::string> file_arguments(gchar** arguments) {
   std::vector<std::string> paths;
   for (gchar** arg = arguments; arg != nullptr && *arg != nullptr; ++arg) {
     if ((*arg)[0] == '-' || (*arg)[0] == '\0') continue;
-    if (!g_file_test(*arg, G_FILE_TEST_IS_REGULAR)) continue;
     g_autoptr(GFile) file = g_file_new_for_commandline_arg(*arg);
     g_autofree gchar* path = g_file_get_path(file);
-    if (path != nullptr) paths.push_back(path);
+    if (path == nullptr || !g_file_test(path, G_FILE_TEST_IS_REGULAR)) continue;
+    paths.push_back(path);
   }
   return paths;
 }

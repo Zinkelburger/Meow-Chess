@@ -48,6 +48,9 @@ jobs:
       - name: Analyze
         run: flutter analyze lib test integration_test tools scripts
       - name: Architecture and documentation lint
+        # bash -e on every OS: Windows' default pwsh would only fail the step
+        # on the last command's exit code.
+        shell: bash
         run: |
           python scripts/test_lint.py
           python scripts/lint.py
@@ -115,6 +118,8 @@ jobs:
         run: flutter test test/infrastructure/artifact_file_test.dart test/infrastructure/artifact_save_test.dart test/infrastructure/event_save_test.dart test/infrastructure/file_access_test.dart
       - name: Compile the macOS application
         run: flutter build macos --debug
+      # Signed ad hoc, not unsigned: the App Sandbox entitlements only apply to
+      # a signed app, and the bookmark and publication paths differ inside it.
       - name: Test Foundation staging, publication and bookmarks
         env:
           MEOW_DATA_DIR: ${{ runner.temp }}/meow-native-tests
@@ -122,7 +127,7 @@ jobs:
           xcodebuild test -workspace macos/Runner.xcworkspace -scheme Runner
           -configuration Debug -destination 'platform=macOS'
           -resultBundlePath artifacts/macos-publication.xcresult
-          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
       - uses: actions/upload-artifact@v4
         if: always()
         with:

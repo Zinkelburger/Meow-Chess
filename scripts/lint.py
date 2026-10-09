@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import os
 import subprocess
+import xml.etree.ElementTree as ElementTree
 
 root = Path(__file__).resolve().parent.parent
 
@@ -44,6 +45,45 @@ def release_issues(root, ref=''):
         issues.append('The release version exceeds the ten-character DBF H_PROGRAM field')
     if ref.startswith('refs/tags/') and ref != 'refs/tags/v' + version:
         issues.append(f'Release tag {ref} does not match package version {version}')
+    metainfo = root / 'packaging/flatpak/org.meowchess.meow_chess.metainfo.xml'
+    try:
+        # AppStream lists releases newest first; software centers show that one.
+        newest = ElementTree.parse(metainfo).getroot().find('releases/release')
+    except (OSError, ElementTree.ParseError):
+        newest = None
+    if newest is None:
+        issues.append(f'Could not read the newest release in {metainfo.relative_to(root)}')
+    elif newest.get('version') != version:
+        issues.append(f'Newest metainfo release {newest.get("version")} does not match package version {version}')
+    return issues
+
+
+# Copied verbatim from elsewhere (a font license, a saved web page) or written
+# by a tool, so their whitespace is not ours to fix.
+WHITESPACE_EXEMPT = [
+    ':(exclude,glob)assets/fonts/LICENSE-*',
+    ':(exclude,glob)test/fixtures/**/*.html',
+    ':(exclude,glob).impeccable/**',
+]
+
+
+def whitespace_issues(root):
+    """Whitespace errors in every tracked file, not only uncommitted edits.
+
+    A plain `git diff --check` compares the working tree to the index, which on
+    a fresh CI checkout is nothing at all; diffing against the empty tree checks
+    the whole working tree and index instead.
+    """
+    empty_tree = subprocess.run(
+        ['git', 'hash-object', '-t', 'tree', '--stdin'], cwd=root, input='',
+        capture_output=True, text=True, check=True).stdout.strip()
+    issues = []
+    for args in [[empty_tree], ['--cached', empty_tree]]:
+        result = subprocess.run(
+            ['git', 'diff', '--check', *args, '--', '.', *WHITESPACE_EXEMPT],
+            cwd=root, capture_output=True, text=True)
+        if result.returncode != 0:
+            issues.append(result.stdout.strip() or result.stderr.strip())
     return issues
 
 
@@ -62,7 +102,7 @@ def main():
             issues.append(f'Duplicate {label} IDs')
     if set(req_ids) & set(cap_ids):
         issues.append('Catalog namespaces overlap')
-    subprocess.run(['git', 'diff', '--check'], cwd=root, check=True)
+    issues += whitespace_issues(root)
     if issues:
         raise SystemExit('\n'.join(issues))
     print('PASS: domain boundaries, application boundaries, local links, requirement IDs, release version, whitespace')

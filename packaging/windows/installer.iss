@@ -24,8 +24,9 @@
 #define AppName "Meow Chess"
 #define AppExe "meow_chess.exe"
 #define BundleDir "..\..\build\windows\x64\runner\Release"
-; Held by every running copy (windows/runner/single_instance.cpp).
-#define InstanceMutex "Local\MeowChess.Instance"
+; Running is held by every running copy (windows/runner/single_instance.cpp),
+; Instance by the one that owns the session, which is all older builds hold.
+#define InstanceMutex "Local\MeowChess.Instance,Local\MeowChess.Running"
 
 ; File version resources take numbers only: 1.2.0-rc1 is 1.2.0 there, as in
 ; the app's own --build-name.

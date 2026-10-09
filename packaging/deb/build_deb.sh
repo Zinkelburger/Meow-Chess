@@ -12,6 +12,10 @@ BUNDLE="${2:-build/linux/x64/release/bundle}"
 OUT="${3:-dist}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# A dash would split 1.2.0-rc1 into upstream 1.2.0 and Debian revision rc1,
+# which dpkg orders *after* 1.2.0. 1.2.0~rc1 sorts before it, as in rpm.
+DEB_VERSION="${VERSION//-/\~}"
+
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 "$ROOT/packaging/stage_linux.sh" "$BUNDLE" "$STAGE"
@@ -21,7 +25,7 @@ install -d "$STAGE/DEBIAN"
 INSTALLED_KB="$(du -sk "$STAGE" | cut -f1)"
 cat > "$STAGE/DEBIAN/control" <<CONTROL
 Package: meow-chess
-Version: $VERSION
+Version: $DEB_VERSION
 Section: games
 Priority: optional
 Architecture: amd64

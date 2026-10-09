@@ -102,10 +102,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $dir = Join-Path $env:RUNNER_TEMP 'previous-release'
-          gh release download --repo $env:GITHUB_REPOSITORY --pattern '*-windows-setup.exe' --dir $dir
+          $output = gh release download --repo $env:GITHUB_REPOSITORY --pattern '*-windows-setup.exe' --dir $dir 2>&1 | Out-String
           if ($LASTEXITCODE -ne 0) {
-            Write-Host '::notice::No previous Windows setup to upgrade from; testing a reinstall instead'
-            exit 0
+            # Only a missing release or asset means there is nothing to upgrade
+            # from; a network or auth failure must not quietly skip the upgrade.
+            if ($output -match 'release not found|no assets match') {
+              Write-Host '::notice::No previous Windows setup to upgrade from; testing a reinstall instead'
+              exit 0
+            }
+            Write-Host $output
+            throw "Could not download the previous release's Windows setup"
           }
           $setup = Get-ChildItem $dir -Filter '*-windows-setup.exe' | Select-Object -First 1
           Write-Host "Upgrading from $($setup.Name)"

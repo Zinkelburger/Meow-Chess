@@ -44,9 +44,20 @@ void WriteChoice(const wchar_t* choice) {
 // defer to; Windows still keeps a default the user picked themselves
 // (UserChoice) ahead of all of this.
 void RegisterMeowAssociation() {
-  wchar_t exe_buffer[MAX_PATH] = {};
-  if (::GetModuleFileNameW(nullptr, exe_buffer, MAX_PATH) == 0) return;
-  const std::wstring exe(exe_buffer);
+  // An install path past MAX_PATH would be silently truncated in a fixed
+  // buffer, so grow it until the whole path fits.
+  std::wstring exe(MAX_PATH, L'\0');
+  for (;;) {
+    DWORD length = ::GetModuleFileNameW(nullptr, &exe[0],
+                                        static_cast<DWORD>(exe.size()));
+    if (length == 0) return;
+    if (length < exe.size()) {
+      exe.resize(length);
+      break;
+    }
+    if (exe.size() >= 32768) return;
+    exe.resize(exe.size() * 2);
+  }
   const std::wstring open_command = L"\"" + exe + L"\" \"%1\"";
 
   SetString(kProgIdKey, nullptr, L"Meow Chess tournament");

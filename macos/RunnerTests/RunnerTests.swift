@@ -5,6 +5,12 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
+  // CI must exercise the sandboxed paths the shipped app takes, so it signs the
+  // test host (ad hoc) instead of building it unsigned.
+  func testHostRunsInsideTheAppSandbox() {
+    XCTAssertNotNil(ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"])
+  }
+
   func testFileAndFolderBookmarksSurviveStoreRecreation() throws {
     let manager = FileManager.default
     let directory = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -59,12 +65,42 @@ class RunnerTests: XCTestCase {
 
     let reopened = FileAccessBookmarks(defaults: defaults)
     defer { reopened.releaseAccess() }
-    XCTAssertEqual(Set(reopened.restore()), Set([
-      "/invalid-bookmark", "/invalid-value", missing.standardizedFileURL.path,
-    ]))
+    XCTAssertEqual(reopened.restore(), ["/invalid-bookmark"])
     XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "available")
-    // Keep unavailable bookmarks for a later startup when a volume returns.
-    XCTAssertEqual(defaults.dictionary(forKey: FileAccessBookmarks.preferenceKey)?.count, 4)
+    // A file deleted from a disk that is present is forgotten, as is an entry
+    // that is not bookmark data; a bookmark that cannot be read is kept, like
+    // one on a disk that is unplugged, for a later startup.
+    let remaining = try XCTUnwrap(defaults.dictionary(forKey: FileAccessBookmarks.preferenceKey))
+    XCTAssertEqual(Set(remaining.keys), Set([file.standardizedFileURL.path, "/invalid-bookmark"]))
+    XCTAssertEqual(reopened.restore(), ["/invalid-bookmark"])
+  }
+
+  func testMovedFileBookmarkFollowsTheFile() throws {
+    let manager = FileManager.default
+    let directory = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: directory) }
+    let file = directory.appendingPathComponent("before.meow")
+    let moved = directory.appendingPathComponent("after.meow")
+    try Data("moved".utf8).write(to: file)
+    let suite = "meow.bookmark-tests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let original = FileAccessBookmarks(defaults: defaults)
+    try original.remember(file)
+    original.releaseAccess()
+    try manager.moveItem(at: file, to: moved)
+
+    let reopened = FileAccessBookmarks(defaults: defaults)
+    defer { reopened.releaseAccess() }
+    XCTAssertEqual(reopened.restore(), [])
+    let bookmarks = try XCTUnwrap(defaults.dictionary(forKey: FileAccessBookmarks.preferenceKey))
+    // Compared without symlinks: a resolved URL may come back as /private/var.
+    XCTAssertEqual(
+      bookmarks.keys.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path },
+      [moved.resolvingSymlinksInPath().path])
+    XCTAssertEqual(reopened.restore(), [])
+    XCTAssertEqual(try String(contentsOf: moved, encoding: .utf8), "moved")
   }
 
   func testNativeArtifactCreationAndReplacement() throws {
