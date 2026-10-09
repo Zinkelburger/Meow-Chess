@@ -3,6 +3,7 @@ import 'dart:math';
 import 'fixed_schedule.dart';
 import 'model.dart';
 import 'swiss_pairing.dart';
+import 'us_chess.dart';
 
 export 'fixed_schedule.dart';
 export 'swiss_pairing.dart'
@@ -20,11 +21,12 @@ List<int> quadGroupSizes(int n) {
       : [...List.filled((n - 4 - remainder) ~/ 4, 4), 4 + remainder];
 }
 
-/// Quad seeding order: rating high to low, then name, then id.
+/// Quad seeding order: rating high to low, then name (ignoring case and
+/// accents), then id.
 int quadOrder(Player a, Player b) {
   final c = b.rating.compareTo(a.rating);
   if (c != 0) return c;
-  final n = a.name.compareTo(b.name);
+  final n = compareNames(a.name, b.name);
   return n != 0 ? n : a.id.compareTo(b.id);
 }
 

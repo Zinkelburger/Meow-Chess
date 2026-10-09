@@ -201,6 +201,7 @@ def rehearse(folder, output):
             date = h['H_BEG_DATE']
             metadata = dict(name=h['H_NAME'], date=f'{date[:4]}-{date[4:6]}-{date[6:]}',
                             timeControl=sections[0]['S_TIMECTL'], tdId=h['H_CTD_ID'],
+                            assistantTdId=h.get('H_ATD_ID', ''), otherTdIds=h.get('H_OTHER_TD', ''),
                             affiliateId=h['H_AFF_ID'], city=h['H_CITY'], state=h['H_STATE'], zip=h['H_ZIPCODE'],
                             practice=False, notes='LOCAL ARCHIVE REHEARSAL ONLY. Not submitted. Metadata copied from the supplied DBF header.')
             client.call('create_event', path=f'{slug}.meow', **metadata)

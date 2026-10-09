@@ -42,8 +42,12 @@ class SwissProposal {
 
 /// Everything the engine knows about one entrant. Scores are half points.
 class _Card {
-  _Card(this.player, this.rating);
+  _Card(this.player, this.rating, this.number);
   final Player player;
+
+  /// The pairing number: the player's position on the section's list
+  /// (28B), which breaks rating ties the way numbered pairing cards do.
+  final int number;
   String get id => player.id;
   String get name => player.name;
 
@@ -220,7 +224,8 @@ List<_Card> _cards(
   final byId = <String, _Card>{};
   for (final id in available) {
     final p = event.player(id);
-    byId[id] = _Card(p, p.effectivePairingRating)
+    final number = section.players.indexOf(id);
+    byId[id] = _Card(p, p.effectivePairingRating, number < 0 ? 1 << 20 : number)
       ..points = points[id] ?? 0
       ..score = points[id] ?? 0;
   }
@@ -249,6 +254,9 @@ List<_Card> _cards(
           byId[b.player]
             ?..hadFullBye = true
             ..fullByes += 1;
+        } else if (b.points > 0) {
+          // 28L4: a half-point bye already taken.
+          byId[b.player]?.halfBye = true;
         }
       }
       for (final g in r.games) {
@@ -257,8 +265,12 @@ List<_Card> _cards(
         if (!g.outcome.played && g.pairingAssumption == null) continue;
         meet(g.white, g.black);
         meet(g.black, g.white);
-        byId[g.white]?.colors.add((r.number, 1));
-        byId[g.black]?.colors.add((r.number, -1));
+        // A double-game round gives both colors, so it carries no color
+        // history (and a double-game section pairs without color goals).
+        if (!s.doubleGames && !section.doubleGames) {
+          byId[g.white]?.colors.add((r.number, 1));
+          byId[g.black]?.colors.add((r.number, -1));
+        }
         // The earlier entry's opponents carry over to the re-entry.
         for (final (me, opp) in [(g.white, g.black), (g.black, g.white)]) {
           for (final entry in earlier.entries) {
@@ -273,8 +285,8 @@ List<_Card> _cards(
   }
   for (final c in byId.values) {
     c.colors.sort((a, b) => a.$1.compareTo(b.$1));
-    // 28L4: a half-point bye taken or committed to, in any round.
-    c.halfBye = c.player.byes.values.any((v) => v > 0);
+    // 28L4: a half-point bye committed to for a later round.
+    c.halfBye = c.halfBye || c.player.byes.values.any((v) => v > 0);
   }
   return available.map((id) => byId[id]!).toList();
 }
@@ -307,14 +319,14 @@ void _acceleration(_Rules rules, List<_Card> playing, List<String> out) {
 
 int _byRank(_Card a, _Card b) {
   final s = b.score.compareTo(a.score);
-  if (s != 0) return s;
-  final r = b.rating.compareTo(a.rating);
-  return r != 0 ? r : a.id.compareTo(b.id);
+  return s != 0 ? s : _byRating(a, b);
 }
 
 int _byRating(_Card a, _Card b) {
   final r = b.rating.compareTo(a.rating);
-  return r != 0 ? r : a.id.compareTo(b.id);
+  if (r != 0) return r;
+  final n = a.number.compareTo(b.number);
+  return n != 0 ? n : a.id.compareTo(b.id);
 }
 
 /// 28L2–28L5: who may take the full-point bye, best candidate first, each
@@ -345,10 +357,12 @@ List<(_Card, String)> _byeCandidates(
         eligible.add(c);
       }
     }
-    final rated = eligible.where((c) => !c.unrated).toList()
-      ..sort((a, b) => a.rating.compareTo(b.rating));
-    final recent = eligible.where((c) => c.unrated && !c.isNew).toList();
-    final fresh = eligible.where((c) => c.isNew).toList();
+    // Lowest rank first: lowest rating, then the highest pairing number.
+    int lowestFirst(_Card a, _Card b) => _byRating(b, a);
+    final rated = eligible.where((c) => !c.unrated).toList()..sort(lowestFirst);
+    final recent = eligible.where((c) => c.unrated && !c.isNew).toList()
+      ..sort(lowestFirst);
+    final fresh = eligible.where((c) => c.isNew).toList()..sort(lowestFirst);
     for (final c in rated) {
       result.add((
         c,
@@ -467,12 +481,30 @@ List<_Board> _pairField(
   var floaters = <_Card>[];
   final notes = <String>[];
   try {
-    for (var gi = 0; gi < groups.length; gi++) {
+    // When a lower group cannot be paired, the group above sends one more
+    // player down (29D2) and pairing resumes from there.
+    final extra = <int, int>{};
+    final saved = <int, (int, List<_Card>, int)>{};
+    var gi = 0, retries = 0;
+    while (gi < groups.length) {
+      saved[gi] = (boards.length, [...floaters], notes.length);
       final below = groups.skip(gi + 1).expand((g) => g).toList();
       final ctx = _GroupContext(rules, maxMeetings, groups[gi], below);
-      final plan = ctx.pair(floaters, notes);
-      boards.addAll(plan.boards);
-      floaters = plan.leftover;
+      try {
+        final plan = ctx.pair(floaters, notes, extraDrops: extra[gi] ?? 0);
+        boards.addAll(plan.boards);
+        floaters = plan.leftover;
+        gi++;
+      } on _Failure {
+        if (gi == 0 || ++retries > 12 || (extra[gi - 1] ?? 0) >= 3) rethrow;
+        extra[gi - 1] = (extra[gi - 1] ?? 0) + 1;
+        extra.removeWhere((k, _) => k >= gi);
+        final (boardCount, savedFloaters, noteCount) = saved[gi - 1]!;
+        boards.removeRange(boardCount, boards.length);
+        notes.removeRange(noteCount, notes.length);
+        floaters = savedFloaters;
+        gi--;
+      }
     }
     if (floaters.isNotEmpty) {
       throw _Failure(
@@ -491,6 +523,7 @@ List<_Board> _pairField(
     out.add(
       'The score groups could not be paired in order (${f.message}); this round uses the closest legal pairing found by search, without color switches (29D2, 29E5).',
     );
+    out.addAll(notes.map((n) => 'Attempted before the search: $n'));
     return fallback;
   }
 }
@@ -609,10 +642,14 @@ class _GroupContext {
     return go(sorted);
   }
 
-  _Plan pair(List<_Card> floaters, List<String> out) {
+  _Plan pair(List<_Card> floaters, List<String> out, {int extraDrops = 0}) {
     // Odd players from above are paired first, the highest-ranked first.
     final sortedFloaters = [...floaters]..sort(_byRank);
-    final best = _bestPlan(sortedFloaters, lookAhead: true);
+    final best = _bestPlan(
+      sortedFloaters,
+      lookAhead: true,
+      extraDrops: extraDrops,
+    );
     out.addAll(best.notes);
     return best;
   }
@@ -620,8 +657,17 @@ class _GroupContext {
   /// Compares the default odd player (29D1a) with alternatives within the
   /// transposition limits (29E7 example 5), judging each by the colors of
   /// this group and the next.
-  _Plan _bestPlan(List<_Card> floaters, {required bool lookAhead}) {
-    final base = _planWith(floaters, forcedOdd: null, notes: []);
+  _Plan _bestPlan(
+    List<_Card> floaters, {
+    required bool lookAhead,
+    int extraDrops = 0,
+  }) {
+    final base = _planWith(
+      floaters,
+      forcedOdd: null,
+      notes: [],
+      extraDrops: extraDrops,
+    );
     if (!lookAhead || base.leftover.isEmpty || next == null) return base;
     final odd = base.leftover.last;
     if (!members.contains(odd)) return base;
@@ -640,12 +686,21 @@ class _GroupContext {
       if (diff > 200 && !odd.unrated && !rules.has('29E5h')) continue;
       final _Plan plan;
       try {
-        plan = _planWith(floaters, forcedOdd: alt, notes: []);
+        plan = _planWith(
+          floaters,
+          forcedOdd: alt,
+          notes: [],
+          extraDrops: extraDrops,
+        );
       } on _Failure {
         continue;
       }
       final altNext = _nextPlan(plan.leftover);
       if (altNext == null) continue;
+      if (plan.leftover.length > base.leftover.length ||
+          altNext.leftover.length > (baseNext?.leftover.length ?? 0)) {
+        continue; // 29D2: colors never justify extra drop-downs.
+      }
       final total = plan.penalty + altNext.penalty;
       // 29E5c: the switch of odd players is measured by the smaller of the
       // two differences: the players switched, or the partners they trade
@@ -658,8 +713,10 @@ class _GroupContext {
           partnerOfAlt != partnerOfOdd) {
         cost = _min(cost, (partnerOfAlt.rating - partnerOfOdd.rating).abs());
       }
+      // 29D1a makes the lowest-rated player the odd player "ordinarily";
+      // another choice for colors stays within the 80-point rule.
       final removedStrong = baseTotal - total >= 2;
-      final limit = rules.limitFor(removedStrong ? 2 : 1);
+      final limit = rules.limitFor(1);
       if (cost > limit && !odd.unrated && !alt.unrated) continue;
       final planCost = _max(_max(plan.cost, altNext.cost), cost);
       final better =
@@ -709,6 +766,7 @@ class _GroupContext {
     List<_Card> floaters, {
     required _Card? forcedOdd,
     required List<String> notes,
+    int extraDrops = 0,
   }) {
     var pool = [...members];
     final boards = <_Board>[];
@@ -722,10 +780,13 @@ class _GroupContext {
       final candidates = [...pool]
         ..sort(_byRating)
         ..retainWhere((m) => legal(f, m, teamsBlocked: belowPlusTwo));
+      // The rest of the field, including floaters still to be placed and
+      // those that already dropped further, must stay pairable.
       final others = floaters.skip(floaters.indexOf(f) + 1).toList();
       bool completes(_Card m) => matchable([
         ...pool.where((x) => x != m),
         ...others,
+        ...leftover,
         ...below,
       ], teamsBlocked: false);
       _Card? chosen;
@@ -755,6 +816,9 @@ class _GroupContext {
           if (diff > limit && !m.unrated && !chosen.unrated) break;
           if (m.due == f.due && m.due != 0) continue;
           if (!completes(m)) continue;
+          // 29D2: a switch for colors must not force extra drop-downs.
+          final rest = pool.where((x) => x != m).toList();
+          if (!matchable(rest, spare: rest.length.isOdd ? 1 : 0)) continue;
           opponent = m;
           cost = cost > diff ? cost : diff;
           note =
@@ -820,6 +884,31 @@ class _GroupContext {
       }
       notes.add(
         '${drop.name} (${drop.rating}) drops from the $label: its members have already met or are restricted (27A1, 29D).',
+      );
+      pool.remove(drop);
+      leftover.add(drop);
+    }
+
+    // 29D2: a lower group that could not be paired asked for more players
+    // from here; the lowest-rated who can play below go first.
+    for (var k = 0; k < extraDrops; k++) {
+      if (next == null) throw _Failure('the $label has no group below');
+      final order = [...pool]..sort((a, b) => a.rating.compareTo(b.rating));
+      final drop =
+          [
+            ...order.where((c) => !c.unrated),
+            ...order.where((c) => c.unrated),
+          ].where((c) {
+            if (c == forcedOdd) return false;
+            final rest = pool.where((x) => x != c).toList();
+            return below.any((m) => legal(c, m, teamsBlocked: false)) &&
+                matchable(rest, spare: rest.length.isOdd ? 1 : 0);
+          }).firstOrNull;
+      if (drop == null) {
+        throw _Failure('the $label cannot send another player down');
+      }
+      notes.add(
+        '${drop.name} (${drop.rating}) drops from the $label so the groups below can be paired (29D2).',
       );
       pool.remove(drop);
       leftover.add(drop);

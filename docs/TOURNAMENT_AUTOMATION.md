@@ -113,7 +113,13 @@ python3 -m venv /tmp/meow-boylston-venv
 scripts/ci.sh with -- /tmp/meow-boylston-venv/bin/python scripts/rehearse_boylston.py \
   "$HOME/Downloads/Sample Boylston Tournaments" artifacts/new-boylston-run
 python3 scripts/rehearse_synthetic.py artifacts/new-synthetic-run
+dart run tools/compare_pairings.dart artifacts/new-boylston-run/artifacts/new-boylston-run/*.meow
 ```
+
+The last command re-pairs every posted Swiss round with the engine and prints,
+per round, how many boards, colors and byes match the historical pairing and
+the engine's explanation for each board that differs. Its findings are
+summarized in [the Boylston rehearsal](BOYLSTON_REHEARSAL.md).
 
 Output directories must not already exist. The harness inventories empty HTML,
 selects completed snapshots using roster counts, checks HTML checkpoints,

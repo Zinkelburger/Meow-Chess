@@ -1,5 +1,53 @@
 # Boylston tournament rehearsal — October 3, 2026
 
+**Pairing comparison (2026-10-09):** with the US Chess Swiss engine
+(`uscf-swiss-29-v1`) in place, `tools/compare_pairings.dart` re-paired every
+posted Swiss round of the seven replayed events from the position before that
+round (the same field, requested byes and withdrawals) and compared the result
+with what SwissSys posted:
+
+```sh
+dart run tools/compare_pairings.dart artifacts/<rehearsal-run>/artifacts/<rehearsal-run>/*.meow
+```
+
+Over the 49 Swiss rounds (240 boards) the engine reproduced 27 rounds exactly
+and 172 of the 240 boards; 134 of those 172 had the same colors, and 13 of the
+16 full-point byes went to the same player. Every difference was read against
+the rulebook; none is a rule violation by the engine, and the report lists each
+one with the engine's own explanation. The recurring causes:
+
+- **Ladders** (April and May, `G45`/`G90`) are not Swiss-paired at all, so
+  their rounds are expected to differ and are excluded from the counts above.
+- **Late entrants:** SwissSys paired a round-1 field of 28 and added two late
+  entrants as their own board; given all 30 at once the engine splits the halves
+  at a different place (Spring Festival Open round 1). Both follow 28J.
+- **Rating ties and unrated players** are ordered by pairing number (the
+  section list), which now matches SwissSys where it mattered.
+- **Color switches within the limits:** the engine applies the 29E5e
+  preference (a transposition inside 80 points beats an interchange; otherwise
+  the smaller switch), while SwissSys sometimes made the larger transposition
+  (Rated Friday Night Blitz round 4, Tornado Open round 3).
+- **Odd-player choice:** the engine drops the lowest-rated rated player
+  (29D1a) where SwissSys dropped an unrated player or a higher-rated one
+  (Blitz round 5, Spring Festival U1850 round 5).
+- **Byes:** the engine never gives the bye to a player who already had a
+  half-point bye (28L4) or to anyone outside the lowest score group (28L2);
+  Tornado #147 U1800 rounds 3–4 gave it to a player on 1 point instead of the
+  player on 0, which reads as a director's choice.
+- **One historical repeat:** Blitz round 6 paired Kai Solter and Vikram
+  Manisankar, who had met in round 3; the engine refuses that pairing (27A1).
+
+The comparison fixed four engine defects before the counts above were taken:
+double-game rounds no longer carry color history, a floater's color switch
+may not force extra drop-downs (29D2), a lower group that cannot be paired now
+pulls one more player from the group above instead of falling back to a
+global search, and half-point byes recorded in earlier rounds count for 28L4.
+The archive's DBF exports were re-run the same day with the same result as
+below (zero detail differences in every single-game section; the double-game
+sections differ only in how the two legs are serialized, which US Chess
+accepts either way).
+
+
 **Second follow-up (same day):** all seven events now export as one package
 each, including Rated Friday Night Blitz and the May Ladder double-game section.
 Compared with what US Chess actually rated (public API), Meow's reports have no

@@ -96,8 +96,10 @@ All four are fixed and covered by fixtures (`28J and 29E2 first round`, `S1`, `2
 ### 1.3 Still to do
 
 1. **TD review of full event replays** (DELIVERY.md exit criterion): the fixtures
-   cover the rulebook's examples, not a real event. The explanations make that
-   review possible from the posted round.
+   cover the rulebook's examples. `tools/compare_pairings.dart` re-pairs the
+   Boylston archive's 49 Swiss rounds and explains every board that differs from
+   SwissSys (27 rounds identical, 172 of 240 boards; see BOYLSTON_REHEARSAL.md).
+   A certified TD still needs to read those differences.
 2. 28R2 adjusted-rating acceleration, 28L2a, 29I/29J class pairings, 28I and the
    28S5 score carry-over.
 3. A selective re-pair of a started round (29G3).
