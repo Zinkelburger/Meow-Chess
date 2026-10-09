@@ -393,6 +393,25 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
       blocking: false,
     );
   }
+  // Chapter 10 (2B, 15B): an online event is rated under the online
+  // categories and never dual-rated; the 2C file carries no online marker.
+  if (e.online) {
+    bool dual(Section s) {
+      try {
+        return TimeControl.parse(s.effectiveTimeControl(e)).category ==
+            RatingCategory.dual;
+      } on TournamentException {
+        return false;
+      }
+    }
+
+    add(
+      'Online event: US Chess rates it under the online rating categories (Online Regular, Quick or Blitz), never dual-rated, and the 2C files have no online marker. Say so when uploading; the manifest and submission notes record it.'
+      '${sections.any(dual) ? ' A section here classifies as Dual, which is not available online (Chapter 10, 2B).' : ''}',
+      repairs: [event('online')],
+      blocking: false,
+    );
+  }
   for (final (_, p) in entrants) {
     if (p.state.length > 2) {
       add(
@@ -601,6 +620,7 @@ Map<String, dynamic> ratingManifest(Event e, Map<String, List<int>> files) {
     'status': 'UNVERIFIED — TD/provider validation required before submission',
     'ratingSystem': shared((tc) => tc.category!.reportSystemCode),
     'timeControl': shared((tc) => tc.uscfText),
+    'online': e.online,
     'sections': [
       for (final (section, tc) in controls)
         {

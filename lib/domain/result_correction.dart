@@ -81,6 +81,7 @@ class ResultCorrection {
     String reason = '',
     int? reopenFrom,
     bool confirmedUnstarted = false,
+    bool? adjudicated,
   }) {
     if (reopenFrom != null &&
         (!canReopenFrom(reopenFrom) || !confirmedUnstarted)) {
@@ -106,6 +107,10 @@ class ResultCorrection {
                                         ? g
                                         : g.copy(
                                             outcome: outcome,
+                                            // Rule 18G: an adjudicated result
+                                            // stays marked until unmarked.
+                                            adjudicated:
+                                                adjudicated ?? g.adjudicated,
                                             // The note is optional; an empty
                                             // one keeps what the game had.
                                             note: reason.trim().isEmpty

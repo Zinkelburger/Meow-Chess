@@ -91,7 +91,13 @@ class RatingsApi {
         MemberLookupFailureKind.unavailable,
         'Could not reach US Chess. Check the connection and retry later.',
       );
-    } on SocketException {
+    } on TlsException {
+      // Often a hotel or venue Wi-Fi sign-in page intercepting the request.
+      throw const MemberLookupFailure(
+        MemberLookupFailureKind.unavailable,
+        'Could not reach US Chess securely. If this network has a sign-in page, sign in, then retry.',
+      );
+    } on IOException {
       throw const MemberLookupFailure(
         MemberLookupFailureKind.unavailable,
         'Could not reach US Chess. Check the connection and retry later.',

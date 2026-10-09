@@ -9,7 +9,8 @@ import 'package:printing/printing.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
-import '../domain/pairing.dart' show pairingFormat;
+import '../domain/pairing.dart';
+import '../domain/bye_policy.dart';
 import '../domain/us_chess.dart';
 import '../domain/standings.dart';
 import '../infrastructure/artifact_save.dart';
@@ -41,7 +42,9 @@ class DockController extends ChangeNotifier {
   void show(Object id, Widget? panel) {
     if (this.id == null) _returnFocus = FocusManager.instance.primaryFocus;
     this.id = id;
-    this.panel = panel;
+    this.panel = panel == null || tournament == null
+        ? panel
+        : _LivePanel(tournament: tournament!, child: panel);
     notifyListeners();
   }
 
@@ -57,6 +60,48 @@ class DockController extends ChangeNotifier {
       }
     });
   }
+}
+
+/// The dock keeps one panel instance, and Flutter never rebuilds an
+/// identical widget on its own; rebuild it whenever the event changes so a
+/// docked panel never shows stale players, rounds or settings.
+class _LivePanel extends StatefulWidget {
+  const _LivePanel({required this.tournament, required this.child});
+  final Listenable tournament;
+  final Widget child;
+  @override
+  State<_LivePanel> createState() => _LivePanelState();
+}
+
+class _LivePanelState extends State<_LivePanel> {
+  @override
+  void initState() {
+    super.initState();
+    widget.tournament.addListener(changed);
+  }
+
+  @override
+  void didUpdateWidget(_LivePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.tournament != widget.tournament) {
+      oldWidget.tournament.removeListener(changed);
+      widget.tournament.addListener(changed);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.tournament.removeListener(changed);
+    super.dispose();
+  }
+
+  void changed() {
+    if (!mounted) return;
+    (context as Element).visitChildElements((panel) => panel.markNeedsBuild());
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class Dock extends InheritedNotifier<DockController> {
@@ -85,12 +130,16 @@ class FieldsPanel extends StatefulWidget {
     this.saveLabel = 'Save',
     this.controller,
     this.draftKey,
+    this.footer = const [],
     super.key,
   });
   final String title, saveLabel;
   final TournamentController? controller;
   final String? draftKey;
   final String? description;
+
+  /// Actions that belong with these fields but apply on their own.
+  final List<Widget> footer;
   final List<FieldSpec> fields;
   final Map<String, String> values;
 
@@ -229,16 +278,36 @@ class _FieldsPanelState extends State<FieldsPanel> {
                         ? null
                         : (v) => setState(() => text[f.key]!.text = v),
                   )
-                : TextField(
-                    key: ValueKey('field-${f.key}'),
-                    controller: text[f.key],
-                    autofocus: f == firstTextField,
-                    maxLines: f.lines,
-                    decoration: InputDecoration(
-                      labelText: f.label,
-                      alignLabelWithHint: f.lines > 1,
-                    ),
-                    onSubmitted: (_) => save(),
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        key: ValueKey('field-${f.key}'),
+                        controller: text[f.key],
+                        autofocus: f == firstTextField,
+                        maxLines: f.lines,
+                        decoration: InputDecoration(
+                          labelText: f.label,
+                          alignLabelWithHint: f.lines > 1,
+                        ),
+                        onChanged: f.note == null
+                            ? null
+                            : (_) => setState(() {}),
+                        onSubmitted: (_) => save(),
+                      ),
+                      if (f.note?.call(text[f.key]!.text) case final note?)
+                        Padding(
+                          key: ValueKey('field-note-${f.key}'),
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            note,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
           ),
         if (error != null)
@@ -263,6 +332,7 @@ class _FieldsPanelState extends State<FieldsPanel> {
             ],
           ),
         ),
+        ...widget.footer,
       ],
     );
   }
@@ -273,9 +343,20 @@ Map<String, String> _sectionSettings(Section section) => {
   'format': section.format.name,
   'sideGames': '${section.sideGames}',
   'doubleGames': '${section.doubleGames}',
+  'rrTable': section.rrTable,
+  'doubleCycle': '${section.doubleCycle}',
+  'accelerated': section.accelerated,
+  'avoidTeammates': '${section.avoidTeammates}',
+  'variations': (section.variations.toList()..sort()).join(', '),
   'rounds': '${section.plannedRounds}',
   'board': '${section.boardStart}',
   'timeControl': section.timeControl,
+  'lastHalfByeRound':
+      '${ByePolicy.fromJson(section.byeRules).lastHalfByeRound}',
+  'maxHalfByes': '${ByePolicy.fromJson(section.byeRules).maxHalfByes}',
+  'byeDeadline': '${ByePolicy.fromJson(section.byeRules).deadlineMinutes}',
+  'irrevocableFromRound':
+      '${ByePolicy.fromJson(section.byeRules).irrevocableFromRound}',
 };
 
 List<FieldSpec> _sectionFields({bool locked = false}) => [
@@ -297,9 +378,61 @@ List<FieldSpec> _sectionFields({bool locked = false}) => [
     checkbox: true,
     enabled: !locked,
   ),
+  // Rule 30A / 30F: round robins only; a Swiss ignores both.
+  FieldSpec(
+    'rrTable',
+    'Round-robin table',
+    enabled: !locked,
+    options: const {
+      '': 'Circle method',
+      crenshawTable: 'Crenshaw-Berger (Chapter 12)',
+    },
+  ),
+  FieldSpec(
+    'doubleCycle',
+    'Double round robin: second cycle with colors reversed',
+    checkbox: true,
+    enabled: !locked,
+  ),
+  // Rules 28R1, 28N1 and the announced 29E variations: Swiss only.
+  const FieldSpec(
+    'accelerated',
+    'Accelerated pairings (rule 28R)',
+    options: {'': 'None', 'addedScore': 'Added score, rounds 1–2 (28R1)'},
+  ),
+  const FieldSpec(
+    'avoidTeammates',
+    'Keep team-mates apart, plus-two method (rule 28N1)',
+    checkbox: true,
+  ),
+  const FieldSpec(
+    'variations',
+    'Announced pairing variations (29E4a, 29E4b, 29E4d, 29E5h)',
+  ),
   const FieldSpec('rounds', 'Number of rounds', required: true),
   const FieldSpec('board', 'First board number', required: true),
-  const FieldSpec('timeControl', 'Time control (blank uses event default)'),
+  FieldSpec(
+    'timeControl',
+    'Time control (blank uses event default)',
+    note: delayHint,
+  ),
+  // Rule 22C: the announced half-point bye policy.
+  const FieldSpec(
+    'lastHalfByeRound',
+    'Last round for half-point byes (0 = any round, rule 22C1)',
+  ),
+  const FieldSpec(
+    'maxHalfByes',
+    'Half-point byes per player (0 = no limit, rule 22C3)',
+  ),
+  const FieldSpec(
+    'byeDeadline',
+    'Bye requests close, minutes before the round (rule 22C2)',
+  ),
+  const FieldSpec(
+    'irrevocableFromRound',
+    'Byes irrevocable from round (0 = never, rule 22C4)',
+  ),
 ];
 
 /// Validated values from the section fields.
@@ -308,9 +441,15 @@ List<FieldSpec> _sectionFields({bool locked = false}) => [
   Format format,
   bool sideGames,
   bool doubleGames,
+  String rrTable,
+  bool doubleCycle,
+  String accelerated,
+  bool avoidTeammates,
+  Set<String> variations,
   int rounds,
   int board,
   String timeControl,
+  Json byeRules,
 })
 _readSection(Map<String, String> v, {String previousControl = ''}) {
   final rounds = int.tryParse(v['rounds']!.trim()),
@@ -329,14 +468,62 @@ _readSection(Map<String, String> v, {String previousControl = ''}) {
   if (control.isNotEmpty && control != previousControl) {
     TimeControl.parse(control);
   }
+  int byeNumber(String key, String label, {int blank = 0}) {
+    final text = v[key]?.trim() ?? '';
+    final n = text.isEmpty ? blank : int.tryParse(text);
+    if (n == null || n < 0 || n > 999) {
+      throw TournamentException('$label must be a whole number.');
+    }
+    return n;
+  }
+
+  final variations = {
+    for (final code in (v['variations'] ?? '').split(RegExp(r'[,\s]+')))
+      if (code.trim().isNotEmpty) code.trim(),
+  };
+  for (final code in variations) {
+    if (!swissVariations.contains(code)) {
+      throw TournamentException(
+        'Unknown pairing variation "$code". Use ${swissVariations.join(', ')}.',
+      );
+    }
+  }
+  final policy = ByePolicy(
+    lastHalfByeRound: byeNumber(
+      'lastHalfByeRound',
+      'Last round for half-point byes',
+    ),
+    maxHalfByes: byeNumber('maxHalfByes', 'Half-point byes per player'),
+    deadlineMinutes: byeNumber(
+      'byeDeadline',
+      'The bye request deadline',
+      blank: 60,
+    ),
+    irrevocableFromRound: byeNumber(
+      'irrevocableFromRound',
+      'Byes irrevocable from round',
+    ),
+  );
+  if (policy.lastHalfByeRound > rounds ||
+      policy.irrevocableFromRound > rounds) {
+    throw TournamentException(
+      'Bye policy rounds cannot exceed the $rounds planned rounds.',
+    );
+  }
   return (
     name: v['name']!.trim(),
     format: Format.values.byName(v['format']!),
     sideGames: v['sideGames'] == 'true',
     doubleGames: v['doubleGames'] == 'true',
+    rrTable: v['rrTable'] ?? '',
+    doubleCycle: v['doubleCycle'] == 'true',
+    accelerated: v['accelerated'] ?? '',
+    avoidTeammates: v['avoidTeammates'] == 'true',
+    variations: variations,
     rounds: rounds,
     board: board,
     timeControl: control,
+    byeRules: policy.toJson(),
   );
 }
 
@@ -356,15 +543,69 @@ Widget sectionSettingsPanel(
     return section;
   }
 
-  final s = currentSection();
+  // Built on each rebuild of the dock, so the title and the format lock
+  // follow the section as rounds are posted or undone.
+  return Builder(
+    builder: (context) {
+      final s = c.event!.sections.where((s) => s.id == sectionId).firstOrNull;
+      if (s == null) {
+        return SidePanel(
+          key: ValueKey('section-settings-$sectionId'),
+          title: 'Section removed',
+          onClose: onClose,
+          children: const [Text('This section no longer exists.')],
+        );
+      }
+      return _sectionSettingsFields(c, s, currentSection, onClose);
+    },
+  );
+}
+
+Widget _sectionSettingsFields(
+  TournamentController c,
+  Section s,
+  Section Function() currentSection,
+  VoidCallback onClose,
+) {
+  final sectionId = s.id;
+  // Rule 29K: a small Swiss with nearly everyone-plays-everyone rounds.
+  final smallSwiss =
+      s.format == Format.swiss &&
+      s.players.length >= 2 &&
+      s.players.length <= 6 &&
+      s.plannedRounds >= s.players.length - 1 &&
+      s.rounds.isEmpty;
   return FieldsPanel(
     key: ValueKey('section-settings-$sectionId'),
     controller: c,
     draftKey: 'draft-section-$sectionId',
     title: '${s.name} settings',
     description:
-        'Choose how this section plays. A new first board number applies from the next round.',
+        'Choose how this section plays. A new first board number applies from the next round.'
+        '${smallSwiss ? '\nRule 29K: a small Swiss with this many rounds can be run as a round robin; change the format before posting round 1.' : ''}',
     fields: _sectionFields(locked: s.rounds.isNotEmpty),
+    footer: [
+      if (s.format != Format.swiss && !s.sideGames && s.rounds.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Builder(
+              builder: (context) => OutlinedButton(
+                key: const ValueKey('draw-lots'),
+                onPressed: () {
+                  try {
+                    c.drawLots(sectionId);
+                  } catch (e) {
+                    showFailure(context, e);
+                  }
+                },
+                child: const Text('Draw lots for pairing numbers (30A)'),
+              ),
+            ),
+          ),
+        ),
+    ],
     values: _sectionSettings(s),
     currentValues: () => _sectionSettings(currentSection()),
     onClose: onClose,
@@ -374,7 +615,9 @@ Widget sectionSettingsPanel(
       if (current.rounds.isNotEmpty &&
           (n.format != current.format ||
               n.sideGames != current.sideGames ||
-              n.doubleGames != current.doubleGames)) {
+              n.doubleGames != current.doubleGames ||
+              n.rrTable != current.rrTable ||
+              n.doubleCycle != current.doubleCycle)) {
         throw const TournamentException(
           'Pairing format cannot change after rounds are posted.',
         );
@@ -384,22 +627,36 @@ Widget sectionSettingsPanel(
           '${current.rounds.length} rounds are already posted, so the section needs at least that many.',
         );
       }
+      final next = current.copy(
+        name: n.name,
+        format: n.format,
+        sideGames: n.sideGames,
+        doubleGames: n.doubleGames,
+        rrTable: n.rrTable,
+        doubleCycle: n.doubleCycle,
+        accelerated: n.accelerated,
+        avoidTeammates: n.avoidTeammates,
+        variations: n.variations,
+        plannedRounds: n.rounds,
+        boardStart: n.board,
+        timeControl: n.timeControl,
+        byeRules: n.byeRules,
+      );
+      if (next.rrTable == crenshawTable &&
+          next.format == Format.roundRobin &&
+          next.players.length > crenshawMaxPlayers) {
+        throw TournamentException(
+          'The Crenshaw-Berger tables cover 3 to $crenshawMaxPlayers players; this section has ${next.players.length}.',
+        );
+      }
+      if (doubleCycleProblem(next) case final problem?) {
+        throw TournamentException(problem);
+      }
       c.change(
-        'Edit section ${s.name}',
+        'Edit section ${current.name}',
         c.event!.copy(
           sections: [
-            for (final x in c.event!.sections)
-              x.id == s.id
-                  ? x.copy(
-                      name: n.name,
-                      format: n.format,
-                      sideGames: n.sideGames,
-                      doubleGames: n.doubleGames,
-                      plannedRounds: n.rounds,
-                      boardStart: n.board,
-                      timeControl: n.timeControl,
-                    )
-                  : x,
+            for (final x in c.event!.sections) x.id == current.id ? next : x,
           ],
         ),
       );
@@ -452,12 +709,19 @@ class _CombinePanelState extends State<CombinePanel> {
     super.dispose();
   }
 
-  void combine(Section source) {
+  void combine() {
     if (target == null) {
       setState(() => error = 'Choose the section to combine into.');
       return;
     }
     try {
+      // The roster as it is now, not as it was when the panel last built.
+      final source = widget.controller.event!.sections
+          .where((s) => s.id == widget.sectionId)
+          .firstOrNull;
+      if (source == null) {
+        throw const TournamentException('This section no longer exists.');
+      }
       widget.controller.movePlayers(
         source.players,
         target!,
@@ -522,7 +786,7 @@ class _CombinePanelState extends State<CombinePanel> {
           decoration: const InputDecoration(
             labelText: 'Reason (needed once rounds are played)',
           ),
-          onSubmitted: (_) => combine(source),
+          onSubmitted: (_) => combine(),
         ),
         if (error != null)
           Padding(
@@ -533,7 +797,7 @@ class _CombinePanelState extends State<CombinePanel> {
         Align(
           alignment: Alignment.centerLeft,
           child: FilledButton(
-            onPressed: others.isEmpty ? null : () => combine(source),
+            onPressed: others.isEmpty ? null : combine,
             child: const Text('Combine'),
           ),
         ),
@@ -555,10 +819,19 @@ class PrintPanel extends StatefulWidget {
     this.ceiling = 0,
     this.forPrizes = false,
     this.generate,
+    this.printing,
+    this.printNow = false,
     super.key,
   });
   final Event event;
   final TournamentController? controller;
+
+  /// The printing service; tests pass their own.
+  final RememberedPrinting? printing;
+
+  /// Starts printing as soon as the panel opens, as when a direct print
+  /// needs a printer chosen first.
+  final bool printNow;
   final ReportKind kind;
   final String? sectionId;
   final int? roundNumber;
@@ -590,6 +863,9 @@ class _PrintPreviewJob {
 
 class _PrintPanelState extends State<PrintPanel> {
   late _PrintPreviewJob preview = createPreview(widget.event);
+
+  /// Rule 28J TD TIP: a by-name list after each round's board table.
+  bool alphabetical = false;
   Event get snapshot => preview.event;
   bool printing = false;
   String? savedPath;
@@ -599,10 +875,21 @@ class _PrintPanelState extends State<PrintPanel> {
   _PrintPreviewJob createPreview(Event event) =>
       _PrintPreviewJob(event, generate(event));
 
+  /// Printers to choose from, shown in the panel while a print waits for
+  /// one; [choosing] completes with the TD's choice, or null for Cancel.
+  List<Printer>? printers;
+  Printer? printer;
+  Completer<Printer?>? choosing;
+
   @override
   void initState() {
     super.initState();
     widget.controller?.addListener(changed);
+    if (widget.printNow) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) printPreview();
+      });
+    }
   }
 
   void changed() {
@@ -612,7 +899,30 @@ class _PrintPanelState extends State<PrintPanel> {
   @override
   void dispose() {
     widget.controller?.removeListener(changed);
+    choosing?.complete(null);
+    choosing = null;
     super.dispose();
+  }
+
+  Future<Printer?> choosePrinter(List<Printer> available) {
+    if (!mounted) return Future.value(null);
+    choosing?.complete(null);
+    final choice = choosing = Completer<Printer?>();
+    setState(() {
+      printers = available;
+      printer =
+          available.where((p) => p.url == printer?.url).firstOrNull ??
+          available.where((p) => p.isDefault).firstOrNull ??
+          available.first;
+    });
+    return choice.future;
+  }
+
+  void finishChoice(Printer? chosen) {
+    final choice = choosing;
+    choosing = null;
+    setState(() => printers = null);
+    choice?.complete(chosen);
   }
 
   Future<Uint8List> generate(Event event) async {
@@ -631,6 +941,7 @@ class _PrintPanelState extends State<PrintPanel> {
       roundNumbers: widget.roundNumbers,
       ceiling: widget.ceiling,
       forPrizes: widget.forPrizes,
+      alphabetical: alphabetical,
       font: font,
       bold: bold,
     );
@@ -652,6 +963,8 @@ class _PrintPanelState extends State<PrintPanel> {
         job.event.name,
         changePrinter: changePrinter,
         canSend: canSend,
+        choose: choosePrinter,
+        printing: widget.printing,
       );
     } catch (e) {
       if (mounted) showFailure(context, e);
@@ -673,6 +986,11 @@ class _PrintPanelState extends State<PrintPanel> {
           ? await saveArtifact(
               'standings-r${e.revision}.csv',
               utf8.encode(standingsCsv(e, sectionId: widget.sectionId)),
+            )
+          : widget.kind == ReportKind.prizes
+          ? await saveArtifact(
+              'prizes-r${e.revision}.txt',
+              utf8.encode(prizeReport(e, sectionId: widget.sectionId)),
             )
           : await saveArtifact(
               'crosstable-r${e.revision}.txt',
@@ -698,10 +1016,13 @@ class _PrintPanelState extends State<PrintPanel> {
       ReportKind.packet || ReportKind.pairings => 'Pairing sheets',
       ReportKind.standings => 'Standings',
       ReportKind.crosstable => 'Crosstable',
+      ReportKind.prizes => 'Prizes',
+      ReportKind.conditions => 'Event conditions',
     };
     final ranking =
         widget.kind == ReportKind.standings ||
-        widget.kind == ReportKind.crosstable;
+        widget.kind == ReportKind.crosstable ||
+        widget.kind == ReportKind.prizes;
     final pairingSheet =
         widget.kind == ReportKind.packet || widget.kind == ReportKind.pairings;
     final scopedSections = snapshot.sections.where(
@@ -711,6 +1032,7 @@ class _PrintPanelState extends State<PrintPanel> {
               widget.roundNumbers!.containsKey(s.id)),
     );
     String scopeLabel(Section s) {
+      if (widget.kind == ReportKind.conditions) return 'Whole event';
       if (widget.kind == ReportKind.sections) {
         return '${s.players.length} ${s.players.length == 1 ? 'player' : 'players'}';
       }
@@ -759,6 +1081,10 @@ class _PrintPanelState extends State<PrintPanel> {
                                 value: ReportKind.crosstable,
                                 label: Text('Crosstable'),
                               ),
+                              ButtonSegment(
+                                value: ReportKind.prizes,
+                                label: Text('Prizes'),
+                              ),
                             ],
                             selected: {widget.kind},
                             onSelectionChanged: (kind) => showPrint(
@@ -783,40 +1109,77 @@ class _PrintPanelState extends State<PrintPanel> {
                           key: const ValueKey('print-scope'),
                         ),
                         const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: [
-                            FilledButton.icon(
-                              key: const ValueKey('print-preview'),
-                              onPressed: canPrint && !printing
-                                  ? printPreview
-                                  : null,
-                              icon: const Icon(Icons.print_outlined),
-                              label: Text(printing ? 'Printing…' : 'Print'),
-                            ),
-                            TextButton(
-                              onPressed: canPrint && !printing
-                                  ? () => printPreview(changePrinter: true)
-                                  : null,
-                              child: const Text('Choose printer…'),
-                            ),
-                          ],
-                        ),
+                        if (printers case final available?) ...[
+                          // The first print, or Choose printer…, asks here.
+                          PlainSelect<Printer?>(
+                            key: const ValueKey('print-printer'),
+                            label: 'Printer',
+                            value: printer,
+                            options: [
+                              for (final p in available)
+                                SelectOption(p, p.name),
+                            ],
+                            onChanged: (p) => setState(() => printer = p),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              FilledButton.icon(
+                                key: const ValueKey('print-to-printer'),
+                                onPressed: printer == null
+                                    ? null
+                                    : () => finishChoice(printer),
+                                icon: const Icon(Icons.print_outlined),
+                                label: const Text('Print'),
+                              ),
+                              TextButton(
+                                key: const ValueKey('print-cancel-printer'),
+                                onPressed: () => finishChoice(null),
+                                child: const Text('Cancel'),
+                              ),
+                            ],
+                          ),
+                        ] else
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              FilledButton.icon(
+                                key: const ValueKey('print-preview'),
+                                onPressed: canPrint && !printing
+                                    ? printPreview
+                                    : null,
+                                icon: const Icon(Icons.print_outlined),
+                                label: Text(printing ? 'Printing…' : 'Print'),
+                              ),
+                              TextButton(
+                                onPressed: canPrint && !printing
+                                    ? () => printPreview(changePrinter: true)
+                                    : null,
+                                child: const Text('Choose printer…'),
+                              ),
+                            ],
+                          ),
                         if (ranking) ...[
                           const SizedBox(height: 8),
                           Wrap(
                             spacing: 4,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              TextButton(
-                                key: const ValueKey('save-standings-csv'),
-                                onPressed: () => saveFile(csv: true),
-                                child: const Text('Save CSV'),
-                              ),
+                              if (widget.kind != ReportKind.prizes)
+                                TextButton(
+                                  key: const ValueKey('save-standings-csv'),
+                                  onPressed: () => saveFile(csv: true),
+                                  child: const Text('Save CSV'),
+                                ),
                               TextButton(
                                 key: const ValueKey('save-crosstable-text'),
                                 onPressed: () => saveFile(csv: false),
-                                child: const Text('Save text crosstable'),
+                                child: Text(
+                                  widget.kind == ReportKind.prizes
+                                      ? 'Save text prize report'
+                                      : 'Save text crosstable',
+                                ),
                               ),
                             ],
                           ),
@@ -826,6 +1189,22 @@ class _PrintPanelState extends State<PrintPanel> {
                               key: const ValueKey('print-saved'),
                             ),
                         ],
+                        if (pairingSheet)
+                          CheckboxListTile(
+                            key: const ValueKey('print-alphabetical'),
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: const Text('Also list each round by name'),
+                            value: alphabetical,
+                            onChanged: printing
+                                ? null
+                                : (v) {
+                                    alphabetical = v ?? false;
+                                    refresh();
+                                  },
+                          ),
                         if (widget.ceiling > 0)
                           Text('Prize class: Under ${widget.ceiling}'),
                         if (widget.forPrizes)
@@ -922,8 +1301,10 @@ void showPrint(
   int ceiling = 0,
   bool forPrizes = false,
   ReportKind kind = ReportKind.packet,
+  bool printNow = false,
+  DockController? dock,
 }) {
-  final dock = Dock.maybeOf(context);
+  dock ??= Dock.maybeOf(context);
   if (dock == null) return;
   // Freeze the round too: refreshing must not silently switch to a new round.
   final scoped = event.sections.where(
@@ -951,6 +1332,7 @@ void showPrint(
       },
       ceiling: ceiling,
       forPrizes: forPrizes,
+      printNow: printNow,
       onClose: dock.close,
     ),
   );
@@ -1145,42 +1527,25 @@ class _LookupPanelState extends State<LookupPanel> {
   }
 }
 
-/// First print chooses a device; subsequent prints use it directly.
+/// First print chooses a device, through [choose]; subsequent prints use
+/// it directly.
 Future<void> sendToPrinter(
   BuildContext context,
   Uint8List bytes,
   String name, {
+  required Future<Printer?> Function(List<Printer>) choose,
   bool changePrinter = false,
   bool Function()? canSend,
+  RememberedPrinting? printing,
 }) async {
   Object? preferenceError;
-  final success = await RememberedPrinting.shared.print(
+  final success = await (printing ?? RememberedPrinting.shared).print(
     bytes,
     name,
     changePrinter: changePrinter,
     canSend: canSend,
     onPreferenceError: (error) => preferenceError = error,
-    choose: (printers) async {
-      if (!context.mounted) return null;
-      return showDialog<Printer>(
-        context: context,
-        animationStyle: AnimationStyle.noAnimation,
-        builder: (context) => SimpleDialog(
-          title: const Text('Choose printer'),
-          children: [
-            for (final printer in printers)
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, printer),
-                child: Text(printer.name),
-              ),
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-          ],
-        ),
-      );
-    },
+    choose: choose,
   );
   if (context.mounted && success && preferenceError != null) {
     showFailure(
@@ -1201,6 +1566,8 @@ Future<void> printSheets(
   int ceiling = 0,
   bool forPrizes = false,
   ReportKind kind = ReportKind.sections,
+  DockController? dock,
+  RememberedPrinting? printing,
 }) async {
   try {
     final font = pw.Font.ttf(
@@ -1220,7 +1587,31 @@ Future<void> printSheets(
       font: font,
       bold: bold,
     );
-    if (context.mounted) await sendToPrinter(context, bytes, event.name);
+    if (!context.mounted) return;
+    await sendToPrinter(
+      context,
+      bytes,
+      event.name,
+      printing: printing,
+      // No printer remembered yet: choose one in the print panel, which
+      // prints as soon as it opens.
+      choose: (_) async {
+        if (context.mounted) {
+          showPrint(
+            context,
+            event,
+            sectionId: sectionId,
+            roundNumber: roundNumber,
+            ceiling: ceiling,
+            forPrizes: forPrizes,
+            kind: kind,
+            printNow: true,
+            dock: dock,
+          );
+        }
+        return null;
+      },
+    );
   } catch (e) {
     if (context.mounted) showFailure(context, e);
   }

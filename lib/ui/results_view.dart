@@ -83,6 +83,21 @@ class ResultsViewState extends State<ResultsView> {
   /// Restored read-only; a newly posted round resets the selection.
   int? selectedRound;
   bool showAllRounds = false;
+
+  /// The default view: a fixed quad schedule shows every round, while
+  /// Swiss sections beside it stay on their current round.
+  bool scheduleRounds = true;
+
+  /// Every board was entered; focus rests on the completion status.
+  bool allEntered = false;
+  final doneNode = FocusNode(debugLabel: 'all results entered');
+
+  /// A printable key that is not a result was typed; the legend says which
+  /// keys are.
+  bool invalidKey = false;
+
+  /// The one score box Tab enters the grid at.
+  String? entryBox;
   void showCrosstable() {
     final target = crosstableHeading.currentContext;
     if (target != null) Scrollable.ensureVisible(target);
@@ -110,7 +125,7 @@ class ResultsViewState extends State<ResultsView> {
   @override
   void initState() {
     super.initState();
-    showAllRounds = sections.any(hasFixedQuadSchedule);
+    showAllRounds = allQuads;
     roundSignature = signature();
     final saved = c.workspaceState.readMap(preference);
     if (c.workspaceState.read('pairings-missing-only') == null) {
@@ -122,6 +137,7 @@ class ResultsViewState extends State<ResultsView> {
     if (saved['signature'] == roundSignature) {
       selectedRound = saved['round'] as int?;
       showAllRounds = saved['allRounds'] == true;
+      scheduleRounds = saved['scheduleRounds'] != false;
       jump.text = saved['search'] as String? ?? '';
       activeBox = saved['box'] as String?;
     }
@@ -166,6 +182,9 @@ class ResultsViewState extends State<ResultsView> {
     (s) => widget.sectionId == null || s.id == widget.sectionId,
   );
 
+  bool get allQuads =>
+      sections.isNotEmpty && sections.every(hasFixedQuadSchedule);
+
   String signature() =>
       sections.map((s) => '${s.id}:${s.rounds.length}').join('|');
 
@@ -176,8 +195,9 @@ class ResultsViewState extends State<ResultsView> {
     // A round was posted or undone: go back to the current round.
     if (roundSignature.isNotEmpty && next != roundSignature) {
       selectedRound = null;
-      showAllRounds = sections.any(hasFixedQuadSchedule);
-      correcting = nudged = false;
+      showAllRounds = allQuads;
+      scheduleRounds = true;
+      correcting = nudged = allEntered = invalidKey = false;
       activeBox = null;
       jump.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -197,6 +217,7 @@ class ResultsViewState extends State<ResultsView> {
     for (final n in boxes.values) {
       n.dispose();
     }
+    doneNode.dispose();
     scroll.dispose();
     stackedScroll.dispose();
     jump.dispose();
@@ -211,6 +232,7 @@ class ResultsViewState extends State<ResultsView> {
         node.addListener(() {
           if (node.hasFocus) {
             activeBox = '$gameId-${white ? 'w' : 'b'}';
+            invalidKey = false;
             remember();
           }
         });
@@ -222,8 +244,14 @@ class ResultsViewState extends State<ResultsView> {
       ? s.rounds.lastOrNull
       : s.rounds.where((r) => r.number == selectedRound).firstOrNull;
 
+  /// Whether every round of [s] is on screen. A quad's fixed schedule never
+  /// turns a Swiss section beside it into an earlier round.
+  bool allRoundsOf(Section s) =>
+      showAllRounds ||
+      (scheduleRounds && selectedRound == null && hasFixedQuadSchedule(s));
+
   Iterable<Round> shownRounds(Section s) =>
-      showAllRounds ? s.rounds : [?shownRound(s)];
+      allRoundsOf(s) ? s.rounds : [?shownRound(s)];
 
   /// An earlier round, whose results change only while correcting.
   bool past(BoardRow row) =>
@@ -275,6 +303,7 @@ class ResultsViewState extends State<ResultsView> {
       'signature': roundSignature,
       'round': selectedRound,
       'allRounds': showAllRounds,
+      'scheduleRounds': scheduleRounds,
       'search': jump.text,
       'box': activeBox,
       'scroll': scroll.hasClients ? scroll.offset : 0,
@@ -317,24 +346,39 @@ class ResultsViewState extends State<ResultsView> {
     focusBox(next.game.id, white);
   }
 
-  /// After a result: the next board still missing one, same side.
+  /// After a result: the next board still missing one, same side, in the
+  /// [order] the boards had before the save (Missing only hides the board
+  /// just entered), wrapping to an earlier skipped board. With none left,
+  /// focus moves to the completion status so the next key changes nothing.
   /// Clearing a result keeps the cursor where it is.
-  void advance(String gameId, bool white, Outcome outcome) {
+  void advance(
+    String gameId,
+    bool white,
+    Outcome outcome, {
+    List<String>? order,
+  }) {
     if (outcome == Outcome.unreported) {
       focusBox(gameId, white);
       return;
     }
-    final all = visibleRows();
-    final i = all.indexWhere((r) => r.game.id == gameId);
-    final next = all
-        .skip(i + 1)
-        .where((r) => !r.game.outcome.resolved)
-        .firstOrNull;
+    final ids = order ?? [for (final r in visibleRows()) r.game.id];
+    final open = {
+      for (final r in rows())
+        if (!r.game.outcome.resolved) r.game.id,
+    };
+    final i = ids.indexOf(gameId);
+    final next = [
+      ...ids.skip(i + 1),
+      ...ids.take(math.max(i, 0)),
+    ].where(open.contains).firstOrNull;
     if (next != null) {
-      focusBox(next.game.id, white);
-    } else if (!missingOnly) {
-      focusBox(gameId, white);
+      focusBox(next, white);
+      return;
     }
+    setState(() => allEntered = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) doneNode.requestFocus();
+    });
   }
 
   /// Later rounds require a review before anything is committed.
@@ -375,11 +419,12 @@ class ResultsViewState extends State<ResultsView> {
     String why = '',
   }) {
     busy = true;
+    final order = [for (final r in visibleRows()) r.game.id];
     try {
       c.recordResult(row.game.id, outcome, reason: why);
       if (!mounted) return;
       setState(() {});
-      advance(row.game.id, white, outcome);
+      advance(row.game.id, white, outcome, order: order);
     } catch (e) {
       if (mounted) showFailure(context, e);
     } finally {
@@ -391,7 +436,7 @@ class ResultsViewState extends State<ResultsView> {
   void pickRound(int? n, int latest) {
     setState(() {
       selectedRound = n == latest ? null : n;
-      showAllRounds = false;
+      showAllRounds = scheduleRounds = false;
       correcting = nudged = false;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => focusFirst());
@@ -429,6 +474,23 @@ class ResultsViewState extends State<ResultsView> {
       case LogicalKeyboardKey.keyA:
         if (!locked(row) && !g.outcome.resolved) assume(g.id);
         return KeyEventResult.handled;
+      case LogicalKeyboardKey.space:
+        showPlayer(white ? g.white : g.black);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.f2:
+        // An explicit correction, also of an earlier round: the review
+        // opens beside the table.
+        if (g.outcome != Outcome.unreported) {
+          openResultCorrection(
+            context,
+            c,
+            g.id,
+            onDone: () {
+              if (mounted) focusBox(g.id, white);
+            },
+          );
+        }
+        return KeyEventResult.handled;
       case LogicalKeyboardKey.delete || LogicalKeyboardKey.backspace:
         enter(row, Outcome.unreported, white: white);
         return KeyEventResult.handled;
@@ -438,7 +500,15 @@ class ResultsViewState extends State<ResultsView> {
       white: white,
       current: row.game.outcome,
     );
-    if (outcome == null) return KeyEventResult.ignored;
+    if (outcome == null) {
+      // A printable key that is not a result: say which keys are.
+      if ((event.character ?? '').trim().isNotEmpty) {
+        setState(() => invalidKey = true);
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+    if (invalidKey) setState(() => invalidKey = false);
     enter(row, outcome, white: white);
     return KeyEventResult.handled;
   }
@@ -525,6 +595,19 @@ class ResultsViewState extends State<ResultsView> {
         for (final r in shownRounds(s)) (s, r),
     ];
     final all = rows(), visible = visibleRows();
+    // Tab enters the grid at the active box, or the first board missing a
+    // result; every other box is reached with the arrows.
+    final keys = {
+      for (final r in visible) ...['${r.game.id}-w', '${r.game.id}-b'],
+    };
+    final start =
+        visible.where((r) => !r.game.outcome.resolved).firstOrNull ??
+        visible.firstOrNull;
+    entryBox = keys.contains(activeBox)
+        ? activeBox
+        : start == null
+        ? null
+        : '${start.game.id}-w';
     final viewingPast = shown.any(
       (x) => x.$1.format == Format.swiss && x.$2.number < x.$1.rounds.length,
     );
@@ -571,6 +654,9 @@ class ResultsViewState extends State<ResultsView> {
                 : 'Try another name or board number.',
           )
         : _table(context, shown, visible, latest);
+    if (allEntered && !visible.every((r) => r.game.outcome.resolved)) {
+      allEntered = false;
+    }
     return PlayerDetailsLayout(
       expandContent: true,
       panel:
@@ -905,6 +991,7 @@ class ResultsViewState extends State<ResultsView> {
                     () => c.workspaceState.write('pairings-missing-only', '$v'),
                   ),
           ),
+          if (allEntered) _allEntered(context),
           IconButton(
             key: const ValueKey('print-round'),
             constraints: const BoxConstraints.tightFor(width: 36, height: 36),
@@ -912,6 +999,110 @@ class ResultsViewState extends State<ResultsView> {
             tooltip: 'Print packet',
             onPressed: shown.isEmpty ? null : printRound,
             icon: const Icon(Icons.print_outlined, size: 18),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Where focus rests after the last missing result, so the next key
+  /// cannot overwrite a board. Announced as it appears.
+  Widget _allEntered(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final every = rows().every((r) => r.game.outcome.resolved);
+    return Focus(
+      focusNode: doneNode,
+      onFocusChange: (_) => setState(() {}),
+      child: Semantics(
+        liveRegion: true,
+        child: Container(
+          key: const ValueKey('all-results-entered'),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: doneNode.hasFocus ? focusRing(colors) : Colors.transparent,
+              width: focusRingWidth,
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.check_circle_outline,
+                size: 16,
+                color: colors.onSurface,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                every ? 'All results entered' : 'All matching boards entered',
+                style: const TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Under the boards: whose result the focused box enters, and the keys.
+  /// A key that is not a result makes the legend say so.
+  Widget _legend(BuildContext context, List<BoardRow> visible) {
+    final colors = Theme.of(context).colorScheme, e = c.event!;
+    final focused = boxes[activeBox]?.hasFocus == true;
+    final row = !focused
+        ? null
+        : visible
+              .where(
+                (r) =>
+                    activeBox == '${r.game.id}-w' ||
+                    activeBox == '${r.game.id}-b',
+              )
+              .firstOrNull;
+    final white = activeBox?.endsWith('-w') ?? true;
+    final line = row == null
+        ? null
+        : [
+            if (widget.sectionId == null) row.section.name,
+            'Round ${row.round.number}',
+            'Board ${row.game.board}${row.section.doubleGames ? ' · Game ${row.game.leg}' : ''}',
+            '${e.player(row.game.white).name} vs ${e.player(row.game.black).name}',
+            locked(row)
+                ? 'read-only'
+                : 'entering ${white ? 'White' : 'Black'}\'s result',
+          ].join(' · ');
+    return Container(
+      key: const ValueKey('result-legend'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        border: Border(top: BorderSide(color: colors.outlineVariant)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (line != null)
+            Text(
+              line,
+              key: const ValueKey('entry-context'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13),
+            ),
+          Semantics(
+            liveRegion: invalidKey,
+            child: Text(
+              invalidKey
+                  ? 'Not a result key. $resultKeyHint · $moreResultKeys'
+                  : '$resultKeyHint · $gridKeyHint',
+              key: const ValueKey('result-key-legend'),
+              style: TextStyle(
+                fontSize: 12,
+                color: invalidKey ? colors.onSurface : colors.onSurfaceVariant,
+                fontWeight: invalidKey ? FontWeight.w600 : null,
+              ),
+            ),
           ),
         ],
       ),
@@ -1032,7 +1223,7 @@ class ResultsViewState extends State<ResultsView> {
           ? const <ByeAward>[]
           : r.byes.where((b) => named(e.player(b.player))).toList();
       if (boards.isEmpty && byes.isEmpty) continue;
-      if (widget.sectionId == null || showAllRounds) {
+      if (widget.sectionId == null || allRoundsOf(s)) {
         items.add(_sectionRow(context, s, r));
       }
       // Swiss boards fall into score groups once anyone has a score.
@@ -1052,15 +1243,15 @@ class ResultsViewState extends State<ResultsView> {
         items.add(_game(context, row, before));
       }
       for (final b in byes) {
-        items.add(_bye(context, b, r.number));
+        items.add(_bye(context, b, r.number, every: allRoundsOf(s)));
       }
     }
-    return _frame(context, items);
+    return _frame(context, items, footer: _legend(context, visible));
   }
 
   /// The ruled sheet the boards sit on, with a column header that stays put
   /// while the boards scroll under it.
-  Widget _frame(BuildContext context, List<Widget> items) {
+  Widget _frame(BuildContext context, List<Widget> items, {Widget? footer}) {
     final colors = Theme.of(context).colorScheme;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1083,7 +1274,7 @@ class ResultsViewState extends State<ResultsView> {
                     ? Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [_columns(context), ...items],
+                        children: [_columns(context), ...items, ?footer],
                       )
                     : constraints.maxHeight <
                           MediaQuery.textScalerOf(context).scale(150)
@@ -1091,7 +1282,7 @@ class ResultsViewState extends State<ResultsView> {
                         controller: scroll,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [_columns(context), ...items],
+                          children: [_columns(context), ...items, ?footer],
                         ),
                       )
                     : Column(
@@ -1108,6 +1299,7 @@ class ResultsViewState extends State<ResultsView> {
                               ),
                             ),
                           ),
+                          ?footer,
                         ],
                       ),
               ),
@@ -1245,7 +1437,7 @@ class ResultsViewState extends State<ResultsView> {
         ),
       ),
       child: Text(
-        showAllRounds ? '${s.name} · Round ${r.number}' : s.name,
+        allRoundsOf(s) ? '${s.name} · Round ${r.number}' : s.name,
         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     );
@@ -1268,11 +1460,16 @@ class ResultsViewState extends State<ResultsView> {
   }
 
   /// A bye, listed after the boards.
-  Widget _bye(BuildContext context, ByeAward b, int round) {
+  Widget _bye(
+    BuildContext context,
+    ByeAward b,
+    int round, {
+    required bool every,
+  }) {
     final colors = Theme.of(context).colorScheme;
     final p = c.event!.player(b.player);
     return Container(
-      key: ValueKey(showAllRounds ? 'bye-${p.id}-$round' : 'bye-${p.id}'),
+      key: ValueKey(every ? 'bye-${p.id}-$round' : 'bye-${p.id}'),
       constraints: const BoxConstraints(minHeight: _row),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
@@ -1309,14 +1506,20 @@ class ResultsViewState extends State<ResultsView> {
                   WidgetSpan(
                     alignment: PlaceholderAlignment.baseline,
                     baseline: TextBaseline.alphabetic,
-                    child: InkWell(
-                      key: ValueKey(
-                        showAllRounds
-                            ? 'bye-player-${p.id}-$round'
-                            : 'bye-player-${p.id}',
+                    // The grid is one Tab stop; names are not.
+                    child: ExcludeFocusTraversal(
+                      child: InkWell(
+                        key: ValueKey(
+                          every
+                              ? 'bye-player-${p.id}-$round'
+                              : 'bye-player-${p.id}',
+                        ),
+                        onTap: () => showPlayer(p.id),
+                        child: Text(
+                          p.name,
+                          style: const TextStyle(fontSize: 14),
+                        ),
                       ),
-                      onTap: () => showPlayer(p.id),
-                      child: Text(p.name, style: const TextStyle(fontSize: 14)),
                     ),
                   ),
                   // The points are in the score column; a pairing bye needs
@@ -1401,25 +1604,29 @@ class ResultsViewState extends State<ResultsView> {
         at,
         onByes: (id) => showPlayer(id, focus: 'byes'),
       );
-      final playerLink = Tooltip(
-        message: '${p.name} · Double-click or press Enter for player details',
-        child: ContextMenuKeys(
-          onMenu: menu,
-          child: CallbackShortcuts(
-            bindings: {
-              const SingleActivator(LogicalKeyboardKey.enter): () =>
-                  showPlayer(p.id),
-              const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
-                  showPlayer(p.id),
-            },
-            child: Semantics(
-              button: true,
-              hint: 'Opens player details',
-              child: InkWell(
-                key: ValueKey('round-player-${g.id}-${p.id}'),
-                onSecondaryTapDown: (details) => menu(details.globalPosition),
-                onDoubleTap: () => showPlayer(p.id),
-                child: label,
+      // The grid is one Tab stop, so names are not: Space on a score box
+      // opens that player's details, Shift+F10 their menu.
+      final playerLink = ExcludeFocusTraversal(
+        child: Tooltip(
+          message: '${p.name} · Double-click for player details',
+          child: ContextMenuKeys(
+            onMenu: menu,
+            child: CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.enter): () =>
+                    showPlayer(p.id),
+                const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
+                    showPlayer(p.id),
+              },
+              child: Semantics(
+                button: true,
+                hint: 'Opens player details',
+                child: InkWell(
+                  key: ValueKey('round-player-${g.id}-${p.id}'),
+                  onSecondaryTapDown: (details) => menu(details.globalPosition),
+                  onDoubleTap: () => showPlayer(p.id),
+                  child: label,
+                ),
               ),
             ),
           ),
@@ -1442,16 +1649,20 @@ class ResultsViewState extends State<ResultsView> {
               style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
             )
           else
-            TextButton(
-              key: ValueKey('withdraw-${g.id}-${p.id}'),
-              onPressed: () {
-                try {
-                  c.savePlayer(c.event!.player(p.id).copy(withdrawn: true));
-                } catch (error) {
-                  if (mounted) showFailure(context, error);
-                }
-              },
-              child: const Text('Withdraw from future rounds'),
+            // Reached with Tab only from this board's score boxes.
+            ExcludeFocusTraversal(
+              excluding: !{'${g.id}-w', '${g.id}-b'}.contains(entryBox),
+              child: TextButton(
+                key: ValueKey('withdraw-${g.id}-${p.id}'),
+                onPressed: () {
+                  try {
+                    c.savePlayer(c.event!.player(p.id).copy(withdrawn: true));
+                  } catch (error) {
+                    if (mounted) showFailure(context, error);
+                  }
+                },
+                child: const Text('Withdraw from future rounds'),
+              ),
             ),
         ],
       );
@@ -1505,11 +1716,17 @@ class ResultsViewState extends State<ResultsView> {
   Widget _scoreBox(BuildContext context, BoardRow row, {required bool white}) {
     final colors = Theme.of(context).colorScheme, g = row.game;
     final node = box(g.id, white), lock = locked(row);
+    node.skipTraversal = '${g.id}-${white ? 'w' : 'b'}' != entryBox;
     final owner = c.event!.player(white ? g.white : g.black);
     final assumed = !g.outcome.resolved && g.pairingAssumption != null;
     // Unfinished, disputed and assumed results each look different from an
     // empty box, so none of them reads as "not reported yet".
     final (mark, caption) = switch (g.outcome) {
+      // A game still going may carry an assumption for pairing.
+      Outcome.unfinished when assumed => (
+        '(${scoreMark(g.pairingAssumption!, white: white)})',
+        'playing',
+      ),
       Outcome.unfinished => ('', 'playing'),
       Outcome.disputed => ('?', 'disputed'),
       _ when assumed => (
@@ -1523,69 +1740,80 @@ class ResultsViewState extends State<ResultsView> {
       Outcome.unreported when assumed =>
         'assumed ${mark.replaceAll(RegExp('[()]'), '')} for pairing only',
       Outcome.unreported => 'no result',
+      Outcome.unfinished when assumed =>
+        'still playing, assumed ${mark.replaceAll(RegExp('[()]'), '')} for pairing only',
       Outcome.unfinished => 'still playing',
       Outcome.disputed => 'disputed',
       _ => mark,
     };
-    return Focus(
-      focusNode: node,
-      onKeyEvent: (_, event) => onKey(row, white, event),
-      onFocusChange: (has) {
-        setState(() {});
-      },
-      child: Semantics(
-        label: '${owner.name}\'s score: $spoken${lock ? ', read-only' : ''}',
-        child: Tooltip(
-          message: assumed
-              ? 'Assumed for pairing only: ${g.pairingReason}'
-              : odd
-              ? g.outcome.label
-              : '',
-          child: MouseRegion(
-            cursor: lock ? SystemMouseCursors.basic : SystemMouseCursors.text,
-            child: GestureDetector(
-              key: ValueKey('score-${g.id}-${white ? 'w' : 'b'}'),
-              onTap: () => focusBox(g.id, white),
-              child: Container(
-                width: scoreWidth(context),
-                constraints: const BoxConstraints(minHeight: 24),
-                padding: EdgeInsets.symmetric(
-                  vertical: caption == null ? 3 : 2,
-                ),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: lock ? colors.surfaceContainerLow : colors.surface,
-                  border: node.hasFocus
-                      ? Border.all(color: colors.primary, width: 2)
-                      : Border.all(color: colors.outline),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      mark,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        height: 1,
-                        color: odd
-                            ? colors.error
-                            : assumed
-                            ? colors.onSurfaceVariant
-                            : colors.onSurface,
-                      ),
-                    ),
-                    if (caption != null)
+    return ContextMenuKeys(
+      onMenu: (at) => showPlayerMenu(
+        context,
+        c,
+        owner.id,
+        at,
+        onByes: (id) => showPlayer(id, focus: 'byes'),
+      ),
+      child: Focus(
+        focusNode: node,
+        onKeyEvent: (_, event) => onKey(row, white, event),
+        onFocusChange: (has) {
+          setState(() {});
+        },
+        child: Semantics(
+          label: '${owner.name}\'s score: $spoken${lock ? ', read-only' : ''}',
+          child: Tooltip(
+            message: assumed
+                ? 'Assumed for pairing only: ${g.pairingReason}'
+                : odd
+                ? g.outcome.label
+                : '',
+            child: MouseRegion(
+              cursor: lock ? SystemMouseCursors.basic : SystemMouseCursors.text,
+              child: GestureDetector(
+                key: ValueKey('score-${g.id}-${white ? 'w' : 'b'}'),
+                onTap: () => focusBox(g.id, white),
+                child: Container(
+                  width: scoreWidth(context),
+                  constraints: const BoxConstraints(minHeight: 24),
+                  padding: EdgeInsets.symmetric(
+                    vertical: caption == null ? 3 : 2,
+                  ),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: lock ? colors.surfaceContainerLow : colors.surface,
+                    border: node.hasFocus
+                        ? Border.all(color: colors.primary, width: 2)
+                        : Border.all(color: colors.outline),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        caption,
+                        mark,
                         style: TextStyle(
-                          fontSize: 12,
-                          height: 1.1,
-                          color: odd ? colors.error : colors.onSurfaceVariant,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          height: 1,
+                          color: odd
+                              ? colors.error
+                              : assumed
+                              ? colors.onSurfaceVariant
+                              : colors.onSurface,
                         ),
                       ),
-                  ],
+                      if (caption != null)
+                        Text(
+                          caption,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.1,
+                            color: odd ? colors.error : colors.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),

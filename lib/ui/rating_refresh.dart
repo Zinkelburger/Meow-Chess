@@ -217,7 +217,12 @@ class RatingRefresh extends ChangeNotifier {
       } else if (outcome == MemberBatchOutcome.cancelled) {
         notice = 'Event changed. Refresh again for the current roster.';
       }
-      _recordMemberships();
+      try {
+        _recordMemberships();
+      } catch (error, stack) {
+        _saveFailed(error, stack);
+        return;
+      }
       Diagnostics.record(
         'refresh USCF ratings',
         'completed',
@@ -232,7 +237,17 @@ class RatingRefresh extends ChangeNotifier {
             'No USCF IDs to look up. Nothing changed. Add IDs in player details if you want ratings later.';
       }
     } catch (error, stack) {
-      if (current()) _saveFailed(error, stack);
+      if (current()) {
+        notice =
+            'Lookup stopped. ${plainMessage(error)} '
+            'Review completed lookups, retry later, or keep current ratings.';
+        Diagnostics.record(
+          'refresh USCF ratings',
+          'failed',
+          error: error,
+          stack: stack,
+        );
+      }
     } finally {
       if (current()) {
         busy = false;
@@ -284,8 +299,18 @@ class RatingRefresh extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Closes the review. Completed membership checks are saved first, even
+  /// mid-lookup; if that save fails the review stays open with the notice.
   void discard() {
     _generation++;
+    try {
+      _recordMemberships();
+    } catch (error, stack) {
+      busy = false;
+      _saveFailed(error, stack);
+      notifyListeners();
+      return;
+    }
     active = busy = false;
     snapshot = null;
     _unrecorded.clear();

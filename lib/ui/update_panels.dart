@@ -127,6 +127,7 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
         context: {'selected': selected.length, 'revision': c.event!.revision},
       );
       setState(() {
+        error = null;
         notice =
             'Saved locally. ${selected.length} changes applied. Nobody removed. Undo is available in History.';
         review = null;

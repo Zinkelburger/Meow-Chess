@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import 'bye_policy.dart';
 import 'model.dart';
+import 'tiebreaks.dart';
 
 /// One saved state of the event. Every command creates a node whose parent is
 /// the node the event was at, so going back and changing something starts a
@@ -187,7 +189,11 @@ String _format(Format f) => switch (f) {
 String _short(String text) {
   final line = text.replaceAll('\n', ' ').trim();
   if (line.isEmpty) return '(empty)';
-  return line.length > 40 ? '“${line.substring(0, 39)}…”' : '“$line”';
+  // Count code points, so an emoji is never cut in half.
+  final runes = line.runes;
+  return runes.length > 40
+      ? '“${String.fromCharCodes(runes.take(39))}…”'
+      : '“$line”';
 }
 
 /// Plain-language list of what differs from [before] to [after], for
@@ -238,8 +244,26 @@ List<String> describeChanges(
           : 'Tie-break rankings disabled',
     );
   }
+  if (before.tiebreaks.join('|') != after.tiebreaks.join('|')) {
+    out.add(
+      after.tiebreaks.isEmpty
+          ? 'Tie-break order: US Chess default'
+          : 'Tie-break order: ${after.tiebreaks.map(tiebreakLabel).join(', ')}',
+    );
+  }
   if (jsonEncode(before.rosterSource) != jsonEncode(after.rosterSource)) {
     out.add('Roster source changed');
+  }
+  if (before.online != after.online) {
+    out.add(after.online ? 'Marked as an online event' : 'Online mark removed');
+  }
+  if (before.rulings.length != after.rulings.length) {
+    final added = after.rulings.length - before.rulings.length;
+    out.add(
+      added > 0
+          ? 'Logged ${added == 1 ? 'a' : '$added'} ${after.rulings.last['kind'] ?? 'ruling'}${added == 1 ? '' : 's'}: ${_short('${after.rulings.last['text'] ?? ''}')}'
+          : 'Removed ${-added == 1 ? 'a log entry' : '${-added} log entries'}',
+    );
   }
 
   final oldPlayers = {for (final p in before.players) p.id: p};
@@ -262,6 +286,21 @@ List<String> describeChanges(
     final edits = [
       if (o.name != p.name) 'renamed from ${o.name}',
       if (o.rating != p.rating) 'rating ${value(o.rating, p.rating)}',
+      if (o.pairingRating != p.pairingRating)
+        'pairing rating ${value(o.pairingRating == 0 ? 'published' : o.pairingRating, p.pairingRating == 0 ? 'published' : p.pairingRating)}',
+      if (o.prizeRating != p.prizeRating)
+        'prize rating ${value(o.prizeRating == 0 ? 'published' : o.prizeRating, p.prizeRating == 0 ? 'published' : p.prizeRating)}',
+      if (o.ratingNote != p.ratingNote)
+        'rating cause ${_short(p.ratingNote.isEmpty ? '(none)' : p.ratingNote)}',
+      if (o.foreignRating != p.foreignRating ||
+          o.foreignFederation != p.foreignFederation)
+        'foreign rating ${p.foreignRating == 0 ? '(none)' : '${p.foreignFederation} ${p.foreignRating}'}',
+      if (o.computer != p.computer)
+        p.computer ? 'marked computer entrant' : 'no longer a computer entrant',
+      for (final r in p.irrevocableByes.difference(o.irrevocableByes))
+        'round $r bye declared irrevocable',
+      for (final r in o.irrevocableByes.difference(p.irrevocableByes))
+        'round $r irrevocable declaration withdrawn',
       if (o.state != p.state)
         'state ${value(_short(o.state), _short(p.state))}',
       if (o.reportName != p.reportName)
@@ -327,6 +366,9 @@ List<String> describeChanges(
         'quad pairing schedule changed',
       if (o.doubleGames != s.doubleGames)
         s.doubleGames ? 'double games' : 'single games',
+      if (jsonEncode(o.byeRules) != jsonEncode(s.byeRules))
+        'bye policy: ${ByePolicy.fromJson(s.byeRules).describe()}',
+      if (jsonEncode(o.prizes) != jsonEncode(s.prizes)) 'prize table changed',
     ];
     if (settings.isNotEmpty) out.add('$label: ${settings.join(', ')}');
     final joined = s.players.where((id) => !o.players.contains(id));

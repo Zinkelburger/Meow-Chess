@@ -1,6 +1,7 @@
 import 'result_keys.dart';
 import 'player_actions.dart';
 import 'package:file_selector/file_selector.dart';
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ import '../domain/rating_preview.dart';
 import 'dialogs.dart';
 import 'result_correction_panel.dart';
 import 'roster_import_panel.dart';
+import '../infrastructure/roster_import.dart' show decodeRosterText;
 import 'panels.dart' show FieldsPanel, Dock, showPrint;
 import '../infrastructure/reports.dart' show ReportKind;
 import 'theme.dart';
@@ -117,8 +119,11 @@ class _PlayersViewState extends State<PlayersView> {
 
   void tick(Iterable<String> ids, bool value) {
     setState(() {
+      final before = selected.length;
       value ? selected.addAll(ids) : selected.removeAll(ids);
-      if (selected.isEmpty) {
+      // A pending swap or move was for the players ticked then; one click
+      // must never confirm it for a different group.
+      if (selected.length != before) {
         moveTo = null;
         swapping = false;
       }
@@ -283,6 +288,14 @@ class _PlayersViewState extends State<PlayersView> {
   /// Whether the table shows points and tiebreaks.
   bool scores = false;
 
+  /// Rule 34B: the posted tie-break methods shown beside the points, in
+  /// order, once the event ranks by them.
+  List<TiebreakMethod> tiebreakColumns = const [];
+
+  /// Rule 30B on screen: standings without early round-robin withdrawals.
+  bool prizeStandings = false;
+  static const _tiebreak = 56.0;
+
   bool showIds = true;
 
   /// A rating review compares IDs, so it always shows them.
@@ -331,21 +344,21 @@ class _PlayersViewState extends State<PlayersView> {
     activeResult = saved['activeResult'] as String?;
     showRatingPreview =
         !widget.standingsOnly && saved['showRatingPreview'] == true;
+    prizeStandings = widget.standingsOnly && saved['prizeStandings'] == true;
     moveTo = saved['moveTo'] as String?;
     moveReason.text = saved['moveReason'] as String? ?? '';
+    if (moveTo != null && !c.event!.sections.any((s) => s.id == moveTo)) {
+      moveTo = null;
+    }
     ready = true;
     search.addListener(remember);
     moveReason.addListener(remember);
-    scroll.addListener(remember);
+    scroll.addListener(scrolled);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      scrollOffset = (saved['scroll'] as num? ?? 0).toDouble();
       if (scroll.hasClients) {
-        scroll.jumpTo(
-          (saved['scroll'] as num? ?? 0).toDouble().clamp(
-            0,
-            scroll.position.maxScrollExtent,
-          ),
-        );
+        scroll.jumpTo(scrollOffset.clamp(0, scroll.position.maxScrollExtent));
       }
       if (side != null) {
         Dock.maybeOf(context)?.claim(panelOwner);
@@ -359,7 +372,11 @@ class _PlayersViewState extends State<PlayersView> {
   void answerNewSection() {
     if (!widget.newSectionRequested || !mounted) return;
     widget.onNewSectionShown?.call();
-    showSide(side == _Side.newSection ? restingSide : _Side.newSection);
+    // A form hidden behind History or another tool is shown, not closed.
+    final dock = Dock.maybeOf(context);
+    final shown =
+        side == _Side.newSection && (dock == null || dock.id == panelOwner);
+    showSide(shown ? restingSide : _Side.newSection);
   }
 
   void sectionsCreated(List<String> ids) {
@@ -407,8 +424,22 @@ class _PlayersViewState extends State<PlayersView> {
     }
   }
 
+  /// The last scroll offset, kept after the list detaches on dispose.
+  double scrollOffset = 0;
+  Timer? scrollSave;
+
+  /// Scrolling only notes the offset; it is saved once scrolling settles,
+  /// not written and broadcast on every frame.
+  void scrolled() {
+    if (scroll.hasClients) scrollOffset = scroll.offset;
+    scrollSave?.cancel();
+    scrollSave = Timer(const Duration(milliseconds: 400), remember);
+  }
+
   void remember() {
     if (!ready) return;
+    scrollSave?.cancel();
+    scrollSave = null;
     c.workspaceState.writeMap(preference, {
       'search': search.text,
       'open': open,
@@ -416,9 +447,10 @@ class _PlayersViewState extends State<PlayersView> {
       'selected': selected.toList(),
       'activeResult': activeResult,
       'showRatingPreview': showRatingPreview,
+      'prizeStandings': prizeStandings,
       'moveTo': moveTo,
       'moveReason': moveReason.text,
-      'scroll': scroll.hasClients ? scroll.offset : 0,
+      'scroll': scroll.hasClients ? scroll.offset : scrollOffset,
     });
   }
 
@@ -431,6 +463,7 @@ class _PlayersViewState extends State<PlayersView> {
   @override
   void dispose() {
     remember();
+    scrollSave?.cancel();
     widget.ratingRefresh?.removeListener(refreshRatingsView);
     scroll.dispose();
     search.dispose();
@@ -467,7 +500,7 @@ class _PlayersViewState extends State<PlayersView> {
         ],
       );
       if (file == null || !mounted) return;
-      final source = await file.readAsString();
+      final source = decodeRosterText(await file.readAsBytes());
       if (!mounted) return;
       final summary = await showRosterImport(
         context,
@@ -488,6 +521,8 @@ class _PlayersViewState extends State<PlayersView> {
     if (widget.onPlayer case final onPlayer?) {
       onPlayer(id, focus: focus);
     } else if (side == _Side.player && open == id) {
+      // The card may be hidden behind History or another tool.
+      Dock.maybeOf(context)?.claim(panelOwner);
       setState(() => openFocus = focus);
     } else {
       openFocus = focus;
@@ -611,7 +646,16 @@ class _PlayersViewState extends State<PlayersView> {
     if (side == _Side.player && !e.players.any((p) => p.id == open)) {
       side = open = null;
     }
+    final ticked = selected.length;
     selected.removeWhere((id) => !e.players.any((p) => p.id == id));
+    if (selected.length != ticked) {
+      moveTo = null;
+      swapping = false;
+    }
+    // Undo can remove the section a move was waiting for.
+    if (moveTo != null && !c.event!.sections.any((s) => s.id == moveTo)) {
+      moveTo = null;
+    }
     if ((side == _Side.team || side == _Side.selection) && selected.isEmpty) {
       side = restingSide;
     }
@@ -673,10 +717,34 @@ class _PlayersViewState extends State<PlayersView> {
               (widget.sectionId == null || s.id == widget.sectionId),
         );
     final ranked = started;
+    final rankedSection = e.sections
+        .where(
+          (s) =>
+              s.rounds.isNotEmpty &&
+              (widget.sectionId == null || s.id == widget.sectionId),
+        )
+        .firstOrNull;
+    tiebreakColumns = started && e.useTiebreaks && rankedSection != null
+        ? standingsTiebreaks(e, rankedSection)
+        : const [];
+    // Rule 30B: a round-robin player who withdrew before half their games
+    // leaves the prize standings; the chip below switches the view.
+    final prizeSection =
+        rankedSection != null && pairingFormat(rankedSection) != Format.swiss;
     final tables = <String, Map<String, Standing>>{
       for (final s in e.sections)
         if (s.rounds.isNotEmpty)
-          s.id: {for (final row in standings(e, s)) row.player.id: row},
+          s.id: {
+            for (final row in standings(
+              e,
+              s,
+              forPrizes:
+                  prizeStandings &&
+                  prizeSection &&
+                  pairingFormat(s) != Format.swiss,
+            ))
+              row.player.id: row,
+          },
     };
     final numbers = <String, int>{};
     List<Player> ordered(Section s) {
@@ -768,6 +836,7 @@ class _PlayersViewState extends State<PlayersView> {
         (showsIds ? _id : 0) +
         rounds * _round +
         (started ? _points : 0) +
+        tiebreakColumns.length * _tiebreak +
         28;
     if (widget.standingsOnly) {
       final heading = PaneHeading(
@@ -812,6 +881,26 @@ class _PlayersViewState extends State<PlayersView> {
                   kind: ranked ? ReportKind.standings : ReportKind.sections,
                 ),
                 icon: const Icon(Icons.print_outlined, size: 18),
+              ),
+            if (prizeSection)
+              FilterChip(
+                key: const ValueKey('prize-standings'),
+                chipAnimationStyle: noChipAnimation,
+                label: const Text('Prize standings (30B)'),
+                selected: prizeStandings,
+                onSelected: (v) {
+                  setState(() => prizeStandings = v);
+                  remember();
+                },
+              ),
+            if (tiebreakColumns.isNotEmpty)
+              Text(
+                key: const ValueKey('standings-tiebreak-order'),
+                'Tie-breaks: ${tiebreakColumns.map((m) => m.label).join(', ')}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
           ],
         ),
@@ -1370,6 +1459,11 @@ class _PlayersViewState extends State<PlayersView> {
             ],
             for (var r = 1; r <= rounds; r++) cell(_round, 'R$r', center: true),
             if (scores) ...[cell(_points, 'Pts', center: true)],
+            for (final m in tiebreakColumns)
+              Tooltip(
+                message: '${m.label} (${m.rule})',
+                child: cell(_tiebreak, m.short, center: true),
+              ),
           ],
         ),
       ),
@@ -1617,9 +1711,13 @@ class _PlayersViewState extends State<PlayersView> {
       onMenu: menu,
       child: CallbackShortcuts(
         bindings: {
-          if (!widget.standingsOnly)
+          if (!widget.standingsOnly) ...{
             const SingleActivator(LogicalKeyboardKey.delete): () =>
                 removeFromKey(p.id),
+            // The Mac Delete key sends Backspace.
+            const SingleActivator(LogicalKeyboardKey.backspace): () =>
+                removeFromKey(p.id),
+          },
         },
         child: InkWell(
           key: ValueKey('player-${p.id}'),
@@ -1741,6 +1839,12 @@ class _PlayersViewState extends State<PlayersView> {
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
+                      for (final m in tiebreakColumns)
+                        cell(
+                          _tiebreak,
+                          standing?.tiebreak(m)?.text ?? '',
+                          muted,
+                        ),
                     ],
                   ],
                 ),

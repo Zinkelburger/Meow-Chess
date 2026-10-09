@@ -29,6 +29,8 @@ class WorkspaceStateCore extends ChangeNotifier {
   }
 
   bool write(String key, String value) {
+    // Views save from dispose too, which can run after the event has closed.
+    if (_disposed) return true;
     if (_memory[key] == value && !failures.containsKey(key)) return true;
     _memory[key] = value;
     try {

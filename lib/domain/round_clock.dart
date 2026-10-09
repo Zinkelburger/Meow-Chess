@@ -1,3 +1,6 @@
+import 'model.dart';
+import 'us_chess.dart';
+
 /// A planning estimate, never a deadline or a bound on game duration.
 class RoundEstimate {
   const RoundEstimate(this.finish, this.assumedMoves);
@@ -12,14 +15,19 @@ RoundEstimate? estimateRoundFinish(
   DateTime actualStart, {
   int assumedMoves = 40,
 }) {
-  final match = RegExp(
-    r'^G\s*/\s*(\d+)(?:\s*([di+])\s*(\d+))?$',
-    caseSensitive: false,
-  ).firstMatch(timeControl.trim());
-  if (match == null || assumedMoves < 1) return null;
-  final minutes = int.parse(match[1]!);
-  final extra = int.tryParse(match[3] ?? '0') ?? 0;
-  if (minutes < 1) return null;
+  if (assumedMoves < 1) return null;
+  final TimeControl control;
+  try {
+    // Every form the app accepts or writes: `G/60;d5`, `G/90 inc/30`,
+    // `Game/45`, `40/90, SD/30 d/5`.
+    control = TimeControl.parse(timeControl);
+  } on TournamentException {
+    return null;
+  }
+  // A move-count control (`40/90, SD/30`) has no single game length.
+  if (control.stages.length != 1) return null;
+  final minutes = control.stages.single.$2;
+  final extra = control.bonusSeconds;
   return RoundEstimate(
     actualStart.add(
       Duration(minutes: minutes * 2, seconds: extra * assumedMoves * 2),

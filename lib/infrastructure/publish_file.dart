@@ -3,6 +3,15 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 
+import '../application/diagnostics.dart';
+
+/// For tests: behave as if the filesystem has no exclusive rename, as on
+/// NFS, exFAT, SMB or under the macOS App Sandbox.
+bool debugExclusiveRenameUnsupported = false;
+
+/// For tests: the directory sync that follows a successful publication.
+void Function(String path) debugSyncPublishedDirectory = syncDirectory;
+
 /// Atomically publishes a complete file or directory, exclusively by default.
 /// Fail closed on unsupported filesystems: ordinary rename can destroy a backup.
 void publishFile(
@@ -26,8 +35,8 @@ void publishFile(
           .lookupFunction<Uint32 Function(), int Function()>('GetLastError');
       // MOVEFILE_WRITE_THROUGH, with replacement only after user confirmation.
       if (move(
-            source.toNativeUtf16(allocator: arena),
-            destination.toNativeUtf16(allocator: arena),
+            windowsExtendedPath(source).toNativeUtf16(allocator: arena),
+            windowsExtendedPath(destination).toNativeUtf16(allocator: arena),
             replaceExisting ? 9 : 8,
           ) !=
           0) {
@@ -42,39 +51,66 @@ void publishFile(
           .lookupFunction<Pointer<Int32> Function(), Pointer<Int32> Function()>(
             Platform.isLinux ? '__errno_location' : '__error',
           )();
-      final int result;
-      if (Platform.isLinux) {
-        final rename = library
-            .lookupFunction<
-              Int32 Function(
-                Int32,
-                Pointer<Utf8>,
-                Int32,
-                Pointer<Utf8>,
-                Uint32,
-              ),
-              int Function(int, Pointer<Utf8>, int, Pointer<Utf8>, int)
-            >('renameat2');
-        result = rename(-100, from, -100, to, replaceExisting ? 0 : 1);
+      int path2(String name) =>
+          library.lookupFunction<
+            Int32 Function(Pointer<Utf8>, Pointer<Utf8>),
+            int Function(Pointer<Utf8>, Pointer<Utf8>)
+          >(name)(from, to);
+      if (replaceExisting) {
+        error = path2('rename') == 0 ? 0 : errno.value;
       } else {
-        final rename = library
-            .lookupFunction<
-              Int32 Function(Pointer<Utf8>, Pointer<Utf8>, Uint32),
-              int Function(Pointer<Utf8>, Pointer<Utf8>, int)
-            >('renamex_np');
-        result = rename(from, to, replaceExisting ? 0 : 4); // RENAME_EXCL
+        error = _renameExclusively(library, from, to, errno);
+        if (error != 0 && _exclusiveRenameUnsupported(error)) {
+          if (FileSystemEntity.typeSync(source, followLinks: false) !=
+              FileSystemEntityType.file) {
+            throw FileSystemException(
+              'This drive cannot save a folder without risking another one of the same name. Choose a destination on another drive',
+              destination,
+              OSError('Exclusive rename is unsupported', error),
+            );
+          }
+          // link() refuses an existing name just as an exclusive rename does,
+          // through calls the App Sandbox and most filesystems allow.
+          error = path2('link') == 0 ? 0 : errno.value;
+          if (error == 0) {
+            final unlink = library
+                .lookupFunction<
+                  Int32 Function(Pointer<Utf8>),
+                  int Function(Pointer<Utf8>)
+                >('unlink');
+            if (unlink(from) != 0) {
+              // The complete file is already published; callers remove their
+              // staging names, so a leftover second name is harmless.
+              Diagnostics.record(
+                'publish file',
+                'staging name left behind',
+                error: OSError('unlink failed', errno.value),
+                context: {'path': source},
+              );
+            }
+          } else if (Platform.isLinux
+              ? const {1, 38, 95}.contains(error)
+              : const {1, 45, 78, 102}.contains(error)) {
+            // EPERM, ENOSYS, ENOTSUP/EOPNOTSUPP: no hard links either (FAT,
+            // exFAT, some network shares). EEXIST stays an ordinary failure.
+            throw FileSystemException(
+              'This drive cannot save a file without risking another one of the same name. Choose a destination on another drive',
+              destination,
+              OSError('Exclusive publication is unsupported', error),
+            );
+          }
+        }
       }
-      if (result == 0) {
-        syncDirectory(p.dirname(destination));
+      if (error == 0) {
+        _syncPublished(p.dirname(destination));
         if (!p.equals(
           p.absolute(p.dirname(source)),
           p.absolute(p.dirname(destination)),
         )) {
-          syncDirectory(p.dirname(source));
+          _syncPublished(p.dirname(source));
         }
         return;
       }
-      error = errno.value;
     } else {
       throw UnsupportedError('Exclusive file publication is unavailable.');
     }
@@ -84,6 +120,74 @@ void publishFile(
       OSError('Atomic rename failed', error),
     );
   });
+}
+
+/// renameat2(RENAME_NOREPLACE) on Linux, renamex_np(RENAME_EXCL) on macOS;
+/// returns 0 or the errno, ENOSYS when the C library lacks the call.
+int _renameExclusively(
+  DynamicLibrary library,
+  Pointer<Utf8> from,
+  Pointer<Utf8> to,
+  Pointer<Int32> errno,
+) {
+  if (debugExclusiveRenameUnsupported) return Platform.isLinux ? 22 : 1;
+  try {
+    if (Platform.isLinux) {
+      final rename = library
+          .lookupFunction<
+            Int32 Function(Int32, Pointer<Utf8>, Int32, Pointer<Utf8>, Uint32),
+            int Function(int, Pointer<Utf8>, int, Pointer<Utf8>, int)
+          >('renameat2');
+      return rename(-100, from, -100, to, 1) == 0 ? 0 : errno.value;
+    }
+    final rename = library
+        .lookupFunction<
+          Int32 Function(Pointer<Utf8>, Pointer<Utf8>, Uint32),
+          int Function(Pointer<Utf8>, Pointer<Utf8>, int)
+        >('renamex_np');
+    return rename(from, to, 4) == 0 ? 0 : errno.value; // RENAME_EXCL
+  } on ArgumentError {
+    // glibc before 2.28 has no renameat2 wrapper.
+    return Platform.isLinux ? 38 : 78;
+  }
+}
+
+/// Errors meaning the filesystem or sandbox lacks an exclusive rename, as
+/// opposed to the destination existing: Linux EINVAL, ENOSYS, EOPNOTSUPP;
+/// macOS EPERM (App Sandbox), EINVAL, ENOTSUP, ENOSYS, EOPNOTSUPP.
+bool _exclusiveRenameUnsupported(int error) => Platform.isLinux
+    ? const {22, 38, 95}.contains(error)
+    : const {1, 22, 45, 78, 102}.contains(error);
+
+/// The file is already published under its final name; a directory sync that
+/// fails afterwards only weakens durability, so it is logged, not reported
+/// as a failed save.
+void _syncPublished(String directory) {
+  try {
+    debugSyncPublishedDirectory(directory);
+  } on FileSystemException catch (error) {
+    Diagnostics.record(
+      'publish file',
+      'directory sync failed',
+      error: error,
+      context: {'directory': directory},
+    );
+  }
+}
+
+/// MoveFileExW refuses paths of MAX_PATH (260) or more without the `\\?\`
+/// prefix, which also turns off normalization, so the path is normalized first.
+String windowsExtendedPath(String path) {
+  if (path.startsWith(r'\\?\')) return path;
+  final full = p.windows.normalize(
+    p.windows.isAbsolute(path) ? path : p.join(Directory.current.path, path),
+  );
+  if (full.length < 260) return path;
+  if (RegExp(r'^[A-Za-z]:\\').hasMatch(full)) return '\\\\?\\$full';
+  if (RegExp(r'^\\\\[^\\]').hasMatch(full)) {
+    return '\\\\?\\UNC\\${full.substring(2)}';
+  }
+  return path;
 }
 
 /// Publishes a flat package whose component files have already been flushed.

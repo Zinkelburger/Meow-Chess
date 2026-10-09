@@ -1,5 +1,8 @@
 import 'model.dart';
 import 'fixed_schedule.dart';
+import 'tiebreaks.dart';
+
+export 'tiebreaks.dart';
 
 class Standing {
   const Standing(
@@ -9,13 +12,68 @@ class Standing {
     this.sonneborn,
     this.played, {
     this.rank = 0,
+    this.tiebreaks = const [],
   });
   final Player player;
+
+  /// [buchholz] is the played opponents' final scores (half-points) and
+  /// [sonneborn] is Sonneborn–Berger in quarter-points, kept for callers
+  /// that print them; the ranking itself uses [tiebreaks].
   final int points, buchholz, sonneborn, played, rank;
+
+  /// Rule 34: the posted tie-break methods, in order, with this row's value
+  /// for each. Empty when the row was built without them.
+  final List<TiebreakValue> tiebreaks;
+
+  Standing withRank(int rank) => Standing(
+    player,
+    points,
+    buchholz,
+    sonneborn,
+    played,
+    rank: rank,
+    tiebreaks: tiebreaks,
+  );
+
+  /// The value of one method, or null when it is not in the posted order.
+  TiebreakValue? tiebreak(TiebreakMethod method) =>
+      tiebreaks.where((t) => t.method == method).firstOrNull;
 }
 
-/// Buchholz includes played opponents only; SB is in quarter-point units.
-/// Forfeits and byes contribute points, never fictional opponents.
+/// The tie-break methods [section] ranks by, in posted order (rule 34B).
+List<TiebreakMethod> standingsTiebreaks(Event event, Section section) =>
+    sectionTiebreaks(event, pairingFormat(section));
+
+/// Whether two adjacent rows share a place: equal points and, when
+/// [tiebreaks] rank, equal on every posted method.
+bool sharePlace(Standing a, Standing b, {required bool tiebreaks}) {
+  if (a.points != b.points) return false;
+  if (!tiebreaks) return true;
+  if (a.tiebreaks.length != b.tiebreaks.length) return false;
+  for (var i = 0; i < a.tiebreaks.length; i++) {
+    if (a.tiebreaks[i].value != b.tiebreaks[i].value) return false;
+  }
+  return true;
+}
+
+/// Number sorted [rows] 1, 2, 2, 4 … sharing a place per [sharePlace].
+List<Standing> rankStandings(List<Standing> rows, {required bool tiebreaks}) {
+  var rank = 1;
+  return [
+    for (var i = 0; i < rows.length; i++)
+      (() {
+        if (i > 0 && !sharePlace(rows[i], rows[i - 1], tiebreaks: tiebreaks)) {
+          rank = i + 1;
+        }
+        return rows[i].withRank(rank);
+      })(),
+  ];
+}
+
+/// Points first, then the posted rule 34 tie-breaks in order when the event
+/// ranks by them (or when pairing asks). Forfeits and byes contribute
+/// points, never fictional opponents; the tie-break adjustments for
+/// unplayed games are rule 34E1's and 34E3's.
 List<Standing> standings(
   Event event,
   Section section, {
@@ -49,6 +107,13 @@ List<Standing> standings(
   }
   bool contributes(Game g) =>
       !excluded.contains(g.white) && !excluded.contains(g.black);
+  // Rule 15I / 22C5: prizes may count a different result from the one on
+  // the wall chart and the rating report.
+  Outcome outcomeOf(Game g) => forPairing && !g.outcome.resolved
+      ? g.pairingAssumption ?? g.outcome
+      : forPrizes
+      ? g.prizeOutcome ?? g.outcome
+      : g.outcome;
   final scores = <String, int>{for (final p in event.players) p.id: 0};
   for (final s in event.sections) {
     for (final r in s.rounds) {
@@ -57,36 +122,55 @@ List<Standing> standings(
       }
       for (final g in r.games) {
         if (!contributes(g)) continue;
-        final outcome = forPairing && !g.outcome.resolved
-            ? g.pairingAssumption ?? g.outcome
-            : g.outcome;
+        final outcome = outcomeOf(g);
         scores[g.white] = scores[g.white]! + outcome.whiteScore;
         scores[g.black] = scores[g.black]! + outcome.blackScore;
       }
     }
   }
-  final rows = section.players.where((id) => !excluded.contains(id)).map((id) {
+  final ids = section.players.where((id) => !excluded.contains(id)).toList();
+  final methods = standingsTiebreaks(event, section);
+  final values = tiebreakValues(
+    event: event,
+    section: section,
+    players: ids,
+    methods: methods,
+    scores: scores,
+    outcomeOf: outcomeOf,
+    counts: contributes,
+  );
+  final rows = ids.map((id) {
     var bh = 0, sb = 0, played = 0;
     for (final g in event.games.where(
       (g) =>
-          g.outcome.played &&
           contributes(g) &&
+          outcomeOf(g).played &&
           (g.white == id || g.black == id),
     )) {
       final opponent = g.white == id ? g.black : g.white;
+      final outcome = outcomeOf(g);
       bh += scores[opponent]!;
       sb +=
           scores[opponent]! *
-          (g.white == id ? g.outcome.whiteScore : g.outcome.blackScore);
+          (g.white == id ? outcome.whiteScore : outcome.blackScore);
       played++;
     }
-    return Standing(event.player(id), scores[id]!, bh, sb, played);
+    return Standing(
+      event.player(id),
+      scores[id]!,
+      bh,
+      sb,
+      played,
+      tiebreaks: values[id]!,
+    );
   }).toList();
+  final ranked = event.useTiebreaks || forPairing;
   rows.sort((a, b) {
     for (final c in [
       b.points.compareTo(a.points),
-      if (event.useTiebreaks || forPairing) b.buchholz.compareTo(a.buchholz),
-      if (event.useTiebreaks || forPairing) b.sonneborn.compareTo(a.sonneborn),
+      if (ranked)
+        for (var i = 0; i < methods.length; i++)
+          b.tiebreaks[i].value.compareTo(a.tiebreaks[i].value),
       a.player.name.compareTo(b.player.name),
       a.player.id.compareTo(b.player.id),
     ]) {
@@ -94,27 +178,5 @@ List<Standing> standings(
     }
     return 0;
   });
-  var rank = 1;
-  final ranked = <Standing>[];
-  for (var i = 0; i < rows.length; i++) {
-    final row = rows[i];
-    if (i > 0 &&
-        (row.points != rows[i - 1].points ||
-            ((event.useTiebreaks || forPairing) &&
-                (row.buchholz != rows[i - 1].buchholz ||
-                    row.sonneborn != rows[i - 1].sonneborn)))) {
-      rank = i + 1;
-    }
-    ranked.add(
-      Standing(
-        row.player,
-        row.points,
-        row.buchholz,
-        row.sonneborn,
-        row.played,
-        rank: rank,
-      ),
-    );
-  }
-  return ranked;
+  return rankStandings(rows, tiebreaks: ranked);
 }

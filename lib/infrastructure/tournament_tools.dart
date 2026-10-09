@@ -5,7 +5,10 @@ import 'package:path/path.dart' as p;
 
 import '../application/failures.dart';
 import '../application/tournament_controller_core.dart';
+import '../domain/bye_policy.dart';
 import '../domain/model.dart';
+import '../domain/prizes.dart';
+import '../domain/pairing.dart';
 import '../domain/standings.dart';
 import '../domain/us_chess.dart';
 import 'dbf_export.dart';
@@ -51,6 +54,17 @@ final _metadata = <String, dynamic>{
     key: _string(),
   'practice': _bool,
   'useTiebreaks': _bool,
+  // Chapter 10: reported through the online rating categories.
+  'online': _bool,
+  // Rule 34B: the posted order by method code; empty restores the US Chess
+  // default (34E for a Swiss, 34F for a round robin or quad).
+  'tiebreaks': {
+    'type': 'array',
+    'items': {
+      'type': 'string',
+      'enum': [for (final m in TiebreakMethod.values) m.code],
+    },
+  },
 };
 final _playerFields = <String, dynamic>{
   for (final key in [
@@ -61,12 +75,69 @@ final _playerFields = <String, dynamic>{
     'club',
     'team',
     'notes',
+    'ratingNote',
+    'foreignFederation',
   ])
     key: _string(),
   'rating': {'type': 'integer', 'minimum': 0, 'maximum': 4000},
+  // Rules 28E/28F: TD-assigned ratings (0 = use the published rating), the
+  // stated cause (28E2), a disclosed foreign rating (28C2/28D1) and rule 36.
+  'pairingRating': {'type': 'integer', 'minimum': 0, 'maximum': 4000},
+  'prizeRating': {'type': 'integer', 'minimum': 0, 'maximum': 4000},
+  'foreignRating': {'type': 'integer', 'minimum': 0, 'maximum': 4000},
+  'computer': _bool,
+  // Rule 20M3 / 35: a fixed board (0 = none). Rule 28S: the earlier entry
+  // this re-entry replaces.
+  'fixedBoard': _integer(0),
+  'reentryOf': _string('Player ID of the earlier entry; empty for none.'),
   'checkedIn': _bool,
   'withdrawn': _bool,
 };
+final _swissFields = <String, dynamic>{
+  'accelerated': {
+    ..._enum(['', 'addedScore']),
+    'description': 'Rule 28R1 accelerated pairings for rounds 1–2.',
+  },
+  'avoidTeammates': {
+    ..._bool,
+    'description': 'Rule 28N1: keep team-mates apart by the plus-two method.',
+  },
+  'variations': {
+    ..._array(_enum(swissVariations)),
+    'description':
+        'Announced pairing variations by rule number (29E4a, 29E4b, 29E4d, 29E5h).',
+  },
+};
+final _byeRules = _object({
+  'lastHalfByeRound': _integer(0),
+  'maxHalfByes': _integer(0),
+  'deadlineMinutes': _integer(0),
+  'irrevocableFromRound': _integer(0),
+});
+final _prizeTable = _object({
+  'basedOn': _integer(0),
+  'fundCents': _integer(0),
+  'withdrawnEligible': _bool,
+  'unratedCapCents': _integer(0),
+  'list': _array(
+    _object(
+      {
+        'id': _string(),
+        'label': _string(),
+        'kind': _enum(PrizeKind.values.map((k) => k.code)),
+        'place': _integer(1),
+        'min': _integer(0),
+        'max': _integer(0),
+        'points': _integer(0),
+        'cents': _integer(0),
+        'trophy': _bool,
+        'guaranteed': _bool,
+        'eligible': _array(_string('Player ID')),
+      },
+      ['id'],
+    ),
+  ),
+});
 final _gameFields = _object(
   {
     'white': _string('Player ID'),
@@ -122,6 +193,7 @@ class TournamentTools {
         'readOnlyHint': [
           'get_event',
           'standings',
+          'prize_report',
           'propose_pairings',
           'rating_preflight',
         ].contains(name),
@@ -150,7 +222,7 @@ class TournamentTools {
       ),
       tool(
         'update_event',
-        'Edit event and rating-report metadata.',
+        'Edit event and rating-report metadata. Practice is fixed when the event is created.',
         _metadata,
         write: true,
       ),
@@ -183,19 +255,31 @@ class TournamentTools {
           'ratingCeiling': _integer(0),
           'timeControl': _string('Blank inherits the event default.'),
           'sideGames': _bool,
+          'rrTable': _enum(['', crenshawTable]),
+          'doubleCycle': _bool,
+          ..._swissFields,
         },
         required: ['name', 'players', 'format', 'plannedRounds', 'boardStart'],
         write: true,
       ),
       tool(
         'update_section',
-        'Edit a section\'s name, time control (blank inherits the event default), planned rounds or first board. Format changes are GUI-only.',
+        'Edit a section\'s name, time control (blank inherits the event default), planned rounds, first board or prize table. Format changes are GUI-only.',
         {
           'sectionId': _string(),
           'name': _string(),
           'timeControl': _string('Blank inherits the event default.'),
           'plannedRounds': _integer(1),
           'boardStart': _integer(1),
+          'rrTable': _enum(['', crenshawTable]),
+          'doubleCycle': _bool,
+          ..._swissFields,
+          'byeRules': _byeRules,
+          'prizes': {
+            ..._prizeTable,
+            'description':
+                'Rules 32–33 prize table; replaces the whole table. Amounts are cents; points are half-points; class min/max are inclusive, under max is exclusive; eligible lists player IDs for junior/senior prizes.',
+          },
         },
         required: ['sectionId'],
         write: true,
@@ -212,6 +296,13 @@ class TournamentTools {
         'Enter an existing person separately in another unstarted section. Keeps identity; starts a separate score.',
         {'playerId': _string(), 'sectionId': _string()},
         required: ['playerId', 'sectionId'],
+        write: true,
+      ),
+      tool(
+        'draw_lots',
+        'Rule 30A: assign a round-robin or quad section\'s pairing numbers by lot (seeded shuffle, recorded in history). Only before round 1.',
+        {'sectionId': _string(), 'seed': _integer(0)},
+        required: ['sectionId'],
         write: true,
       ),
       tool(
@@ -240,13 +331,46 @@ class TournamentTools {
       ),
       tool(
         'reserve_bye',
-        'Reserve a future bye: points 0, 1, 2 mean zero, half, full point.',
+        'Reserve a future bye: points 0, 1, 2 mean zero, half, full point. Half-point byes follow the section byeRules (22C1–22C4); irrevocable declares the bye irrevocable (22C4), and a cancelled irrevocable bye scores a later win as a draw for prizes (22C5).',
         {
           'playerId': _string(),
           'round': _integer(1),
           'points': {'type': 'integer', 'minimum': 0, 'maximum': 2},
+          'irrevocable': _bool,
         },
         required: ['playerId', 'round', 'points'],
+        write: true,
+      ),
+      tool(
+        'cancel_bye',
+        'Cancel a reserved bye. An irrevocable declaration stays unless irrevocable is false (rule 22C5).',
+        {'playerId': _string(), 'round': _integer(1), 'irrevocable': _bool},
+        required: ['playerId', 'round'],
+        write: true,
+      ),
+      tool(
+        'hold_out_non_reporters',
+        'Rules 29H3/29H4: for unreported games in the last posted round, score each as a double forfeit (doubleForfeit) or give both players half-point byes for the next round (halfPointByes), in one revision.',
+        {
+          'sectionId': _string(),
+          'treatment': _enum(['doubleForfeit', 'halfPointByes']),
+        },
+        required: ['sectionId', 'treatment'],
+        write: true,
+      ),
+      tool(
+        'log_ruling',
+        'Rules 13I, 20K, 18G, 21H–21L: log a ruling, penalty, appeal or adjudication. Appeals are due within 30 minutes of the ruling (21H1); appeals to US Chess within ten days of the event (21L1).',
+        {
+          'kind': _enum(['ruling', 'penalty', 'appeal', 'adjudication']),
+          'text': _string(),
+          'round': _integer(0),
+          'sectionId': _string(),
+          'players': _array(_string('Player ID')),
+          'decidedBy': _string(),
+          'outcome': _string(),
+        },
+        required: ['kind', 'text'],
         write: true,
       ),
       tool(
@@ -293,13 +417,18 @@ class TournamentTools {
       ),
       tool(
         'standings',
-        'Read points, ranks, tie-breaks and played counts. Points are integer half-points; Sonneborn-Berger is in quarter-points.',
+        'Read points, ranks, tie-breaks and played counts. Points are integer half-points. Each section lists its posted tie-break order (rule 34) and each row carries the values in that order, with each value in its method\'s unit and as a number.',
         {},
       ),
       tool(
         'rating_preflight',
         'Read export blockers without changing anything.',
         {},
+      ),
+      tool(
+        'prize_report',
+        'Read the prize allocation (rules 32–33) for one section or all: paid amounts, who wins what, and the pooling arithmetic.',
+        {'sectionId': _string()},
       ),
       tool(
         'export_event',
@@ -377,6 +506,11 @@ class TournamentTools {
     }
     if (otherTdProblem(args['otherTdIds'] ?? '') case final problem?) {
       throw TournamentException(problem);
+    }
+    if (args['tiebreaks'] case final List codes) {
+      if (tiebreakCodesProblem(List<String>.from(codes)) case final problem?) {
+        throw TournamentException(problem);
+      }
     }
   }
 
@@ -460,6 +594,17 @@ class TournamentTools {
           _controller = next;
         } catch (_) {
           next.dispose();
+          // A failed create must not leave an empty file that blocks a retry.
+          if (initial != null) {
+            for (final suffix in ['', '-wal', '-shm', '-journal']) {
+              try {
+                final leftover = File('$path$suffix');
+                if (leftover.existsSync()) leftover.deleteSync();
+              } on FileSystemException {
+                // Report the original failure rather than the cleanup.
+              }
+            }
+          }
           rethrow;
         }
         return {'path': path, ...event.toJson()};
@@ -472,6 +617,13 @@ class TournamentTools {
         if (event.practice && args['practice'] == false) {
           throw const TournamentException(
             'This event is a practice copy and stays one, so it cannot produce a rating report. Create a new event with practice set to false.',
+          );
+        }
+        if (!event.practice && args['practice'] == true) {
+          // Practice is permanent and undo cannot remove it, so a rated event
+          // is never converted in place.
+          throw const TournamentException(
+            'A rated event cannot be turned into a practice copy, because that cannot be undone. Back it up and create a separate event with practice set to true.',
           );
         }
         _checkMetadata(args);
@@ -496,11 +648,11 @@ class TournamentTools {
           throw const TournamentException('Provide at least one player.');
         }
         final ids = event.players
-            .where((p) => p.memberId.isNotEmpty)
+            .where((p) => isMemberId(p.memberId))
             .map((p) => p.memberId)
             .toSet();
         for (final player in additions) {
-          if (player.memberId.isNotEmpty && !ids.add(player.memberId)) {
+          if (isMemberId(player.memberId) && !ids.add(player.memberId)) {
             throw TournamentException(
               'Duplicate US Chess ID: ${player.memberId}.',
             );
@@ -545,7 +697,15 @@ class TournamentTools {
           ratingCeiling: args['ratingCeiling'] ?? 0,
           timeControl: args['timeControl'] ?? '',
           sideGames: args['sideGames'] ?? false,
+          rrTable: args['rrTable'] ?? '',
+          doubleCycle: args['doubleCycle'] ?? false,
+          accelerated: args['accelerated'] ?? '',
+          avoidTeammates: args['avoidTeammates'] ?? false,
+          variations: Set<String>.from(args['variations'] ?? const []),
         );
+        if (doubleCycleProblem(section) case final problem?) {
+          throw TournamentException(problem);
+        }
         controller.change(
           'Create ${section.name}',
           event.copy(sections: [...event.sections, section]),
@@ -564,6 +724,42 @@ class TournamentTools {
         }
         final name = (args['name'] ?? current.name).trim();
         if (name.isEmpty) throw const TournamentException('Name the section.');
+        final rrTable = args['rrTable'] ?? current.rrTable,
+            doubleCycle = args['doubleCycle'] ?? current.doubleCycle;
+        if (current.rounds.isNotEmpty &&
+            (rrTable != current.rrTable ||
+                doubleCycle != current.doubleCycle)) {
+          throw const TournamentException(
+            'Pairing format cannot change after rounds are posted.',
+          );
+        }
+        if (doubleCycleProblem(
+              current.copy(
+                plannedRounds: rounds,
+                rrTable: rrTable,
+                doubleCycle: doubleCycle,
+              ),
+            )
+            case final problem?) {
+          throw TournamentException(problem);
+        }
+        final prizes = args['prizes'] == null
+            ? null
+            : PrizeTable.fromJson(
+                Map<String, dynamic>.from(args['prizes'] as Map),
+              ).toJson();
+        final byeRules = args['byeRules'] == null
+            ? null
+            : ByePolicy.fromJson(
+                Map<String, dynamic>.from(args['byeRules'] as Map),
+              );
+        if (byeRules != null &&
+            (byeRules.lastHalfByeRound > rounds ||
+                byeRules.irrevocableFromRound > rounds)) {
+          throw TournamentException(
+            'Bye policy rounds cannot exceed the $rounds planned rounds.',
+          );
+        }
         controller.change(
           'Edit section ${current.name} via automation',
           event.copy(
@@ -576,6 +772,16 @@ class TournamentTools {
                             .trim(),
                         plannedRounds: rounds,
                         boardStart: args['boardStart'] ?? x.boardStart,
+                        rrTable: rrTable,
+                        doubleCycle: doubleCycle,
+                        accelerated: args['accelerated'] ?? x.accelerated,
+                        avoidTeammates:
+                            args['avoidTeammates'] ?? x.avoidTeammates,
+                        variations: args['variations'] == null
+                            ? x.variations
+                            : Set<String>.from(args['variations']),
+                        prizes: prizes,
+                        byeRules: byeRules?.toJson() ?? x.byeRules,
                       )
                     : x,
             ],
@@ -595,6 +801,9 @@ class TournamentTools {
           args['sectionId'],
         );
         return {..._summary(), 'entry': entry.toJson()};
+      case 'draw_lots':
+        controller.drawLots(args['sectionId'], seed: args['seed']);
+        return {..._summary(), 'section': _section(args['sectionId']).toJson()};
       case 'make_quads':
         controller.applyQuads(controller.quadPreview(), event.revision);
         return {
@@ -610,7 +819,36 @@ class TournamentTools {
       case 'remove_players':
         controller.removePlayers(List<String>.from(args['players']));
       case 'reserve_bye':
-        controller.reserveBye(args['playerId'], args['round'], args['points']);
+        controller.reserveBye(
+          args['playerId'],
+          args['round'],
+          args['points'],
+          irrevocable: args['irrevocable'],
+        );
+      case 'cancel_bye':
+        controller.reserveBye(
+          args['playerId'],
+          args['round'],
+          -1,
+          irrevocable: args['irrevocable'],
+        );
+      case 'hold_out_non_reporters':
+        final boards = controller.holdOutNonReporters(
+          args['sectionId'],
+          treatment: args['treatment'],
+        );
+        return {..._summary(), 'boards': boards};
+      case 'log_ruling':
+        final id = controller.logRuling(
+          kind: args['kind'],
+          text: args['text'],
+          round: args['round'] ?? 0,
+          section: args['sectionId'] ?? '',
+          players: List<String>.from(args['players'] ?? const []),
+          decidedBy: args['decidedBy'] ?? '',
+          outcome: args['outcome'] ?? '',
+        );
+        return {..._summary(), 'rulingId': id};
       case 'propose_pairings':
         if (args['sectionId'] != null) _section(args['sectionId']);
         final batch = await controller.propose(sectionId: args['sectionId']);
@@ -642,6 +880,21 @@ class TournamentTools {
           Outcome.values.byName(args['outcome']),
           reason: args['reason'] ?? '',
         );
+      case 'prize_report':
+        if (args['sectionId'] != null) _section(args['sectionId']);
+        return {
+          'revision': event.revision,
+          'sections': [
+            for (final s in event.sections)
+              if (args['sectionId'] == null || s.id == args['sectionId'])
+                {
+                  'id': s.id,
+                  'name': s.name,
+                  'prizes': s.prizes,
+                  ...allocatePrizes(event, s).toJson(),
+                },
+          ],
+        };
       case 'standings':
         return {
           'revision': event.revision,
@@ -650,6 +903,10 @@ class TournamentTools {
               {
                 'id': s.id,
                 'name': s.name,
+                'tiebreakOrder': [
+                  for (final m in standingsTiebreaks(event, s))
+                    {'code': m.code, 'label': m.label, 'rule': m.rule},
+                ],
                 'rows': [
                   for (final row in standings(event, s))
                     {
@@ -657,8 +914,16 @@ class TournamentTools {
                       'name': row.player.name,
                       'points': row.points,
                       'rank': row.rank,
-                      'buchholz': row.buchholz,
-                      'sonneborn': row.sonneborn,
+                      'tiebreaks': [
+                        for (final t in row.tiebreaks)
+                          {
+                            'code': t.code,
+                            'value': t.value,
+                            'unit': t.method.unit.name,
+                            'number': t.number,
+                            'text': t.text,
+                          },
+                      ],
                       'played': row.played,
                     },
                 ],

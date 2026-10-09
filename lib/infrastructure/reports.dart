@@ -5,11 +5,22 @@ import 'package:csv/csv.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../domain/bye_policy.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
+import '../domain/prizes.dart';
 import '../domain/standings.dart';
+import '../domain/us_chess.dart';
 
-enum ReportKind { packet, pairings, standings, crosstable, sections }
+enum ReportKind {
+  packet,
+  pairings,
+  standings,
+  crosstable,
+  sections,
+  prizes,
+  conditions,
+}
 
 /// A player's result, stable opponent number, and color. Both print and text
 /// reports use this representation; a bye is distinct from an unplayed cell.
@@ -49,10 +60,41 @@ String crosstableCell(
             : points == 1
             ? 'D'
             : 'L';
-        return '$code${numbers[opponent] ?? event.player(opponent).name}${white ? 'w' : 'b'}';
+        // Rule 18G: an adjudicated result is marked on the chart.
+        return '$code${numbers[opponent] ?? reportName(event.player(opponent).name)}${white ? 'w' : 'b'}${game.adjudicated ? ' ADJ' : ''}';
       })
       .join('/');
 }
+
+/// A name on one line: a line break or tab pasted into a name would split a
+/// printed row or misalign a text column.
+String reportName(String name) => name.replaceAll(RegExp(r'\s+'), ' ').trim();
+
+/// Rule 28O: the wall chart shows a player's cumulative score after each
+/// round, in half-points per posted round of [section], in order.
+List<int> cumulativeScores(Section section, String playerId) {
+  final totals = <int>[];
+  var total = 0;
+  for (final round in section.rounds) {
+    for (final bye in round.byes.where((b) => b.player == playerId)) {
+      total += bye.points;
+    }
+    for (final g in round.games) {
+      if (g.white == playerId) total += g.outcome.whiteScore;
+      if (g.black == playerId) total += g.outcome.blackScore;
+    }
+    totals.add(total);
+  }
+  return totals;
+}
+
+/// Rule 28O: `NEW` for a player with no rating and no US Chess ID, `UNR`
+/// for any other unrated player.
+String wallChartRating(Player player) => player.rating != 0
+    ? '${player.rating}'
+    : player.memberId.trim().isEmpty
+    ? 'NEW'
+    : 'UNR';
 
 String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
   final lines = <String>['${e.name} | ${e.date} | revision ${e.revision}', ''];
@@ -63,27 +105,28 @@ String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
     final numbers = {for (final (i, id) in s.players.indexed) id: i + 1};
     final nameWidth = rows.fold(
       12,
-      (int n, Standing r) =>
-          r.player.name.length > n ? r.player.name.length : n,
+      (int n, Standing r) => reportName(r.player.name).length > n
+          ? reportName(r.player.name).length
+          : n,
     );
+    // Rule 28O: each cell is the result, then the score so far.
+    final cellWidth = s.doubleGames ? 22 : 12;
     lines.add('${s.name} — ${s.rounds.length}/${s.plannedRounds} rounds');
     lines.add(
-      '${'#'.padLeft(3)}  ${'Name'.padRight(nameWidth)}  ${'Rtg'.padLeft(4)}  ${'Pts'.padLeft(4)}  ${[for (final r in s.rounds) 'R${r.number}'.padRight(s.doubleGames ? 18 : 8)].join(' ')}',
+      '${'#'.padLeft(3)}  ${'Name'.padRight(nameWidth)}  ${'Rtg'.padLeft(4)}  ${'Pts'.padLeft(4)}  ${[for (final r in s.rounds) 'R${r.number}'.padRight(cellWidth)].join(' ')}',
     );
     for (final row in rows) {
       final id = row.player.id;
-      final cells = s.rounds
+      final totals = cumulativeScores(s, id);
+      final cells = s.rounds.indexed
           .map(
-            (r) => crosstableCell(
-              e,
-              r,
-              id,
-              numbers,
-            ).padRight(s.doubleGames ? 18 : 8),
+            (entry) =>
+                '${crosstableCell(e, entry.$2, id, numbers)} ${scoreText(totals[entry.$1])}'
+                    .padRight(cellWidth),
           )
           .join(' ');
       lines.add(
-        '${numbers[id].toString().padLeft(3)}  ${row.player.name.padRight(nameWidth)}  ${row.player.rating.toString().padLeft(4)}  ${scoreText(row.points).padLeft(4)}  $cells',
+        '${numbers[id].toString().padLeft(3)}  ${reportName(row.player.name).padRight(nameWidth)}  ${wallChartRating(row.player).padLeft(4)}  ${scoreText(row.points).padLeft(4)}  $cells',
       );
     }
     lines.add('');
@@ -100,30 +143,107 @@ String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
   return text;
 }
 
-String standingsCsv(Event e, {String? sectionId}) => Csv().encode([
-  [
-    'Section',
-    'Pairing number',
-    'Name',
-    'Rating',
-    'Points',
-    'Buchholz',
-    'Sonneborn-Berger',
-  ],
+/// Rules 32–33 on screen: the prize table, who takes what, and the
+/// pooling arithmetic behind it, per section.
+String prizeReport(Event e, {String? sectionId}) {
+  final lines = <String>['${e.name} | ${e.date} | revision ${e.revision}', ''];
   for (final s in e.sections.where(
-    (s) => sectionId == null || s.id == sectionId,
-  ))
-    for (final row in standings(e, s))
-      [
-        _safe(s.name),
-        s.players.indexOf(row.player.id) + 1,
-        _safe(row.player.name),
-        row.player.rating,
-        scoreText(row.points),
-        scoreText(row.buchholz),
-        row.sonneborn / 4,
-      ],
-]);
+    (s) => s.players.isNotEmpty && (sectionId == null || s.id == sectionId),
+  )) {
+    final a = allocatePrizes(e, s);
+    lines.add(
+      '${s.name} — ${a.entries} entries'
+      '${a.table.basedOn > 0 ? ', based on ${a.table.basedOn}' : ''}'
+      '${a.payoutPercent == 100 ? '' : ', paying ${a.payoutPercent}%'}',
+    );
+    if (a.table.isEmpty) {
+      lines
+        ..add('No prizes announced.')
+        ..add('');
+      continue;
+    }
+    for (final line in a.lines) {
+      lines.add(
+        '${line.prize.title.padRight(24)} ${_prizeAmount(line).padLeft(16)}  ${_prizeOutcome(e, line)}',
+      );
+    }
+    lines.add('');
+    for (final w in a.awards) {
+      lines.add(
+        '${reportName(w.player.name).padRight(28)} ${scoreText(w.points).padLeft(4)}  '
+        '${w.cents > 0 ? dollars(w.cents).padLeft(9) : ''.padLeft(9)}'
+        '${w.trophies.isEmpty ? '' : '  ${w.trophies.map((t) => '${t.title} trophy').join(', ')}'}',
+      );
+    }
+    lines.add('Total paid: ${dollars(a.paidCents)}');
+    lines.add('');
+    for (final x in a.explanations) {
+      lines.add('• $x');
+    }
+    lines.add('');
+  }
+  return lines.join('\n');
+}
+
+String _prizeAmount(PrizeLine line) => [
+  if (line.prize.cents > 0)
+    line.paidCents == line.prize.cents
+        ? dollars(line.prize.cents)
+        : '${dollars(line.paidCents)} of ${dollars(line.prize.cents)}',
+  if (line.prize.trophy) 'trophy',
+].join(' + ');
+
+String _prizeOutcome(Event e, PrizeLine line) {
+  String name(String id) =>
+      reportName(e.players.where((p) => p.id == id).firstOrNull?.name ?? id);
+  final cash = line.cash.entries.toList();
+  final parts = <String>[
+    if (cash.length == 1 && line.pooledWith.isEmpty)
+      name(cash.single.key)
+    else if (cash.isNotEmpty)
+      '${line.pooledWith.isEmpty ? 'shared' : 'pooled'}: '
+          '${cash.map((c) => '${name(c.key)} ${dollars(c.value)}').join(', ')}',
+    if (line.trophyWinner != null) 'trophy: ${name(line.trophyWinner!)}',
+    if (line.note.isNotEmpty) line.note,
+  ];
+  return parts.join(' · ');
+}
+
+/// Starts with a byte-order mark: without one, Excel on Windows reads UTF-8
+/// as the system code page and garbles names such as José.
+///
+/// Rule 34B: the tie-break columns are headed by the posted method names.
+/// Every selected section shares one header, so the columns are the first
+/// section's methods; a section ranked by other methods leaves them blank.
+String standingsCsv(Event e, {String? sectionId}) {
+  final sections = e.sections
+      .where((s) => sectionId == null || s.id == sectionId)
+      .toList();
+  final methods = sections.isEmpty
+      ? const <TiebreakMethod>[]
+      : standingsTiebreaks(e, sections.first);
+  return Csv(addBom: true).encode([
+    [
+      'Section',
+      'Pairing number',
+      'Name',
+      'Rating',
+      'Points',
+      for (final m in methods) '${m.label} (${m.rule})',
+    ],
+    for (final s in sections)
+      for (final row in standings(e, s))
+        [
+          _safe(s.name),
+          s.players.indexOf(row.player.id) + 1,
+          _safe(reportName(row.player.name)),
+          row.player.rating,
+          scoreText(row.points),
+          for (final m in methods) row.tiebreak(m)?.number ?? '',
+        ],
+  ]);
+}
+
 String _safe(String text) =>
     RegExp(r'^[=+@\-\t\r]').hasMatch(text) ? "'$text" : text;
 
@@ -133,12 +253,6 @@ String _halves(int n) => n == 1
     : n.isOdd
     ? '${n ~/ 2}½'
     : '${n ~/ 2}';
-
-/// Quarter-points (Sonneborn–Berger) as printed: ¼, 2½, 3¾.
-String _quarters(int n) {
-  final whole = n ~/ 4, part = const ['', '¼', '½', '¾'][n % 4];
-  return whole == 0 && part.isNotEmpty ? part : '$whole$part';
-}
 
 /// Paper schedules never post rounds or change the tournament. Preserve edited
 /// posted pairings; fill the remaining round-robin rounds from the fixed draw.
@@ -205,28 +319,7 @@ List<Standing> reportStandings(
             ceiling == 0 || (r.player.rating > 0 && r.player.rating < ceiling),
       )
       .toList();
-  var rank = 1;
-  return [
-    for (var i = 0; i < rows.length; i++)
-      (() {
-        final r = rows[i];
-        if (i > 0 &&
-            (r.points != rows[i - 1].points ||
-                (event.useTiebreaks &&
-                    (r.buchholz != rows[i - 1].buchholz ||
-                        r.sonneborn != rows[i - 1].sonneborn)))) {
-          rank = i + 1;
-        }
-        return Standing(
-          r.player,
-          r.points,
-          r.buchholz,
-          r.sonneborn,
-          r.played,
-          rank: rank,
-        );
-      })(),
-  ];
+  return rankStandings(rows, tiebreaks: event.useTiebreaks);
 }
 
 /// Fixed player numbers stay readable even after the standings order changes.
@@ -256,7 +349,7 @@ List<pw.Widget> _roundRobinPairingGrid(
   // A posted opponent who has since left the roster has no number.
   String opponentLabel(String id) =>
       numbers[id]?.toString() ??
-      ' ${event.players.where((p) => p.id == id).firstOrNull?.name ?? '?'}';
+      ' ${reportName(event.players.where((p) => p.id == id).firstOrNull?.name ?? '?')}';
   pw.Widget roundCell(String player, Round round) {
     final games =
         round.games
@@ -334,7 +427,7 @@ List<pw.Widget> _roundRobinPairingGrid(
             pw.TableRow(
               children: [
                 label('${numbers[player]}'),
-                label(event.player(player).name, left: true),
+                label(reportName(event.player(player).name), left: true),
                 for (final round in rounds.skip(offset).take(5))
                   roundCell(player, round),
               ],
@@ -361,6 +454,7 @@ Future<Uint8List> reportPdf(
   bool currentRoundOnly = false,
   int ceiling = 0,
   bool forPrizes = false,
+  bool alphabetical = false,
   pw.Font? font,
   pw.Font? bold,
 }) async {
@@ -373,6 +467,9 @@ Future<Uint8List> reportPdf(
   }
   if (roundNumbers == null && roundNumber != null) {
     eventThroughRound(source, roundNumber, sectionId: sectionId);
+  }
+  if (kind == ReportKind.conditions) {
+    return conditionsPdf(source, a4: a4, font: font, bold: bold);
   }
   final doc = pw.Document();
   var sectionCount = 0;
@@ -433,7 +530,7 @@ Future<Uint8List> reportPdf(
             for (final (i, id) in s.players.indexed)
               [
                 '${i + 1}',
-                '${source.player(id).name}'
+                '${reportName(source.player(id).name)}'
                     '${source.player(id).withdrawn ? ' (withdrawn)' : ''}',
                 source.player(id).rating == 0
                     ? 'UNR'
@@ -496,6 +593,19 @@ Future<Uint8List> reportPdf(
             ),
           ),
         );
+        // Rule 17B1: a changed start time or other notice travels with the
+        // pairings.
+        if (round.note.trim().isNotEmpty) {
+          widgets.add(
+            pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 5),
+              child: pw.Text(
+                round.note.trim(),
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+            ),
+          );
+        }
         widgets.add(
           pw.TableHelper.fromTextArray(
             headers: ['Board', 'Result', 'White', 'Black', 'Result'],
@@ -504,8 +614,8 @@ Future<Uint8List> reportPdf(
                 [
                   '${g.board}${scope.doubleGames ? ' / ${g.leg}' : ''}',
                   '',
-                  source.player(g.white).name,
-                  source.player(g.black).name,
+                  reportName(source.player(g.white).name),
+                  reportName(source.player(g.black).name),
                   '',
                 ],
             ],
@@ -550,11 +660,14 @@ Future<Uint8List> reportPdf(
             pw.Padding(
               padding: const pw.EdgeInsets.only(top: 5),
               child: pw.Text(
-                '${source.player(bye.player).name}: ${bye.allocated ? 'Bye' : bye.reason} (${_halves(bye.points)})',
+                '${reportName(source.player(bye.player).name)}: ${bye.allocated ? 'Bye' : bye.reason} (${_halves(bye.points)})',
                 style: const pw.TextStyle(fontSize: 10),
               ),
             ),
           );
+        }
+        if (alphabetical) {
+          widgets.addAll(_alphabeticalPairings(source, scope, round));
         }
       }
     }
@@ -562,25 +675,33 @@ Future<Uint8List> reportPdf(
       title(
         'Standings${ceiling == 0 ? '' : ' · Under $ceiling'}${forPrizes ? ' · Excluding early round-robin withdrawals' : ''}',
       );
+      // Rule 34B: the posted order, named in full under the grid.
+      final methods = standingsTiebreaks(e, s);
       grid(
-        ['Rank', 'Player', 'Rating', 'Points', 'BH', 'SB'],
+        [
+          'Rank',
+          'Player',
+          'Rating',
+          'Points',
+          for (final m in methods) m.short,
+        ],
         [
           for (final r in table)
             [
               table.where((x) => x.rank == r.rank).length > 1
                   ? 'T-${r.rank}'
                   : '${r.rank}',
-              r.player.name,
+              reportName(r.player.name),
               r.player.rating == 0 ? 'UNR' : '${r.player.rating}',
               _halves(r.points),
-              _halves(r.buchholz),
-              _quarters(r.sonneborn),
+              for (final m in methods) r.tiebreak(m)?.text ?? '',
             ],
         ],
       );
       widgets.add(
         pw.Text(
-          'Tie breaks: played-opponent Buchholz, then Sonneborn–Berger. Equal values remain tied.',
+          'Tie-breaks (rule 34B): ${[for (final (i, m) in methods.indexed) '${i + 1}. ${m.label} (${m.rule})'].join(', ')}. '
+          '${e.useTiebreaks ? 'Equal values on every method remain tied.' : 'Places are shared on points; the values are shown for reference.'}',
           style: const pw.TextStyle(fontSize: 9),
         ),
       );
@@ -588,26 +709,101 @@ Future<Uint8List> reportPdf(
     if (kind == ReportKind.crosstable) {
       title('Crosstable');
       final numbers = {for (final (i, id) in s.players.indexed) id: i + 1};
+      // Rule 28O: result on the first line, score so far on the second.
+      final totals = {
+        for (final row in table)
+          row.player.id: cumulativeScores(s, row.player.id),
+      };
       grid(
-        ['#', 'Player', 'Pts', for (final r in s.rounds) 'R${r.number}'],
+        ['#', 'Player', 'Rtg', 'Pts', for (final r in s.rounds) 'R${r.number}'],
         [
           for (final row in table)
             [
               '${numbers[row.player.id]}',
-              row.player.name,
+              reportName(row.player.name),
+              wallChartRating(row.player),
               _halves(row.points),
-              for (final r in s.rounds)
-                crosstableCell(e, r, row.player.id, numbers),
+              for (final (i, r) in s.rounds.indexed)
+                '${crosstableCell(e, r, row.player.id, numbers)}\n'
+                    '${_halves(totals[row.player.id]![i])}',
             ],
         ],
       );
       widgets.add(
         pw.Text(
-          'W/D/L = win/draw/loss; number = opponent; w/b = color. '
-          'F = forfeit points; ? = unresolved; BYE = awarded points.',
+          'W/D/L = win/draw/loss; number = opponent; w/b = color; the second '
+          'line is the score after that round. '
+          'X/F = forfeit win/loss; ? = unresolved. B--- = full-point bye; '
+          'H--- = half-point bye; U--- = zero-point bye (unpaired); '
+          '-- = not paired. NEW = unrated with no US Chess ID; UNR = unrated.',
           style: const pw.TextStyle(fontSize: 9),
         ),
       );
+    }
+    if (kind == ReportKind.prizes) {
+      final a = allocatePrizes(e, s);
+      title(
+        'Prizes · ${a.entries} entries'
+        '${a.table.basedOn > 0 ? ' · based on ${a.table.basedOn}' : ''}'
+        '${a.payoutPercent == 100 ? '' : ' · paying ${a.payoutPercent}%'}',
+      );
+      if (a.table.isEmpty) {
+        widgets.add(pw.Text('No prizes are announced for this section.'));
+      } else {
+        grid(
+          ['Prize', 'Amount', 'Awarded to'],
+          [
+            for (final line in a.lines)
+              [line.prize.title, _prizeAmount(line), _prizeOutcome(e, line)],
+          ],
+        );
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 12, bottom: 6),
+            child: pw.Text(
+              'Awards',
+              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+            ),
+          ),
+        );
+        grid(
+          ['Player', 'Points', 'Cash', 'Trophy'],
+          [
+            for (final w in a.awards)
+              [
+                reportName(w.player.name),
+                _halves(w.points),
+                w.cents > 0 ? dollars(w.cents) : '',
+                w.trophies.map((t) => t.title).join(', '),
+              ],
+            ['Total', '', dollars(a.paidCents), ''],
+          ],
+        );
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 12, bottom: 6),
+            child: pw.Text(
+              'How the prizes were allocated',
+              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+            ),
+          ),
+        );
+        for (final x in a.explanations) {
+          widgets.add(
+            pw.Bullet(text: x, style: const pw.TextStyle(fontSize: 10)),
+          );
+        }
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 8),
+            child: pw.Text(
+              'Tied cash prizes are pooled and split equally (32B, 34C); '
+              'trophies follow the standings order (32F1, 33D2).',
+              style: const pw.TextStyle(fontSize: 9),
+            ),
+          ),
+        );
+      }
     }
     doc.addPage(
       pw.MultiPage(
@@ -651,4 +847,302 @@ Future<Uint8List> reportPdf(
     );
   }
   return doc.save();
+}
+
+/// Rule 34B: the announced tie-break order, or the US Chess default for
+/// the section's format (34E for Swiss, 34F for round robins).
+String _conditionsTiebreaks(Event e, Section s) => e.tiebreaks.isNotEmpty
+    ? e.tiebreaks.map(tiebreakLabel).join(', ')
+    : 'US Chess default: ${defaultTiebreaks(s.format).map((m) => m.label).join(', ')}';
+
+String _conditionsDollars(Object? cents) {
+  final n = cents is num ? cents.toInt() : 0;
+  final whole = n ~/ 100, part = n % 100;
+  final digits = whole.toString();
+  final grouped = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) grouped.write(',');
+    grouped.write(digits[i]);
+  }
+  return '\$$grouped${part == 0 ? '' : '.${part.toString().padLeft(2, '0')}'}';
+}
+
+/// Rules 26A, 34B, 25, 22C4 and 17B1: the announced conditions of the event,
+/// to post before round 1. One page per event, not per section.
+Future<Uint8List> conditionsPdf(
+  Event e, {
+  bool a4 = false,
+  pw.Font? font,
+  pw.Font? bold,
+}) async {
+  final doc = pw.Document();
+  final widgets = <pw.Widget>[];
+  final small = const pw.TextStyle(fontSize: 10);
+  void heading(String text) => widgets.add(
+    pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 12, bottom: 4),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+      ),
+    ),
+  );
+  void line(String text) => widgets.add(pw.Text(text, style: small));
+  void table(List<String> headers, List<List<String>> rows) => widgets.add(
+    pw.TableHelper.fromTextArray(
+      headers: headers,
+      data: rows,
+      cellStyle: small,
+      headerStyle: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+      cellPadding: const pw.EdgeInsets.all(4),
+    ),
+  );
+  final tds = [
+    if (e.tdId.isNotEmpty) 'Chief TD ${e.tdId}',
+    if (e.assistantTdId.isNotEmpty) 'Assistant chief TD ${e.assistantTdId}',
+    if (e.otherTdIds.isNotEmpty) 'Other TDs ${e.otherTdIds}',
+  ];
+  line(
+    [
+      e.endDate.isEmpty ? e.date : '${e.date} – ${e.endDate}',
+      if (e.venue.isNotEmpty) e.venue,
+      if (e.online) 'Online event (Chapter 10)',
+    ].join(' · '),
+  );
+  if (tds.isNotEmpty) line(tds.join(' · '));
+  if (e.policy.trim().isNotEmpty) {
+    heading('Announced conditions');
+    line(e.policy.trim());
+  }
+
+  heading('Sections and pairing rules (rule 26A)');
+  table(
+    ['Section', 'Format', 'Rounds', 'Time control', 'Pairing settings'],
+    [
+      for (final s in e.sections)
+        [
+          s.name,
+          switch (s.format) {
+            Format.swiss => 'Swiss',
+            Format.quad => 'Quad',
+            Format.roundRobin => 'Round robin',
+          },
+          '${s.plannedRounds}',
+          [
+            s.effectiveTimeControl(e),
+            ?delayHint(s.effectiveTimeControl(e)),
+          ].join(' · '),
+          [
+            if (s.accelerated.isNotEmpty)
+              'Accelerated pairings: ${s.accelerated == 'addedScore'
+                  ? 'added score (28R1)'
+                  : s.accelerated == 'adjustedRating'
+                  ? 'adjusted rating (28R2)'
+                  : s.accelerated}',
+            if (s.avoidTeammates) 'Team-mates not paired (28N)',
+            if (s.variations.isNotEmpty)
+              'Variations: ${(s.variations.toList()..sort()).join(', ')}',
+            if (s.format != Format.swiss && s.rrTable.isNotEmpty)
+              'Table: ${s.rrTable}',
+            if (s.doubleCycle) 'Double round robin, second cycle (30F)',
+            if (s.doubleGames) 'Both colors each round',
+            if (s.ratingCeiling > 0) 'Under ${s.ratingCeiling}',
+          ].join('; '),
+        ],
+    ],
+  );
+
+  heading('Tie-breaks (rule 34B)');
+  for (final s in e.sections) {
+    line('${s.name}: ${_conditionsTiebreaks(e, s)}');
+  }
+  if (e.sections.isEmpty) {
+    line(_conditionsTiebreaks(e, Section(id: '', name: '', players: const [])));
+  }
+
+  heading('Half-point byes (rule 22C)');
+  for (final s in e.sections) {
+    line('${s.name}: ${ByePolicy.fromJson(s.byeRules).describe()}');
+  }
+  final irrevocable = [
+    for (final p in e.players)
+      if (p.irrevocableByes.isNotEmpty)
+        (p, (p.irrevocableByes.toList()..sort())),
+  ];
+  heading('Irrevocable byes (rule 22C4)');
+  if (irrevocable.isEmpty) {
+    line('None declared.');
+  } else {
+    table(
+      ['Player', 'Section', 'Rounds'],
+      [
+        for (final (p, rounds) in irrevocable)
+          [
+            reportName(p.name),
+            e.sectionOf(p.id)?.name ?? '',
+            rounds
+                .map(
+                  (r) => p.byes[r] == null
+                      ? '$r (cancelled: a win counts as a draw for prizes, 22C5)'
+                      : '$r',
+                )
+                .join(', '),
+          ],
+      ],
+    );
+  }
+
+  heading('Prizes (rule 25)');
+  var anyPrizes = false;
+  for (final s in e.sections) {
+    final list = s.prizes['list'];
+    if (list is! List || list.isEmpty) continue;
+    anyPrizes = true;
+    final basedOn = s.prizes['basedOn'];
+    final fund = s.prizes['fundCents'];
+    line(
+      [
+        s.name,
+        if (fund is num && fund > 0) 'fund ${_conditionsDollars(fund)}',
+        if (basedOn is num && basedOn > 0) 'based on $basedOn entries',
+        if (s.prizes['withdrawnEligible'] == true)
+          'withdrawn players stay eligible',
+      ].join(' · '),
+    );
+    table(
+      ['Prize', 'Eligibility', 'Amount'],
+      [
+        for (final entry in list)
+          if (entry is Map)
+            [
+              '${entry['label'] ?? ''}'.trim().isEmpty
+                  ? '${entry['kind'] ?? ''} ${entry['place'] ?? ''}'.trim()
+                  : '${entry['label']}',
+              switch ('${entry['kind'] ?? ''}') {
+                'class' => '${entry['min'] ?? 0}–${entry['max'] ?? 0}',
+                'under' => 'Under ${entry['max'] ?? 0}',
+                'points' => '${entry['points'] ?? 0} half-points',
+                final kind => kind,
+              },
+              [
+                if ((entry['cents'] as num? ?? 0) > 0)
+                  _conditionsDollars(entry['cents']),
+                if (entry['trophy'] == true) 'trophy',
+              ].join(' + '),
+            ],
+      ],
+    );
+  }
+  if (!anyPrizes) line('No prize table announced.');
+
+  doc.addPage(
+    pw.MultiPage(
+      pageFormat: a4 ? PdfPageFormat.a4 : PdfPageFormat.letter,
+      margin: const pw.EdgeInsets.all(32),
+      theme: font == null
+          ? null
+          : pw.ThemeData.withFont(base: font, bold: bold ?? font),
+      header: (_) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            e.name,
+            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.Text('Event conditions${e.practice ? ' · PRACTICE COPY' : ''}'),
+        ],
+      ),
+      footer: (context) => pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            'Revision ${e.revision}',
+            style: const pw.TextStyle(fontSize: 9),
+          ),
+          pw.Text(
+            '${context.pageNumber} / ${context.pagesCount}',
+            style: const pw.TextStyle(fontSize: 9),
+          ),
+        ],
+      ),
+      build: (_) => widgets,
+    ),
+  );
+  return doc.save();
+}
+
+/// Rule 28J TD TIP: the same round's pairings by player name, so a player
+/// who cannot find a board number can find their own name.
+List<pw.Widget> _alphabeticalPairings(
+  Event source,
+  Section scope,
+  Round round,
+) {
+  final rows = <(String key, List<String> cells)>[];
+  for (final g in round.games) {
+    for (final (id, color, opponent) in [
+      (g.white, 'White', g.black),
+      (g.black, 'Black', g.white),
+    ]) {
+      final name = reportName(source.player(id).name);
+      rows.add((
+        nameKey(name),
+        [
+          name,
+          '${g.board}${scope.doubleGames ? ' / ${g.leg}' : ''}',
+          color,
+          reportName(source.player(opponent).name),
+        ],
+      ));
+    }
+  }
+  for (final bye in round.byes) {
+    final name = reportName(source.player(bye.player).name);
+    rows.add((
+      nameKey(name),
+      [
+        name,
+        '',
+        '',
+        '${bye.allocated ? 'Bye' : bye.reason} (${_halves(bye.points)})',
+      ],
+    ));
+  }
+  rows.sort((a, b) => a.$1.compareTo(b.$1));
+  return [
+    pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 12, bottom: 5),
+      child: pw.Text(
+        'Round ${round.number} by name',
+        style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+      ),
+    ),
+    pw.TableHelper.fromTextArray(
+      headers: ['Player', 'Board', 'Color', 'Opponent'],
+      data: [for (final row in rows) row.$2],
+      tableWidth: pw.TableWidth.max,
+      columnWidths: {
+        0: const pw.FlexColumnWidth(),
+        1: const pw.FixedColumnWidth(48),
+        2: const pw.FixedColumnWidth(48),
+        3: const pw.FlexColumnWidth(),
+      },
+      cellAlignments: {
+        0: pw.Alignment.centerLeft,
+        1: pw.Alignment.center,
+        2: pw.Alignment.center,
+        3: pw.Alignment.centerLeft,
+      },
+      headerAlignments: {
+        0: pw.Alignment.centerLeft,
+        1: pw.Alignment.center,
+        2: pw.Alignment.center,
+        3: pw.Alignment.centerLeft,
+      },
+      border: pw.TableBorder.all(color: PdfColors.black, width: 0.6),
+      cellStyle: const pw.TextStyle(fontSize: 10),
+      headerStyle: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+    ),
+  ];
 }

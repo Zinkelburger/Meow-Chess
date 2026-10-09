@@ -187,12 +187,15 @@ void main() {
     expectFieldFocus(tester, 'field-name');
     await tester.enterText(find.byKey(const ValueKey('field-name')), 'Top');
     await tester.enterText(find.byKey(const ValueKey('field-rounds')), '0');
+    // The settings panel is taller than the window; Save is below the fold.
+    await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pump();
     // The problem stays beside the field and nothing changes.
     expect(find.text('Number of rounds must be between 1 and 32.'), findsOne);
     expect(c.event!.sections.first.name, q1.name);
     await tester.enterText(find.byKey(const ValueKey('field-rounds')), '3');
+    await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(c.event!.sections.first.name, 'Top');

@@ -11,7 +11,7 @@ import '../support.dart';
 void main() {
   WidgetController.hitTestWarningShouldBeFatal = true;
   for (final (size, scale) in [
-    (const Size(960, 600), 1.0),
+    (const Size(960, 540), 1.0),
     (const Size(1280, 720), 2.0),
   ]) {
     for (final scenario in [

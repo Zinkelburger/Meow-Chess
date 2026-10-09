@@ -171,4 +171,31 @@ void main() {
     expect(id.text, '12345678');
     await tester.pumpAndSettle();
   });
+
+  testWidgets('a middle initial or accents are not another person', (
+    tester,
+  ) async {
+    for (final (typed, official, report) in [
+      ('John Q Smith', 'John Smith', 'SMITH, JOHN'),
+      ('Nguyễn Văn An', 'An Nguyen', 'NGUYEN, AN'),
+      ('José Ávila', 'Jose Avila', null),
+    ]) {
+      name.text = typed;
+      await show(
+        tester,
+        lookup: (value) async => MemberObservation(
+          id: value,
+          name: official,
+          reportName: report,
+          retrievedAt: '',
+          ratings: const {},
+        ),
+        search: (_) async => fail('$typed matches $official'),
+      );
+      await tester.tap(find.text('Check ID'));
+      await tester.pumpAndSettle();
+      expect(find.text('ID 12345678 is $official'), findsOneWidget);
+      expect(find.textContaining('belongs to'), findsNothing);
+    }
+  });
 }

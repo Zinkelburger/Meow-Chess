@@ -11,10 +11,18 @@ class HelpArticle {
   const HelpArticle(this.id, this.title, this.summary, this.sections);
   final String id, title, summary;
   final List<(String, String)> sections;
-  bool matches(String query) =>
-      '$title $summary ${sections.map((s) => '${s.$1} ${s.$2}').join(' ')}'
-          .toLowerCase()
-          .contains(query.toLowerCase());
+
+  /// Every word of [query] appears somewhere in the article, in any order.
+  bool matches(String query) {
+    final text =
+        '$title $summary ${sections.map((s) => '${s.$1} ${s.$2}').join(' ')}'
+            .toLowerCase();
+    return query
+        .toLowerCase()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .every(text.contains);
+  }
 }
 
 /// Offline, searchable articles. Add an entry here to extend Help.

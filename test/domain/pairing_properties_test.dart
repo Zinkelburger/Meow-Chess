@@ -87,15 +87,13 @@ void main() {
             ],
           );
         }
-        final Round round;
-        try {
-          round = proposeRound(e, e.sections.single, next);
-        } on TournamentException catch (error) {
-          // Small fields legitimately run out of non-repeat pairings; that
-          // must be reported, never resolved by a silent repeat.
-          expect(error.message, contains('No non-repeat pairing'));
-          break;
-        }
+        final round = proposeRound(e, e.sections.single, next);
+        // Small fields legitimately run out of non-repeat pairings; a
+        // second meeting is then allowed, but only with an explicit
+        // explanation (27A1), never silently.
+        final repeatsAllowed = round.explanations.any(
+          (x) => x.contains('meeting is allowed where unavoidable (27A1)'),
+        );
         final seen = <String>[
           for (final g in round.games) ...[g.white, g.black],
           for (final b in round.byes) b.player,
@@ -108,7 +106,7 @@ void main() {
         for (final g in round.games) {
           final pair = ([g.white, g.black]..sort()).join('/');
           expect(
-            opponents.contains(pair),
+            opponents.contains(pair) && !repeatsAllowed,
             false,
             reason: 'seed $seed repeats played pair $pair',
           );
@@ -118,7 +116,13 @@ void main() {
           }
         }
         for (final b in round.byes.where((b) => b.allocated)) {
-          expect(allocated.add(b.player), true, reason: 'second full bye');
+          // 28L3: a second full-point bye only when nobody is eligible,
+          // and then only with an explanation.
+          expect(
+            allocated.add(b.player) || b.reason.contains('28L3 could not'),
+            true,
+            reason: 'second full bye',
+          );
         }
         final decided = decide(round, rng);
         // Only a played game makes two players prior opponents; a forfeited
@@ -202,10 +206,7 @@ void main() {
     for (var i = 1; i < table.length; i++) {
       final a = table[i - 1], b = table[i];
       expect(b.rank >= a.rank, true);
-      final tied =
-          a.points == b.points &&
-          a.buchholz == b.buchholz &&
-          a.sonneborn == b.sonneborn;
+      final tied = sharePlace(a, b, tiebreaks: true);
       expect(b.rank == a.rank, tied);
     }
   });

@@ -130,10 +130,17 @@ when posting new or replacing unstarted pairings. Teams and requests persist in
 player JSON and participate in undo, redo and backups; older records default to
 no team and no requests.
 
-A Swiss proposal is labelled `score-swiss-pilot-v1`. Its priorities are score
-proximity, upper/lower-half preference, non-repeat opponents, color balance and
-lowest eligible non-repeat bye. It is **not a qualified US Chess Swiss engine**.
-Never promote the pilot to that claim without the rule-linked fixtures in DELIVERY.
+A Swiss proposal is labelled `uscf-swiss-29-v1` (`lib/domain/swiss_pairing.dart`).
+It implements US Chess rules 27–29 in the rulebook's order of work: the bye (28L),
+house players (28M1), score groups from the top (29B), odd players (29D), upper
+half against lower half (29C1), repeat fixes (27A1), transpositions and
+interchanges within the 80/200-point limits (29E5) and color priority (29E4),
+with accelerated pairings (28R1), team-mate avoidance (28N1), re-entries (28S),
+fixed boards and announced variations. Every switch is explained in the round.
+`docs/USCF_TD_RULES_MAP.md` §1 is the rule-by-rule status; the fixtures in
+`test/domain/swiss_rules_test.dart` are the rulebook's own examples. An
+experienced TD's review of full event replays (DELIVERY.md) is still outstanding,
+so do not describe the engine as certified.
 
 The DBF writer uses the 2C field layout and mappings checked against archived
 US Chess-accepted club reports and their rated records. Packages remain locally

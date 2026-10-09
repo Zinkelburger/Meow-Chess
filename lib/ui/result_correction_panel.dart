@@ -69,6 +69,9 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
   Outcome? outcome;
   int? reopenFrom;
   bool confirmed = false, more = false;
+
+  /// Rule 18G: the result was adjudicated by the director.
+  bool adjudicated = false;
   String? error;
 
   /// What was saved, so the panel can confirm it and offer Undo in place.
@@ -100,6 +103,8 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
         Outcome.values.where((o) => o.name == draft['outcome']).firstOrNull;
     note.text = draft['note'] as String? ?? '';
     reopenFrom = draft['reopenFrom'] as int?;
+    adjudicated =
+        draft['adjudicated'] as bool? ?? review?.game.adjudicated ?? false;
     note.addListener(remember);
     c.addListener(changed);
     final initial = outcome ?? review?.game.outcome;
@@ -115,7 +120,9 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
   }
 
   void changed() {
-    if (!mounted || saved != null) return;
+    if (!mounted) return;
+    // After saving, redraw so Undo disappears once another change lands.
+    if (saved != null) return setState(() {});
     final r = review;
     // A round that has since started can no longer be unpaired.
     if (r != null && reopenFrom != null && !r.canReopenFrom(reopenFrom!)) {
@@ -131,6 +138,7 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
       'outcome': ?outcome?.name,
       'note': note.text,
       'reopenFrom': ?reopenFrom,
+      'adjudicated': adjudicated,
     });
   }
 
@@ -188,6 +196,7 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
         reason: note.text,
         reopenFrom: reopened,
         confirmedUnstarted: confirmed,
+        adjudicated: adjudicated,
       );
       c.workspaceState.write(draftKey, '');
       setState(() {
@@ -225,9 +234,13 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
   }
 
   KeyEventResult key(FocusNode _, KeyEvent event, List<Outcome> visible) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final arrow = [
+      LogicalKeyboardKey.arrowUp,
+      LogicalKeyboardKey.arrowDown,
+    ].contains(event.logicalKey);
+    // Holding Enter must not save and then press Done; held keys only move.
+    if (event is KeyRepeatEvent && !arrow) return KeyEventResult.handled;
     final keyboard = HardwareKeyboard.instance;
     if (keyboard.isControlPressed ||
         keyboard.isMetaPressed ||
@@ -246,7 +259,7 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
       case LogicalKeyboardKey.enter || LogicalKeyboardKey.numpadEnter:
         save();
       default:
-        final next = resultFromKey(event, white: true);
+        final next = resultFromKey(event, white: true, current: current);
         if (next == null) return KeyEventResult.ignored;
         pick(next);
     }
@@ -458,14 +471,35 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
                 ),
               ],
             ],
-            const SizedBox(height: 24),
-            TextField(
-              key: const ValueKey('result-reason'),
-              controller: note,
-              decoration: const InputDecoration(labelText: 'Note (optional)'),
-              minLines: 1,
-              maxLines: 3,
-              onSubmitted: (_) => save(),
+            const SizedBox(height: 16),
+            // Rule 18G: emergency adjudications are marked ADJ on the chart.
+            _Confirm(
+              key: const ValueKey('result-adjudicated'),
+              value: adjudicated,
+              label:
+                  'Adjudicated by the director (rule 18G, emergency only; shown as ADJ)',
+              onChanged: (v) => setState(() {
+                adjudicated = v;
+                remember();
+              }),
+            ),
+            const SizedBox(height: 8),
+            // Enter saves from the note too; Shift+Enter starts a new line.
+            CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.enter): save,
+                const SingleActivator(LogicalKeyboardKey.numpadEnter): save,
+              },
+              child: TextField(
+                key: const ValueKey('result-reason'),
+                controller: note,
+                decoration: const InputDecoration(
+                  labelText: 'Note (optional)',
+                  helperText: 'Enter to save · Shift+Enter for a new line',
+                ),
+                minLines: 1,
+                maxLines: 3,
+              ),
             ),
             const SizedBox(height: 8),
             Text('The earlier version stays in History.', style: muted),
@@ -482,50 +516,59 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
     final canUndo = c.graph.head == s.head;
     return KeyedSubtree(
       key: const ValueKey('correction-saved'),
-      child: SidePanel(
-        title: 'Result corrected',
-        onClose: widget.onClose,
-        footer: [
-          Row(
-            children: [
-              if (canUndo)
-                OutlinedButton.icon(
-                  key: const ValueKey('correction-undo'),
-                  onPressed: undoSaved,
-                  icon: const Icon(Icons.undo),
-                  label: const Text('Undo'),
+      // Enter held from saving repeats onto the autofocused Done; only a
+      // fresh press closes the panel.
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: (_, event) => event is KeyRepeatEvent
+            ? KeyEventResult.handled
+            : KeyEventResult.ignored,
+        child: SidePanel(
+          title: 'Result corrected',
+          onClose: widget.onClose,
+          footer: [
+            Row(
+              children: [
+                if (canUndo)
+                  OutlinedButton.icon(
+                    key: const ValueKey('correction-undo'),
+                    onPressed: undoSaved,
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Undo'),
+                  ),
+                const Spacer(),
+                OutlinedButton(
+                  key: const ValueKey('correction-done'),
+                  autofocus: true,
+                  onPressed: widget.onClose,
+                  child: const Text('Done'),
                 ),
-              const Spacer(),
-              OutlinedButton(
-                key: const ValueKey('correction-done'),
-                autofocus: true,
-                onPressed: widget.onClose,
-                child: const Text('Done'),
+              ],
+            ),
+          ],
+          children: [
+            _Notice(
+              icon: Icons.check_circle_outline,
+              text: '${s.game} is now ${s.to.label} (was ${s.from.label}).',
+              color: colors.onSurface,
+            ),
+            const SizedBox(height: 12),
+            Text('Standings and tiebreaks are up to date.', style: muted),
+            if (s.reopened != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Round ${s.reopened} onward is unpaired. Pair it again with Create pairings.',
+                style: muted,
               ),
             ],
-          ),
-        ],
-        children: [
-          _Notice(
-            icon: Icons.check_circle_outline,
-            text: '${s.game} is now ${s.to.label} (was ${s.from.label}).',
-            color: colors.onSurface,
-          ),
-          const SizedBox(height: 12),
-          Text('Standings and tiebreaks are up to date.', style: muted),
-          if (s.reopened != null) ...[
             const SizedBox(height: 8),
             Text(
-              'Round ${s.reopened} onward is unpaired. Pair it again with Create pairings.',
+              'Reprint anything already posted for this section, such as wall sheets and standings.',
               style: muted,
             ),
           ],
-          const SizedBox(height: 8),
-          Text(
-            'Reprint anything already posted for this section, such as wall sheets and standings.',
-            style: muted,
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -14,10 +14,15 @@ class FieldSpec {
     this.checkbox = false,
     this.enabled = true,
     this.options,
+    this.note,
   });
   final String key, label;
   final int lines;
   final bool required, secret, checkbox, enabled;
+
+  /// Muted advice under a text field for its current value, such as the
+  /// rule 5E2 delay hint; null shows nothing.
+  final String? Function(String value)? note;
 
   /// Stored value → displayed label. When set, the field is a drop-down.
   final Map<String, String>? options;

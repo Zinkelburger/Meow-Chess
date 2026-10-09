@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'dart:math' show Random;
 
 import 'headless_foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
+import '../domain/bye_policy.dart';
 import '../domain/history.dart';
 import '../domain/result_correction.dart';
+import '../domain/rulings.dart';
 import '../domain/model.dart';
 import '../domain/member_observation.dart';
 import '../domain/rating_update.dart';
@@ -70,6 +73,7 @@ class TournamentControllerCore extends ChangeNotifier {
         Diagnostics.record('save event', 'unchanged', context: context);
         return;
       }
+      _refuseNewDuplicateSectionName(event, next);
       event = repository.commit(
         next,
         expectedRevision: event?.revision ?? 0,
@@ -94,14 +98,46 @@ class TournamentControllerCore extends ChangeNotifier {
     }
   }
 
+  /// Refuses a change that gives two sections the same name. Older files
+  /// that already hold duplicates still open and save.
+  static void _refuseNewDuplicateSectionName(Event? previous, Event next) {
+    Map<String, int> count(Iterable<Section> sections) {
+      final out = <String, int>{};
+      for (final s in sections) {
+        final key = s.name.trim().toLowerCase();
+        out[key] = (out[key] ?? 0) + 1;
+      }
+      return out;
+    }
+
+    final before = count(previous?.sections ?? const []);
+    for (final MapEntry(:key, :value) in count(next.sections).entries) {
+      if (value > 1 && value > (before[key] ?? 0)) {
+        // Name the section that already had it, as the TD knows it.
+        final name = [
+          ...?previous?.sections,
+          ...next.sections,
+        ].firstWhere((s) => s.name.trim().toLowerCase() == key).name.trim();
+        throw TournamentException(
+          'There is already a section called $name. Choose another name.',
+        );
+      }
+    }
+  }
+
+  /// Rule 28H: after [savePlayer], advice the TD should see (the player now
+  /// exceeds their section's rating ceiling). Cleared by the next save.
+  String? playerNotice;
+
   void savePlayer(Player player) {
     final e = event!;
+    playerNotice = null;
     final duplicate = e.players
         .where(
           (p) =>
               p.id != player.id &&
               (p.personId ?? p.id) != (player.personId ?? player.id) &&
-              player.memberId.isNotEmpty &&
+              isMemberId(player.memberId) &&
               p.memberId == player.memberId,
         )
         .firstOrNull;
@@ -124,6 +160,12 @@ class TournamentControllerCore extends ChangeNotifier {
         },
       );
     }
+    if (previous == null ||
+        previous.pairingRating != player.pairingRating ||
+        previous.prizeRating != player.prizeRating ||
+        previous.rating != player.rating) {
+      _checkAssignedRatings(e, player);
+    }
     final exists = e.players.any((p) => p.id == player.id);
     change(
       exists ? 'Edit ${player.name}' : 'Register ${player.name}',
@@ -133,6 +175,80 @@ class TournamentControllerCore extends ChangeNotifier {
             : [...e.players, player],
       ),
     );
+    // Rule 28H: a revised rating can make the player ineligible for the
+    // section. The save stands; the TD decides what to do.
+    final section = e.sectionOf(player.id);
+    if (previous != null &&
+        section != null &&
+        section.ratingCeiling > 0 &&
+        player.effectivePairingRating >= section.ratingCeiling &&
+        previous.effectivePairingRating != player.effectivePairingRating) {
+      playerNotice =
+          'Rating ${player.effectivePairingRating} is at or above the ${section.name} ceiling of ${section.ratingCeiling} (rule 28H). '
+          'Move the player to an appropriate section, with half-point byes for rounds missed (28H2), or remove them (28H1).';
+    }
+  }
+
+  /// Rules 28D2, 28D5, 28E1 and 28E2 for a TD-assigned pairing or prize
+  /// rating. Throws when the assignment breaks the rule as written.
+  void _checkAssignedRatings(Event e, Player player) {
+    final assigned = [
+      if (player.pairingRating > 0) ('pairing', player.pairingRating),
+      if (player.prizeRating > 0) ('prize', player.prizeRating),
+    ];
+    if (assigned.isEmpty) return;
+    final cause = player.ratingNote.trim();
+    // Rule 28E1: never below the published rating, or the converted foreign
+    // rating of a player without one.
+    final foreign = player.rating == 0 && player.foreignRating > 0
+        ? convertForeignRating(player.foreignFederation, player.foreignRating)
+        : null;
+    final floor = player.rating > 0 ? player.rating : foreign?.rating ?? 0;
+    for (final (purpose, value) in assigned) {
+      if (floor > 0 && value < floor) {
+        throw TournamentException(
+          'An assigned $purpose rating cannot be lower than '
+          '${player.rating > 0 ? 'the published rating $floor' : 'the converted foreign rating $floor'} (rule 28E1).',
+        );
+      }
+    }
+    if (player.rating > 0 && cause.isEmpty) {
+      throw const TournamentException(
+        'State the cause for assigning a rating to a rated player (rule 28E2): superiority to the class, prize-driven results, an unlikely drop, or a previous lack of effort.',
+      );
+    }
+    // Rules 28D2 / 28D5: an unverified or activity-based assignment to an
+    // unrated player should not put them under 2200 where a class prize is
+    // available. A stated cause records the verification (28D1).
+    final prize = player.prizeRating > 0
+        ? player.prizeRating
+        : player.pairingRating;
+    final section = e.sectionOf(player.id);
+    if (player.rating == 0 &&
+        prize < 2200 &&
+        cause.isEmpty &&
+        section != null &&
+        _hasClassPrizeFor(section, prize)) {
+      throw TournamentException(
+        'An unrated player assigned $prize would be eligible for a class prize in ${section.name}. Rules 28D2 and 28D5 say an unverified assignment should not be under 2200; state the cause (for example the verified rating under 28D1) to proceed.',
+      );
+    }
+  }
+
+  static bool _hasClassPrizeFor(Section section, int rating) {
+    final list = section.prizes['list'];
+    if (list is! List) return false;
+    for (final entry in list) {
+      if (entry is! Map) continue;
+      final kind = '${entry['kind'] ?? ''}'.toLowerCase();
+      if (kind != 'class' && kind != 'under') continue;
+      final min = (entry['min'] as num?)?.toInt() ?? 0;
+      final max = (entry['max'] as num?)?.toInt() ?? 0;
+      // Class ranges are inclusive; Under prizes exclude the ceiling.
+      final below = kind == 'class' ? rating <= max : rating < max;
+      if ((min == 0 || rating >= min) && (max == 0 || below)) return true;
+    }
+    return false;
   }
 
   /// Validates the entire approval against current state before a single commit.
@@ -318,11 +434,16 @@ class TournamentControllerCore extends ChangeNotifier {
       final end = s.boardStart + (s.players.length + 1) ~/ 2;
       return end > next ? end : next;
     });
+    final taken = {for (final s in e.sections) s.name.trim().toLowerCase()};
+    var name = 'Side Games';
+    for (var n = 2; taken.contains(name.toLowerCase()); n++) {
+      name = 'Side Games $n';
+    }
     final section =
         existing ??
         Section(
           id: newId(),
-          name: 'Side Games',
+          name: name,
           players: [],
           sideGames: true,
           plannedRounds: 1,
@@ -482,6 +603,41 @@ class TournamentControllerCore extends ChangeNotifier {
             boardStart: nextBoard(e.sections),
             doubleGames: doubleGames,
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Rule 30A: assigns a round-robin or quad section's pairing numbers by
+  /// lot. The shuffle is seeded and the seed is in the audited action, so the
+  /// draw can be reproduced; posted rounds fix the numbers.
+  void drawLots(String sectionId, {int? seed}) {
+    final e = event!;
+    final section = e.sections.where((s) => s.id == sectionId).firstOrNull;
+    if (section == null) {
+      throw const TournamentException('This section no longer exists.');
+    }
+    if (section.format == Format.swiss || section.sideGames) {
+      throw const TournamentException(
+        'Numbers by lot apply to round robins and quads.',
+      );
+    }
+    if (section.rounds.isNotEmpty) {
+      throw const TournamentException(
+        'Pairing numbers are fixed once a round is posted.',
+      );
+    }
+    if (section.players.length < 2) {
+      throw const TournamentException('Add players before drawing lots.');
+    }
+    final drawn = seed ?? Random().nextInt(1 << 31);
+    final players = [...section.players]..shuffle(Random(drawn));
+    change(
+      'Draw lots for ${section.name} (seed $drawn)',
+      e.copy(
+        sections: [
+          for (final x in e.sections)
+            x.id == section.id ? x.copy(players: players, quadPairings: []) : x,
         ],
       ),
     );
@@ -656,6 +812,14 @@ class TournamentControllerCore extends ChangeNotifier {
               ],
             );
     }).toList();
+    // Rule 29E2 TIP: one coin toss decides board one of every section, so
+    // the toss the first Swiss round used is recorded on the event.
+    final tossed =
+        e.colorToss.isEmpty &&
+        batch.rounds.values.any(
+          (r) => r.policy == swissPolicy && r.number == 1,
+        );
+    final colorToss = tossed ? effectiveColorToss(e) : e.colorToss;
     // Board numbers reserve physical space across independently progressing sections.
     final busy = <int, String>{};
     for (final s in updated) {
@@ -678,37 +842,43 @@ class TournamentControllerCore extends ChangeNotifier {
     }
     change(
       'Create pairings for ${batch.rounds.length} section${batch.rounds.length == 1 ? '' : 's'}',
-      e.copy(sections: updated),
+      e.copy(sections: updated, colorToss: colorToss),
     );
     secondaryBackup();
   }
 
   void startRound(String sectionId) => startRounds([sectionId]);
 
-  /// Starts the current round of each section as one revision.
+  /// Starts the current round of each section as one revision: the first
+  /// unfinished one. Entering a quad result saves the schedule through that
+  /// round, so the current round can come before the last saved one.
   void startRounds(Iterable<String> sectionIds) {
     final e = event!, ids = sectionIds.toSet();
     if (ids.isEmpty) {
       throw const TournamentException('No round is waiting to start.');
     }
+    final current = <String, int>{};
     for (final id in ids) {
       final section = _section(id);
       if (section.rounds.isEmpty) {
         throw const TournamentException('Post a round before starting it.');
       }
-      if (section.rounds.last.startedAt != null) {
-        throw const TournamentException('This round has already started.');
-      }
-      if (section.rounds.last.complete) {
+      final open = section.rounds.indexWhere((r) => !r.complete);
+      if (open < 0) {
         throw const TournamentException('This round is already complete.');
       }
-      if (section.rounds
-          .take(section.rounds.length - 1)
-          .any((r) => !r.complete)) {
-        throw TournamentException(
-          '${section.name}: earlier games are still unresolved. A pairing assumption permits posting, not simultaneous play.',
-        );
+      final round = section.rounds[open];
+      final last = open == section.rounds.length - 1;
+      // The last round may have results entered before its start; an earlier
+      // one with play is still being played under a later posted round.
+      if (last ? round.startedAt != null : round.hasPlay) {
+        throw last
+            ? const TournamentException('This round has already started.')
+            : TournamentException(
+                '${section.name}: earlier games are still unresolved. A pairing assumption permits posting, not simultaneous play.',
+              );
       }
+      current[id] = open;
     }
     final now = DateTime.now().toUtc().toIso8601String();
     change(
@@ -720,8 +890,8 @@ class TournamentControllerCore extends ChangeNotifier {
                   ? s
                   : s.copy(
                       rounds: [
-                        ...s.rounds.take(s.rounds.length - 1),
-                        s.rounds.last.copy(startedAt: now),
+                        for (final (i, r) in s.rounds.indexed)
+                          i == current[s.id] ? r.copy(startedAt: now) : r,
                       ],
                     ),
             )
@@ -767,6 +937,7 @@ class TournamentControllerCore extends ChangeNotifier {
     String reason = '',
     int? reopenFrom,
     bool confirmedUnstarted = false,
+    bool? adjudicated,
   }) {
     if (event!.id != review.event.id ||
         event!.revision != review.event.revision) {
@@ -774,11 +945,15 @@ class TournamentControllerCore extends ChangeNotifier {
         'The event changed while this review was open. Close it and review the correction again.',
       );
     }
-    final next = review.apply(
-      outcome,
-      reason: reason,
-      reopenFrom: reopenFrom,
-      confirmedUnstarted: confirmedUnstarted,
+    final next = _withIrrevocableByeRule(
+      review.apply(
+        outcome,
+        reason: reason,
+        reopenFrom: reopenFrom,
+        confirmedUnstarted: confirmedUnstarted,
+        adjudicated: adjudicated,
+      ),
+      review.gameId,
     );
     change(
       'Correct ${review.section.name} round ${review.round.number}, board ${review.game.board}: '
@@ -825,6 +1000,29 @@ class TournamentControllerCore extends ChangeNotifier {
     throw const TournamentException('The selected game no longer exists.');
   }
 
+  /// Rule 22C5: once a result is in, a win by a player who cancelled an
+  /// irrevocable bye for that round counts as a draw for prizes.
+  static Event _withIrrevocableByeRule(Event e, String gameId) => e.copy(
+    sections: [
+      for (final s in e.sections)
+        s.copy(
+          rounds: [
+            for (final r in s.rounds)
+              r.games.any((g) => g.id == gameId)
+                  ? r.copy(
+                      games: [
+                        for (final g in r.games)
+                          g.id == gameId
+                              ? applyIrrevocableByeRule(e, g, r.number)
+                              : g,
+                      ],
+                    )
+                  : r,
+          ],
+        ),
+    ],
+  );
+
   void recordResult(String gameId, Outcome outcome, {String reason = ''}) {
     final (e, game) = _materialize(gameId);
     if (game.outcome == outcome && game.note == reason) return;
@@ -835,37 +1033,40 @@ class TournamentControllerCore extends ChangeNotifier {
     }
     change(
       'Result, board ${game.board}',
-      e.copy(
-        sections: e.sections
-            .map(
-              (s) => s.copy(
-                rounds: s.rounds
-                    .map(
-                      (r) => r.copy(
-                        games: r.games
-                            .map(
-                              (g) => g.id == gameId
-                                  ? g.copy(
-                                      outcome: outcome,
-                                      note: reason,
-                                      // An assumption stands in only until
-                                      // the game is resolved.
-                                      pairingAssumption: outcome.resolved
-                                          ? null
-                                          : g.pairingAssumption,
-                                      pairingReason: outcome.resolved
-                                          ? ''
-                                          : g.pairingReason,
-                                    )
-                                  : g,
-                            )
-                            .toList(),
-                      ),
-                    )
-                    .toList(),
-              ),
-            )
-            .toList(),
+      _withIrrevocableByeRule(
+        e.copy(
+          sections: e.sections
+              .map(
+                (s) => s.copy(
+                  rounds: s.rounds
+                      .map(
+                        (r) => r.copy(
+                          games: r.games
+                              .map(
+                                (g) => g.id == gameId
+                                    ? g.copy(
+                                        outcome: outcome,
+                                        note: reason,
+                                        // An assumption stands in only until
+                                        // the game is resolved.
+                                        pairingAssumption: outcome.resolved
+                                            ? null
+                                            : g.pairingAssumption,
+                                        pairingReason: outcome.resolved
+                                            ? ''
+                                            : g.pairingReason,
+                                      )
+                                    : g,
+                              )
+                              .toList(),
+                        ),
+                      )
+                      .toList(),
+                ),
+              )
+              .toList(),
+        ),
+        gameId,
       ),
     );
   }
@@ -903,7 +1104,12 @@ class TournamentControllerCore extends ChangeNotifier {
     );
   }
 
-  void reserveBye(String playerId, int round, int points) {
+  /// Reserves, changes or cancels (negative [points]) a future bye. Rules
+  /// 22C1–22C4 limit half-point byes by the section's [ByePolicy];
+  /// zero-point byes are always allowed. [irrevocable] true declares the
+  /// bye irrevocable (22C4), false withdraws the declaration, null keeps
+  /// it, so a cancelled irrevocable bye still counts under 22C5.
+  void reserveBye(String playerId, int round, int points, {bool? irrevocable}) {
     final e = event!;
     final s = e.sectionOf(playerId);
     if (s != null && round <= s.rounds.length) {
@@ -913,12 +1119,167 @@ class TournamentControllerCore extends ChangeNotifier {
     }
     final player = e.player(playerId);
     final byes = {...player.byes};
+    final declared = {...player.irrevocableByes};
+    if (irrevocable == true) declared.add(round);
+    if (irrevocable == false) declared.remove(round);
     if (points < 0) {
       byes.remove(round);
     } else {
+      if (points == 1 && s != null) {
+        final problem = ByePolicy.fromJson(
+          s.byeRules,
+        ).halfByeProblem(player, round, declared: declared.contains(round));
+        if (problem != null) throw TournamentException(problem);
+      }
       byes[round] = points;
     }
-    savePlayer(player.copy(byes: byes));
+    savePlayer(player.copy(byes: byes, irrevocableByes: declared));
+  }
+
+  /// Rules 29H3 and 29H4: when the last posted round of [sectionId] still has
+  /// unreported games at pairing time, score each as a double forfeit
+  /// (`doubleForfeit`, 29H3) or hold both players out of the next round with
+  /// half-point byes (`halfPointByes`, 29H4), in one revision. Returns the
+  /// boards treated.
+  List<int> holdOutNonReporters(String sectionId, {required String treatment}) {
+    final e = event!, s = _section(sectionId);
+    if (!const {'doubleForfeit', 'halfPointByes'}.contains(treatment)) {
+      throw const TournamentException(
+        'Choose doubleForfeit (rule 29H3) or halfPointByes (rule 29H4).',
+      );
+    }
+    final round = s.rounds.lastOrNull;
+    if (round == null) {
+      throw const TournamentException('No round is posted in this section.');
+    }
+    final unreported = round.games
+        .where((g) => g.outcome == Outcome.unreported)
+        .toList();
+    if (unreported.isEmpty) {
+      throw TournamentException(
+        'Every game in round ${round.number} has a result.',
+      );
+    }
+    final next = round.number + 1;
+    var players = e.players;
+    var games = round.games;
+    if (treatment == 'doubleForfeit') {
+      games = [
+        for (final g in games)
+          unreported.contains(g)
+              ? g.copy(
+                  outcome: Outcome.doubleForfeit,
+                  note:
+                      'Rule 29H3: result not reported by pairing time; both players scored as losses. The real result, when learned, may be recorded as an extra rated game (28M4).',
+                  pairingAssumption: null,
+                  pairingReason: '',
+                )
+              : g,
+      ];
+    } else {
+      if (next > s.plannedRounds) {
+        throw TournamentException(
+          'Round ${round.number} is the last round, so there is no next round to hold them out of. Use the double forfeit (rule 29H3).',
+        );
+      }
+      final policy = ByePolicy.fromJson(s.byeRules);
+      final held = <String, Player>{};
+      for (final g in unreported) {
+        for (final id in [g.white, g.black]) {
+          final p = held[id] ?? e.player(id);
+          final problem = policy.halfByeProblem(p, next, declared: true);
+          if (problem != null) {
+            throw TournamentException(
+              'Half-point byes are not available for round $next (rule 29H4): $problem',
+            );
+          }
+          held[id] = p.copy(byes: {...p.byes, next: 1});
+        }
+      }
+      players = [for (final p in players) held[p.id] ?? p];
+      games = [
+        for (final g in games)
+          unreported.contains(g)
+              ? g.copy(
+                  note:
+                      'Rule 29H4: result not reported by pairing time; both players hold half-point byes for round $next.',
+                )
+              : g,
+      ];
+    }
+    change(
+      treatment == 'doubleForfeit'
+          ? 'Double forfeit ${unreported.length == 1 ? 'board ${unreported.single.board}' : '${unreported.length} unreported boards'} in ${s.name} round ${round.number} (29H3)'
+          : 'Hold ${unreported.length * 2} non-reporters out of ${s.name} round $next with half-point byes (29H4)',
+      e.copy(
+        players: players,
+        sections: [
+          for (final x in e.sections)
+            x.id == s.id
+                ? x.copy(
+                    rounds: [
+                      for (final r in x.rounds)
+                        r.number == round.number ? r.copy(games: games) : r,
+                    ],
+                  )
+                : x,
+        ],
+      ),
+    );
+    return [for (final g in unreported) g.board];
+  }
+
+  /// Rules 13I, 20K, 18G, 21H–21L: records a ruling, penalty, appeal or
+  /// adjudication in the event's log. Returns the entry's ID.
+  String logRuling({
+    required String kind,
+    required String text,
+    int round = 0,
+    String section = '',
+    List<String> players = const [],
+    String decidedBy = '',
+    String outcome = '',
+  }) {
+    final e = event!;
+    if (!rulingKinds.containsKey(kind)) {
+      throw TournamentException(
+        'The kind must be one of ${rulingKinds.keys.join(', ')}.',
+      );
+    }
+    if (text.trim().isEmpty) {
+      throw const TournamentException('Describe the ruling.');
+    }
+    if (section.isNotEmpty) _section(section);
+    for (final id in players) {
+      e.player(id);
+    }
+    final entry = <String, dynamic>{
+      'id': newId(),
+      'at': DateTime.now().toUtc().toIso8601String(),
+      'kind': kind,
+      'round': round,
+      'section': section,
+      'players': players,
+      'text': text.trim(),
+      'decidedBy': decidedBy.trim(),
+      'outcome': outcome.trim(),
+    };
+    change(
+      'Log ${rulingKinds[kind]!.toLowerCase()}',
+      e.copy(rulings: [...e.rulings, entry]),
+    );
+    return entry['id'] as String;
+  }
+
+  void removeRuling(String id) {
+    final e = event!;
+    if (!e.rulings.any((r) => r['id'] == id)) {
+      throw const TournamentException('That log entry no longer exists.');
+    }
+    change(
+      'Remove log entry',
+      e.copy(rulings: [...e.rulings.where((r) => r['id'] != id)]),
+    );
   }
 
   /// Saves a complete quad schedule, including unplayed posted rounds, in one
@@ -1185,25 +1546,49 @@ class TournamentControllerCore extends ChangeNotifier {
     // Before any play a move is only a roster edit; afterwards the merged
     // section's schedule no longer holds, so it continues as a Swiss.
     final played = affected.any((s) => s.rounds.isNotEmpty);
-    final sections = e.sections
-        .map(
-          (s) => s.id == targetId
-              ? s.copy(
-                  players: members,
-                  format: played ? Format.swiss : s.format,
-                )
-              : s.copy(
-                  players: s.players.where((id) => !ids.contains(id)).toList(),
-                ),
-        )
-        .toList();
-    // Reallocate only future board ranges, keeping every historical game intact.
-    var board = 1;
-    final allocated = sections.map((s) {
-      final out = s.copy(boardStart: board);
-      board += (s.players.length + 1) ~/ 2;
-      return out;
+    final changed = <String>{};
+    final sections = e.sections.map((s) {
+      final players = s.id == targetId
+          ? members
+          : s.players.where((id) => !ids.contains(id)).toList();
+      if (listEquals(players, s.players)) {
+        return s.id == targetId && played ? s.copy(format: Format.swiss) : s;
+      }
+      changed.add(s.id);
+      return s.copy(
+        players: players,
+        format: s.id == targetId && played ? Format.swiss : null,
+        // A manual quad schedule names roster slots, which shift.
+        quadPairings: const [],
+      );
     }).toList();
+    // Board ranges stay where the TD put them. A section whose roster grew
+    // into another's range moves after every range and every live board.
+    (int, int) range(Section s) =>
+        (s.boardStart, s.boardStart + (s.players.length + 1) ~/ 2);
+    bool overlaps((int, int) a, (int, int) b) =>
+        a.$1 < a.$2 && b.$1 < b.$2 && a.$1 < b.$2 && b.$1 < a.$2;
+    final before = {for (final s in e.sections) s.id: range(s)};
+    final allocated = [...sections];
+    for (final (i, s) in allocated.indexed) {
+      if (!changed.contains(s.id)) continue;
+      final others = [
+        for (final o in allocated)
+          if (o.id != s.id) o,
+      ];
+      final collides = others.any(
+        (o) =>
+            overlaps(range(s), range(o)) &&
+            !overlaps(before[s.id]!, before[o.id]!),
+      );
+      if (!collides) continue;
+      final live = others
+          .expand((o) => o.unresolvedRounds)
+          .expand((r) => r.games)
+          .fold(0, (int max, g) => g.board > max ? g.board : max);
+      final free = nextBoard(others);
+      allocated[i] = s.copy(boardStart: free > live ? free : live + 1);
+    }
     change(
       'Move ${ids.length} players to ${target.name}',
       e.copy(
@@ -1313,17 +1698,33 @@ class TournamentControllerCore extends ChangeNotifier {
   List<String> lossesTo(int node) =>
       playLost(event!, repository.snapshot(node));
 
+  /// History lives in the event file, so a closed event cannot read it.
+  void _refuseClosed(String action) {
+    if (!_closed) return;
+    const error = TournamentException('This event has closed.');
+    Diagnostics.record(
+      'save event',
+      'failed',
+      context: {'action': action},
+      error: error,
+    );
+    throw error;
+  }
+
   void undo({bool acceptLosses = false}) {
+    _refuseClosed('Undo');
     if (!canUndo) return;
     _move(graph.back!, 'Undo $undoLabel', acceptLosses);
   }
 
   void redo({bool acceptLosses = false}) {
+    _refuseClosed('Redo');
     if (!canRedo) return;
     _move(graph.forward!, 'Redo $redoLabel', acceptLosses);
   }
 
   void restore(int node, {bool acceptLosses = false}) {
+    _refuseClosed('Restore #$node');
     if (node == graph.head) return;
     _move(
       node,
@@ -1333,28 +1734,51 @@ class TournamentControllerCore extends ChangeNotifier {
   }
 
   void _move(int node, String action, bool acceptLosses) {
-    if (_closed) throw const TournamentException('This event has closed.');
-    final target = repository.snapshot(node);
-    // History before a copy was marked practice belongs to the original
-    // event; restoring it would also restore that event's backup folder.
-    if (event!.practice && !target.practice) {
-      throw const TournamentException(
-        'This practice copy cannot go back to before it was copied.',
+    final context = <String, Object?>{
+      'action': action,
+      'eventId': event?.id,
+      'revision': event?.revision,
+      'node': node,
+    };
+    Diagnostics.record('save event', 'started', context: context);
+    try {
+      if (_closed) throw const TournamentException('This event has closed.');
+      final target = repository.snapshot(node);
+      // History before a copy was marked practice belongs to the original
+      // event; restoring it would also restore that event's backup folder.
+      if (event!.practice && !target.practice) {
+        throw const TournamentException(
+          'This practice copy cannot go back to before it was copied.',
+        );
+      }
+      final lost = playLost(event!, target);
+      if (lost.isNotEmpty && !acceptLosses) {
+        throw TournamentException(
+          'Going there removes play already recorded: ${lost.join('; ')}.',
+        );
+      }
+      event = repository.checkout(
+        node,
+        expectedRevision: event!.revision,
+        action: action,
       );
-    }
-    final lost = playLost(event!, target);
-    if (lost.isNotEmpty && !acceptLosses) {
-      throw TournamentException(
-        'Going there removes play already recorded: ${lost.join('; ')}.',
+      _graph = null;
+      Diagnostics.record(
+        'save event',
+        'succeeded',
+        context: {...context, 'revision': event!.revision},
       );
+      notifyListeners();
+    } catch (error, stack) {
+      Diagnostics.record(
+        'save event',
+        'failed',
+        context: context,
+        error: error,
+        stack: stack,
+      );
+      rethrow;
     }
-    event = repository.checkout(
-      node,
-      expectedRevision: event!.revision,
-      action: action,
-    );
-    _graph = null;
-    notifyListeners();
   }
 
   void secondaryBackup() {

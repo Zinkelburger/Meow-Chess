@@ -258,4 +258,40 @@ void main() {
     );
     expect(summary(tester), '1 new player');
   });
+
+  testWidgets('a detected pipe can be seen and cleared, and stays labelled', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 850);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    await open(tester, c, 'Name|Rating\nAda|1500\nBo|1400');
+    expect(find.text('Detected |'), findsOneWidget);
+    final other = find.byKey(const ValueKey('import-other-separator'));
+    expect(tester.widget<TextField>(other).controller!.text, '|');
+    expect(find.text('Ada'), findsOneWidget);
+    // Clearing Other really stops splitting on the pipe.
+    await tester.enterText(other, '');
+    await tester.pumpAndSettle();
+    expect(find.text('Ada|1500'), findsOneWidget);
+    expect(find.text('Detected |'), findsOneWidget);
+  });
+
+  testWidgets('a one-column Last, First list is not split on the comma', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 850);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    await open(tester, c, 'Smith, John\nGarcia, Maria\nLee, Ann');
+    expect(find.text('Smith, John'), findsOneWidget);
+    expect(find.text('Smith'), findsNothing);
+    expect(find.text('Detected ,'), findsNothing);
+  });
 }

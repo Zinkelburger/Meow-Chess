@@ -98,8 +98,8 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   String? quote = '"';
   bool merge = false;
 
-  /// What auto-detection picked, shown until the TD changes the separators.
-  String? detected;
+  /// What auto-detection picked, kept in view while the TD adjusts it.
+  late final String? detected;
   late RosterTable table;
   late bool hasHeader;
   late Map<RosterField, int> columns;
@@ -115,7 +115,12 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   void initState() {
     super.initState();
     detected = detectSeparator(widget.source);
-    separators.add(detected ?? ',');
+    // None detected means one column (a list of names, or "Last, First"
+    // lines). One without its own checkbox (a pipe) goes in Other, where the
+    // TD can see and clear it.
+    if (detected case final ch?) {
+      _separators.containsKey(ch) ? separators.add(ch) : other.text = ch;
+    }
     decode();
   }
 
@@ -170,7 +175,6 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
 
   void settings(VoidCallback change) => setState(() {
     change();
-    detected = null;
     skipInvalid = false;
     decode();
   });

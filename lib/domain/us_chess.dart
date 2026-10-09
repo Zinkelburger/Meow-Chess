@@ -202,6 +202,56 @@ const _fold = {
   'þ': 'th',
   'Ĳ': 'IJ',
   'ĳ': 'ij',
+  // Latin Extended Additional (Vietnamese and others) and the horned O and U.
+  'ḀẠẢẤẦẨẪẬẮẰẲẴẶ': 'A',
+  'ḁạảấầẩẫậắằẳẵặẚ': 'a',
+  'ḂḄḆ': 'B',
+  'ḃḅḇ': 'b',
+  'Ḉ': 'C',
+  'ḉ': 'c',
+  'ḊḌḎḐḒ': 'D',
+  'ḋḍḏḑḓ': 'd',
+  'ḔḖḘḚḜẸẺẼẾỀỂỄỆ': 'E',
+  'ḕḗḙḛḝẹẻẽếềểễệ': 'e',
+  'Ḟ': 'F',
+  'ḟ': 'f',
+  'Ḡ': 'G',
+  'ḡ': 'g',
+  'ḢḤḦḨḪ': 'H',
+  'ḣḥḧḩḫẖ': 'h',
+  'ḬḮỈỊ': 'I',
+  'ḭḯỉị': 'i',
+  'ḰḲḴ': 'K',
+  'ḱḳḵ': 'k',
+  'ḶḸḺḼ': 'L',
+  'ḷḹḻḽ': 'l',
+  'ḾṀṂ': 'M',
+  'ḿṁṃ': 'm',
+  'ṄṆṈṊ': 'N',
+  'ṅṇṉṋ': 'n',
+  'ṌṎṐṒỌỎỐỒỔỖỘỚỜỞỠỢƠ': 'O',
+  'ṍṏṑṓọỏốồổỗộớờởỡợơ': 'o',
+  'ṔṖ': 'P',
+  'ṕṗ': 'p',
+  'ṘṚṜṞ': 'R',
+  'ṙṛṝṟ': 'r',
+  'ṠṢṤṦṨ': 'S',
+  'ṡṣṥṧṩ': 's',
+  'ṪṬṮṰ': 'T',
+  'ṫṭṯṱẗ': 't',
+  'ṲṴṶṸṺỤỦỨỪỬỮỰƯ': 'U',
+  'ṳṵṷṹṻụủứừửữựư': 'u',
+  'ṼṾ': 'V',
+  'ṽṿ': 'v',
+  'ẀẂẄẆẈ': 'W',
+  'ẁẃẅẇẉẘ': 'w',
+  'ẊẌ': 'X',
+  'ẋẍ': 'x',
+  'ẎỲỴỶỸ': 'Y',
+  'ẏẙỳỵỷỹ': 'y',
+  'ẐẒẔ': 'Z',
+  'ẑẓẕ': 'z',
+  'ẞ': 'SS',
   '‘’ʼ´`“”„«»': "'",
   '‐‑‒–—−': '-',
   '½': '1/2',
@@ -232,6 +282,25 @@ String? reportText(String text) {
     }
   }
   return out.toString().replaceAll(RegExp(r' +'), ' ').trim();
+}
+
+/// A case- and accent-insensitive key for comparing or sorting names, so
+/// "José  Pérez" and "jose perez" match and "de Silva" sorts before "Zhang".
+/// Characters with no plain spelling are kept, unlike [reportText].
+String nameKey(String name) {
+  final out = StringBuffer();
+  for (final c in name.runes) {
+    if (c >= 0x300 && c <= 0x36f) continue; // Combining accents.
+    final mapped = _foldMap[c];
+    mapped != null ? out.write(mapped) : out.writeCharCode(c);
+  }
+  return out.toString().toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+/// Orders names by [nameKey], then exactly, so the order is total.
+int compareNames(String a, String b) {
+  final c = nameKey(a).compareTo(nameKey(b));
+  return c != 0 ? c : a.compareTo(b);
 }
 
 /// Characters kept out of free-text report fields. The DBF format can hold
@@ -281,7 +350,8 @@ String? reportName(String name) {
   }
   final words = text.replaceAll(',', ' ').split(' ')
     ..removeWhere((w) => w.isEmpty);
-  final end = words.length > 2 && suffix(words.last)
+  // "Smith Jr" is a last name and suffix, like a lone "Smith".
+  final end = words.length > 1 && suffix(words.last)
       ? words.length - 1
       : words.length;
   if (end == 1) return words.join(' ');
@@ -415,3 +485,117 @@ const sectionLevels = {
 String? playerReportName(Player p) => p.reportName.trim().isNotEmpty
     ? reportText(p.reportName)?.toUpperCase()
     : reportName(p.name);
+
+/// Rule 5E: the recommended minimum delay or increment, in seconds, for a
+/// time control that states none (rule 5E2 applies it).
+int recommendedDelaySeconds(TimeControl tc) {
+  if (tc.stages.length > 1 || tc.primaryMinutes >= 30) return 5;
+  if (tc.primaryMinutes > 10) return 3;
+  return 2;
+}
+
+/// Rule 5E2: the hint shown beside a time control that states no delay or
+/// increment. Null when a delay is stated or the text does not parse.
+String? delayHint(String text) {
+  if (text.trim().isEmpty) return null;
+  try {
+    final tc = TimeControl.parse(text);
+    if (tc.bonusKind != null) return null;
+    final seconds = recommendedDelaySeconds(tc);
+    return 'No delay or increment stated: rule 5E2 applies the recommended minimum, d$seconds here (rule 5E). Write d0 to play without one.';
+  } on TournamentException {
+    return null;
+  }
+}
+
+/// Rule 28D1 federations with a stated conversion, by code, for the player
+/// panel's federation choice and [convertForeignRating].
+const foreignFederations = {
+  'FIDE': 'FIDE',
+  'CAN': 'Canada (CFC)',
+  'BER': 'Bermuda',
+  'JAM': 'Jamaica',
+  'QUICK': 'US Chess Quick (or Regular at a Quick event)',
+  'FQE': 'Quebec (FQE)',
+  'ENG': 'England (ECF, 3-digit grade)',
+  'GER': 'Germany (Ingo)',
+  'USSR': 'Former Soviet Union',
+  'PHI': 'Philippines',
+  'BRA': 'Brazil',
+  'PER': 'Peru',
+  'COL': 'Colombia',
+  'OTHER': 'Another federation',
+};
+
+/// Rule 28D1: converts a foreign or FIDE rating to the US Chess scale with
+/// the rulebook's current formulas. `rating` is null, with [note] saying
+/// why, when the text gives no formula for [federation].
+({int? rating, String note}) convertForeignRating(
+  String federation,
+  int rating,
+) {
+  final code = federation.trim().toUpperCase();
+  if (rating <= 0) {
+    return (rating: null, note: 'Enter the foreign rating to convert.');
+  }
+  switch (code) {
+    case 'FIDE':
+      // Rule 28D1c, general conversion.
+      final converted = rating <= 2000
+          ? -1073 + 1.5667 * rating
+          : 20 + 1.02 * rating;
+      return (
+        rating: converted.round(),
+        note: rating <= 2000
+            ? 'Rule 28D1c: US Chess = -1073 + 1.5667 × FIDE $rating.'
+            : 'Rule 28D1c: US Chess = 20 + 1.02 × FIDE $rating.',
+      );
+    case 'CAN' || 'CFC' || 'BER' || 'JAM' || 'QUICK':
+      return (
+        rating: rating,
+        note:
+            'Rule 28D1a: ${foreignFederations[code == 'CFC' ? 'CAN' : code]} ratings need no adjustment.',
+      );
+    case 'FQE':
+      return (rating: rating + 100, note: 'Rule 28D1b: Quebec (FQE) + 100.');
+    case 'ENG' || 'ECF':
+      if (rating >= 1000) {
+        return (
+          rating: null,
+          note:
+              'Rule 28D1d gives a formula for the old 3-digit English grade (× 8 + 700); England now publishes 4-digit ratings, and the rulebook says it is unclear whether the formula still applies. Assign a rating with cause (28E).',
+        );
+      }
+      return (
+        rating: rating * 8 + 700,
+        note: 'Rule 28D1d: English grade × 8 + 700.',
+      );
+    case 'GER' || 'INGO':
+      return (
+        rating: 2940 - rating * 8,
+        note: 'Rule 28D1e: 2940 − Ingo × 8 (lower Ingo numbers are stronger).',
+      );
+    case 'USSR' || 'PHI':
+      return (
+        rating: rating + 250,
+        note:
+            'Rule 28D1g: ${foreignFederations[code]} + 250 (a category uses its midpoint).',
+      );
+    case 'BRA' || 'PER' || 'COL':
+      return (
+        rating: null,
+        note:
+            'Rule 28D1h: ratings from ${foreignFederations[code]} have proved highly unreliable. Assign a rating with cause (28E); the player is not eligible for class prizes below 2200 on this rating.',
+      );
+    case 'OTHER':
+      return (
+        rating: rating + 200,
+        note: 'Rule 28D1f: nations not named + 200.',
+      );
+  }
+  return (
+    rating: null,
+    note:
+        'No conversion is listed for "$federation". Choose a federation from the list; rule 28D1f adds 200 for nations the rulebook does not name.',
+  );
+}

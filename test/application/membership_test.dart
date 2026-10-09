@@ -139,8 +139,13 @@ void main() {
       contains('Expires before the event ends'),
     );
     expect(
-      summary('2026-10-03', DateTime(2026, 10, 4)).detail,
+      summary('2026-10-04', DateTime(2026, 10, 4)).detail,
       contains('Expired as of today'),
+    );
+    // Valid on the day it was played: a later review does not flag it.
+    expect(
+      summary('2026-10-03', DateTime(2026, 10, 4)).severity,
+      MembershipSeverity.normal,
     );
   });
 
@@ -155,7 +160,8 @@ void main() {
               memberId: '12345678',
               membershipEvidence: evidence('12345678', expiration: expiration),
             ),
-            eventDate: '2026-01-01',
+            // An event today, so only the current month matters.
+            eventDate: now.toIso8601String().substring(0, 10),
             now: now,
           );
       expect(

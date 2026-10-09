@@ -39,7 +39,7 @@ void validateArtifactDestination(String destination) {
     throw protected;
   }
   if (type == FileSystemEntityType.file) {
-    final file = File(destination).openSync();
+    final file = _unlessLocked(destination, File(destination).openSync);
     try {
       final header = file.readSync(16);
       // Headers protect renamed databases and hard links too.
@@ -70,8 +70,44 @@ void writeArtifact(String destination, List<int> bytes) {
     final file = File(p.join(staging.path, 'complete'));
     file.writeAsBytesSync(bytes, flush: true);
     validateArtifactDestination(destination);
-    publishFile(file.path, destination, replaceExisting: true);
+    _unlessLocked(
+      destination,
+      () => publishFile(file.path, destination, replaceExisting: true),
+    );
   } finally {
     staging.deleteSync(recursive: true);
   }
+}
+
+T _unlessLocked<T>(String destination, T Function() action) {
+  try {
+    return action();
+  } on FileSystemException catch (error) {
+    final locked = lockedDestinationError(error, destination);
+    if (locked != null) throw locked;
+    rethrow;
+  }
+}
+
+/// Plain wording for a report Windows will not let us touch, as when the
+/// previous CSV is still open in Excel: ERROR_SHARING_VIOLATION,
+/// ERROR_LOCK_VIOLATION, or ERROR_ACCESS_DENIED on an existing file.
+TournamentException? lockedDestinationError(
+  FileSystemException error,
+  String destination, {
+  bool? windows,
+}) {
+  if (!(windows ?? Platform.isWindows)) return null;
+  final name = p.basename(destination);
+  switch (error.osError?.errorCode) {
+    case 32 || 33:
+      return TournamentException(
+        '$name is open in another program. Close it there and try again.',
+      );
+    case 5 when File(destination).existsSync():
+      return TournamentException(
+        '$name could not be replaced. It may be open in another program or read-only; close it and try again.',
+      );
+  }
+  return null;
 }

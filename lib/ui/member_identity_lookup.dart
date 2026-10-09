@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../application/failures.dart';
+import '../domain/name_match.dart';
 import '../domain/us_chess.dart';
 import '../domain/member_observation.dart';
 import '../application/member_lookup.dart' show MemberNotFound;
@@ -93,17 +94,6 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
 
   bool current(int token) => mounted && token == generation;
 
-  String normalizedName(String value) {
-    final tokens =
-        (reportText(value) ?? value)
-            .toLowerCase()
-            .split(RegExp(r'[^a-z0-9]+'))
-            .where((s) => s.isNotEmpty)
-            .toList()
-          ..sort();
-    return tokens.join(' ');
-  }
-
   Future<void> search(int token) async {
     try {
       final found = await widget.search(query.text.trim());
@@ -158,9 +148,19 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
           notice = 'ID could not be verified · try again later';
         } else {
           record = found;
+          // The same forgiving test as the bulk rating review: a middle
+          // initial or nickname is not another person. nameKey folds accents
+          // but keeps letters it cannot fold rather than dropping them.
           mismatch =
               name.isNotEmpty &&
-              normalizedName(name) != normalizedName(found.name);
+              !namesLookAlike(
+                nameKey(name),
+                nameKey(found.name),
+                lastName: switch (lastNameOf(found.reportName)) {
+                  final last? => nameKey(last),
+                  null => null,
+                },
+              );
           suggest = mismatch;
         }
       }

@@ -4,7 +4,7 @@ import '../infrastructure/member_directory.dart';
 import 'select.dart';
 
 /// An inline field for the US Chess API key. The key is kept in the system
-/// keychain, not in the event file.
+/// keychain, not in the event file, and can be removed here.
 class ApiKeyField extends StatefulWidget {
   const ApiKeyField({this.onSaved, super.key});
   final VoidCallback? onSaved;
@@ -15,6 +15,15 @@ class ApiKeyField extends StatefulWidget {
 class _ApiKeyFieldState extends State<ApiKeyField> {
   final text = TextEditingController();
   String? status;
+  bool saved = false;
+
+  @override
+  void initState() {
+    super.initState();
+    hasMemberApiKey().then((value) {
+      if (mounted) setState(() => saved = value);
+    });
+  }
 
   @override
   void dispose() {
@@ -29,11 +38,32 @@ class _ApiKeyFieldState extends State<ApiKeyField> {
       await saveMemberApiKey(key);
       if (!mounted) return;
       text.clear();
-      setState(() => status = 'Key saved.');
+      setState(() {
+        saved = true;
+        status = 'Key saved.';
+      });
       widget.onSaved?.call();
     } catch (e) {
       if (mounted) {
         setState(() => status = 'Could not save the key. ${plainMessage(e)}');
+      }
+    }
+  }
+
+  /// A revoked key would block every lookup; without one, lookups use the
+  /// public US Chess route.
+  Future<void> remove() async {
+    try {
+      await saveMemberApiKey('');
+      if (!mounted) return;
+      setState(() {
+        saved = false;
+        status = 'Key removed. Lookups use public US Chess access.';
+      });
+      widget.onSaved?.call();
+    } catch (e) {
+      if (mounted) {
+        setState(() => status = 'Could not remove the key. ${plainMessage(e)}');
       }
     }
   }
@@ -58,6 +88,15 @@ class _ApiKeyFieldState extends State<ApiKeyField> {
           OutlinedButton(onPressed: save, child: const Text('Save key')),
         ],
       ),
+      if (saved)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            key: const ValueKey('remove-api-key'),
+            onPressed: remove,
+            child: const Text('Remove saved key'),
+          ),
+        ),
       if (status != null)
         Padding(
           padding: const EdgeInsets.only(top: 8),
@@ -72,7 +111,7 @@ class _ApiKeyFieldState extends State<ApiKeyField> {
   );
 }
 
-/// Shared across events on this computer, alongside the operator's API key.
+/// Shared across events on this computer, in a plain preferences file.
 class RatingSettings extends StatefulWidget {
   const RatingSettings({super.key});
   @override
@@ -99,10 +138,10 @@ class _RatingSettingsState extends State<RatingSettings> {
           error = null;
         });
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         setState(
-          () => error = 'Could not save this setting in the system keychain.',
+          () => error = 'Could not save this setting. ${plainMessage(e)}',
         );
       }
     }

@@ -143,14 +143,34 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
     }
   }
 
+  /// The format choices ride in the draft as one hidden field. Defaults are
+  /// stored as blank, so choosing a pool or reopening is not an edit.
   @override
   void setState(VoidCallback fn) {
     super.setState(fn);
-    configuration.text = jsonEncode({
-      'format': format.name,
-      'doubleGames': doubleGames,
-      'sideGames': sideGames,
-    });
+    final choices = format == Format.swiss && !doubleGames && !sideGames
+        ? ''
+        : jsonEncode({
+            'format': format.name,
+            'doubleGames': doubleGames,
+            'sideGames': sideGames,
+          });
+    if (configuration.text != choices) configuration.text = choices;
+  }
+
+  /// Why [rounds] cannot work for [players] entrants, or null. A round robin
+  /// plays everyone once (twice with two games each, in the same round), so
+  /// more rounds than its schedule could never be completed.
+  String? roundsProblem(int players) {
+    final text = rounds.text.trim();
+    if (format != Format.roundRobin || text.isEmpty || players < 2) {
+      return null;
+    }
+    final n = int.tryParse(text);
+    final schedule = players.isOdd ? players : players - 1;
+    if (n == null || n <= schedule) return null;
+    return 'A round robin of $players has $schedule '
+        '${schedule == 1 ? 'round' : 'rounds'}. Enter $schedule or fewer.';
   }
 
   @override
@@ -196,6 +216,9 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
         throw const TournamentException(
           'Number of rounds must be between 1 and 32.',
         );
+      }
+      if (roundsProblem(ids.length) case final problem?) {
+        throw TournamentException(problem);
       }
       if (board.text.trim().isNotEmpty && (first == null || first < 1)) {
         throw const TournamentException(
@@ -257,13 +280,20 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
       TextEditingController controller,
       String label, {
       bool autofocus = false,
+      String? helper,
+      String? problem,
     }) => Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
         key: ValueKey('new-section-$key'),
         controller: controller,
         autofocus: autofocus,
-        decoration: InputDecoration(labelText: label),
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: helper,
+          errorText: problem,
+          errorMaxLines: 3,
+        ),
         onChanged: (_) => setState(() => error = null),
         onSubmitted: (_) => create(),
       ),
@@ -400,7 +430,15 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
         const SizedBox(height: 16),
         if (!quads) ...[
           field('name', name, 'Section name', autofocus: true),
-          field('rounds', rounds, 'Number of rounds'),
+          field(
+            'rounds',
+            rounds,
+            'Number of rounds',
+            helper: format == Format.roundRobin && count >= 2
+                ? '$count players: ${count.isOdd ? count : count - 1} rounds'
+                : null,
+            problem: roundsProblem(count),
+          ),
           if (format == Format.roundRobin)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),

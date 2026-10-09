@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
+import '../domain/us_chess.dart';
 import 'side_panel.dart';
 import 'select.dart';
 
@@ -48,7 +49,7 @@ class _SideGamePanelState extends State<SideGamePanel> {
     final e = widget.controller.event!;
     final people = {for (final p in e.players) p.personId ?? p.id: p};
     final players = people.values.toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+      ..sort((a, b) => compareNames(a.name, b.name));
     Widget choose(String label, String? value, ValueChanged<String?> change) =>
         Padding(
           padding: const EdgeInsets.only(top: 12),

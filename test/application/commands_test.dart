@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
+import 'package:meow_chess/domain/pairing.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import '../support.dart';
 
@@ -520,8 +521,8 @@ void main() {
       c.movePlayers([quad1.players.last], quad2.id);
       final batch = await c.propose();
       expect(batch.issues, isEmpty);
-      expect(batch.rounds[quad1.id]!.policy, 'score-swiss-pilot-v1');
-      expect(batch.rounds[quad2.id]!.policy, 'score-swiss-pilot-v1');
+      expect(batch.rounds[quad1.id]!.policy, swissPolicy);
+      expect(batch.rounds[quad2.id]!.policy, swissPolicy);
       // Three players: one game and a bye; five players: two games and a bye.
       expect(batch.rounds[quad1.id]!.games, hasLength(1));
       expect(batch.rounds[quad2.id]!.games, hasLength(2));

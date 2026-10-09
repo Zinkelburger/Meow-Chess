@@ -8,6 +8,7 @@ import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/membership.dart';
 import 'membership_style.dart';
+import '../domain/bye_policy.dart';
 import '../domain/us_chess.dart';
 import 'drafts.dart';
 import 'theme.dart';
@@ -71,6 +72,14 @@ class PlayerPanelState extends State<PlayerPanel> {
     ('reportName', 'Name on rating report', 1),
     ('team', 'Team', 1),
     ('notes', 'Notes', 3),
+    // Rules 28E/28F, 28C2/28D1: TD-assigned and disclosed foreign ratings.
+    ('pairingRating', 'Pairing rating (blank = published, rule 28F)', 1),
+    ('prizeRating', 'Prize rating (blank = published, rule 28F)', 1),
+    ('ratingNote', 'Cause for the assigned rating (rule 28E2)', 2),
+    ('foreignRating', 'Foreign or FIDE rating (rule 28C2)', 1),
+    ('foreignFederation', 'Federation', 1),
+    // Rule 20M3 / 35: a board this player always sits at.
+    ('fixedBoard', 'Fixed board number (rule 20M3; blank = none)', 1),
   ];
   final text = {for (final f in _fields) f.$1: TextEditingController()};
   final fieldFocus = {for (final f in _fields) f.$1: FocusNode()};
@@ -80,6 +89,7 @@ class PlayerPanelState extends State<PlayerPanel> {
   static const _groups = [
     'byes',
     'uschess',
+    'assigned',
     'requests',
     'team',
     'notes',
@@ -101,7 +111,12 @@ class PlayerPanelState extends State<PlayerPanel> {
           'team' => 'team',
           'notes' => 'notes',
           'byes' => 'byes',
-          'avoid' => 'requests',
+          'avoid' || 'fixedBoard' => 'requests',
+          'pairingRating' ||
+          'prizeRating' ||
+          'ratingNote' ||
+          'foreignRating' ||
+          'foreignFederation' => 'assigned',
           _ => null,
         };
 
@@ -177,6 +192,9 @@ class PlayerPanelState extends State<PlayerPanel> {
   String? pendingRating;
   Event? lookupSnapshot;
 
+  /// Rule 28H advice from the last save, shown until the next edit.
+  String? notice;
+
   /// US Chess lookup: in progress, result, or failure message.
   bool looking = false;
   MemberObservation? member;
@@ -228,6 +246,16 @@ class PlayerPanelState extends State<PlayerPanel> {
     'reportName': p?.reportName ?? '',
     'team': p?.team ?? '',
     'notes': p?.notes ?? '',
+    'pairingRating': p == null || p.pairingRating == 0
+        ? ''
+        : '${p.pairingRating}',
+    'prizeRating': p == null || p.prizeRating == 0 ? '' : '${p.prizeRating}',
+    'ratingNote': p?.ratingNote ?? '',
+    'foreignRating': p == null || p.foreignRating == 0
+        ? ''
+        : '${p.foreignRating}',
+    'foreignFederation': p?.foreignFederation ?? '',
+    'fixedBoard': p == null || p.fixedBoard == 0 ? '' : '${p.fixedBoard}',
   };
 
   void load() {
@@ -303,6 +331,7 @@ class PlayerPanelState extends State<PlayerPanel> {
     }
     if (old.player?.id != widget.player?.id) {
       draft.dispose();
+      notice = null;
       moving = false;
       moveTo = null;
       swapWith = null;
@@ -376,16 +405,36 @@ class PlayerPanelState extends State<PlayerPanel> {
           'Enter the state as two letters, like MA.',
         );
       }
+      int assigned(String key, String label) {
+        final value = v[key]!.trim();
+        if (value.isEmpty) return 0;
+        final n = int.tryParse(value);
+        if (n == null || n < 0 || n > 4000) {
+          throw TournamentException(
+            'Enter the $label as a number, or leave it blank.',
+          );
+        }
+        return n;
+      }
+
       final saved = (adding ? Player(id: c.newId(), name: '') : fresh).copy(
         name: v['name']!.trim(),
         memberId: v['memberId']!.trim(),
-        rating: rating,
+        // A locked rating keeps its value, whatever a restored draft says.
+        rating: ratingLocked ? fresh.rating : rating,
         state: state,
         reportName: v['reportName']!.trim(),
         team: v['team']!.trim(),
         notes: v['notes']!,
+        pairingRating: assigned('pairingRating', 'pairing rating'),
+        prizeRating: assigned('prizeRating', 'prize rating'),
+        ratingNote: v['ratingNote']!.trim(),
+        foreignRating: assigned('foreignRating', 'foreign rating'),
+        foreignFederation: v['foreignFederation']!.trim(),
+        fixedBoard: assigned('fixedBoard', 'fixed board number'),
       );
       c.savePlayer(saved);
+      notice = c.playerNotice;
       if (adding) joined = joinNew(saved);
       // Show the saved capitals rather than leaving the panel looking unsaved.
       if (!adding) text['state']!.text = state;
@@ -514,8 +563,36 @@ class PlayerPanelState extends State<PlayerPanel> {
     }
   }
 
+  static const ratingLockedNote =
+      'Pairings are posted; the pairing rating stays.';
+
+  /// Once the player's section is paired, the pairing rating is fixed, as
+  /// with the US Chess rating chips.
+  bool get ratingLocked {
+    final p = widget.player;
+    return p != null && (c.event!.sectionOf(p.id)?.rounds.isNotEmpty ?? false);
+  }
+
   Widget field(String key) {
     final (_, label, lines) = _fields.firstWhere((f) => f.$1 == key);
+    if (key == 'foreignFederation') {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 8),
+        child: PlainSelect<String>(
+          key: const ValueKey('panel-foreignFederation'),
+          value: text[key]!.text,
+          label: label,
+          hint: 'Choose',
+          options: [
+            const SelectOption('', 'None'),
+            for (final f in foreignFederations.entries)
+              SelectOption(f.key, f.value),
+          ],
+          onChanged: (v) => setState(() => text[key]!.text = v),
+        ),
+      );
+    }
+    final locked = key == 'rating' && ratingLocked;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -527,11 +604,13 @@ class PlayerPanelState extends State<PlayerPanel> {
             focusNode: fieldFocus[key],
             autofocus: key == (widget.focusField ?? 'name'),
             maxLines: lines,
+            enabled: !locked,
             textCapitalization: key == 'state'
                 ? TextCapitalization.characters
                 : TextCapitalization.none,
             decoration: InputDecoration(
               labelText: label,
+              helperText: locked ? ratingLockedNote : null,
               alignLabelWithHint: lines > 1,
             ),
             onChanged: (_) => setState(() {}),
@@ -551,6 +630,18 @@ class PlayerPanelState extends State<PlayerPanel> {
           ),
       ],
     );
+  }
+
+  /// The Assigned ratings group's closed summary.
+  static String assignedSummary(Player p) {
+    final parts = [
+      if (p.pairingRating > 0) 'Pairing ${p.pairingRating}',
+      if (p.prizeRating > 0) 'Prize ${p.prizeRating}',
+      if (p.foreignRating > 0)
+        '${p.foreignFederation.isEmpty ? 'Foreign' : p.foreignFederation} ${p.foreignRating}',
+      if (p.computer) 'Computer',
+    ];
+    return parts.isEmpty ? 'None' : parts.join(' · ');
   }
 
   /// A group's closed summary: the value, or "None".
@@ -580,11 +671,17 @@ class PlayerPanelState extends State<PlayerPanel> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
-    final problem = error == null
+    final problem = error == null && notice == null
         ? null
         : Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(error!, style: TextStyle(color: colors.error)),
+            child: Text(
+              error ?? notice!,
+              key: ValueKey(error == null ? 'panel-notice' : 'panel-error'),
+              style: TextStyle(
+                color: error == null ? attentionColor(colors) : colors.error,
+              ),
+            ),
           );
     void close() => widget.onClose();
 
@@ -703,7 +800,7 @@ class PlayerPanelState extends State<PlayerPanel> {
       title: p.name,
       onClose: close,
       footer: [
-        if (dirty || error != null) ...[
+        if (dirty || error != null || notice != null) ...[
           ?problem,
           if (dirty)
             Wrap(
@@ -727,7 +824,10 @@ class PlayerPanelState extends State<PlayerPanel> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Text(
-              '${s?.name ?? 'Not in a section'} · ${ratingText(p.rating)}',
+              '${s?.name ?? 'Not in a section'} · ${ratingText(p.rating)}'
+              '${p.pairingRating > 0 ? ' · pairs as ${p.pairingRating}' : ''}'
+              '${p.prizeRating > 0 ? ' · prizes as ${p.prizeRating}' : ''}'
+              '${p.computer ? ' · computer' : ''}',
               style: muted,
             ),
             if (p.withdrawn) const StatusPill('Withdrawn'),
@@ -819,6 +919,39 @@ class PlayerPanelState extends State<PlayerPanel> {
                 () => c.reserveBye(p.id, r, p.byes[r] == points ? -1 : points),
               ),
             ),
+            if (s != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Rule 22C: ${ByePolicy.fromJson(s.byeRules).describe()}.',
+                key: const ValueKey('bye-policy'),
+                style: muted,
+              ),
+            ],
+            // Rule 22C4: a half-point bye the player cannot take back; 22C5:
+            // once cancelled, a win in that round counts as a draw for prizes.
+            for (final r in open)
+              if (p.byes[r] == 1 || p.irrevocableByes.contains(r))
+                CheckboxListTile(
+                  key: ValueKey('irrevocable-$r'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: Text(
+                    p.byes[r] == null
+                        ? 'Round $r irrevocable bye cancelled: a win counts as a draw for prizes (22C5)'
+                        : 'Round $r bye is irrevocable (22C4)',
+                  ),
+                  value: p.irrevocableByes.contains(r),
+                  onChanged: (v) => attempt(
+                    () => c.reserveBye(
+                      p.id,
+                      r,
+                      p.byes[r] ?? -1,
+                      irrevocable: v ?? false,
+                    ),
+                  ),
+                ),
             const SizedBox(height: 8),
           ], summary: byes.isEmpty ? 'None' : byes.join(' · ')),
         group(
@@ -989,10 +1122,100 @@ class PlayerPanelState extends State<PlayerPanel> {
           summary: checked ? 'Expires ${membership.label}' : membership.label,
           summaryColor: membershipColor(colors, membership),
         ),
+        group('assigned', 'Assigned ratings', [
+          Text(
+            'Rule 28E1: an assigned rating is never lower than the published one. Rule 28F: a pairing-only rating is not valid for prizes.',
+            style: muted,
+          ),
+          const SizedBox(height: 4),
+          field('pairingRating'),
+          field('prizeRating'),
+          field('ratingNote'),
+          field('foreignRating'),
+          field('foreignFederation'),
+          Builder(
+            builder: (context) {
+              final foreign = int.tryParse(text['foreignRating']!.text.trim());
+              final result = foreign == null || foreign <= 0
+                  ? null
+                  : convertForeignRating(
+                      text['foreignFederation']!.text,
+                      foreign,
+                    );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (result != null)
+                    Text(
+                      result.rating == null
+                          ? result.note
+                          : 'Converted: ${result.rating}. ${result.note}',
+                      key: const ValueKey('foreign-conversion'),
+                      style: muted,
+                    ),
+                  if (result?.rating case final converted?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: ActionChip(
+                          key: const ValueKey('use-converted-rating'),
+                          chipAnimationStyle: noChipAnimation,
+                          label: Text('Use $converted as pairing rating'),
+                          onPressed: () => setState(() {
+                            text['pairingRating']!.text = '$converted';
+                            if (text['ratingNote']!.text.trim().isEmpty) {
+                              text['ratingNote']!.text = result!.note;
+                            }
+                          }),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          // Rule 36: computers never meet each other and take only prizes
+          // designated for computers.
+          CheckboxListTile(
+            key: const ValueKey('panel-computer'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            visualDensity: VisualDensity.compact,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text('Computer entrant (rule 36)'),
+            value: p.computer,
+            onChanged: (v) =>
+                attempt(() => c.savePlayer(fresh.copy(computer: v ?? false))),
+          ),
+        ], summary: assignedSummary(p)),
         group(
           'requests',
           'Pairing requests',
           [
+            field('fixedBoard'),
+            // Rule 28S: a re-entry is a new entry for a person whose earlier
+            // entry withdrew; the engine keeps them from meeting the earlier
+            // entry's opponents again and restarts their colors.
+            PlainSelect<String>(
+              key: const ValueKey('panel-reentry'),
+              label: 'Re-entry for (rule 28S)',
+              value: p.reentryOf,
+              options: [
+                const SelectOption('', 'Not a re-entry'),
+                for (final other in c.event!.players.where(
+                  (x) =>
+                      x.id != p.id &&
+                      x.withdrawn &&
+                      (x.personId ?? x.id) != (p.personId ?? p.id),
+                ))
+                  SelectOption(other.id, '${other.name} (withdrawn)'),
+              ],
+              onChanged: (v) =>
+                  attempt(() => c.savePlayer(fresh.copy(reentryOf: v))),
+            ),
+            const SizedBox(height: 8),
             for (final other in avoided)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),

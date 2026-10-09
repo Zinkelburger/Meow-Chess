@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'us_chess.dart';
+
 /// Scores are stored as integer half-points. IDs never depend on list order.
 String scoreText(int halves) =>
     halves.isEven ? '${halves ~/ 2}' : '${halves ~/ 2}.5';
@@ -65,11 +67,57 @@ class Player {
     this.reportName = '',
     Json ratingEvidence = const {},
     Json membershipEvidence = const {},
+    this.pairingRating = 0,
+    this.prizeRating = 0,
+    this.ratingNote = '',
+    this.foreignRating = 0,
+    this.foreignFederation = '',
+    this.fixedBoard = 0,
+    this.reentryOf = '',
+    Set<int> irrevocableByes = const {},
+    this.computer = false,
   }) : membershipEvidence = Map.unmodifiable(membershipEvidence),
        ratingEvidence = Map.unmodifiable(ratingEvidence),
        byes = Map.unmodifiable(byes),
+       irrevocableByes = Set.unmodifiable(irrevocableByes),
        avoid = Set.unmodifiable(avoid);
   final String id, name, memberId, club, team, notes, source;
+
+  /// Rule 28A TIP / 28F: a rating assigned for pairing only, or for prizes
+  /// only. Zero means the published [rating] serves that purpose.
+  final int pairingRating, prizeRating;
+
+  /// Rule 28E: the stated cause for a TD-assigned rating.
+  final String ratingNote;
+
+  /// Rule 28C2 / 28D1: a disclosed foreign rating and its federation
+  /// (`FIDE`, `CFC`, …) before conversion. Zero when none was disclosed.
+  final int foreignRating;
+  final String foreignFederation;
+
+  /// Rule 20M3 / 35: a board this player always sits at. Zero means the
+  /// board follows pairing order.
+  final int fixedBoard;
+
+  /// Rule 28S: the ID of this person's earlier entry in the same event,
+  /// which this re-entry replaced. Empty for a first entry.
+  final String reentryOf;
+
+  /// Rule 22C4: rounds whose requested bye the player declared irrevocable.
+  final Set<int> irrevocableByes;
+
+  /// Rule 36: a computer entrant, never paired against another computer.
+  final bool computer;
+
+  /// The rating the pairing engine ranks by (rule 28A TIP, 28F).
+  int get effectivePairingRating => pairingRating > 0 ? pairingRating : rating;
+
+  /// The rating prize eligibility uses (rule 28F).
+  int get effectivePrizeRating => prizeRating > 0 ? prizeRating : rating;
+
+  /// Rule 28L2: an unrated player has no published rating and no assigned
+  /// pairing rating.
+  bool get unrated => effectivePairingRating == 0;
 
   /// Free-form registration text from the roster source, separate from private notes.
   final String registrationNote;
@@ -106,6 +154,15 @@ class Player {
     String? reportName,
     Json? ratingEvidence,
     Json? membershipEvidence,
+    int? pairingRating,
+    int? prizeRating,
+    String? ratingNote,
+    int? foreignRating,
+    String? foreignFederation,
+    int? fixedBoard,
+    String? reentryOf,
+    Set<int>? irrevocableByes,
+    bool? computer,
   }) => Player(
     id: id,
     personId: personId,
@@ -128,6 +185,15 @@ class Player {
     membershipEvidence: memberId != null && memberId != this.memberId
         ? const {}
         : membershipEvidence ?? this.membershipEvidence,
+    pairingRating: pairingRating ?? this.pairingRating,
+    prizeRating: prizeRating ?? this.prizeRating,
+    ratingNote: ratingNote ?? this.ratingNote,
+    foreignRating: foreignRating ?? this.foreignRating,
+    foreignFederation: foreignFederation ?? this.foreignFederation,
+    fixedBoard: fixedBoard ?? this.fixedBoard,
+    reentryOf: reentryOf ?? this.reentryOf,
+    irrevocableByes: irrevocableByes ?? this.irrevocableByes,
+    computer: computer ?? this.computer,
   );
   Json toJson() => {
     'id': id,
@@ -149,6 +215,16 @@ class Player {
     'reportName': reportName,
     'ratingEvidence': ratingEvidence,
     'membershipEvidence': membershipEvidence,
+    if (pairingRating != 0) 'pairingRating': pairingRating,
+    if (prizeRating != 0) 'prizeRating': prizeRating,
+    if (ratingNote.isNotEmpty) 'ratingNote': ratingNote,
+    if (foreignRating != 0) 'foreignRating': foreignRating,
+    if (foreignFederation.isNotEmpty) 'foreignFederation': foreignFederation,
+    if (fixedBoard != 0) 'fixedBoard': fixedBoard,
+    if (reentryOf.isNotEmpty) 'reentryOf': reentryOf,
+    if (irrevocableByes.isNotEmpty)
+      'irrevocableByes': irrevocableByes.toList()..sort(),
+    if (computer) 'computer': computer,
   };
   factory Player.fromJson(Json j) => Player(
     id: j['id'],
@@ -176,6 +252,17 @@ class Player {
               ? j['ratingEvidence']
               : const {}),
     ),
+    pairingRating: j['pairingRating'] ?? 0,
+    prizeRating: j['prizeRating'] ?? 0,
+    ratingNote: j['ratingNote'] ?? '',
+    foreignRating: j['foreignRating'] ?? 0,
+    foreignFederation: j['foreignFederation'] ?? '',
+    fixedBoard: j['fixedBoard'] ?? 0,
+    reentryOf: j['reentryOf'] ?? '',
+    irrevocableByes: {
+      for (final r in j['irrevocableByes'] as List? ?? const []) r as int,
+    },
+    computer: j['computer'] ?? false,
   );
 }
 
@@ -190,12 +277,22 @@ class Game {
     this.note = '',
     this.pairingAssumption,
     this.pairingReason = '',
+    this.adjudicated = false,
+    this.prizeOutcome,
   });
   final String id, white, black, note;
   final int board, leg;
   final Outcome outcome;
   final Outcome? pairingAssumption;
   final String pairingReason;
+
+  /// Rule 18G: the result was adjudicated by the director, not played out.
+  final bool adjudicated;
+
+  /// Rule 15I / 22C5 / 28M4: the result that counts for prizes when it
+  /// differs from [outcome] (which is what the wall chart and the rating
+  /// report carry). Null means prizes use [outcome].
+  final Outcome? prizeOutcome;
   Game copy({
     String? id,
     Outcome? outcome,
@@ -205,6 +302,8 @@ class Game {
     String? note,
     Object? pairingAssumption = _unset,
     String? pairingReason,
+    bool? adjudicated,
+    Object? prizeOutcome = _unset,
   }) => Game(
     id: id ?? this.id,
     white: white ?? this.white,
@@ -217,6 +316,10 @@ class Game {
         ? this.pairingAssumption
         : pairingAssumption as Outcome?,
     pairingReason: pairingReason ?? this.pairingReason,
+    adjudicated: adjudicated ?? this.adjudicated,
+    prizeOutcome: identical(prizeOutcome, _unset)
+        ? this.prizeOutcome
+        : prizeOutcome as Outcome?,
   );
   Json toJson() => {
     'id': id,
@@ -228,6 +331,8 @@ class Game {
     'note': note,
     'pairingAssumption': pairingAssumption?.name,
     'pairingReason': pairingReason,
+    if (adjudicated) 'adjudicated': adjudicated,
+    if (prizeOutcome != null) 'prizeOutcome': prizeOutcome!.name,
   };
   factory Game.fromJson(Json j) => Game(
     id: j['id'],
@@ -241,6 +346,10 @@ class Game {
         ? null
         : Outcome.values.byName(j['pairingAssumption']),
     pairingReason: j['pairingReason'] ?? '',
+    adjudicated: j['adjudicated'] ?? false,
+    prizeOutcome: j['prizeOutcome'] == null
+        ? null
+        : Outcome.values.byName(j['prizeOutcome']),
   );
 }
 
@@ -278,13 +387,19 @@ class Round {
     this.revision = 1,
     this.policy = 'quad-30G-v1',
     this.note = '',
+    List<String> explanations = const [],
   }) : games = List.unmodifiable(games),
+       explanations = List.unmodifiable(explanations),
        byes = List.unmodifiable(byes);
   final int number, revision;
   final List<Game> games;
   final List<ByeAward> byes;
   final String? postedAt, startedAt;
   final String policy, note;
+
+  /// Rule 29E TIP: why each pairing decision was made (transpositions,
+  /// interchanges, drop-downs, the bye), for the director's review.
+  final List<String> explanations;
   bool get complete => games.every((g) => g.outcome.resolved);
   bool get hasPlay =>
       startedAt != null || games.any((g) => g.outcome != Outcome.unreported);
@@ -295,6 +410,7 @@ class Round {
     String? startedAt,
     int? revision,
     String? note,
+    List<String>? explanations,
   }) => Round(
     number: number,
     games: games ?? this.games,
@@ -304,6 +420,7 @@ class Round {
     revision: revision ?? this.revision,
     policy: policy,
     note: note ?? this.note,
+    explanations: explanations ?? this.explanations,
   );
   Json toJson() => {
     'number': number,
@@ -314,6 +431,7 @@ class Round {
     'revision': revision,
     'policy': policy,
     'note': note,
+    if (explanations.isNotEmpty) 'explanations': explanations,
   };
   factory Round.fromJson(Json j) => Round(
     number: j['number'],
@@ -324,6 +442,7 @@ class Round {
     revision: j['revision'],
     policy: j['policy'],
     note: j['note'],
+    explanations: List<String>.from(j['explanations'] ?? const []),
   );
 }
 
@@ -341,12 +460,52 @@ class Section {
     this.timeControl = '',
     this.sideGames = false,
     List<List<int>> quadPairings = const [],
+    this.accelerated = '',
+    this.avoidTeammates = false,
+    Set<String> variations = const {},
+    Json byeRules = const {},
+    Json prizes = const {},
+    this.rrTable = '',
+    this.doubleCycle = false,
   }) : players = List.unmodifiable(players),
        quadPairings = List.unmodifiable(
          quadPairings.map((r) => List<int>.unmodifiable(r)),
        ),
+       variations = Set.unmodifiable(variations),
+       byeRules = Map.unmodifiable(byeRules),
+       prizes = Map.unmodifiable(prizes),
        rounds = List.unmodifiable(rounds);
   final String id, name;
+
+  /// Rule 28R: accelerated pairings. Empty for none, `addedScore` (28R1) or
+  /// `adjustedRating` (28R2). Announced before round 1.
+  final String accelerated;
+
+  /// Rule 28N: avoid pairing team-mates using the plus-two method.
+  final bool avoidTeammates;
+
+  /// Announced pairing variations by rule number, such as `29E4a`,
+  /// `29E5b1`, `29E5f1`, `29E5h`, `29E6b`, `29E8`, `29I`, `29J`, `28L2a`.
+  final Set<String> variations;
+
+  /// Rule 22C: announced bye availability. Keys: `lastHalfByeRound` (the
+  /// last round a half-point bye may be requested for; 0 = any round),
+  /// `maxHalfByes` (0 = unlimited), `deadlineMinutes` (before the round;
+  /// default 60), `irrevocableFromRound` (byes for this round and later
+  /// must be declared irrevocable; 0 = never).
+  final Json byeRules;
+
+  /// Rules 32–33: the announced prize table and payout terms. See
+  /// `prizes.dart` for the schema.
+  final Json prizes;
+
+  /// Rule 30A: the round-robin table. Empty keeps the circle method
+  /// (`circle-rr-v1`); `crenshaw` uses the Crenshaw-Berger tables.
+  final String rrTable;
+
+  /// Rule 30F: a double round robin played as a second cycle with colors
+  /// reversed, instead of both games in the same round.
+  final bool doubleCycle;
 
   /// Empty inherits the event default. Ladders may use different controls.
   final String timeControl;
@@ -380,6 +539,13 @@ class Section {
     String? timeControl,
     bool? sideGames,
     List<List<int>>? quadPairings,
+    String? accelerated,
+    bool? avoidTeammates,
+    Set<String>? variations,
+    Json? byeRules,
+    Json? prizes,
+    String? rrTable,
+    bool? doubleCycle,
   }) => Section(
     id: id,
     name: name ?? this.name,
@@ -393,6 +559,13 @@ class Section {
     timeControl: timeControl ?? this.timeControl,
     sideGames: sideGames ?? this.sideGames,
     quadPairings: quadPairings ?? this.quadPairings,
+    accelerated: accelerated ?? this.accelerated,
+    avoidTeammates: avoidTeammates ?? this.avoidTeammates,
+    variations: variations ?? this.variations,
+    byeRules: byeRules ?? this.byeRules,
+    prizes: prizes ?? this.prizes,
+    rrTable: rrTable ?? this.rrTable,
+    doubleCycle: doubleCycle ?? this.doubleCycle,
   );
   Json toJson() => {
     'id': id,
@@ -407,6 +580,13 @@ class Section {
     'timeControl': timeControl,
     'sideGames': sideGames,
     if (quadPairings.isNotEmpty) 'quadPairings': quadPairings,
+    if (accelerated.isNotEmpty) 'accelerated': accelerated,
+    if (avoidTeammates) 'avoidTeammates': avoidTeammates,
+    if (variations.isNotEmpty) 'variations': variations.toList()..sort(),
+    if (byeRules.isNotEmpty) 'byeRules': byeRules,
+    if (prizes.isNotEmpty) 'prizes': prizes,
+    if (rrTable.isNotEmpty) 'rrTable': rrTable,
+    if (doubleCycle) 'doubleCycle': doubleCycle,
   };
   factory Section.fromJson(Json j) => Section(
     id: j['id'],
@@ -423,6 +603,13 @@ class Section {
     quadPairings: [
       for (final r in j['quadPairings'] as List? ?? const []) List<int>.from(r),
     ],
+    accelerated: j['accelerated'] ?? '',
+    avoidTeammates: j['avoidTeammates'] ?? false,
+    variations: Set<String>.from(j['variations'] ?? const []),
+    byeRules: Map<String, dynamic>.from(j['byeRules'] ?? const {}),
+    prizes: Map<String, dynamic>.from(j['prizes'] ?? const {}),
+    rrTable: j['rrTable'] ?? '',
+    doubleCycle: j['doubleCycle'] ?? false,
   );
 }
 
@@ -455,12 +642,36 @@ class Event {
     this.useTiebreaks = false,
     this.policy =
         'Requested byes: ½ point before the round is posted. Equal scores share a place unless tie-break rankings are enabled.',
+    this.colorToss = '',
+    List<String> tiebreaks = const [],
+    this.online = false,
+    List<Json> rulings = const [],
   }) : rosterSource = Map.unmodifiable(rosterSource),
        players = List.unmodifiable(players),
        sections = List.unmodifiable(sections),
+       tiebreaks = List.unmodifiable(tiebreaks),
+       rulings = List.unmodifiable(
+         rulings.map((r) => Map<String, dynamic>.unmodifiable(r)),
+       ),
        transitions = List.unmodifiable(
          transitions.map((t) => Map<String, dynamic>.unmodifiable(t)),
        );
+
+  /// Rule 29E2 / 28J: the round-1 coin toss, shared by every section.
+  /// `higherWhite` or `higherBlack` once tossed; empty before round 1.
+  final String colorToss;
+
+  /// Rule 34B: the announced tie-break order, by method code (see
+  /// `tiebreaks.dart`). Empty means the US Chess default order.
+  final List<String> tiebreaks;
+
+  /// Chapter 10: an online event, reported with online rating categories.
+  final bool online;
+
+  /// Rules 13I, 20K, 21H–L, 18G: the ruling, penalty and appeal log.
+  /// Each entry has `id`, `at`, `kind`, `round`, `section`, `players`,
+  /// `text`, `decidedBy` and `outcome`.
+  final List<Json> rulings;
   final String id,
       name,
       date,
@@ -526,6 +737,10 @@ class Event {
     String? zip,
     String? level,
     bool? useTiebreaks,
+    String? colorToss,
+    List<String>? tiebreaks,
+    bool? online,
+    List<Json>? rulings,
   }) => Event(
     id: id,
     name: name ?? this.name,
@@ -555,6 +770,10 @@ class Event {
     zip: zip ?? this.zip,
     level: level ?? this.level,
     useTiebreaks: useTiebreaks ?? this.useTiebreaks,
+    colorToss: colorToss ?? this.colorToss,
+    tiebreaks: tiebreaks ?? this.tiebreaks,
+    online: online ?? this.online,
+    rulings: rulings ?? this.rulings,
   );
   Json toJson() => {
     'id': id,
@@ -583,6 +802,10 @@ class Event {
     'zip': zip,
     'level': level,
     'useTiebreaks': useTiebreaks,
+    if (colorToss.isNotEmpty) 'colorToss': colorToss,
+    if (tiebreaks.isNotEmpty) 'tiebreaks': tiebreaks,
+    if (online) 'online': online,
+    if (rulings.isNotEmpty) 'rulings': rulings,
   };
   factory Event.fromJson(Json j) => Event(
     id: j['id'],
@@ -611,6 +834,14 @@ class Event {
     state: j['state'] ?? '',
     zip: j['zip'] ?? '',
     level: j['level'] ?? 'N',
+    colorToss: j['colorToss'] ?? '',
+    tiebreaks: List<String>.from(j['tiebreaks'] ?? const []),
+    online: j['online'] ?? false,
+    rulings: List<Json>.from(
+      (j['rulings'] as List? ?? const []).map(
+        (r) => Map<String, dynamic>.from(r as Map),
+      ),
+    ),
   );
   String encode() => jsonEncode(toJson());
   factory Event.decode(String source) => Event.fromJson(jsonDecode(source));
@@ -659,27 +890,28 @@ Set<String> sectionsEmptiedBy(Event e, Set<String> players) => {
 /// A member ID is identity; a name only identifies someone when either side
 /// lacks an ID, so two members who share a name are both admitted.
 List<Player> newEntries(Iterable<Player> existing, Iterable<Player> incoming) {
+  // The 2C placeholder `00000000` identifies nobody.
   final ids = {
     for (final p in existing)
-      if (p.memberId.isNotEmpty) p.memberId,
+      if (isMemberId(p.memberId)) p.memberId,
   };
   // Name -> whether every entry with that name has a member ID.
   final names = <String, bool>{};
   void remember(Player p) {
-    final key = p.name.trim().toLowerCase();
-    names[key] = (names[key] ?? true) && p.memberId.isNotEmpty;
+    final key = nameKey(p.name);
+    names[key] = (names[key] ?? true) && isMemberId(p.memberId);
   }
 
   existing.forEach(remember);
   final additions = <Player>[];
   for (final player in incoming) {
-    if (player.memberId.isNotEmpty && ids.contains(player.memberId)) continue;
-    final allIdentified = names[player.name.trim().toLowerCase()];
-    if (allIdentified != null &&
-        !(allIdentified && player.memberId.isNotEmpty)) {
+    final identified = isMemberId(player.memberId);
+    if (identified && ids.contains(player.memberId)) continue;
+    final allIdentified = names[nameKey(player.name)];
+    if (allIdentified != null && !(allIdentified && identified)) {
       continue;
     }
-    if (player.memberId.isNotEmpty) ids.add(player.memberId);
+    if (identified) ids.add(player.memberId);
     remember(player);
     additions.add(player);
   }
@@ -730,6 +962,8 @@ void validateEvent(Event e) {
       p.rating >= 0 && p.rating <= 4000,
       'Rating must be between 0 and 4000.',
     );
+    // Files may hold the 2C placeholder `00000000` ("ID unavailable");
+    // identity and rating checks treat it as no ID ([isMemberId]).
     require(
       p.memberId.isEmpty || RegExp(r'^\d{8}$').hasMatch(p.memberId),
       'US Chess IDs must contain eight digits.',
@@ -742,7 +976,28 @@ void validateEvent(Event e) {
       p.byes.entries.every((b) => b.key > 0 && b.value >= 0 && b.value <= 2),
       'Invalid bye reservation.',
     );
+    require(
+      [
+        p.pairingRating,
+        p.prizeRating,
+        p.foreignRating,
+      ].every((r) => r >= 0 && r <= 4000),
+      'Assigned ratings must be between 0 and 4000.',
+    );
+    require(p.fixedBoard >= 0, 'A fixed board number must be 1 or more.');
+    require(
+      p.reentryOf.isEmpty || (p.reentryOf != p.id && ids.contains(p.reentryOf)),
+      'A re-entry must name an earlier entry in this event.',
+    );
+    require(
+      p.irrevocableByes.every((r) => r > 0),
+      'Invalid irrevocable bye round.',
+    );
   }
+  require(
+    ['', 'higherWhite', 'higherBlack'].contains(e.colorToss),
+    'Invalid round-1 color toss.',
+  );
   final liveBoards = <int>{};
   final livePeople = <String>{};
   for (final s in e.sections) {
@@ -773,6 +1028,11 @@ void validateEvent(Event e) {
       s.name.trim().isNotEmpty && s.plannedRounds > 0 && s.boardStart > 0,
       'Invalid section settings.',
     );
+    require(
+      ['', 'addedScore', 'adjustedRating'].contains(s.accelerated),
+      'Invalid accelerated pairing method.',
+    );
+    require(['', 'crenshaw'].contains(s.rrTable), 'Invalid round-robin table.');
     for (final id in s.players) {
       require(
         ids.contains(id) && assigned.add(id),

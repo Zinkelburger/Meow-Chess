@@ -1,9 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../application/diagnostics.dart';
+
+/// Small enough for a 1366x768 laptop at 125% scaling (about 1093x614 logical
+/// pixels, less the taskbar), where 600 pixels of height did not fit.
+const minimumWindowSize = Size(960, 540);
+
+/// A window-manager failure only loses the minimum size; it must never keep
+/// the app from starting.
 Future<void> initializeDesktopWindow() async {
-  await windowManager.ensureInitialized();
-  await windowManager.setMinimumSize(const Size(960, 600));
+  try {
+    await windowManager.ensureInitialized();
+    await windowManager.setMinimumSize(minimumWindowSize);
+  } catch (error, stack) {
+    Diagnostics.record(
+      'initialize window',
+      'failed',
+      error: error,
+      stack: stack,
+    );
+  }
 }
 
 /// Tournament navigation; the operating system owns the window decorations.

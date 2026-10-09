@@ -17,7 +17,9 @@ and the TD collects results by walking the room or reading the wall sheet in
 board order. During play the event-wide grid is the default; switching to a section
 grid is a filter, not a different editor. The round number is the largest text on
 the surface, because entering into the wrong round is the mistake this layout
-exists to prevent.
+exists to prevent. In the event-wide grid a fixed-schedule quad shows its whole
+schedule while Swiss sections beside it stay on their current round, so a quad
+never turns the Swiss boards into a read-only earlier round.
 
 Default: board-ordered rows for the selected round. Columns: Board, White, white
 pre-round score, **White result**, Black, black pre-round score. Label the perspective
@@ -35,6 +37,11 @@ where needed and a persistent context line: “Round 2 · Board 10 · Morgan vs 
 entering White's result.” Do not force a pop-up or mouse interaction for ordinary
 win/loss/draw entry. A compact visible keyboard legend makes the interaction discoverable.
 
+Built: a status bar under the boards carries both. While a score box has focus
+it reads “Round 2 · Board 10 · Morgan vs Sam · entering White's result” (the
+event-wide grid adds the section name first; an earlier round says read-only
+instead of entering), and below it the legend.
+
 ## Input and commitment
 
 | Input | Meaning | Commit / focus behavior |
@@ -47,16 +54,31 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 | F | Labelled player is a no-show (forfeit loss; opponent wins by forfeit) | Save as an unplayed forfeit and advance immediately |
 | X | Forfeit win for labelled player | Save as an unplayed forfeit and advance immediately |
 | F on both players of a board | Double forfeit | The second F turns the opponent's forfeit win into a double forfeit |
+| + or numpad + | Forfeit win for labelled player (same as X) | Save and advance immediately |
+| − or numpad − | Labelled player forfeits (same as F, never a double forfeit) | Save and advance immediately |
+| P | Game still playing | Save as unfinished and advance; a pairing assumption still shows in brackets with “playing” |
+| ? | Disputed | Save as disputed and advance |
+| A | Assume a result for pairing only (unresolved games) | Opens the assumption beside the table |
 | Arrow keys | Navigate cells | No result created by moving focus |
 | Enter on blank | Skip unknown game | Leave unreported and advance |
 | Shift+Enter | Previous result cell | Move backward; an explicit text editor commits only a valid complete value |
 | Tab / Shift+Tab in grid navigation | Leave grid forward/backward | Normal focus traversal; not a trap cycling through every result |
 | Escape | Cancel current uncommitted edit | Restore old display; do not create a result |
-| F2 or double-click existing result | Explicit correction | Edit directly; preserve history and review later-round dependencies when applicable |
+| F2 on an existing result | Explicit correction | Opens the correction review beside the table, also in an earlier round; preserves history and reviews later-round dependencies. Double-click does not open it (a double-click recognizer would delay the single click that focuses the box) |
+| Space | Player details | Opens the details of the box's player |
+| Shift+F10 or Menu | Player menu | Opens the box's player menu (byes, move, withdraw) |
+| Any other printable key | Not a result | Saves nothing, does not move; the legend says “Not a result key” and lists every result key |
 | Delete on selected saved result | Clear result deliberately | Restore unreported state with history/undo; review dependencies if necessary |
 | Undo | Revert latest applicable change | Restore both opponents and focus to that game; review historical dependencies |
 
-Show a persistent compact legend: **1 / W win · 0 / L loss · D draw · F no-show**.
+Show a persistent compact legend: **1 / W win · 0 / L loss · D draw · F no-show ·
+X forfeit win · Enter skip · F2 correct · Space player details**. After a key that
+is not a result it adds **+ forfeit win · − no-show · P playing · ? disputed**.
+
+F on a box that already shows a forfeit win records a double forfeit. The stored
+result is the same whether that win came from the opponent's F or a mistaken X on
+this box, so the app cannot tell them apart; correct a mistaken X with L, 0 or
+Delete, not F.
 
 Score boxes and crosstables use the US Chess letters for unplayed games:
 **X** won by forfeit, **F** forfeited (both players show F after a double
@@ -89,17 +111,29 @@ non-editable structural cells and already completed games. Provide a visible
 The all-round grid offers Down this round / Across this player, with the current
 mode labelled. Automatic result advancement is over result cells, not names or
 ratings. The grid is one Tab stop: arrows move inside; Tab/Shift+Tab leave forward/
-backward. Returning restores the active cell. In an explicit text editor, Tab
+backward. Returning restores the active cell (or, before any, the first board
+missing a result). The withdraw offer after a forfeit is a Tab stop only from its
+own board. In an explicit text editor, Tab
 commits a valid complete edit and exits; invalid input explains the error and
 Escape always cancels it. Document/announce this convention; do not require a
 hidden exit shortcut. Player-name actions remain keyboard-accessible through a
-labelled game/player details control without making every name a Tab stop.
+labelled game/player details control without making every name a Tab stop: Space
+on a score box opens that player's details and Shift+F10 their menu; names stay
+announced to screen readers and open on double-click.
 
 Freeze row order during an entry sequence. Updating scores must not re-sort rows
 under the TD's fingers. When a missing-only row disappears, focus advances using
 the previous ordered game IDs; never skip an extra row. Virtualization must preserve
 focus and scroll the next cell into view. At the last editable cell, show completion
 without silently switching sections, creating a new round or publishing pairings.
+
+Built: advance follows the board order captured before the save to the next board
+still missing a result (in the event-wide grid that is the next board in the room,
+whichever section it belongs to). Past the last board it wraps to the first earlier
+board still missing one, such as a board skipped with Enter. When none remain,
+focus moves to an announced **All results entered** status beside the toolbar
+(**All matching boards entered** while a search narrows the boards), so the next
+key changes nothing.
 
 Allow jumping by board number or player search and returning to the entry cursor.
 Out-of-order slips should not require scrolling through the whole tournament.
@@ -200,15 +234,17 @@ The correction opens in the docked panel beside the table, never a dialog, so
 lookup and the boards stay usable while it is open. It names the section,
 round, board, colors and game leg. Results are buttons named for the players
 ("Jamie Patel won", Draw), with forfeits and other outcomes behind one
-disclosure; the usual result keys also select them, and Enter or Ctrl+Enter
-saves. Each player's score change shows before saving. Later paired rounds
+disclosure; the usual result keys also select them (F on a forfeit win picks
+Double forfeit), and Enter or Ctrl+Enter saves. A held key does not repeat, so
+holding Enter saves once and never presses Done. In the note Enter also saves and
+Shift+Enter starts a new line. Each player's score change shows before saving. Later paired rounds
 default to **Keep the pairings**; **Unpair from round N** removes that round and
 every later one, and requires both no recorded play in that suffix and an
 explicit check that no games have actually started. Later section transfers
 disable unpairing and name the linked sections. The note is optional. Closing
 keeps the draft. Saving commits the result and unpairing in one revision and
 leaves a confirmation in the panel with Undo and a reminder to reprint posted
-copies. New pairings are created separately; the panel always saves against the
+copies; Undo disappears once any other change lands. New pairings are created separately; the panel always saves against the
 current revision.
 
 History rows lead with what happened: a result reads as the players and score
@@ -226,4 +262,6 @@ exported files need replacement after a change.
 
 Covered by `test/application/result_correction_test.dart`,
 `test/ui/result_correction_test.dart`, and the native rehearsal in
-`integration_test/result_correction_test.dart`.
+`integration_test/result_correction_test.dart`. Traversal, completion, the
+single Tab stop, the legend and context line, F2, mixed quad/Swiss views and
+the panel's key handling are covered by `test/ui/result_entry_regression_test.dart`.

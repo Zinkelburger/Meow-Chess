@@ -294,10 +294,11 @@ class PlayerRatingReview extends StatelessWidget {
                   Text(
                     '${ratingText(p.rating)} → $proposed',
                     maxLines: 1,
+                    // Only the Regular weight is bundled; a bolder request
+                    // would be synthesized differently on each OS.
                     style: const TextStyle(
                       fontFamily: 'SourceCodePro',
                       fontSize: 15,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   if (change != null && p.rating != 0) ...[

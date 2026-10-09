@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:path/path.dart' as p;
+import '../application/diagnostics.dart';
 import '../application/event_repository.dart';
 import '../domain/history.dart';
 import '../domain/model.dart';
@@ -13,7 +14,7 @@ class SqliteEventRepository implements EventRepository {
   SqliteEventRepository(String path)
     : _path = path,
       _created = path == ':memory:' || !File(path).existsSync(),
-      _db = sqlite3.open(path) {
+      _db = _open(path) {
     try {
       _db.execute('PRAGMA foreign_keys = ON');
       _db.execute('PRAGMA busy_timeout = 1000');
@@ -35,13 +36,23 @@ class SqliteEventRepository implements EventRepository {
       }
       try {
         _db.execute('PRAGMA journal_mode = WAL');
-      } on SqliteException {
+      } on SqliteException catch (error) {
+        // Only a refused sibling file justifies the fallback; anything else,
+        // such as another program holding the file, is reported instead.
+        if (!_siblingRefused(error)) rethrow;
         // WAL (and every rollback journal mode) creates a sibling file next to
         // this one. A macOS App Sandbox grant for a single externally-chosen
         // file does not cover creating that new filename in its folder, so
         // fall back to an in-memory journal, which stays within the file
-        // already granted.
+        // already granted. A crash mid-commit can then damage the file.
         _db.execute('PRAGMA journal_mode = MEMORY');
+        _crashProtected = false;
+        Diagnostics.record(
+          'open event',
+          'crash protection unavailable',
+          error: error,
+          context: {'path': path},
+        );
       }
       _db.execute('PRAGMA synchronous = FULL');
       _db.execute('BEGIN EXCLUSIVE');
@@ -79,28 +90,104 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
       _db.execute('CREATE INDEX IF NOT EXISTS audit_node ON audit(node)');
       _db.execute('PRAGMA user_version = 2');
       _db.execute('COMMIT');
+      _checkpoint();
       if (_path != ':memory:') {
         _ownershipPath = File(_path).resolveSymbolicLinksSync();
         _owners.add(this);
       }
     } catch (error) {
       _db.close();
-      if (error is SqliteException) {
-        switch (error.resultCode) {
-          case 5 || 6: // SQLITE_BUSY, SQLITE_LOCKED
-            throw const TournamentException(
-              'This event is open in another window or program. Close it there first.',
-            );
-          case 26: // SQLITE_NOTADB
-            throw const TournamentException(
-              'This file is not a Meow-Chess event.',
-            );
+      final busy =
+          error is SqliteException &&
+          (error.resultCode == 5 || error.resultCode == 6);
+      // A file this constructor created must not stay behind as an empty or
+      // half-initialized event. A busy file belongs to whoever created it.
+      if (_created && path != ':memory:' && !busy) {
+        for (final suffix in ['', '-wal', '-shm', '-journal']) {
+          try {
+            final leftover = File('$path$suffix');
+            if (leftover.existsSync()) leftover.deleteSync();
+          } on FileSystemException {
+            // The original failure is the one worth reporting.
+          }
         }
+      }
+      if (error is SqliteException) {
+        throw _openFailure(error, created: _created) ?? error;
       }
       rethrow;
     }
   }
   static final _owners = <SqliteEventRepository>{};
+
+  static Database _open(String path) {
+    try {
+      return sqlite3.open(path);
+    } on SqliteException catch (error) {
+      throw _openFailure(error, created: !File(path).existsSync()) ?? error;
+    }
+  }
+
+  /// SQLITE_PERM, SQLITE_READONLY, SQLITE_IOERR, SQLITE_CANTOPEN and
+  /// SQLITE_AUTH: the journal's sibling file could not be created.
+  static bool _siblingRefused(SqliteException error) =>
+      const {3, 8, 10, 14, 23}.contains(error.resultCode);
+
+  /// Plain wording for SQLite failures a director can act on.
+  static TournamentException? _openFailure(
+    SqliteException error, {
+    required bool created,
+  }) {
+    switch (error.resultCode) {
+      case 5 || 6: // SQLITE_BUSY, SQLITE_LOCKED
+        return const TournamentException(
+          'This event is open in another window or program. Close it there first.',
+        );
+      case 26: // SQLITE_NOTADB
+        return const TournamentException(
+          'This file is not a Meow-Chess event.',
+        );
+      case 14 || 8 when created: // SQLITE_CANTOPEN, SQLITE_READONLY
+        return const TournamentException(
+          'Meow-Chess cannot create a file in this folder. Choose a folder you can save files in.',
+        );
+      // SQLITE_CANTOPEN, or SQLITE_READONLY_DIRECTORY: an event saved with
+      // crash protection needs its recovery file beside it, which the folder
+      // (or the macOS App Sandbox) refused.
+      case 14:
+      case 8 when error.extendedResultCode == 1544:
+        return const TournamentException(
+          'Meow-Chess could not create this event\'s recovery file next to it, so it cannot open the event safely. Check that you can save files in the event\'s folder.',
+        );
+      case 8: // SQLITE_READONLY
+        return const TournamentException(
+          'This event file is read-only. Check its permissions, or copy it to a folder you can save files in.',
+        );
+    }
+    return null;
+  }
+
+  /// False when the folder refused SQLite's recovery file and commits use an
+  /// in-memory journal, which a crash or power loss mid-commit can corrupt.
+  bool get crashProtected => _crashProtected;
+  bool _crashProtected = true, _closed = false;
+
+  /// Copies committed pages from the WAL into the event file, so the .meow on
+  /// its own is complete even if the app is killed or the file is copied while
+  /// open. The commit is already durable in the WAL; failing here only
+  /// postpones that.
+  void _checkpoint() {
+    try {
+      _db.execute('PRAGMA wal_checkpoint(PASSIVE)');
+    } on SqliteException catch (error) {
+      Diagnostics.record(
+        'checkpoint event',
+        'failed',
+        error: error,
+        context: {'path': _path},
+      );
+    }
+  }
 
   /// Checks active databases and their journals using metadata only. Opening
   /// and then closing a raw file descriptor could release this process's
@@ -411,6 +498,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
         ],
       );
       _db.execute('COMMIT');
+      _checkpoint();
       return committed;
     } catch (_) {
       _rollback();
@@ -449,6 +537,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
         [restored.revision, action, _now(), node],
       );
       _db.execute('COMMIT');
+      _checkpoint();
       return restored;
     } catch (_) {
       _rollback();
@@ -642,8 +731,22 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     }
   }
 
+  /// Folds the WAL into the event file first, so the .meow alone holds every
+  /// commit once the event is closed.
   @override
   void close() {
+    if (_closed) return;
+    _closed = true;
+    try {
+      _db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    } on SqliteException catch (error) {
+      Diagnostics.record(
+        'checkpoint event',
+        'failed',
+        error: error,
+        context: {'path': _path},
+      );
+    }
     _db.close();
     _owners.remove(this);
   }

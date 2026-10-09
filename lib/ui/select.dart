@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../domain/us_chess.dart' show nameKey;
+
 /// One choice in a [PlainSelect].
 class SelectOption<T> {
   const SelectOption(this.value, this.label, {this.enabled = true});
@@ -15,8 +17,9 @@ class SelectOption<T> {
 /// below it, at least as wide as the field, with a check beside the current
 /// choice. The field itself stays visible, as with a native combo box.
 ///
-/// Keyboard: Enter, Space, Alt+Down or Down opens it; arrows move; Enter
-/// picks; Esc closes without changing anything.
+/// Keyboard: Enter, Space, Alt+Down or Down opens it, on the current choice;
+/// arrows move, skipping disabled choices; typing a letter jumps to the next
+/// choice starting with it; Enter picks; Esc closes without changing anything.
 class PlainSelect<T> extends StatefulWidget {
   const PlainSelect({
     required this.value,
@@ -77,8 +80,45 @@ class _PlainSelectState<T> extends State<PlainSelect<T>> {
       final start = current >= 0 && widget.options[current].enabled
           ? current
           : widget.options.indexWhere((o) => o.enabled);
-      if (start >= 0) itemFocus[start]?.requestFocus();
+      if (start >= 0) reveal(start);
     });
+  }
+
+  /// Focuses a choice and scrolls the capped list to show it.
+  void reveal(int index) {
+    final node = itemFocus[index];
+    if (node == null) return;
+    node.requestFocus();
+    if (node.context case final item? when item.mounted) {
+      Scrollable.ensureVisible(item, alignment: 0.5);
+    }
+  }
+
+  /// Typeahead: a letter moves to the next enabled choice that starts with it.
+  KeyEventResult typeahead(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final keys = HardwareKeyboard.instance;
+    final typed = event.character?.trim() ?? '';
+    if (typed.isEmpty ||
+        keys.isControlPressed ||
+        keys.isMetaPressed ||
+        keys.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    final letter = nameKey(typed);
+    final options = widget.options;
+    final from =
+        itemFocus.entries.where((e) => e.value.hasFocus).firstOrNull?.key ?? -1;
+    for (var step = 1; step <= options.length; step++) {
+      final i = (from + step) % options.length;
+      if (options[i].enabled && nameKey(options[i].label).startsWith(letter)) {
+        reveal(i);
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
   }
 
   void pick(T value) {
@@ -128,22 +168,27 @@ class _PlainSelectState<T> extends State<PlainSelect<T>> {
           ),
           menuChildren: [
             for (final (i, o) in widget.options.indexed)
-              MenuItemButton(
-                key: ValueKey(('select-option', i)),
-                focusNode: itemFocus.putIfAbsent(i, FocusNode.new),
-                closeOnActivate: false,
-                leadingIcon: SizedBox(
-                  width: 18,
-                  child: i == current
-                      ? const Icon(Icons.check, size: 18)
-                      : null,
-                ),
-                onPressed: o.enabled ? () => pick(o.value) : null,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: math.max(width, 420) - 64,
+              Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: typeahead,
+                child: MenuItemButton(
+                  key: ValueKey(('select-option', i)),
+                  focusNode: itemFocus.putIfAbsent(i, FocusNode.new),
+                  closeOnActivate: false,
+                  leadingIcon: SizedBox(
+                    width: 18,
+                    child: i == current
+                        ? const Icon(Icons.check, size: 18)
+                        : null,
                   ),
-                  child: Text(o.label, overflow: TextOverflow.ellipsis),
+                  onPressed: o.enabled ? () => pick(o.value) : null,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: math.max(width, 420) - 64,
+                    ),
+                    child: Text(o.label, overflow: TextOverflow.ellipsis),
+                  ),
                 ),
               ),
           ],

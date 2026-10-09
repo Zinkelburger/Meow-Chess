@@ -108,7 +108,7 @@ void main() {
     },
   );
 
-  testWidgets('Tab to a name on Rounds, then Enter opens player details', (
+  testWidgets('Space on a Rounds score box opens that player\'s details', (
     tester,
   ) async {
     final c = fixture();
@@ -120,9 +120,7 @@ void main() {
     final g = c.event!.sections.first.rounds.last.games.first;
     await tester.tap(find.byKey(ValueKey('score-${g.id}-w')));
     await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('panel-name')), findsOneWidget);
     expect(

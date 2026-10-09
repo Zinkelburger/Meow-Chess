@@ -11,6 +11,8 @@ import '../domain/us_chess.dart';
 import '../infrastructure/dbf_export.dart';
 import 'dialogs.dart';
 import 'panels.dart';
+import 'prize_panel.dart';
+import '../infrastructure/reports.dart' show ReportKind;
 import 'drafts.dart';
 import 'event_panel.dart';
 import 'player_panel.dart';
@@ -255,6 +257,8 @@ class _ReportsViewState extends State<ReportsView> {
               ),
               const SizedBox(height: 32),
               _sections(context, e),
+              const SizedBox(height: 32),
+              _prizes(context, e),
               const SizedBox(height: 32),
               _afterUpload(context, e),
             ],
@@ -612,6 +616,52 @@ class _ReportsViewState extends State<ReportsView> {
     );
   }
 
+  /// Rules 32–33: each section's prize table and the printed allocation.
+  Widget _prizes(BuildContext context, Event e) {
+    final dock = Dock.maybeOf(context);
+    final sections = e.sections.where((s) => s.players.isNotEmpty).toList();
+    return Column(
+      key: const ValueKey('prizes-summary'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Prizes', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final s in sections)
+              TextButton(
+                key: ValueKey('edit-prizes-${s.id}'),
+                onPressed: dock == null
+                    ? null
+                    : () => dock.show(
+                        'prizes-${s.id}',
+                        PrizeTablePanel(
+                          key: ValueKey('prizes-${s.id}'),
+                          controller: controller,
+                          sectionId: s.id,
+                          onClose: dock.close,
+                        ),
+                      ),
+                child: Text(
+                  '${s.name}: ${(s.prizes['list'] as List?)?.length ?? 0} prizes…',
+                ),
+              ),
+            if (sections.isNotEmpty)
+              OutlinedButton.icon(
+                key: const ValueKey('print-prizes'),
+                onPressed: () => showPrint(context, e, kind: ReportKind.prizes),
+                icon: const Icon(Icons.print_outlined, size: 18),
+                label: const Text('Prize report'),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
   /// Keeping the event safe, and recording the upload once it is done.
   Widget _afterUpload(BuildContext context, Event e) {
     final colors = Theme.of(context).colorScheme;
@@ -654,6 +704,22 @@ class _ReportsViewState extends State<ReportsView> {
         ),
         const SizedBox(height: 16),
         SubmissionNotes(controller: controller),
+        const SizedBox(height: 24),
+        Text('Before round 1', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('print-conditions'),
+            onPressed: () => showPrint(
+              context,
+              controller.event!,
+              kind: ReportKind.conditions,
+            ),
+            icon: const Icon(Icons.print_outlined, size: 18),
+            label: const Text('Event conditions sheet (rules 26A, 34B, 25)'),
+          ),
+        ),
       ],
     );
   }

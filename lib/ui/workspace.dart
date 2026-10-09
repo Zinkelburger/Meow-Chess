@@ -2,6 +2,7 @@ import '../application/member_lookup.dart';
 import 'player_actions.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../application/tournament_controller.dart';
 import 'rating_refresh.dart';
 import '../infrastructure/member_directory.dart';
+import '../infrastructure/sqlite_event_repository.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import '../infrastructure/roster_import.dart' show ImportRow;
@@ -17,6 +19,7 @@ import 'desktop_window.dart';
 import 'event_panel.dart';
 import 'history_panel.dart';
 import 'panels.dart';
+import 'prize_panel.dart';
 import '../infrastructure/reports.dart' show ReportKind;
 import 'side_panel.dart';
 import 'theme.dart' show controlHeight;
@@ -25,6 +28,7 @@ import 'results_view.dart';
 import 'reports_view.dart';
 import 'workspace_actions.dart';
 import 'update_panels.dart';
+import 'rulings_panel.dart';
 import 'help_panel.dart';
 import 'side_game_panel.dart';
 import 'quad_pairings_panel.dart';
@@ -243,16 +247,31 @@ class _WorkspaceState extends State<Workspace> {
               : batch.issues.values.join('\n'),
         );
       }
-      final notes = [
-        ...batch.issues.entries.map(
-          (e) =>
-              '${c.event!.sections.firstWhere((s) => s.id == e.key).name}: ${e.value}',
-        ),
-      ];
       // Post straight away; anything worth checking is fixed afterwards
-      // with Edit pairings or Undo post.
+      // with Edit pairings or Undo post. If the event changed while
+      // pairing, post says so.
       c.post(batch);
       if (!mounted) return;
+      final notes = [
+        for (final MapEntry(key: id, value: note) in batch.issues.entries)
+          if (c.event!.sections.where((s) => s.id == id).firstOrNull
+              case final s?)
+            '${s.name}: $note',
+        // Rule 29E TIP: the director reviews what the pairer did. Routine
+        // transpositions stay in the round's explanations (history and
+        // MCP); only what a TD would want to check at once is shown here.
+        for (final MapEntry(key: id, value: round) in batch.rounds.entries)
+          if (c.event!.sections.where((s) => s.id == id).firstOrNull
+              case final s?)
+            for (final line in round.explanations.where(
+              (x) =>
+                  x.contains('meeting is allowed') ||
+                  x.contains('28L3 could not') ||
+                  x.contains('third time') ||
+                  x.contains('closest legal pairing'),
+            ))
+              '${s.name}: $line',
+      ];
       setState(() => postNotes = notes);
       if (sectionId == null || batch.rounds.containsKey(sectionId)) {
         go(TaskView.results);
@@ -273,6 +292,15 @@ class _WorkspaceState extends State<Workspace> {
   void sectionSettings() => dock.show(
     'settings-$sectionId',
     sectionSettingsPanel(c, sectionId!, dock.close),
+  );
+  void prizes() => dock.show(
+    'prizes-$sectionId',
+    PrizeTablePanel(
+      key: ValueKey('prizes-$sectionId'),
+      controller: c,
+      sectionId: sectionId!,
+      onClose: dock.close,
+    ),
   );
   void combine() => dock.show(
     'combine-$sectionId',
@@ -351,15 +379,19 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   void printCurrent() {
+    final scope = printScope(c.event!, view, sectionId);
     if (view == TaskView.results) {
-      resultsKeys[sectionId ?? 'all']?.currentState?.printRound();
+      // The page shown: the section's, or every section's once Undo has
+      // removed the one chosen.
+      resultsKeys[scope.sectionId ?? 'all']?.currentState?.printRound();
       return;
     }
     printSheets(
       context,
       c.event!,
-      sectionId: sectionId,
-      kind: view == TaskView.players ? ReportKind.sections : ReportKind.packet,
+      sectionId: scope.sectionId,
+      kind: scope.kind,
+      dock: dock,
     );
   }
 
@@ -375,7 +407,7 @@ class _WorkspaceState extends State<Workspace> {
                 'Result keys score the focused player and jump to the next missing board.',
               ),
               const SizedBox(height: 16),
-              for (final (keys, action) in const [
+              for (final (keys, action) in [
                 ('1 / W', 'This player wins'),
                 ('0 / L', 'This player loses'),
                 ('D', 'Draw (½ on the sheet)'),
@@ -388,11 +420,16 @@ class _WorkspaceState extends State<Workspace> {
                 ('P / ?', 'Still playing / disputed'),
                 ('A', 'Temporary pairing assumption'),
                 ('Tab, then Enter', 'Open the focused player'),
-                ('Ctrl+L', 'Find a player'),
-                ('Ctrl+P', 'Print this view'),
-                ('Ctrl+Z', 'Undo'),
-                ('Ctrl+Shift+Z / Ctrl+Y', 'Redo'),
-                ('Ctrl+H', 'History'),
+                (shortcutLabel('L'), 'Find a player'),
+                (shortcutLabel('P'), 'Print this view'),
+                (shortcutLabel('Z'), 'Undo'),
+                (
+                  mac
+                      ? shortcutLabel('Z', shift: true)
+                      : '${shortcutLabel('Z', shift: true)} / ${shortcutLabel('Y')}',
+                  'Redo',
+                ),
+                (shortcutLabel(mac ? 'Y' : 'H'), 'History'),
                 ('Esc', 'Close the panel; keep its draft'),
                 ('F1', 'This reference'),
               ])
@@ -438,351 +475,386 @@ class _WorkspaceState extends State<Workspace> {
       ),
     };
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): dock.close,
-        const SingleActivator(LogicalKeyboardKey.keyL, control: true): lookup,
-        const SingleActivator(LogicalKeyboardKey.keyP, control: true):
-            printCurrent,
-        const SingleActivator(LogicalKeyboardKey.f1): keyboardHelp,
-        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
-          if (!editingText) undo();
-        },
-        const SingleActivator(
-          LogicalKeyboardKey.keyZ,
-          control: true,
-          shift: true,
-        ): () {
-          if (!editingText) redo();
-        },
-        const SingleActivator(LogicalKeyboardKey.keyY, control: true): () {
-          if (!editingText) redo();
-        },
-        const SingleActivator(LogicalKeyboardKey.keyH, control: true):
-            toggleHistory,
+    SingleActivator command(LogicalKeyboardKey key, {bool shift = false}) =>
+        SingleActivator(key, control: !mac, meta: mac, shift: shift);
+    return Shortcuts(
+      shortcuts: {
+        const SingleActivator(LogicalKeyboardKey.escape): _KeyIntent(
+          dock.close,
+        ),
+        command(LogicalKeyboardKey.keyL): _KeyIntent(lookup),
+        command(LogicalKeyboardKey.keyP): _KeyIntent(printCurrent),
+        const SingleActivator(LogicalKeyboardKey.f1): _KeyIntent(keyboardHelp),
+        // In a text field these keys belong to the field.
+        command(LogicalKeyboardKey.keyZ): _KeyIntent(undo, inText: false),
+        command(LogicalKeyboardKey.keyZ, shift: true): _KeyIntent(
+          redo,
+          inText: false,
+        ),
+        if (!mac)
+          command(LogicalKeyboardKey.keyY): _KeyIntent(redo, inText: false),
+        // ⌘H hides the app on a Mac; ⌘Y is History there, as in browsers.
+        command(mac ? LogicalKeyboardKey.keyY : LogicalKeyboardKey.keyH):
+            _KeyIntent(toggleHistory, inText: false),
       },
-      child: Dock(
-        controller: dock,
-        child: Focus(
-          focusNode: workspaceFocus,
-          autofocus: true,
-          child: Scaffold(
-            // Names, IDs, scores and messages can be dragged over and copied.
-            body: SelectionArea(
-              child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Top bar: event name and pages on the left, tool icons pinned
-                    // to the right.
-                    WorkspaceToolbar(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final navigation = SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            hitTestBehavior: HitTestBehavior.deferToChild,
-                            child: Row(
-                              children: [
-                                ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxWidth: constraints.maxWidth < 1100
-                                        ? 160
-                                        : 260,
-                                  ),
-                                  child: Tooltip(
-                                    message: 'Event details',
-                                    child: TextButton.icon(
-                                      key: const ValueKey('event-details'),
-                                      onPressed: toggleEvent,
-                                      iconAlignment: IconAlignment.end,
-                                      icon: Icon(
-                                        Icons.edit_outlined,
-                                        size: 16,
-                                        color: colors.onSurfaceVariant,
-                                      ),
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: colors.onSurface,
-                                        backgroundColor: eventOpen
-                                            ? colors.primary.withValues(
-                                                alpha: 0.12,
-                                              )
-                                            : null,
-                                        minimumSize: const Size(0, 32),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
+      child: Actions(
+        actions: {_KeyIntent: _KeyAction(() => editingText)},
+        child: Dock(
+          controller: dock,
+          child: Focus(
+            focusNode: workspaceFocus,
+            autofocus: true,
+            child: Scaffold(
+              // Names, IDs, scores and messages can be dragged over and copied.
+              body: SelectionArea(
+                child: SafeArea(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Top bar: event name and pages on the left, tool icons pinned
+                      // to the right.
+                      WorkspaceToolbar(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final navigation = SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              hitTestBehavior: HitTestBehavior.deferToChild,
+                              child: Row(
+                                children: [
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: constraints.maxWidth < 1100
+                                          ? 160
+                                          : 260,
+                                    ),
+                                    child: Tooltip(
+                                      message: 'Event details',
+                                      child: TextButton.icon(
+                                        key: const ValueKey('event-details'),
+                                        onPressed: toggleEvent,
+                                        iconAlignment: IconAlignment.end,
+                                        icon: Icon(
+                                          Icons.edit_outlined,
+                                          size: 16,
+                                          color: colors.onSurfaceVariant,
                                         ),
-                                      ),
-                                      label: Text(
-                                        e.name,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 15,
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: colors.onSurface,
+                                          backgroundColor: eventOpen
+                                              ? colors.primary.withValues(
+                                                  alpha: 0.12,
+                                                )
+                                              : null,
+                                          minimumSize: const Size(0, 32),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                        ),
+                                        label: Text(
+                                          e.name,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 15,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          );
-                          final actions = Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _barIcon(
-                                Icons.help_outline,
-                                'Help articles',
-                                () => dock.id == 'help'
-                                    ? dock.close()
-                                    : dock.show(
-                                        'help',
-                                        HelpPanel(
-                                          controller: c,
-                                          onClose: dock.close,
+                                ],
+                              ),
+                            );
+                            final actions = Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _barIcon(
+                                  Icons.help_outline,
+                                  'Help articles',
+                                  () => dock.id == 'help'
+                                      ? dock.close()
+                                      : dock.show(
+                                          'help',
+                                          HelpPanel(
+                                            controller: c,
+                                            onClose: dock.close,
+                                          ),
                                         ),
-                                      ),
-                                selected: dock.id == 'help',
-                              ),
-                              _barIcon(
-                                Icons.keyboard_outlined,
-                                'Keyboard shortcuts (F1)',
-                                keyboardHelp,
-                                selected: dock.id == 'keyboard-help',
-                              ),
-                              _toolbarDivider(),
-                              _barIcon(
-                                Icons.arrow_back,
-                                c.canUndo
-                                    ? 'Undo ${c.undoLabel} (Ctrl+Z)'
-                                    : 'Nothing to undo',
-                                c.canUndo ? undo : null,
-                                key: const ValueKey('undo'),
-                              ),
-                              _barIcon(
-                                Icons.arrow_forward,
-                                c.canRedo
-                                    ? 'Redo ${c.redoLabel} (Ctrl+Shift+Z)'
-                                    : 'Nothing to redo',
-                                c.canRedo ? redo : null,
-                              ),
-                              _barIcon(
-                                Icons.history,
-                                historyOpen
-                                    ? 'Hide history (Ctrl+H)'
-                                    : 'History (Ctrl+H)',
-                                toggleHistory,
-                                selected: historyOpen,
-                              ),
-                              _toolbarDivider(),
-                              _barIcon(
-                                dark
-                                    ? Icons.light_mode_outlined
-                                    : Icons.dark_mode_outlined,
-                                dark ? 'Light mode' : 'Dark mode',
-                                widget.onTheme,
-                              ),
-                              _barIcon(
-                                Icons.home_outlined,
-                                'Close event',
-                                widget.onClose,
-                              ),
-                            ],
-                          );
-                          if (constraints.maxWidth /
-                                  MediaQuery.textScalerOf(context).scale(1) <
-                              640) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                navigation,
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: actions,
+                                  selected: dock.id == 'help',
+                                ),
+                                _barIcon(
+                                  Icons.gavel,
+                                  'Rulings, penalties and appeals',
+                                  () => dock.id == 'rulings'
+                                      ? dock.close()
+                                      : dock.show(
+                                          'rulings',
+                                          RulingsPanel(
+                                            controller: c,
+                                            onClose: dock.close,
+                                          ),
+                                        ),
+                                  selected: dock.id == 'rulings',
+                                  key: const ValueKey('rulings'),
+                                ),
+                                _barIcon(
+                                  Icons.keyboard_outlined,
+                                  'Keyboard shortcuts (F1)',
+                                  keyboardHelp,
+                                  selected: dock.id == 'keyboard-help',
+                                ),
+                                _toolbarDivider(),
+                                _barIcon(
+                                  Icons.arrow_back,
+                                  c.canUndo
+                                      ? 'Undo ${c.undoLabel} (${shortcutLabel('Z')})'
+                                      : 'Nothing to undo',
+                                  c.canUndo ? undo : null,
+                                  key: const ValueKey('undo'),
+                                ),
+                                _barIcon(
+                                  Icons.arrow_forward,
+                                  c.canRedo
+                                      ? 'Redo ${c.redoLabel} (${shortcutLabel('Z', shift: true)})'
+                                      : 'Nothing to redo',
+                                  c.canRedo ? redo : null,
+                                ),
+                                _barIcon(
+                                  Icons.history,
+                                  historyOpen
+                                      ? 'Hide history (${shortcutLabel(mac ? 'Y' : 'H')})'
+                                      : 'History (${shortcutLabel(mac ? 'Y' : 'H')})',
+                                  toggleHistory,
+                                  selected: historyOpen,
+                                ),
+                                _toolbarDivider(),
+                                _barIcon(
+                                  dark
+                                      ? Icons.light_mode_outlined
+                                      : Icons.dark_mode_outlined,
+                                  dark ? 'Light mode' : 'Dark mode',
+                                  widget.onTheme,
+                                ),
+                                _barIcon(
+                                  Icons.home_outlined,
+                                  'Close event',
+                                  widget.onClose,
                                 ),
                               ],
                             );
-                          }
-                          return Row(
-                            children: [
-                              Expanded(child: navigation),
-                              const SizedBox(width: 12),
-                              actions,
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                    if (e.practice) _practiceBanner(context),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, layout) {
-                          final pages = Wrap(
-                            spacing: 4,
-                            runSpacing: 4,
-                            children: [
-                              for (final (task, label) in [
-                                (TaskView.players, 'Players'),
-                                (TaskView.results, 'Pairings'),
-                                (TaskView.reports, 'Export'),
-                              ])
-                                _tab(label, view == task, () => go(task)),
-                            ],
-                          );
-                          final action = view != TaskView.results
-                              ? const SizedBox.shrink()
-                              : _postControl(context, e, section);
-                          // One control tall whether or not Create pairings is
-                          // offered, so changing section never shifts the page.
-                          final reserved = BoxConstraints(
-                            minHeight: MediaQuery.textScalerOf(
-                              context,
-                            ).scale(controlHeight),
-                          );
-                          if (layout.maxWidth /
-                                  MediaQuery.textScalerOf(context).scale(1) <
-                              1050) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                pages,
-                                ConstrainedBox(
-                                  constraints: view == TaskView.results
-                                      ? reserved
-                                      : const BoxConstraints(),
-                                  child: Align(
+                            if (constraints.maxWidth /
+                                    MediaQuery.textScalerOf(context).scale(1) <
+                                640) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  navigation,
+                                  Align(
                                     alignment: Alignment.centerRight,
-                                    child: action,
+                                    child: actions,
                                   ),
-                                ),
+                                ],
+                              );
+                            }
+                            return Row(
+                              children: [
+                                Expanded(child: navigation),
+                                const SizedBox(width: 12),
+                                actions,
                               ],
                             );
-                          }
-                          return ConstrainedBox(
-                            constraints: reserved,
-                            child: Row(
-                              children: [
-                                pages,
-                                const SizedBox(width: 24),
-                                Expanded(
-                                  child: Align(
-                                    alignment: Alignment.centerRight,
-                                    child: action,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                          },
+                        ),
                       ),
-                    ),
-                    // The rating report always covers every section.
-                    if (view != TaskView.reports) _sectionTabs(context),
-                    Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                      if (e.practice) _practiceBanner(context),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, layout) {
+                            final pages = Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
                               children: [
-                                if (c.backupWarning != null)
-                                  MaterialBanner(
-                                    content: Text(c.backupWarning!),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: c.secondaryBackup,
-                                        child: const Text('Retry'),
-                                      ),
-                                    ],
+                                for (final (task, label) in [
+                                  (TaskView.players, 'Players'),
+                                  (TaskView.results, 'Pairings'),
+                                  (TaskView.reports, 'Export'),
+                                ])
+                                  _tab(label, view == task, () => go(task)),
+                              ],
+                            );
+                            final action = view != TaskView.results
+                                ? const SizedBox.shrink()
+                                : _postControl(context, e, section);
+                            // One control tall whether or not Create pairings is
+                            // offered, so changing section never shifts the page.
+                            final reserved = BoxConstraints(
+                              minHeight: MediaQuery.textScalerOf(
+                                context,
+                              ).scale(controlHeight),
+                            );
+                            if (layout.maxWidth /
+                                    MediaQuery.textScalerOf(context).scale(1) <
+                                1050) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  pages,
+                                  ConstrainedBox(
+                                    constraints: view == TaskView.results
+                                        ? reserved
+                                        : const BoxConstraints(),
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: action,
+                                    ),
                                   ),
-                                if (postNotes.isNotEmpty) _postNotes(context),
-                                Expanded(
-                                  child: LayoutBuilder(
-                                    builder: (context, layout) => Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        content,
-                                        if (dock.panel != null)
-                                          Positioned(
-                                            top: 0,
-                                            bottom: 0,
-                                            right: 0,
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 16,
-                                              ),
-                                              child: ConstrainedBox(
-                                                constraints: BoxConstraints(
-                                                  maxWidth: detailsColumnWidth(
-                                                    layout.maxWidth,
-                                                  ),
-                                                ),
-                                                child: dock.panel,
-                                              ),
-                                            ),
-                                          ),
-                                        if (eventOpen)
-                                          Positioned(
-                                            top: 0,
-                                            bottom: 0,
-                                            right: 0,
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 16,
-                                              ),
-                                              child: ConstrainedBox(
-                                                constraints: BoxConstraints(
-                                                  maxWidth: detailsColumnWidth(
-                                                    layout.maxWidth,
-                                                  ),
-                                                ),
-                                                child: EventPanel(
-                                                  key: eventPanel,
-                                                  controller: c,
-                                                  onClose: toggleEvent,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        if (historyOpen)
-                                          Positioned(
-                                            top: 0,
-                                            bottom: 0,
-                                            right: 0,
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 16,
-                                              ),
-                                              child: ConstrainedBox(
-                                                constraints: BoxConstraints(
-                                                  maxWidth: detailsColumnWidth(
-                                                    layout.maxWidth,
-                                                  ),
-                                                ),
-                                                child: HistoryPanel(
-                                                  controller: c,
-                                                  review: historyReview,
-                                                  onClose: toggleHistory,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
+                                ],
+                              );
+                            }
+                            return ConstrainedBox(
+                              constraints: reserved,
+                              child: Row(
+                                children: [
+                                  pages,
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: action,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      // The rating report always covers every section.
+                      if (view != TaskView.reports) _sectionTabs(context),
+                      Expanded(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (c.backupWarning != null)
+                                    MaterialBanner(
+                                      content: Text(c.backupWarning!),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: c.secondaryBackup,
+                                          child: const Text('Retry'),
+                                        ),
                                       ],
                                     ),
+                                  if (c.repository
+                                      case final SqliteEventRepository file
+                                      when !file.crashProtected)
+                                    MaterialBanner(
+                                      key: const ValueKey('crash-unprotected'),
+                                      content: const Text(
+                                        'This folder doesn’t let Meow-Chess protect the event file while it saves, so a crash or power cut could damage it. Keep backups on.',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: showBackups,
+                                          child: const Text('Backups…'),
+                                        ),
+                                      ],
+                                    ),
+                                  if (postNotes.isNotEmpty) _postNotes(context),
+                                  Expanded(
+                                    child: LayoutBuilder(
+                                      builder: (context, layout) => Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          content,
+                                          if (dock.panel != null)
+                                            Positioned(
+                                              top: 0,
+                                              bottom: 0,
+                                              right: 0,
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(
+                                                  top: 16,
+                                                ),
+                                                child: ConstrainedBox(
+                                                  constraints: BoxConstraints(
+                                                    maxWidth:
+                                                        detailsColumnWidth(
+                                                          layout.maxWidth,
+                                                        ),
+                                                  ),
+                                                  child: dock.panel,
+                                                ),
+                                              ),
+                                            ),
+                                          if (eventOpen)
+                                            Positioned(
+                                              top: 0,
+                                              bottom: 0,
+                                              right: 0,
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(
+                                                  top: 16,
+                                                ),
+                                                child: ConstrainedBox(
+                                                  constraints: BoxConstraints(
+                                                    maxWidth:
+                                                        detailsColumnWidth(
+                                                          layout.maxWidth,
+                                                        ),
+                                                  ),
+                                                  child: EventPanel(
+                                                    key: eventPanel,
+                                                    controller: c,
+                                                    onClose: toggleEvent,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          if (historyOpen)
+                                            Positioned(
+                                              top: 0,
+                                              bottom: 0,
+                                              right: 0,
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(
+                                                  top: 16,
+                                                ),
+                                                child: ConstrainedBox(
+                                                  constraints: BoxConstraints(
+                                                    maxWidth:
+                                                        detailsColumnWidth(
+                                                          layout.maxWidth,
+                                                        ),
+                                                  ),
+                                                  child: HistoryPanel(
+                                                    controller: c,
+                                                    review: historyReview,
+                                                    onClose: toggleHistory,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    _statusBar(context, e),
-                  ],
+                      _statusBar(context, e),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1225,6 +1297,7 @@ class _WorkspaceState extends State<Workspace> {
                     value: 'side-game',
                     child: Text('Pair a side game…'),
                   ),
+                const PopupMenuItem(value: 'prizes', child: Text('Prizes…')),
                 const PopupMenuItem(
                   value: 'combine',
                   child: Text('Combine sections…'),
@@ -1254,6 +1327,7 @@ class _WorkspaceState extends State<Workspace> {
                 c.event!,
                 sectionId: id,
                 kind: ReportKind.sections,
+                dock: dock,
               );
             case 'preview':
               showPrint(
@@ -1261,6 +1335,7 @@ class _WorkspaceState extends State<Workspace> {
                 c.event!,
                 sectionId: id,
                 kind: ReportKind.sections,
+                dock: dock,
               );
             case 'settings':
               pickSection(id);
@@ -1268,6 +1343,9 @@ class _WorkspaceState extends State<Workspace> {
             case 'side-game':
               pickSection(id);
               pairSideGame(id!);
+            case 'prizes':
+              pickSection(id);
+              prizes();
             case 'combine':
               pickSection(id);
               combine();
@@ -1310,6 +1388,12 @@ class _WorkspaceState extends State<Workspace> {
     );
   }
 
+  /// Workspace shortcuts use Command on a Mac and Ctrl elsewhere.
+  bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
+
+  String shortcutLabel(String key, {bool shift = false}) =>
+      mac ? '⌘${shift ? '⇧' : ''}$key' : 'Ctrl+${shift ? 'Shift+' : ''}$key';
+
   /// Ctrl+Z inside a text field belongs to the field, not event history.
   bool get editingText =>
       FocusManager.instance.primaryFocus?.context
@@ -1339,6 +1423,43 @@ class _WorkspaceState extends State<Workspace> {
       disabledColor: colors.onSurface.withValues(alpha: 0.35),
       visualDensity: VisualDensity.compact,
     );
+  }
+}
+
+/// What Ctrl+P prints on [view]: the section shown, if it still exists,
+/// on Players and Pairings; the whole packet for every section on Export.
+({ReportKind kind, String? sectionId}) printScope(
+  Event e,
+  TaskView view,
+  String? sectionId,
+) {
+  final shown = e.sections.where((s) => s.id == sectionId).firstOrNull?.id;
+  return switch (view) {
+    TaskView.players => (kind: ReportKind.sections, sectionId: shown),
+    TaskView.results => (kind: ReportKind.packet, sectionId: shown),
+    TaskView.reports => (kind: ReportKind.packet, sectionId: null),
+  };
+}
+
+/// A workspace shortcut. One that is not [inText] leaves the key to a
+/// focused text field, so the field's own undo and editing keys work.
+class _KeyIntent extends Intent {
+  const _KeyIntent(this.run, {this.inText = true});
+  final VoidCallback run;
+  final bool inText;
+}
+
+class _KeyAction extends Action<_KeyIntent> {
+  _KeyAction(this.editingText);
+  final bool Function() editingText;
+
+  @override
+  bool isEnabled(_KeyIntent intent) => intent.inText || !editingText();
+
+  @override
+  Object? invoke(_KeyIntent intent) {
+    intent.run();
+    return null;
   }
 }
 

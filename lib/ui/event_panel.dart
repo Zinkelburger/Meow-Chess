@@ -1,5 +1,10 @@
+import 'dart:math' as math;
+
 import '../application/member_lookup.dart';
+import '../domain/fixed_schedule.dart';
+import '../domain/tiebreaks.dart';
 import 'rating_settings.dart';
+import 'select.dart';
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import '../application/failures.dart';
@@ -148,6 +153,11 @@ class EventPanelState extends State<EventPanel> {
           throw TournamentException(problem);
         }
       }
+      // Checked like a section's time control, and only when changed.
+      final time = v['time']!.trim();
+      if (time.isNotEmpty && time != c.event!.timeControl.trim()) {
+        TimeControl.parse(time);
+      }
       if (affiliate != c.event!.affiliateId &&
           affiliate.isNotEmpty &&
           !isAffiliateId(affiliate)) {
@@ -161,7 +171,7 @@ class EventPanelState extends State<EventPanel> {
           name: v['name']!.trim(),
           date: v['date'],
           endDate: end,
-          timeControl: v['time'],
+          timeControl: time,
           venue: v['venue'],
           tdId: td,
           assistantTdId: atd,
@@ -230,6 +240,13 @@ class EventPanelState extends State<EventPanel> {
               onSubmitted: (_) => commit(),
             ),
           ),
+          // Rule 5E2: an unstated delay means the recommended minimum.
+          if (key == 'time' && delayHint(text[key]!.text) != null)
+            Padding(
+              key: const ValueKey('event-time-hint'),
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(delayHint(text[key]!.text)!, style: muted),
+            ),
           if (key == 'td' || key == 'atd')
             MemberIdentityLookup(
               key: ValueKey('event-identity-$key'),
@@ -273,6 +290,35 @@ class EventPanelState extends State<EventPanel> {
               c.change(
                 'Change standings ranking',
                 c.event!.copy(useTiebreaks: value),
+              );
+              setState(() {});
+            } catch (e) {
+              setState(() => error = plainMessage(e));
+            }
+          },
+        ),
+        TiebreakOrderEditor(
+          controller: c,
+          onError: (message) => setState(() => error = message),
+        ),
+        heading('Reporting'),
+        // Chapter 10: online events are rated under the online categories
+        // and are never dual-rated; the rating preflight says so.
+        SwitchListTile(
+          key: const ValueKey('event-online'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Online event'),
+          subtitle: Text(
+            'Rated under the online categories; never dual-rated (Chapter 10).',
+            style: muted,
+          ),
+          value: c.event!.online,
+          onChanged: (value) {
+            FocusScope.of(context).unfocus();
+            try {
+              c.change(
+                value ? 'Mark as online event' : 'Mark as over-the-board event',
+                c.event!.copy(online: value),
               );
               setState(() {});
             } catch (e) {
@@ -405,6 +451,119 @@ class _BackupsPanelState extends State<BackupsPanel> {
             ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+/// Rule 34B: the posted tie-break order, edited in place with undo. Each
+/// slot is a select; "US Chess default" in any slot clears the list back to
+/// the rule 34E order for a Swiss and the 34F order for a round robin.
+class TiebreakOrderEditor extends StatefulWidget {
+  const TiebreakOrderEditor({
+    required this.controller,
+    required this.onError,
+    super.key,
+  });
+  final TournamentController controller;
+  final ValueChanged<String> onError;
+
+  /// Rule 34B asks for at least two posted methods; four is the default
+  /// list's length and as deep as the editor goes.
+  static const slots = 4;
+
+  @override
+  State<TiebreakOrderEditor> createState() => _TiebreakOrderEditorState();
+}
+
+class _TiebreakOrderEditorState extends State<TiebreakOrderEditor> {
+  static const _default = '', _remove = 'remove', _add = 'add';
+
+  void apply(List<String> next) {
+    FocusScope.of(context).unfocus();
+    try {
+      widget.controller.change(
+        'Change tie-break order',
+        widget.controller.event!.copy(tiebreaks: next),
+      );
+      setState(() {});
+    } catch (e) {
+      widget.onError(plainMessage(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.controller.event!;
+    final chosen = e.tiebreaks;
+    final colors = Theme.of(context).colorScheme;
+    final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
+    final shown = chosen.isEmpty
+        ? 1
+        : math.min(chosen.length + 1, TiebreakOrderEditor.slots);
+    final formats = {
+      for (final s in e.sections) pairingFormat(s),
+      if (e.sections.isEmpty) Format.swiss,
+    };
+    String formatName(Format f) => switch (f) {
+      Format.swiss => 'Swiss',
+      Format.roundRobin => 'Round robin',
+      Format.quad => 'Quad',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: Text(
+            'Order (rule 34B). Posted on the standings sheet before round 1.',
+            style: muted,
+          ),
+        ),
+        for (var i = 0; i < shown; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: PlainSelect<String>(
+              key: ValueKey('event-tiebreak-$i'),
+              label: 'Tie-break ${i + 1}',
+              hint: 'Add a method',
+              value: i < chosen.length
+                  ? chosen[i]
+                  : chosen.isEmpty
+                  ? _default
+                  : _add,
+              options: [
+                const SelectOption(_default, 'US Chess default'),
+                if (i < chosen.length)
+                  const SelectOption(_remove, 'Remove from the order'),
+                for (final m in TiebreakMethod.values)
+                  if (!chosen.contains(m.code) ||
+                      (i < chosen.length && chosen[i] == m.code))
+                    SelectOption(m.code, '${m.label} (${m.rule})'),
+              ],
+              onChanged: (value) {
+                if (value == _default) return apply(const []);
+                final next = [...chosen];
+                if (value == _remove) {
+                  next.removeAt(i);
+                } else if (i < next.length) {
+                  next[i] = value;
+                } else {
+                  next.add(value);
+                }
+                apply(next);
+              },
+            ),
+          ),
+        if (chosen.isEmpty)
+          for (final f in formats)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '${formatName(f)} default: ${defaultTiebreaks(f).map((m) => '${m.label} (${m.rule})').join(', ')}.',
+                style: muted,
+              ),
+            ),
       ],
     );
   }

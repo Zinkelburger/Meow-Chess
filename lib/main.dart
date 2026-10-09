@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 import 'application/diagnostics.dart';
 import 'infrastructure/diagnostic_log.dart';
 import 'infrastructure/event_save.dart';
@@ -12,6 +13,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'application/failures.dart';
 import 'application/tournament_controller.dart';
+import 'domain/us_chess.dart';
 import 'infrastructure/native_file_requests.dart';
 import 'infrastructure/sqlite_event_repository.dart';
 import 'infrastructure/save_location.dart';
@@ -85,6 +87,12 @@ class _MeowAppState extends State<MeowApp> {
   final welcomeLogo = GlobalKey();
   bool launchComplete = false;
   late final files = NativeFileRequests(open: openFromDesktop);
+
+  /// Quitting closes the event, so its .meow holds every commit on its own.
+  late final AppLifecycleListener exits;
+
+  /// Replaced controllers whose views have not unmounted yet.
+  final _retiring = <TournamentController>{};
   File get library => File(p.join(widget.dataDirectory.path, 'library.json'));
 
   /// App-wide choices that outlive one event, such as the theme.
@@ -120,17 +128,27 @@ class _MeowAppState extends State<MeowApp> {
     } catch (_) {}
     if (widget.initialPath != null) open(widget.initialPath!);
     files.start();
+    exits = AppLifecycleListener(
+      onExitRequested: () async {
+        _closeForExit();
+        return AppExitResponse.exit;
+      },
+    );
   }
 
   /// A .meow the desktop asked us to open. Dialogs belong to the event on
   /// screen, so they are closed before switching to another one.
   void openFromDesktop(String filename) {
-    if (filename == path) return;
+    if (path != null && _samePath(filename, path!)) return;
     navigator.currentState?.popUntil((route) => route.isFirst);
     open(filename);
     if (error != null && controller != null) {
+      // Shown over the event still open; the welcome screen must not repeat
+      // it after that event is closed.
+      final message = error!;
+      error = null;
       final context = navigator.currentContext;
-      if (context != null) showFailure(context, error!);
+      if (context != null) showFailure(context, message);
     }
   }
 
@@ -138,33 +156,76 @@ class _MeowAppState extends State<MeowApp> {
   void dispose() {
     newName.dispose();
     files.dispose();
-    controller?.dispose();
+    exits.dispose();
+    _closeForExit();
     super.dispose();
+  }
+
+  void _closeForExit() {
+    _closeRetiring();
+    controller?.dispose();
+    controller = null;
+  }
+
+  void _closeRetiring() {
+    final retiring = _retiring.toList();
+    _retiring.clear();
+    for (final c in retiring) {
+      c.dispose();
+    }
+  }
+
+  /// Disposes [old] once its Workspace has unmounted, so views saving their
+  /// state as they dispose still reach an open event file.
+  void _retire(TournamentController? old) {
+    if (old == null) return;
+    _retiring.add(old);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_retiring.remove(old)) old.dispose();
+    });
   }
 
   void open(String filename) {
     TournamentController? next;
+    var opened = false;
     try {
       if (!File(filename).existsSync()) {
         throw const FileSystemException('Event file not found');
+      }
+      // Reopening an event just closed, before its views unmounted.
+      if (_retiring.isNotEmpty && SqliteEventRepository.ownsPath(filename)) {
+        _closeRetiring();
       }
       next = TournamentController(SqliteEventRepository(filename));
       if (next.event == null) {
         throw const FormatException('This file has no Meow-Chess event.');
       }
-      controller?.dispose();
+      _retire(controller);
       controller = next;
       path = filename;
       error = null;
       recent = [
         filename,
-        ...recent.where((x) => x != filename),
+        ...recent.where((x) => !_samePath(x, filename)),
       ].take(12).toList();
-      library.writeAsStringSync(jsonEncode(recent), flush: true);
+      opened = true;
     } catch (e, stack) {
       Diagnostics.record('open event', 'failed', error: e, stack: stack);
       if (next != controller) next?.dispose();
       error = 'Could not open this event. ${plainMessage(e)}';
+    }
+    if (opened) {
+      try {
+        library.writeAsStringSync(jsonEncode(recent), flush: true);
+      } catch (e, stack) {
+        // The event is open; only the recent list is not remembered.
+        Diagnostics.record(
+          'remember recent events',
+          'failed',
+          error: e,
+          stack: stack,
+        );
+      }
     }
     if (mounted) setState(() {});
   }
@@ -182,7 +243,7 @@ class _MeowAppState extends State<MeowApp> {
     String? destination;
     try {
       final location = await chooseSaveLocation(
-        suggestedName: '${_fileStem(name)}.meow',
+        suggestedName: '${fileStem(name)}.meow',
       );
       if (location == null || !context.mounted) return;
       destination = location.path;
@@ -284,10 +345,11 @@ class _MeowAppState extends State<MeowApp> {
   }
 
   void close() {
-    controller?.dispose();
+    _retire(controller);
     setState(() {
       controller = null;
       path = null;
+      error = null;
     });
   }
 
@@ -449,12 +511,26 @@ class _MeowAppState extends State<MeowApp> {
   );
 }
 
-/// Turns an event name like "Saturday Quads" into "saturday-quads".
-String _fileStem(String name) {
-  final stem = name
-      .trim()
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-      .replaceAll(RegExp(r'^-+|-+$'), '');
+/// Whether two names reach the same file: symlinks resolved where the file
+/// exists, and case-insensitive on Windows.
+bool _samePath(String a, String b) {
+  String canonical(String filename) {
+    try {
+      return File(filename).resolveSymbolicLinksSync();
+    } on FileSystemException {
+      return p.normalize(p.absolute(filename));
+    }
+  }
+
+  return p.equals(a, b) || p.equals(canonical(a), canonical(b));
+}
+
+/// Turns an event name like "Saturday Quads" into "saturday-quads", and
+/// "Torneo Año" into "torneo-ano".
+@visibleForTesting
+String fileStem(String name) {
+  final stem = nameKey(
+    name,
+  ).replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
   return stem.isEmpty ? 'tournament' : stem;
 }

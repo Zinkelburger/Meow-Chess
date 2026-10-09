@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import '../domain/model.dart';
+import '../domain/us_chess.dart';
 import 'roster_import.dart';
 import 'roster_sources/html_table.dart';
 import 'roster_sources/registry.dart';
@@ -132,12 +133,12 @@ class RosterReview {
     final players = rows.map((r) => r.player).whereType<Player>().toList();
     for (final p in players) {
       final matches = event.players
-          .where((old) => p.memberId.isNotEmpty && old.memberId == p.memberId)
+          .where((old) => isMemberId(p.memberId) && old.memberId == p.memberId)
           .toList();
       final duplicate =
           players
               .where(
-                (other) => p.memberId.isNotEmpty
+                (other) => isMemberId(p.memberId)
                     ? other.memberId == p.memberId
                     : other.name.toLowerCase() == p.name.toLowerCase(),
               )
@@ -149,7 +150,8 @@ class RosterReview {
             (old) =>
                 old.name.trim().toLowerCase() == p.name.trim().toLowerCase(),
           );
-      final baseline = event.rosterSource['url'] == url && p.memberId.isNotEmpty
+      final baseline =
+          event.rosterSource['url'] == url && isMemberId(p.memberId)
           ? ((event.rosterSource['entries'] as Map?)?[p.memberId] as Map?)
           : null;
       changes.add(
@@ -252,12 +254,12 @@ class RosterReview {
             ...(event.rosterSource['memberIds'] as List? ?? [])
                 .whereType<String>(),
           ...changes
-              .where((r) => r.incoming.memberId.isNotEmpty)
+              .where((r) => isMemberId(r.incoming.memberId))
               .map((r) => r.incoming.memberId),
         }.toList(),
         'entries': {
           for (final change in changes)
-            if (change.incoming.memberId.isNotEmpty)
+            if (isMemberId(change.incoming.memberId))
               change.incoming.memberId: {
                 'name': change.incoming.name,
                 'rating': change.incoming.rating,
