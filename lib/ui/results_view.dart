@@ -96,6 +96,9 @@ class ResultsViewState extends State<ResultsView> {
   /// keys are.
   bool invalidKey = false;
 
+  /// The last key was a draw, playing or disputed key on a forfeit board.
+  bool forfeitRefused = false;
+
   /// The one score box Tab enters the grid at.
   String? entryBox;
   void showCrosstable() {
@@ -503,7 +506,10 @@ class ResultsViewState extends State<ResultsView> {
     if (outcome == null) {
       // A printable key that is not a result: say which keys are.
       if ((event.character ?? '').trim().isNotEmpty) {
-        setState(() => invalidKey = true);
+        setState(() {
+          invalidKey = true;
+          forfeitRefused = refusedOnForfeit(event, g.outcome);
+        });
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;
@@ -1093,8 +1099,12 @@ class ResultsViewState extends State<ResultsView> {
           Semantics(
             liveRegion: invalidKey,
             child: Text(
-              invalidKey
+              invalidKey && forfeitRefused
+                  ? 'A forfeit is only won or lost. 1 or 0 picks who won it · Delete clears it to enter a played game'
+                  : invalidKey
                   ? 'Not a result key. $resultKeyHint · $moreResultKeys'
+                  : row != null && !locked(row) && isForfeit(row.game.outcome)
+                  ? '${forfeitKeyHint(row.game.outcome, white: white)} · $gridKeyHint'
                   : '$resultKeyHint · $gridKeyHint',
               key: const ValueKey('result-key-legend'),
               style: TextStyle(
@@ -1744,6 +1754,8 @@ class ResultsViewState extends State<ResultsView> {
         'still playing, assumed ${mark.replaceAll(RegExp('[()]'), '')} for pairing only',
       Outcome.unfinished => 'still playing',
       Outcome.disputed => 'disputed',
+      Outcome.doubleForfeit => 'double forfeit',
+      _ when !g.outcome.played => mark == 'X' ? 'won by forfeit' : 'forfeited',
       _ => mark,
     };
     return ContextMenuKeys(

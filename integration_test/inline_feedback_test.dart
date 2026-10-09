@@ -54,7 +54,9 @@ void main() {
     await tester.tap(find.text('Pairings'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(ValueKey('game-${game.id}')));
-    await tester.sendKeyEvent(LogicalKeyboardKey.numpadAdd);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    // F on Black: Black is the no-show, White wins by forfeit.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
     await tester.pumpAndSettle();
     expect(c.event!.games.first.outcome, Outcome.whiteForfeit);
     expect(find.text('Withdraw from future rounds'), findsOneWidget);

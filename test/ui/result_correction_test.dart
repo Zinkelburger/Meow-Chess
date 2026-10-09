@@ -179,18 +179,23 @@ void main() {
     await tester.tap(find.text('$black won'));
     await tester.pumpAndSettle();
     expect(canSave(tester), isTrue);
-    // Forfeits sit behind one disclosure; their keys still work.
-    expect(find.text('$white wins by forfeit'), findsNothing);
-    await tester.sendKeyEvent(LogicalKeyboardKey.numpadAdd);
+    // Forfeits sit behind one disclosure; their keys still work. F marks
+    // White absent, then 1 gives White the forfeit win instead.
+    expect(find.text('$black wins by forfeit'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.pumpAndSettle();
+    expect(find.text('$black wins by forfeit'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
     await tester.pumpAndSettle();
     expect(find.text('$white wins by forfeit'), findsOneWidget);
+    // A forfeit is never drawn.
     await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
     await tester.pumpAndSettle();
     await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
     await tester.pumpAndSettle();
-    expect(c.event!.games.first.outcome, Outcome.draw);
+    expect(c.event!.games.first.outcome, Outcome.whiteForfeit);
     await tester.pumpWidget(const SizedBox());
   });
 

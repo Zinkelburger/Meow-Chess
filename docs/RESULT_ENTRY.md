@@ -51,11 +51,10 @@ instead of entering), and below it the legend.
 | D or d | Draw | Save and advance immediately |
 | 1 | Win for labelled player | Save and advance immediately; no Enter needed |
 | 0 | Loss for labelled player | Save and advance immediately; no Enter needed |
-| F | Labelled player is a no-show (forfeit loss; opponent wins by forfeit) | Save as an unplayed forfeit and advance immediately |
-| X | Forfeit win for labelled player | Save as an unplayed forfeit and advance immediately |
-| F on both players of a board | Double forfeit | The second F turns the opponent's forfeit win into a double forfeit |
-| + or numpad + | Forfeit win for labelled player (same as X) | Save and advance immediately |
-| − or numpad − | Labelled player forfeits (same as F, never a double forfeit) | Save and advance immediately |
+| F | Labelled player is a no-show (0F; opponent wins 1F). F is the only forfeit key | Save as an unplayed forfeit and advance immediately; F replaces a played result typed by mistake |
+| F on both players of a board | Double forfeit | The second F, on the player who won by forfeit, makes it a double forfeit. F again on a player already absent changes nothing |
+| 1 / W or 0 / L on a forfeit board | Who won the forfeit | 1 gives the labelled player the forfeit win (1F), 0 gives it to the opponent. On a double forfeit, 1 on one player turns it back into a single forfeit |
+| D, P or ? on a forfeit board | Refused | A forfeit is only won or lost (no ½ forfeit, no playing or disputed forfeit). Saves nothing; the legend says so and points at Delete |
 | P | Game still playing | Save as unfinished and advance; a pairing assumption still shows in brackets with “playing” |
 | ? | Disputed | Save as disputed and advance |
 | A | Assume a result for pairing only (unresolved games) | Opens the assumption beside the table |
@@ -71,14 +70,20 @@ instead of entering), and below it the legend.
 | Delete on selected saved result | Clear result deliberately | Restore unreported state with history/undo; review dependencies if necessary |
 | Undo | Revert latest applicable change | Restore both opponents and focus to that game; review historical dependencies |
 
-Show a persistent compact legend: **1 / W win · 0 / L loss · D draw · F no-show ·
-X forfeit win · Enter skip · F2 correct · Space player details**. After a key that
-is not a result it adds **+ forfeit win · − no-show · P playing · ? disputed**.
+Show a persistent compact legend: **1 / W win · 0 / L loss · D draw · F no-show
+(F on both: double forfeit) · Enter skip · F2 correct · Space player details**.
+After a key that is not a result it adds **P playing · ? disputed · Delete clears**.
+While a forfeit board has focus the legend says what the keys do there, from that
+player's side: on the absent player "F on the other player makes it a double
+forfeit · 1 gives this player the win", on the winner "F here makes it a double
+forfeit · 0 gives the win to the other player", on a double forfeit "1 gives this
+player the forfeit win". Delete clears a forfeit; after that 1, 0 and D record a
+played game again.
 
-F on a box that already shows a forfeit win records a double forfeit. The stored
-result is the same whether that win came from the opponent's F or a mistaken X on
-this box, so the app cannot tell them apart; correct a mistaken X with L, 0 or
-Delete, not F.
+There is one forfeit key so that every forfeit state is reached the same way: a
+box showing a forfeit win always means the opponent was marked absent, and F on
+it always means both were absent. (X, + and − were forfeit keys in earlier versions;
+they now say "Not a result key".)
 
 Score boxes and crosstables use the US Chess letters for unplayed games:
 **X** won by forfeit, **F** forfeited (both players show F after a double
@@ -213,7 +218,7 @@ outcome through an explicit action, not overwrite a derived total accidentally.
 | Double-game match with split wins | Two actual games retained; not converted to draws |
 | Keyboard/screen reader at 200% text | Names/perspective announced, focus visible, grid escapable |
 | TD reads “0.5” in the score column and types 0 then 5 | Named typo fixture: the legend and perspective line are tested against it; 0 records a loss and advances; 5 does nothing. One Undo restores both opponents of the changed game. Never infer a grouped mistake from valid keystrokes |
-| X, then F on both players of the next board | Forfeit win and double forfeit recorded as unplayed; rating export excludes both; withdraw offer shown once |
+| F on one player, then F on both players of the next board | Forfeit win and double forfeit recorded as unplayed; rating export excludes both; withdraw offer shown once |
 | Event-wide grid across five sections | Global board order; each section's standings update; no cross-section reciprocal error |
 | Entry abandoned mid-sequence, app restarted | Cursor position and Missing-only filter restored; no result invented (K14) |
 

@@ -56,21 +56,101 @@ void main() {
     }
   });
 
-  test('F marks the focused player a no-show; X is a forfeit win', () {
-    final f = key(LogicalKeyboardKey.keyF), x = key(LogicalKeyboardKey.keyX);
-    expect(resultFromKey(f, white: true), Outcome.blackForfeit);
-    expect(resultFromKey(f, white: false), Outcome.whiteForfeit);
-    expect(resultFromKey(x, white: true), Outcome.whiteForfeit);
-    expect(resultFromKey(x, white: false), Outcome.blackForfeit);
-    // F on the second player of a board whose opponent is already absent.
+  test(
+    'F marks the focused player a no-show; F on both is a double forfeit',
+    () {
+      final f = key(LogicalKeyboardKey.keyF);
+      expect(resultFromKey(f, white: true), Outcome.blackForfeit);
+      expect(resultFromKey(f, white: false), Outcome.whiteForfeit);
+      // F on the other player of a board whose opponent is already absent.
+      expect(
+        resultFromKey(f, white: false, current: Outcome.blackForfeit),
+        Outcome.doubleForfeit,
+      );
+      expect(
+        resultFromKey(f, white: true, current: Outcome.whiteForfeit),
+        Outcome.doubleForfeit,
+      );
+      // F again on the player already absent changes nothing.
+      expect(
+        resultFromKey(f, white: true, current: Outcome.blackForfeit),
+        Outcome.blackForfeit,
+      );
+      expect(
+        resultFromKey(f, white: true, current: Outcome.doubleForfeit),
+        Outcome.doubleForfeit,
+      );
+      // F replaces a played result typed by mistake.
+      expect(
+        resultFromKey(f, white: true, current: Outcome.whiteWin),
+        Outcome.blackForfeit,
+      );
+      expect(scoreMark(Outcome.whiteForfeit, white: true), 'X');
+      expect(scoreMark(Outcome.whiteForfeit, white: false), 'F');
+      expect(scoreMark(Outcome.doubleForfeit, white: true), 'F');
+      expect([byeMark(2), byeMark(1), byeMark(0)], ['B---', 'H---', 'U---']);
+    },
+  );
+
+  test('on a forfeit board 1 and 0 say who won it; nothing else scores', () {
+    final one = key(LogicalKeyboardKey.digit1),
+        zero = key(LogicalKeyboardKey.digit0);
+    // 1 on one player of a double forfeit turns it back into a single one.
     expect(
-      resultFromKey(f, white: false, current: Outcome.blackForfeit),
-      Outcome.doubleForfeit,
+      resultFromKey(one, white: false, current: Outcome.doubleForfeit),
+      Outcome.blackForfeit,
     );
-    expect(scoreMark(Outcome.whiteForfeit, white: true), 'X');
-    expect(scoreMark(Outcome.whiteForfeit, white: false), 'F');
-    expect(scoreMark(Outcome.doubleForfeit, white: true), 'F');
-    expect([byeMark(2), byeMark(1), byeMark(0)], ['B---', 'H---', 'U---']);
+    expect(
+      resultFromKey(zero, white: false, current: Outcome.doubleForfeit),
+      Outcome.whiteForfeit,
+    );
+    // The absent player's 1 gives them the forfeit win instead.
+    expect(
+      resultFromKey(one, white: true, current: Outcome.blackForfeit),
+      Outcome.whiteForfeit,
+    );
+    expect(
+      resultFromKey(zero, white: false, current: Outcome.blackForfeit),
+      Outcome.whiteForfeit,
+    );
+    // There is no half-point, still-playing or disputed forfeit.
+    for (final current in [
+      Outcome.whiteForfeit,
+      Outcome.blackForfeit,
+      Outcome.doubleForfeit,
+    ]) {
+      for (final refused in [
+        key(LogicalKeyboardKey.keyD, 'd'),
+        key(LogicalKeyboardKey.keyP, 'p'),
+        key(LogicalKeyboardKey.slash, '?'),
+      ]) {
+        expect(resultFromKey(refused, white: true, current: current), isNull);
+        expect(refusedOnForfeit(refused, current), isTrue);
+      }
+      // Delete clears, after which 1 records a played win again.
+      expect(
+        resultFromKey(
+          key(LogicalKeyboardKey.delete),
+          white: true,
+          current: current,
+        ),
+        Outcome.unreported,
+      );
+    }
+    expect(resultFromKey(one, white: true), Outcome.whiteWin);
+    expect(
+      refusedOnForfeit(key(LogicalKeyboardKey.keyD, 'd'), Outcome.whiteWin),
+      isFalse,
+    );
+    // F is the only forfeit key.
+    for (final dropped in [
+      key(LogicalKeyboardKey.keyX, 'x'),
+      key(LogicalKeyboardKey.numpadAdd, '+'),
+      key(LogicalKeyboardKey.numpadSubtract, '-'),
+      key(LogicalKeyboardKey.minus, '-'),
+    ]) {
+      expect(resultFromKey(dropped, white: true), isNull);
+    }
   });
 
   testWidgets(
