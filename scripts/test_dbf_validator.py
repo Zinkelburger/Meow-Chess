@@ -77,6 +77,13 @@ def damage(case, folder):
         # Section 1 now claims 11 rounds, so its played round 12 sits in a
         # column that must be the U0 padding.
         put(raw, path, 0, 'S_TOT_RNDS', '11')
+    elif case == 'unknown-opponent':
+        # Reciprocity would look up a pair number that does not exist.
+        put(raw, path, 0, 'D_RND01', 'W99W')
+    elif case == 'bad-date':
+        path = folder / 'THEXPORT.DBF'
+        raw = bytearray(path.read_bytes())
+        put(raw, path, 0, 'H_BEG_DATE', '20261399')
     elif case == 'self-opponent':
         put(raw, path, 0, 'D_RND01', f"W{get(raw, path, 0, 'D_PAIR_NUM')}W")
     elif case == 'wrong-identity':
@@ -129,7 +136,7 @@ def run(source):
         for case in ['field-type', 'truncated', 'wrong-results', 'wrong-identity',
                      'wrong-rating-system', 'blank-state', 'wrong-name', 'deleted-record',
                      'eof-byte', 'header-length', 'non-ascii', 'padding', 'self-opponent',
-                     'extra-entrant']:
+                     'extra-entrant', 'unknown-opponent', 'bad-date']:
             folder = Path(temp) / case
             shutil.copytree(source, folder)
             damage(case, folder)
@@ -160,10 +167,25 @@ def run(source):
         result = subprocess.run([sys.executable, '-O', str(VERIFIER), str(source)], capture_output=True, text=True)
         if result.returncode != 0:
             raise AssertionError(f'python -O rejected the clean export: {result.stderr}')
+        # Unreadable or undecodable packages fail with a FAIL line, not a crash.
+        missing = Path(temp) / 'missing-file'
+        shutil.copytree(source, missing)
+        (missing / 'TDEXPORT.DBF').unlink()
+        cli_failures = {'missing-file': missing}
+        for case in ['unknown-opponent', 'bad-date', 'truncated']:
+            folder = Path(temp) / f'cli-{case}'
+            shutil.copytree(source, folder)
+            damage(case, folder)
+            cli_failures[case] = folder
+        for case, folder in cli_failures.items():
+            result = subprocess.run([sys.executable, str(VERIFIER), str(folder)], capture_output=True, text=True)
+            if result.returncode != 1 or not result.stderr.startswith('FAIL: ') or 'Traceback' in result.stderr:
+                raise AssertionError(f'{case} did not fail cleanly: {result.returncode} {result.stderr}')
     print('PASS: validator rejects wrong field types, truncation, reciprocal-but-wrong results, a wrong member ID, '
           'a rating system that contradicts the time control, a blank state, a wrong name, a deleted record, '
           'a bad EOF byte, a bad header length, a non-ASCII byte, non-U0 padding, a self opponent, a phantom '
-          'entrant and a missing expected-event.json, also under python -O.')
+          'entrant, an unknown opponent, an impossible date and a missing expected-event.json, also under '
+          'python -O, and reports unreadable packages as FAIL lines rather than tracebacks.')
 
 
 if __name__ == '__main__':

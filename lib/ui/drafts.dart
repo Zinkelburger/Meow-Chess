@@ -95,6 +95,10 @@ class FormDraft {
     save();
   }
 
+  /// Drops the stored draft without touching the fields, which may already
+  /// be disposed when an applied save finishes after its panel closed.
+  void clear() => store.write(key, '');
+
   void dispose() {
     for (final field in fields.values) {
       field.removeListener(save);

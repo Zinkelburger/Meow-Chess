@@ -15,7 +15,10 @@ class WorkspaceStateCore extends ChangeNotifier {
   final failures = <String, String>{};
   bool _scheduled = false, _disposed = false;
 
-  String? read(String key) => _memory[key] ?? repository.readPreference(key);
+  /// After release the event file is closed, so only drafts already held in
+  /// memory remain readable.
+  String? read(String key) =>
+      _memory[key] ?? (_disposed ? null : repository.readPreference(key));
 
   Map<String, dynamic> readMap(String key) {
     try {

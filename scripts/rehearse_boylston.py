@@ -226,7 +226,8 @@ def rehearse(folder, output):
                 known = lambda p: p['memberId'] and p['memberId'] in seen_members
                 fresh = [p for p in registration if not known(p)]
                 new_entries = client.call('add_players', players=fresh)['added'] if fresh else []
-                assert len(new_entries) == len(fresh)
+                if len(new_entries) != len(fresh):
+                    raise RuntimeError(f'Expected {len(fresh)} new entries, got {len(new_entries)}')
                 fresh_entries = iter(new_entries)
                 section = client.call('create_section', name=name, players=[],
                                       format='quad' if bool(settings['R_ROBIN']) and len(players) == 4 else 'swiss',

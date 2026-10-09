@@ -63,6 +63,24 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('removing an event drops every spelling of its path', (
+    tester,
+  ) async {
+    final alias = '${directory.path}/./${event.path.split('/').last}';
+    library.writeAsStringSync(jsonEncode([event.path, alias]));
+    await tester.pumpWidget(MeowApp(dataDirectory: directory));
+    await tester.pumpAndSettle();
+
+    final remove = find.byTooltip('Remove from recent events').first;
+    await tester.ensureVisible(remove);
+    await tester.pumpAndSettle();
+    await tester.tap(remove);
+    await tester.pumpAndSettle();
+    expect(find.text('Recent events'), findsNothing);
+    expect(jsonDecode(library.readAsStringSync()), isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('file explorer failures are shown without removing the event', (
     tester,
   ) async {

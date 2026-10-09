@@ -2,11 +2,12 @@
 """Protocol and real controller/storage tests against the compiled MCP process."""
 import json
 from pathlib import Path
-import shutil
 import struct
 import subprocess
 import tempfile
 import unittest
+
+from toolchain import dart_executable
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -14,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class Client:
     def __init__(self, root, log=None):
         self.process = subprocess.Popen(
-            [shutil.which('dart') or 'dart', str(ROOT / 'scripts/tournament_mcp.dart'), str(root)],
+            [dart_executable(), str(ROOT / 'scripts/tournament_mcp.dart'), str(root)],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding='utf-8', bufsize=1, cwd=root)
         self.counter = 0
@@ -278,7 +279,7 @@ class ProtocolErrorTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='meow chess protocol ')
         self.process = subprocess.Popen(
-            [shutil.which('dart') or 'dart', str(ROOT / 'scripts/tournament_mcp.dart'), self.temp.name],
+            [dart_executable(), str(ROOT / 'scripts/tournament_mcp.dart'), self.temp.name],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=self.temp.name)
 
     def tearDown(self):

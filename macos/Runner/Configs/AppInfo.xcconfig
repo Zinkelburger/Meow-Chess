@@ -11,4 +11,4 @@ PRODUCT_NAME = Meow Chess
 PRODUCT_BUNDLE_IDENTIFIER = org.meowchess.meowChess
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Meow Chess · GNU AGPL v3
+PRODUCT_COPYRIGHT = Copyright © 2026 Meow Chess contributors. Licensed under the GNU AGPLv3.

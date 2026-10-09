@@ -16,6 +16,7 @@ Build first: dart build cli --target=tools/tournament_mcp.dart --output=build/to
 from collections import Counter
 from pathlib import Path
 import json
+import os
 import re
 import struct
 import tempfile
@@ -122,7 +123,8 @@ def replay(folder, root):
                         used.add(p)
                         continue
                     other = CODE.match(codes[opponent][rnd])
-                    assert int(other[2]) == p, ('not reciprocal', sec['S_SEC_NAME'], rnd + 1, p, opponent)
+                    if int(other[2]) != p:  # Not assert: python -O would strip it.
+                        raise AssertionError(('not reciprocal', sec['S_SEC_NAME'], rnd + 1, p, opponent))
                     white, black = (p, opponent) if colour == 'W' or (not colour and other[3] == 'B') else (opponent, p)
                     result = m[1] if white == p else other[1]
                     if double:
@@ -143,7 +145,8 @@ def replay(folder, root):
                 for game, outcome in zip(posted['games'], outcomes):
                     c.call('record_result', gameId=game['id'], outcome=outcome)
         result = c.call('export_event', directory='export')
-        assert result['dbfIssues'] == [], result['dbfIssues']
+        if result['dbfIssues']:
+            raise AssertionError(result['dbfIssues'])
         c.call('close_event')
         return Path(result['directory']), notes
     finally:
@@ -316,6 +319,9 @@ def make_test(folder):
     return test
 
 
+if not FIXTURES.is_dir() and os.environ.get('CI'):
+    # CI checks out the tracked fixtures; their absence there is a failure.
+    raise SystemExit(f'{FIXTURES} is missing in CI')
 if not FIXTURES.is_dir():
     @unittest.skip(f'{FIXTURES} is not present (kept out of this checkout)')
     class BoylstonReplay(unittest.TestCase):  # noqa: F811

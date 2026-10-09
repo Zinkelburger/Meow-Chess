@@ -1,6 +1,8 @@
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 
+/// Fills [controller] with a 22-player practice event split into quads (four
+/// quads and a six-player Swiss remainder), as the integration tests expect.
 void populatePractice(TournamentController controller) {
   controller.create('Saturday at the club', practice: true);
   const names = [

@@ -209,8 +209,13 @@ class _FieldsPanelState extends State<FieldsPanel> {
       }
       setState(() => busy = true);
       await widget.onSave(values);
+      if (!mounted) {
+        // The fields are disposed; only the stored draft is left to clear.
+        draft?.clear();
+        return;
+      }
       draft?.reset(values);
-      if (mounted) widget.onClose();
+      widget.onClose();
     } catch (e) {
       if (mounted) {
         setState(() {

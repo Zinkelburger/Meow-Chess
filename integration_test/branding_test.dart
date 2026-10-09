@@ -19,6 +19,7 @@ void main() {
   ) async {
     await initializeDesktopWindow();
     final directory = Directory.systemTemp.createTempSync('meow-branding-');
+    addTearDown(() => directory.deleteSync(recursive: true));
     final screenshotKey = GlobalKey();
     await tester.pumpWidget(
       RepaintBoundary(
@@ -79,6 +80,5 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
-    directory.deleteSync(recursive: true);
   });
 }

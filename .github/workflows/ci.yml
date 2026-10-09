@@ -11,6 +11,12 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request supersedes the running checks; pushes
+# to main and release calls always run to completion.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     name: Test (${{ matrix.os }})
@@ -30,11 +36,11 @@ jobs:
       MEOW_EXPORT_FIXTURES: '1'
       MEOW_CHESS_DESKTOP_SETUP: '0'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: 3.47.2
           channel: stable
@@ -53,6 +59,9 @@ jobs:
         shell: bash
         run: |
           python scripts/test_lint.py
+          python scripts/test_check_exports.py
+          python scripts/test_toolchain.py
+          if [[ "$RUNNER_OS" == Linux ]]; then python tools/test_install_linux_launcher.py; fi
           python scripts/lint.py
       - name: Install independent DBF reader
         run: python -m pip install dbfread==2.0.7
@@ -95,7 +104,7 @@ jobs:
           }
       - name: Test evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: test-evidence-${{ matrix.os }}
           path: artifacts/
@@ -107,8 +116,11 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: 3.47.2
           channel: stable
@@ -116,6 +128,21 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: Test the Dart file boundaries
         run: flutter test test/infrastructure/artifact_file_test.dart test/infrastructure/artifact_save_test.dart test/infrastructure/event_save_test.dart test/infrastructure/file_access_test.dart
+      # The same rating reports, written on macOS and checked by the
+      # independent reader, so a platform difference cannot reach a TD's DBF.
+      - name: Write the DBF fixtures on macOS
+        env:
+          MEOW_EXPORT_FIXTURES: '1'
+        run: >-
+          flutter test test/infrastructure/rating_contract_test.dart
+          test/infrastructure/dbf_importer_test.dart
+          test/infrastructure/dbf_byte_contract_test.dart
+          test/infrastructure/section_time_control_test.dart
+          test/infrastructure/import_reports_test.dart
+      - name: Independently validate the macOS DBFs
+        run: |
+          python -m pip install dbfread==2.0.7
+          python scripts/check_exports.py --validate-only
       - name: Compile the macOS application
         run: flutter build macos --debug
       # Signed ad hoc, not unsigned: the App Sandbox entitlements only apply to
@@ -128,7 +155,7 @@ jobs:
           -configuration Debug -destination 'platform=macOS'
           -resultBundlePath artifacts/macos-publication.xcresult
           CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: test-evidence-macos-artifacts

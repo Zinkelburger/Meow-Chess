@@ -29,7 +29,8 @@ def main():
                                      format='swiss', plannedRounds=3, boardStart=1, doubleGames=double)['section']
                 for r in range(1, 4):
                     q = c.call('propose_pairings', sectionId=section['id'])
-                    assert not q['issues'], q
+                    if q['issues']:
+                        raise RuntimeError(f'Pairing issues: {q}')
                     c.call('post_pairings', proposalId=q['proposalId'])
                     c.call('start_round', sectionId=section['id'])
                     for i, g in enumerate(q['rounds'][section['id']]['games']):

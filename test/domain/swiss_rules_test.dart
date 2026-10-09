@@ -605,6 +605,27 @@ void main() {
         'f',
       );
     });
+    test(
+      '28L5: equal ratings above a NEW player pass the bye to the lowest-ranked',
+      () {
+        // A four-round event whose lowest group is a lone NEW player: the bye
+        // moves up, and among the three 2000s the last pairing number takes it.
+        final e = scenario([
+          (id: 'a', rating: 2200, colors: 'W', points: 2),
+          (id: 'b', rating: 2000, colors: 'B', points: 2),
+          (id: 'c', rating: 2000, colors: 'W', points: 2),
+          (id: 'd', rating: 2000, colors: 'B', points: 2),
+          (id: 'n', rating: 0, colors: 'W', points: 0),
+        ], plannedRounds: 4);
+        final bye = proposeRound(
+          e,
+          e.sections.single,
+          ids('x'),
+        ).byes.singleWhere((b) => b.allocated);
+        expect(bye.player, 'd');
+        expect(bye.reason, contains('28L5'));
+      },
+    );
     test('28L2: an unrated player only when no rated player is eligible', () {
       expect(
         byeOf(lowGroup({'g': (p) => p.copy(rating: 0, memberId: '12345678')})),

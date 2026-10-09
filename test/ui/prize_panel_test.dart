@@ -90,4 +90,50 @@ void main() {
     await tester.pumpAndSettle();
     expect(table().list, isEmpty);
   });
+
+  testWidgets('a value typed into a prize field survives closing the panel', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = fixture();
+    final section = c.event!.sections.first;
+    final open = ValueNotifier(true);
+    addTearDown(open.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: meowTheme(Brightness.light),
+        home: Scaffold(
+          body: ValueListenableBuilder<bool>(
+            valueListenable: open,
+            builder: (context, shown, _) => shown
+                ? Align(
+                    alignment: Alignment.topLeft,
+                    child: SizedBox(
+                      width: 400,
+                      child: PrizeTablePanel(
+                        controller: c,
+                        sectionId: section.id,
+                        onClose: () => open.value = false,
+                      ),
+                    ),
+                  )
+                : const SizedBox(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('prize-fund')), '250');
+    // Closed while the field still has focus: no Enter, no blur first.
+    open.value = false;
+    await tester.pumpAndSettle();
+    expect(find.byType(PrizeTablePanel), findsNothing);
+    expect(
+      PrizeTable.fromJson(c.event!.sections.first.prizes).fundCents,
+      25000,
+    );
+  });
 }

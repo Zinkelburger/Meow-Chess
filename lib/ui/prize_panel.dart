@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../application/failures.dart';
@@ -62,9 +64,9 @@ class _PrizeTablePanelState extends State<PrizeTablePanel> {
           ],
         ),
       );
-      if (error != null) setState(() => error = null);
+      if (error != null && mounted) setState(() => error = null);
     } catch (e) {
-      setState(() => error = plainMessage(e));
+      if (mounted) setState(() => error = plainMessage(e));
     }
   }
 
@@ -493,6 +495,13 @@ class _CommitFieldState extends State<_CommitField> {
 
   @override
   void dispose() {
+    // Closing the panel mid-edit keeps what was typed. The save runs after
+    // the tree is unlocked, since it notifies the whole workspace.
+    final pending = controller.text, onCommit = widget.onCommit;
+    if (pending != committed) {
+      committed = pending;
+      scheduleMicrotask(() => onCommit(pending));
+    }
     focus.dispose();
     controller.dispose();
     super.dispose();

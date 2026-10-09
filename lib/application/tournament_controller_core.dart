@@ -20,6 +20,8 @@ import 'diagnostics.dart';
 import 'failures.dart';
 import 'workspace_state_core.dart';
 
+part 'controller_history.dart';
+
 class PairingBatch {
   const PairingBatch(this.revision, this.rounds, this.issues);
   final int revision;
@@ -27,7 +29,7 @@ class PairingBatch {
   final Map<String, String> issues;
 }
 
-class TournamentControllerCore extends ChangeNotifier {
+class TournamentControllerCore extends ChangeNotifier with _ControllerHistory {
   TournamentControllerCore(this.repository) {
     try {
       event = repository.load();
@@ -40,11 +42,14 @@ class TournamentControllerCore extends ChangeNotifier {
       rethrow;
     }
   }
+  @override
   final EventRepository repository;
   late final _workspaceState = WorkspaceStateCore(repository);
   WorkspaceStateCore get workspaceState => _workspaceState;
+  @override
   Event? event;
   String? backupWarning;
+  @override
   bool _closed = false;
   String newId() => const Uuid().v4();
   void create(String name, {bool practice = false}) => change(
@@ -85,7 +90,6 @@ class TournamentControllerCore extends ChangeNotifier {
         'succeeded',
         context: {...context, 'revision': event!.revision},
       );
-      notifyListeners();
     } catch (error, stack) {
       Diagnostics.record(
         'save event',
@@ -96,6 +100,9 @@ class TournamentControllerCore extends ChangeNotifier {
       );
       rethrow;
     }
+    // Outside the try: the save has succeeded, so a failing listener must not
+    // be logged as a failed save.
+    notifyListeners();
   }
 
   /// Refuses a change that gives two sections the same name. Older files
@@ -430,10 +437,6 @@ class TournamentControllerCore extends ChangeNotifier {
     if (existing != null && !existing.sideGames) {
       throw const TournamentException('Choose a side-games section.');
     }
-    final nextBoard = e.sections.fold(1, (int next, Section s) {
-      final end = s.boardStart + (s.players.length + 1) ~/ 2;
-      return end > next ? end : next;
-    });
     final taken = {for (final s in e.sections) s.name.trim().toLowerCase()};
     var name = 'Side Games';
     for (var n = 2; taken.contains(name.toLowerCase()); n++) {
@@ -447,7 +450,7 @@ class TournamentControllerCore extends ChangeNotifier {
           players: [],
           sideGames: true,
           plannedRounds: 1,
-          boardStart: nextBoard,
+          boardStart: nextBoard(e.sections),
         );
     final additions = <Player>[];
     Player entry(Player source) {
@@ -612,11 +615,7 @@ class TournamentControllerCore extends ChangeNotifier {
   /// lot. The shuffle is seeded and the seed is in the audited action, so the
   /// draw can be reproduced; posted rounds fix the numbers.
   void drawLots(String sectionId, {int? seed}) {
-    final e = event!;
-    final section = e.sections.where((s) => s.id == sectionId).firstOrNull;
-    if (section == null) {
-      throw const TournamentException('This section no longer exists.');
-    }
+    final e = event!, section = _section(sectionId);
     if (section.format == Format.swiss || section.sideGames) {
       throw const TournamentException(
         'Numbers by lot apply to round robins and quads.',
@@ -712,7 +711,7 @@ class TournamentControllerCore extends ChangeNotifier {
       if (title.isEmpty) {
         throw const TournamentException('Enter the section name.');
       }
-      if (kept.any((s) => s.name.toLowerCase() == title.toLowerCase())) {
+      if (kept.any((s) => s.name.trim().toLowerCase() == title.toLowerCase())) {
         throw TournamentException('There is already a section called $title.');
       }
       if (rounds < 1 || rounds > 32) {
@@ -1002,26 +1001,41 @@ class TournamentControllerCore extends ChangeNotifier {
 
   /// Rule 22C5: once a result is in, a win by a player who cancelled an
   /// irrevocable bye for that round counts as a draw for prizes.
-  static Event _withIrrevocableByeRule(Event e, String gameId) => e.copy(
-    sections: [
-      for (final s in e.sections)
-        s.copy(
-          rounds: [
-            for (final r in s.rounds)
-              r.games.any((g) => g.id == gameId)
-                  ? r.copy(
-                      games: [
-                        for (final g in r.games)
-                          g.id == gameId
-                              ? applyIrrevocableByeRule(e, g, r.number)
-                              : g,
-                      ],
-                    )
-                  : r,
-          ],
-        ),
-    ],
+  static Event _withIrrevocableByeRule(Event e, String gameId) => _withGame(
+    e,
+    gameId,
+    (game, round) => applyIrrevocableByeRule(e, game, round),
   );
+
+  /// [e] with game [gameId] replaced by [update] of it. [update] also receives
+  /// the number of the round holding the game; every other game is unchanged.
+  static Event _withGame(
+    Event e,
+    String gameId,
+    Game Function(Game game, int round) update,
+  ) {
+    bool holds(Round r) => r.games.any((g) => g.id == gameId);
+    return e.copy(
+      sections: [
+        for (final s in e.sections)
+          s.rounds.any(holds)
+              ? s.copy(
+                  rounds: [
+                    for (final r in s.rounds)
+                      holds(r)
+                          ? r.copy(
+                              games: [
+                                for (final g in r.games)
+                                  g.id == gameId ? update(g, r.number) : g,
+                              ],
+                            )
+                          : r,
+                  ],
+                )
+              : s,
+      ],
+    );
+  }
 
   void recordResult(String gameId, Outcome outcome, {String reason = ''}) {
     final (e, game) = _materialize(gameId);
@@ -1034,37 +1048,16 @@ class TournamentControllerCore extends ChangeNotifier {
     change(
       'Result, board ${game.board}',
       _withIrrevocableByeRule(
-        e.copy(
-          sections: e.sections
-              .map(
-                (s) => s.copy(
-                  rounds: s.rounds
-                      .map(
-                        (r) => r.copy(
-                          games: r.games
-                              .map(
-                                (g) => g.id == gameId
-                                    ? g.copy(
-                                        outcome: outcome,
-                                        note: reason,
-                                        // An assumption stands in only until
-                                        // the game is resolved.
-                                        pairingAssumption: outcome.resolved
-                                            ? null
-                                            : g.pairingAssumption,
-                                        pairingReason: outcome.resolved
-                                            ? ''
-                                            : g.pairingReason,
-                                      )
-                                    : g,
-                              )
-                              .toList(),
-                        ),
-                      )
-                      .toList(),
-                ),
-              )
-              .toList(),
+        _withGame(
+          e,
+          gameId,
+          (g, _) => g.copy(
+            outcome: outcome,
+            note: reason,
+            // An assumption stands in only until the game is resolved.
+            pairingAssumption: outcome.resolved ? null : g.pairingAssumption,
+            pairingReason: outcome.resolved ? '' : g.pairingReason,
+          ),
         ),
         gameId,
       ),
@@ -1080,26 +1073,10 @@ class TournamentControllerCore extends ChangeNotifier {
     }
     change(
       'Temporary pairing treatment, board ${game.board}',
-      e.copy(
-        sections: [
-          for (final s in e.sections)
-            s.copy(
-              rounds: [
-                for (final r in s.rounds)
-                  r.copy(
-                    games: [
-                      for (final g in r.games)
-                        g.id == gameId
-                            ? g.copy(
-                                pairingAssumption: assumption,
-                                pairingReason: reason,
-                              )
-                            : g,
-                    ],
-                  ),
-              ],
-            ),
-        ],
+      _withGame(
+        e,
+        gameId,
+        (g, _) => g.copy(pairingAssumption: assumption, pairingReason: reason),
       ),
     );
   }
@@ -1596,7 +1573,7 @@ class TournamentControllerCore extends ChangeNotifier {
         transitions: [
           ...e.transitions,
           {
-            'players': ids,
+            'players': [...ids],
             'target': targetId,
             'effectiveRound': target.rounds.length + 1,
             'reason': reason,
@@ -1682,105 +1659,6 @@ class TournamentControllerCore extends ChangeNotifier {
     );
   }
 
-  HistoryGraph? _graph;
-  HistoryGraph get graph => _graph ??= repository.historyGraph();
-
-  /// The step Back would undo, and the one Forward would redo.
-  String? get undoLabel =>
-      graph.back == null ? null : graph.nodes[graph.head]?.action;
-  String? get redoLabel => graph.nodes[graph.forward]?.action;
-  bool get canUndo => graph.back != null;
-  bool get canRedo => graph.forward != null;
-
-  /// What happened at the board that moving to [node] would take away. The
-  /// UI confirms these; nothing is lost for good, because the state being
-  /// left stays in the graph.
-  List<String> lossesTo(int node) =>
-      playLost(event!, repository.snapshot(node));
-
-  /// History lives in the event file, so a closed event cannot read it.
-  void _refuseClosed(String action) {
-    if (!_closed) return;
-    const error = TournamentException('This event has closed.');
-    Diagnostics.record(
-      'save event',
-      'failed',
-      context: {'action': action},
-      error: error,
-    );
-    throw error;
-  }
-
-  void undo({bool acceptLosses = false}) {
-    _refuseClosed('Undo');
-    if (!canUndo) return;
-    _move(graph.back!, 'Undo $undoLabel', acceptLosses);
-  }
-
-  void redo({bool acceptLosses = false}) {
-    _refuseClosed('Redo');
-    if (!canRedo) return;
-    _move(graph.forward!, 'Redo $redoLabel', acceptLosses);
-  }
-
-  void restore(int node, {bool acceptLosses = false}) {
-    _refuseClosed('Restore #$node');
-    if (node == graph.head) return;
-    _move(
-      node,
-      'Restore #$node · ${graph.nodes[node]?.action ?? ''}',
-      acceptLosses,
-    );
-  }
-
-  void _move(int node, String action, bool acceptLosses) {
-    final context = <String, Object?>{
-      'action': action,
-      'eventId': event?.id,
-      'revision': event?.revision,
-      'node': node,
-    };
-    Diagnostics.record('save event', 'started', context: context);
-    try {
-      if (_closed) throw const TournamentException('This event has closed.');
-      final target = repository.snapshot(node);
-      // History before a copy was marked practice belongs to the original
-      // event; restoring it would also restore that event's backup folder.
-      if (event!.practice && !target.practice) {
-        throw const TournamentException(
-          'This practice copy cannot go back to before it was copied.',
-        );
-      }
-      final lost = playLost(event!, target);
-      if (lost.isNotEmpty && !acceptLosses) {
-        throw TournamentException(
-          'Going there removes play already recorded: ${lost.join('; ')}.',
-        );
-      }
-      event = repository.checkout(
-        node,
-        expectedRevision: event!.revision,
-        action: action,
-      );
-      _graph = null;
-      Diagnostics.record(
-        'save event',
-        'succeeded',
-        context: {...context, 'revision': event!.revision},
-      );
-      notifyListeners();
-    } catch (error, stack) {
-      Diagnostics.record(
-        'save event',
-        'failed',
-        context: context,
-        error: error,
-        stack: stack,
-      );
-      rethrow;
-    }
-  }
-
   void secondaryBackup() {
     final e = event!;
     if (e.backupFolder.isEmpty) return;
@@ -1795,14 +1673,25 @@ class TournamentControllerCore extends ChangeNotifier {
         '${e.revision}|$destination|${DateTime.now().toUtc().toIso8601String()}',
       );
       backupWarning = null;
-    } catch (error) {
+    } catch (error, stack) {
+      // The event file is saved; a failed copy is a warning, not a failure.
+      Diagnostics.record(
+        'secondary backup',
+        'failed',
+        context: {'eventId': e.id, 'revision': e.revision},
+        error: error,
+        stack: stack,
+      );
       backupWarning =
           'Saved to the event file, but the backup copy failed. ${plainMessage(error)}';
     }
     notifyListeners();
   }
 
+  /// Closes the event file. Safe to call more than once, so an owner may
+  /// release early and still dispose.
   void releaseResources() {
+    if (_closed) return;
     _closed = true;
     workspaceState.dispose();
     repository.close();

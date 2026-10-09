@@ -73,6 +73,8 @@ Future<void> main() async {
 class MeowApp extends StatefulWidget {
   const MeowApp({required this.dataDirectory, this.initialPath, super.key});
   final Directory dataDirectory;
+
+  /// An event to open at launch; tests use it in place of a desktop request.
   final String? initialPath;
   @override
   State<MeowApp> createState() => _MeowAppState();
@@ -303,7 +305,9 @@ class _MeowAppState extends State<MeowApp> {
 
   /// Takes an event off the recent list; the file itself is untouched.
   void forget(String filename) {
-    setState(() => recent = recent.where((x) => x != filename).toList());
+    setState(
+      () => recent = recent.where((x) => !_samePath(x, filename)).toList(),
+    );
     try {
       library.writeAsStringSync(jsonEncode(recent), flush: true);
     } catch (_) {}
@@ -323,25 +327,33 @@ class _MeowAppState extends State<MeowApp> {
     }
   }
 
+  /// Open event: a picker or file-access failure is shown, never dropped as
+  /// an unhandled async error.
   Future<void> choose() async {
-    final file = await openFile(
-      acceptedTypeGroups: [
-        const XTypeGroup(label: 'Meow-Chess event', extensions: ['meow']),
-      ],
-    );
-    if (file == null) return;
-    final remembered = await rememberFileAccess(file.path);
-    if (!mounted) return;
-    open(file.path);
-    if (!remembered) {
-      final context = navigator.currentContext;
-      if (context != null && context.mounted) {
-        showFailure(
-          context,
+    try {
+      final file = await openFile(
+        acceptedTypeGroups: [
+          const XTypeGroup(label: 'Meow-Chess event', extensions: ['meow']),
+        ],
+      );
+      if (file == null) return;
+      final remembered = await rememberFileAccess(file.path);
+      if (!mounted) return;
+      open(file.path);
+      if (!remembered) {
+        _notify(
           'The event can be opened now, but its access could not be remembered. Select it with Open event after restarting.',
         );
       }
+    } catch (e, stack) {
+      Diagnostics.record('choose event file', 'failed', error: e, stack: stack);
+      if (mounted) _notify('Could not choose an event. ${plainMessage(e)}');
     }
+  }
+
+  void _notify(String message) {
+    final context = navigator.currentContext;
+    if (context != null && context.mounted) showFailure(context, message);
   }
 
   void close() {

@@ -12,8 +12,14 @@ on:
     tags:
       - 'v*'
 
+# Read-only by default; only the job that publishes the release can write.
 permissions:
-  contents: write
+  contents: read
+
+# The tag reaches shell scripts through the environment, never by template
+# expansion into the script text.
+env:
+  TAG: ${{ github.ref_name }}
 
 jobs:
   quality-gate:
@@ -23,10 +29,11 @@ jobs:
     needs: quality-gate
     # The oldest supported runner sets the glibc floor for the binaries.
     runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: 3.47.2
           channel: stable
@@ -41,15 +48,18 @@ jobs:
             flatpak flatpak-builder
 
       - name: Version from tag
-        id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+            echo "::error::Tag must be a v-prefixed semantic version, such as v0.2.0 or v0.2.0-rc1"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           # Flutter's build name must be plain x.y.z; 1.2.0-rc1 builds as 1.2.0.
-          echo "build_name=${VERSION%%-*}" >> "$GITHUB_OUTPUT"
+          echo "BUILD_NAME=${VERSION%%-*}" >> "$GITHUB_ENV"
 
       - name: Build Linux release
-        run: flutter build linux --release --build-name=${{ steps.version.outputs.build_name }}
+        run: flutter build linux --release --build-name=${BUILD_NAME}
 
       - name: Check the bundle carries what desktop setup needs
         run: |
@@ -61,17 +71,17 @@ jobs:
       - name: Zip bundle
         run: |
           cd build/linux/x64/release/bundle
-          zip -r "$GITHUB_WORKSPACE/meow-chess-${{ github.ref_name }}-linux.zip" .
+          zip -r "$GITHUB_WORKSPACE/meow-chess-${TAG}-linux.zip" .
 
       - name: Build .deb
         run: |
-          packaging/deb/build_deb.sh ${{ github.ref_name }} build/linux/x64/release/bundle dist
-          mv dist/meow-chess-${{ steps.version.outputs.version }}-linux-amd64.deb \
-             meow-chess-${{ github.ref_name }}-linux-amd64.deb
+          packaging/deb/build_deb.sh ${TAG} build/linux/x64/release/bundle dist
+          mv dist/meow-chess-${VERSION}-linux-amd64.deb \
+             meow-chess-${TAG}-linux-amd64.deb
 
       - name: Install the .deb and check the file type registers
         run: |
-          sudo apt-get install -y ./meow-chess-${{ github.ref_name }}-linux-amd64.deb
+          sudo apt-get install -y ./meow-chess-${TAG}-linux-amd64.deb
           # dpkg's shared-mime-info trigger rebuilt the MIME database, and the
           # desktop entry claims the type (GLib reads that line directly).
           grep -F 'application/x-meow-chess:*.meow' /usr/share/mime/globs2
@@ -82,9 +92,9 @@ jobs:
 
       - name: Build .rpm
         run: |
-          packaging/rpm/build_rpm.sh ${{ github.ref_name }} build/linux/x64/release/bundle dist
-          mv dist/meow-chess-${{ steps.version.outputs.version }}-linux-x86_64.rpm \
-             meow-chess-${{ github.ref_name }}-linux-x86_64.rpm
+          packaging/rpm/build_rpm.sh ${TAG} build/linux/x64/release/bundle dist
+          mv dist/meow-chess-${VERSION}-linux-x86_64.rpm \
+             meow-chess-${TAG}-linux-x86_64.rpm
 
       - name: Build Flatpak bundle
         run: |
@@ -96,9 +106,9 @@ jobs:
           flatpak-builder --user --force-clean --disable-rofiles-fuse --repo=flatpak-repo flatpak-build \
             packaging/flatpak/org.meowchess.meow_chess.yml
           flatpak build-bundle flatpak-repo \
-            meow-chess-${{ github.ref_name }}-linux.flatpak org.meowchess.meow_chess
+            meow-chess-${TAG}-linux.flatpak org.meowchess.meow_chess
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: linux-build
           path: |
@@ -124,18 +134,19 @@ jobs:
             install: zypper --non-interactive install --allow-unsigned-rpm
     runs-on: ubuntu-latest
     container: ${{ matrix.image }}
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: linux-build
 
       - name: Install the .rpm and check the files and libraries
         run: |
           # grep is for the checks below; minimal images may not have it.
-          ${{ matrix.install }} grep ./meow-chess-${{ github.ref_name }}-linux-x86_64.rpm
+          ${{ matrix.install }} grep ./meow-chess-${TAG}-linux-x86_64.rpm
           test -x "$(readlink -f /usr/bin/meow_chess)"
           test -s /usr/share/mime/packages/org.meowchess.meow_chess.xml
           test -s /usr/share/icons/hicolor/256x256/apps/org.meowchess.meow_chess.png
@@ -159,8 +170,11 @@ jobs:
   release:
     needs: [build-linux, test-rpm, build-windows]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
           pattern: '*-build'
@@ -172,7 +186,7 @@ jobs:
           sha256sum meow-chess-* > SHA256SUMS
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: artifacts/*
           fail_on_unmatched_files: true

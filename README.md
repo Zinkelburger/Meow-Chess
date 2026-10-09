@@ -80,8 +80,8 @@ With Flutter installed, run `flutter pub get`, then `flutter run -d linux`
 use `scripts/ci.sh build` for a bounded Linux release build; the executable is
 `build/linux/x64/release/bundle/meow_chess`. Start with **New tournament** to create an event, then add or import players.
 
-Choose a section tab, then switch between **Players & standings** and
-**Pairings & results**. Both views keep the selected section. Click a score cell in either view, then type **1/W** for a win, **0/L** for
+Choose a section tab, then switch between **Players** and
+**Pairings**. Both views keep the selected section. Click a score cell in either view, then type **1/W** for a win, **0/L** for
 a loss, or **D** for a draw. Results display as **1**, **0**, and **½**.
 Typing saves and advances; mouse clicks only focus cells. Historical corrections
 retain their review step.
@@ -104,7 +104,7 @@ print only the selected posted round. Pairing sheets use
 **Board | Result | White | Black | Result**, with blank result boxes for handwriting
 and unused space left blank. Each section starts on a fresh page; large Swiss
 sections continue onto additional pages as needed. The first print asks for a printer; later prints use the saved device.
-Use **Print preview…** or **Export** to preview sheets and choose another printer.
+Use **Choose printer…** beside **Print** to pick another printer.
 Systems without direct printing support use the operating system's print dialog.
 
 Use **Export** to wrap up the tournament. Review checks across all sections and
@@ -112,12 +112,12 @@ follow the repair links to resolve missing results or report inconsistencies.
 **Generate DBF files** becomes available once blocking issues are resolved;
 optional checks remain available for review. Final standings, crosstables,
 printouts, backup status, and submission notes are also available here.
-Expand **Optional checks** and choose **Fetch missing states from US Chess** to
+Expand **Optional** and choose **Fetch missing states from US Chess** to
 fill missing player states from their USCF IDs. Rating and membership lookups
 also fill missing states automatically; existing states are preserved.
 
-On **Pairings & results**, choose a round number or **Show all rounds** to find an earlier
-game. Choose **Correct a result**, or click a result cell in **Players & standings**, and the
+On **Pairings**, choose a round number or **All rounds** to find an earlier
+game. Choose **Correct a result**, or click a result cell in **Players**, and the
 correction opens beside the table. Pick who won, see each player's score change, and decide
 what happens to later rounds: keep their pairings, or unpair an unstarted round and all
 rounds after it. Recorded play and section transfers prevent unpairing. A note is optional.
@@ -150,8 +150,8 @@ Search uses public access when available or the API key in Data sources; service
 failures leave the identity unverified. Report city, state and ZIP refer to the
 tournament site.
 
-On **Players**, **Show unofficial rating estimates** is off by default. Enable
-it to see approximate Regular ratings and changes as results are entered or
+On **Players**, **Show rating estimates** (under **Player tools**) is off by
+default. Enable it to see approximate Regular ratings and changes as results are entered or
 corrected between rounds. This just-for-fun preview assumes 50 prior rated games,
 uses starting ratings and completed games in each section, and omits personal
 floors and provisional formulas. It never changes pairing ratings or exports.
@@ -161,7 +161,7 @@ Linux build prerequisites include GTK 3, CMake, Ninja, C++ tooling and libsecret
 development headers (`libsecret-1-dev` on Debian/Ubuntu, `libsecret-devel` on Fedora).
 The workstation wrapper discovers the local dependency prefix if present.
 
-Events are `.meow` files; use the app’s Save independent copy or backup actions
+Events are `.meow` files; use the app’s **Save copy…** or backup actions
 to transfer an open event safely. `MEOW_DATA_DIR` overrides the recent-event library
 location for isolated testing. A filename argument opens that event; in release
 builds a second launch hands its file to the window already open.

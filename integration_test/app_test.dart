@@ -26,6 +26,7 @@ void main() {
     tester,
   ) async {
     final directory = Directory.systemTemp.createTempSync('meow-library-');
+    addTearDown(() => directory.deleteSync(recursive: true));
     final eventPath = '${directory.path}/club.meow';
     final event = TournamentController(SqliteEventRepository(eventPath));
     event.create('Saturday at the club');
@@ -56,12 +57,12 @@ void main() {
     expect(find.text('Practice copy'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
-    directory.deleteSync(recursive: true);
   });
   testWidgets(
     'native tournament day: mixed quad and Swiss schedules, keyboard score, print PDF and recover',
     (tester) async {
       final directory = Directory.systemTemp.createTempSync('meow-native-');
+      addTearDown(() => directory.deleteSync(recursive: true));
       final path = '${directory.path}/practice.meow';
       var c = TournamentController(SqliteEventRepository(path));
       populatePractice(c);
@@ -260,7 +261,6 @@ void main() {
       c = TournamentController(SqliteEventRepository(copy));
       expect(c.event!.encode(), expected);
       c.dispose();
-      directory.deleteSync(recursive: true);
     },
   );
 }

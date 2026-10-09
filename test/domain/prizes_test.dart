@@ -389,6 +389,36 @@ void main() {
       expect(cash(run(e)), {'u': 100, 'r': 300});
     });
 
+    test('32C6: the point-group remainder is explained once, to the tie', () {
+      final e = fixture(
+        [('u', 0, 10), ('r', 2000, 10)],
+        [place(1, 300), place(2, 100)],
+        unratedCapCents: 10000,
+      );
+      final notes = run(e).explanations.where((x) => x.contains('unrated'));
+      expect(notes, hasLength(1));
+      expect(notes.single, contains('goes to the others in the tie'));
+    });
+
+    test('32C6: an uneven remainder is shared without losing a cent', () {
+      // Four tie for $400; the unrated takes $99.95 and the other $0.05
+      // is split 2 + 2 + 1 cents among the three rated players.
+      final e = fixture(
+        [('u', 0, 10), ('a', 2000, 10), ('b', 2000, 10), ('c', 2000, 10)],
+        [place(1, 100), place(2, 100), place(3, 100), place(4, 100)],
+        unratedCapCents: 9995,
+      );
+      final a = run(e);
+      expect(a.paidCents, 40000);
+      final cents = {for (final w in a.awards) w.player.id: w.cents};
+      expect(cents['u'], 9995);
+      expect([cents['a'], cents['b'], cents['c']]..sort(), [
+        10001,
+        10002,
+        10002,
+      ]);
+    });
+
     test(
       '32C6: a clear unrated winner leaves the remainder to the next group',
       () {

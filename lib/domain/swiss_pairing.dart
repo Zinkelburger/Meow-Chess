@@ -389,7 +389,7 @@ List<(_Card, String)> _byeCandidates(
                       !c.halfBye,
                 )
                 .toList()
-              ..sort((a, b) => a.rating.compareTo(b.rating))) {
+              ..sort(lowestFirst)) {
           result.add((
             c,
             'Bye moved one group up so a NEW player keeps playing in a four-round event (28L5)',
@@ -405,28 +405,8 @@ List<(_Card, String)> _byeCandidates(
     }
     if (result.isNotEmpty) break;
   }
-  if (result.isEmpty) {
-    // Nobody in the lowest group qualified; walk up the groups.
-    for (final g in groups.reversed.skip(1)) {
-      final eligible =
-          g
-              .where(
-                (c) =>
-                    !c.hadFullBye && !c.forfeitWin && !c.halfBye && !c.unrated,
-              )
-              .toList()
-            ..sort((a, b) => a.rating.compareTo(b.rating));
-      if (eligible.isNotEmpty) {
-        for (final c in eligible) {
-          result.add((
-            c,
-            'No eligible player in the lowest group; lowest-rated eligible player in the ${groupLabel(g)} (28L2)',
-          ));
-        }
-        break;
-      }
-    }
-  }
+  // The loop above walks every group from the bottom, so an empty result
+  // means no player anywhere passes 28L3 / 28L4.
   if (result.isEmpty) {
     // Everyone has had a bye or a forfeit win: the rulebook's exclusions
     // cannot all hold, so the fewest byes, then the lowest group and

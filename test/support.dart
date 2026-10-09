@@ -4,6 +4,8 @@ import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 
+/// An event of [count] rated players (p0 strongest) split into quads, then
+/// switched to [format] when it is not quads. In memory unless [path] is given.
 TournamentController fixture({
   int count = 8,
   Format format = Format.quad,

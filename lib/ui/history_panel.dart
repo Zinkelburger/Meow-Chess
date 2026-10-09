@@ -87,9 +87,20 @@ class _HistoryPanelState extends State<HistoryPanel> {
   int? shownHead;
 
   // Saved states are immutable. Only visible operations need to be read.
+  // Summaries are small and kept; whole events are only cached for the most
+  // recently read [_snapshotLimit] states, least recently used dropped first.
+  static const _snapshotLimit = 32;
   final snapshots = <int, Event>{};
   final summaries = <int, HistoryStep>{};
-  Event snapshot(int id) => snapshots[id] ??= c.repository.snapshot(id);
+  Event snapshot(int id) {
+    final event = snapshots.remove(id) ?? c.repository.snapshot(id);
+    snapshots[id] = event;
+    if (snapshots.length > _snapshotLimit) {
+      snapshots.remove(snapshots.keys.first);
+    }
+    return event;
+  }
+
   HistoryStep summary(int id) => summaries.putIfAbsent(id, () {
     final node = c.graph.nodes[id]!;
     if (node.parent == null) return (title: node.action, context: '');

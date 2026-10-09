@@ -117,7 +117,10 @@ def verify(folder, reciprocity_only=False):
     check(re.fullmatch(r'\d{5}(-\d{4})?', h['H_ZIPCODE']))
     check(h['H_CITY'] and h['H_NAME'] and h['H_SENDCROS'] in 'TAN')
     for field in ('H_BEG_DATE', 'H_END_DATE'):
-        datetime.datetime.strptime(h[field], '%Y%m%d')
+        try:
+            datetime.datetime.strptime(h[field], '%Y%m%d')
+        except ValueError:
+            raise DbfCheckError(field, h[field]) from None
     check(h['H_BEG_DATE'] <= h['H_END_DATE'])
     check(h['H_EVENT_ID'] == '', 'Event IDs are left for US Chess to assign')
     check(h['H_ATD_ID'] == '' or (MEMBER.fullmatch(h['H_ATD_ID']) and h['H_ATD_ID'] != '0' * 8))
@@ -165,6 +168,7 @@ def verify(folder, reciprocity_only=False):
             if code[0] in reciprocal:
                 check(code[-1] in 'WB')
                 check(code[1:-1] != row['D_PAIR_NUM'], 'Self opponent')
+                check((row['D_SEC_NUM'], code[1:-1]) in players, ('Unknown opponent', row, field))
                 opponent = players[(row['D_SEC_NUM'], code[1:-1])]
                 color = 'B' if code[-1] == 'W' else 'W'
                 check(opponent[field] == reciprocal[code[0]] + row['D_PAIR_NUM'] + color)
@@ -241,6 +245,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try:
         verify(args.package, args.reciprocity_only)
-    except DbfCheckError as error:
-        print(f'FAIL: {error}', file=sys.stderr)
+    # A file that cannot be read or decoded at all is rejected the same way as
+    # one that decodes but breaks a rule: a FAIL line, never a traceback.
+    except (DbfCheckError, OSError, LookupError, ValueError, struct.error) as error:
+        print(f'FAIL: {type(error).__name__}: {error}', file=sys.stderr)
         sys.exit(1)

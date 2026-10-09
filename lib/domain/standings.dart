@@ -58,16 +58,15 @@ bool sharePlace(Standing a, Standing b, {required bool tiebreaks}) {
 
 /// Number sorted [rows] 1, 2, 2, 4 … sharing a place per [sharePlace].
 List<Standing> rankStandings(List<Standing> rows, {required bool tiebreaks}) {
+  final ranked = <Standing>[];
   var rank = 1;
-  return [
-    for (var i = 0; i < rows.length; i++)
-      (() {
-        if (i > 0 && !sharePlace(rows[i], rows[i - 1], tiebreaks: tiebreaks)) {
-          rank = i + 1;
-        }
-        return rows[i].withRank(rank);
-      })(),
-  ];
+  for (var i = 0; i < rows.length; i++) {
+    if (i > 0 && !sharePlace(rows[i], rows[i - 1], tiebreaks: tiebreaks)) {
+      rank = i + 1;
+    }
+    ranked.add(rows[i].withRank(rank));
+  }
+  return ranked;
 }
 
 /// Points first, then the posted rule 34 tie-breaks in order when the event

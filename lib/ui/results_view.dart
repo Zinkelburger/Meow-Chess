@@ -385,11 +385,7 @@ class ResultsViewState extends State<ResultsView> {
   }
 
   /// Later rounds require a review before anything is committed.
-  Future<void> enter(
-    BoardRow row,
-    Outcome outcome, {
-    required bool white,
-  }) async {
+  void enter(BoardRow row, Outcome outcome, {required bool white}) {
     if (busy) return;
     if (locked(row)) {
       setState(() => nudged = true);

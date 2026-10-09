@@ -754,12 +754,11 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
             .where((o) => o != e && o.player.effectivePrizeRating != 0)
             .toList();
         if (others.isNotEmpty) {
-          var extra = excess;
+          // Equal shares; the first `excess % others.length` get a cent more.
           final each = excess ~/ others.length;
+          var leftover = excess % others.length;
           for (final o in others) {
-            final add = each + (extra - each * others.length > 0 ? 1 : 0);
-            o.cents += add;
-            extra -= add;
+            o.cents += each + (leftover-- > 0 ? 1 : 0);
           }
           notes.add(
             '${e.player.name} is unrated and limited to ${dollars(table.unratedCapCents)}; '
@@ -767,6 +766,11 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
           );
         } else {
           pending.add(_Cash(source.prize, excess, remainderOf: source.prize));
+          notes.add(
+            '${e.player.name} is unrated and limited to ${dollars(table.unratedCapCents)}; '
+            'the remaining ${dollars(excess)} of ${source.prize.title} goes to the next '
+            'eligible score group (32C6).',
+          );
         }
         for (final c in pool) {
           for (final o in contenders) {
@@ -776,11 +780,6 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
               cashLines[c.prize.id]!.remove(o.id);
             }
           }
-          notes.add(
-            '${e.player.name} is unrated and limited to ${dollars(table.unratedCapCents)}; '
-            'the remaining ${dollars(excess)} of ${source.prize.title} goes to the next '
-            'eligible score group (32C6).',
-          );
         }
       }
     }
