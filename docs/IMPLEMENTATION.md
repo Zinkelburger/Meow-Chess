@@ -251,7 +251,7 @@ scripts/ci.sh with -- python3 scripts/verify_recovery.py
 MEOW_EXPORT_FIXTURES=1 scripts/ci.sh test test/infrastructure/import_reports_test.dart
 python3 -m venv artifacts/validation-env
 artifacts/validation-env/bin/pip install dbfread==2.0.7
-artifacts/validation-env/bin/python scripts/verify_dbf.py artifacts/dbf
+artifacts/validation-env/bin/python scripts/verify_dbf.py --reciprocity-only artifacts/dbf
 ```
 
 Initial checks exposed and led to fixes for immediate-key focus loss, next-round

@@ -37,7 +37,8 @@ class Client:
         if not line:
             raise RuntimeError('MCP exited: ' + self.process.stderr.read())
         response = json.loads(line)  # Deliberately reject stdout build logs.
-        assert response['id'] == self.counter, response
+        if response.get('id') != self.counter:
+            raise RuntimeError(f'Response for another request: {response}')
         if self.log:
             self.log.write(json.dumps({'request': request, 'response': response}) + '\n')
         if 'error' in response:
@@ -60,7 +61,8 @@ class Client:
         error = self.process.stderr.read()
         self.process.stdout.close()
         self.process.stderr.close()
-        assert self.process.returncode == 0, error
+        if self.process.returncode != 0:
+            raise RuntimeError(f'MCP exited with {self.process.returncode}: {error}')
 
 
 def read_dbf(path):
@@ -268,6 +270,74 @@ class TournamentMcpTest(unittest.TestCase):
         (self.root / 'dangling').symlink_to(self.root / 'missing-target')
         with self.assertRaisesRegex(RuntimeError, 'Broken symbolic link'):
             c.call('create_event', path='dangling/new.meow', name='Nope', date='2026-03-07')
+
+
+class ProtocolErrorTest(unittest.TestCase):
+    """Malformed input is answered and skipped; the session keeps serving."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='meow chess protocol ')
+        self.process = subprocess.Popen(
+            [shutil.which('dart') or 'dart', str(ROOT / 'scripts/tournament_mcp.dart'), self.temp.name],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=self.temp.name)
+
+    def tearDown(self):
+        self.process.stdin.close()
+        self.process.wait(timeout=10)
+        error = self.process.stderr.read().decode('utf-8', 'replace')
+        self.process.stdout.close()
+        self.process.stderr.close()
+        self.temp.cleanup()
+        if self.process.returncode != 0:
+            self.fail(f'MCP exited with {self.process.returncode}: {error}')
+
+    def raw(self, data):
+        self.process.stdin.write(data)
+        self.process.stdin.flush()
+        line = self.process.stdout.readline()
+        if not line:
+            self.fail('MCP exited: ' + self.process.stderr.read().decode('utf-8', 'replace'))
+        return json.loads(line)
+
+    def request(self, request):
+        return self.raw(json.dumps(request).encode('utf-8') + b'\n')
+
+    def assertError(self, response, code, request_id=None):
+        self.assertEqual(response.get('id'), request_id, response)
+        self.assertEqual(response.get('error', {}).get('code'), code, response)
+
+    def test_errors_are_answered_and_the_session_continues(self):
+        rpc = {'jsonrpc': '2.0'}
+        response = self.request({**rpc, 'id': 1, 'method': 'tools/list'})
+        self.assertError(response, -32000, 1)
+        self.assertEqual(response['error']['message'], 'Initialize first')
+        self.assertError(self.request({**rpc, 'id': 2, 'method': 'tools/call',
+                                       'params': {'name': 'get_event'}}), -32000, 2)
+        self.assertIn('result', self.request({
+            **rpc, 'id': 3, 'method': 'initialize',
+            'params': {'protocolVersion': '2025-06-18', 'capabilities': {},
+                       'clientInfo': {'name': 'protocol test', 'version': '1'}}}))
+        # Invalid UTF-8 and invalid JSON are parse errors, not a dead server.
+        self.assertError(self.raw(b'\xff\n'), -32700)
+        self.assertError(self.raw(b'{"jsonrpc": "2.0", "id": 4, "method": "ping"\xff}\n'), -32700)
+        self.assertError(self.raw(b'{not json\n'), -32700)
+        # Valid JSON that is not a request object is an invalid request.
+        self.assertError(self.raw(b'[1, 2]\n'), -32600)
+        self.assertError(self.raw(b'42\n'), -32600)
+        self.assertError(self.request({'id': 5, 'method': 'ping'}), -32600, 5)
+        # An id that is neither a string nor a number is answered with null.
+        self.assertError(self.request({**rpc, 'id': {'n': 6}, 'method': 'ping'}), -32600)
+        self.assertError(self.request({**rpc, 'id': [7], 'method': 'ping'}), -32600)
+        self.assertError(self.request({**rpc, 'id': 8, 'method': 'no/such/method'}), -32601, 8)
+        self.assertError(self.request({**rpc, 'id': 9, 'method': 'tools/call', 'params': [1]}), -32602, 9)
+        self.assertError(self.request({**rpc, 'id': 10, 'method': 'tools/call',
+                                       'params': {'name': 7}}), -32602, 10)
+        self.assertError(self.request({**rpc, 'id': 11, 'method': 'tools/call',
+                                       'params': {'name': 'get_event', 'arguments': [1]}}), -32602, 11)
+        # Blank lines get no response: the next answer belongs to the ping.
+        self.assertEqual(self.raw(b'\n  \r\n\t\n' + json.dumps({**rpc, 'id': 12, 'method': 'ping'}).encode()
+                                  + b'\r\n'), {'jsonrpc': '2.0', 'id': 12, 'result': {}})
+        self.assertIn('tools', self.request({**rpc, 'id': 13, 'method': 'tools/list'})['result'])
 
 
 if __name__ == '__main__':

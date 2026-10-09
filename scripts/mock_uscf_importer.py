@@ -103,12 +103,14 @@ def time_control(value):
         controls, kind, extra = [int(m[1])], m[2], int(m[3] or 0)
         canonical = f'G/{m[1]}'
     else:
-        m = re.fullmatch(r'(\d+)/(\d+)(?:[,;]SD/?(\d+))?' + bonus, text)
+        # One or more timed controls (40/120,20/60), then an optional SD.
+        m = re.fullmatch(r'(\d+/\d+(?:[,;]\d+/\d+)*)(?:[,;]SD/?(\d+))?' + bonus, text)
         if not m:
             return None
-        controls = [int(m[2])] + ([int(m[3])] if m[3] else [])
-        kind, extra = m[4], int(m[5] or 0)
-        canonical = f'{m[1]}/{m[2]}' + (f',SD/{m[3]}' if m[3] else '')
+        periods = re.findall(r'(\d+)/(\d+)', m[1])
+        controls = [int(minutes) for _, minutes in periods] + ([int(m[2])] if m[2] else [])
+        kind, extra = m[3], int(m[4] or 0)
+        canonical = ','.join(f'{moves}/{minutes}' for moves, minutes in periods) + (f',SD/{m[2]}' if m[2] else '')
     if kind:
         canonical += f";{'d' if kind == 'D' else '+'}{extra}"
     total = sum(controls) + extra  # rule 5C: minutes + delay/increment seconds
@@ -271,7 +273,13 @@ def import_package(folder):
                 elif code in NO_OPPONENT:
                     require(opponent == '0', where, f'bye/unpaired code cannot name an opponent ({cell!r})')
                 cells[row['D_PAIR_NUM'], n] = (code, opponent, color)
-        double = section['S_TRN_TYPE'] == '2' or any(c[0] in DOUBLE_ONLY for c in cells.values())
+        # A double section whose every match was split (W against W) has no
+        # double-only code, and SwissSys may write it as type S (May Ladder).
+        # W against W is nonreciprocal for single games, so it only reads as double.
+        played = [(key, c) for key, c in cells.items() if c[0] in PLAYED]
+        splits = bool(played) and all(c[0] == 'W' and cells.get((c[1], key[1]), ('',))[0] == 'W'
+                                      for key, c in played)
+        double = section['S_TRN_TYPE'] == '2' or splits or any(c[0] in DOUBLE_ONLY for c in cells.values())
         for (pair, n), (code, opponent, color) in cells.items():
             if opponent == '0':
                 continue  # X0/F0/Z0/B0/H0/U0: accepted unmatched (SwissSys writes X0/F0)

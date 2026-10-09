@@ -51,12 +51,12 @@ def main():
     session = requests.Session()
     session.headers['User-Agent'] = AGENT
     manifest_path = cache / 'manifest.json'
-    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8')) if manifest_path.exists() else {}
     robots = {}
     for host in ['docs.chessroster.com', 'www.chessroster.com']:
         u = 'https://' + host + '/robots.txt'
         r = session.get(u, timeout=25)
-        (cache / (host + '-robots.txt')).write_text(r.text)
+        (cache / (host + '-robots.txt')).write_text(r.text, encoding='utf-8')
         rp = RobotFileParser(u)
         if r.ok:
             rp.parse(r.text.splitlines())
@@ -70,7 +70,7 @@ def main():
     (cache / 'sitemap.xml').write_bytes(sitemap.content)
     sitemap_urls = [canonical(e.text) for e in ET.fromstring(sitemap.content).iter()
                     if e.tag.endswith('}loc') and e.text and in_scope(e.text)]
-    nav = json.loads((ROOT / 'research/swisssys-navigation.json').read_text())
+    nav = json.loads((ROOT / 'research/swisssys-navigation.json').read_text(encoding='utf-8'))
     seeds = sorted(set(sitemap_urls + [canonical(n['url']) for n in nav] +
                        ['https://www.chessroster.com/swisssys',
                         'https://www.chessroster.com/swisssys/downloads']))
@@ -107,7 +107,7 @@ def main():
             except requests.RequestException as error:
                 manifest[url] = {'status': 'error', 'error': str(error)}
                 record = manifest[url]
-            manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+            manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
             time.sleep(.6)
         if record.get('status') == 200 and 'html' in record.get('content_type', ''):
             soup = BeautifulSoup(raw.read_bytes(), 'html.parser')
@@ -132,12 +132,12 @@ def main():
             for el in article.select('script,style,nav'):
                 el.decompose()
             txt = article.get_text('\n', strip=True)
-            (cache / (key + '.txt')).write_text(txt)
+            (cache / (key + '.txt')).write_text(txt, encoding='utf-8')
             record.update(text=key + '.txt', text_sha256=hashlib.sha256(txt.encode()).hexdigest(),
                           text_chars=len(txt), review='not yet exhaustively reviewed')
         if len(seen) % 25 == 0:
             print(f'{len(seen)} pages processed, {len(queue)} pages queued', flush=True)
-        manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+        manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     # Only same-host article images/PDFs; external assets are inventoried, not mirrored.
     asset_manifest = {}
     for url in sorted(assets):
@@ -154,8 +154,8 @@ def main():
         except requests.RequestException as error:
             asset_manifest[url] = dict(status='error', error=str(error))
         time.sleep(.6)
-    (cache / 'assets.json').write_text(json.dumps(asset_manifest, indent=2) + '\n')
-    (cache / 'external-links.json').write_text(json.dumps(sorted(external), indent=2) + '\n')
+    (cache / 'assets.json').write_text(json.dumps(asset_manifest, indent=2) + '\n', encoding='utf-8')
+    (cache / 'external-links.json').write_text(json.dumps(sorted(external), indent=2) + '\n', encoding='utf-8')
     coverage = dict(retrieved_at=datetime.now(timezone.utc).isoformat(),
         scope=['https://docs.chessroster.com/swisssys/', 'https://www.chessroster.com/swisssys'],
         navigation_count=len(nav), sitemap_count=len(set(sitemap_urls)),
@@ -164,14 +164,14 @@ def main():
         missing_sitemap_urls=sorted(set(sitemap_urls)-set(manifest)),
         missing_navigation_urls=sorted({canonical(n['url']) for n in nav}-set(manifest)),
         article_assets=len(assets), external_links=len(external), pages=manifest)
-    (cache / 'coverage.json').write_text(json.dumps(coverage, indent=2) + '\n')
+    (cache / 'coverage.json').write_text(json.dumps(coverage, indent=2) + '\n', encoding='utf-8')
     rows = ['<!doctype html><html lang="en"><meta charset="utf-8"><title>SwissSys local reference</title>',
             '<h1>SwissSys local reference</h1><p>Saved content is not reviewed/implemented feature coverage. Open text for offline reading; original HTML may reference network assets.</p><ul>']
     for u,r in sorted(manifest.items(), key=lambda item: item[1].get('title', item[0])):
         rows.append('<li>' + html.escape(r.get('title',u)) + ' — ' + str(r['status']) +
                     (f' <a href="{r["text"]}">Local text</a>' if r.get('text') else '') +
                     f' <a href="{html.escape(u)}">Source</a></li>')
-    (cache / 'index.html').write_text('\n'.join(rows) + '</ul></html>\n')
+    (cache / 'index.html').write_text('\n'.join(rows) + '</ul></html>\n', encoding='utf-8')
     print(json.dumps({k:v for k,v in coverage.items() if k != 'pages'}, indent=2), flush=True)
 
 

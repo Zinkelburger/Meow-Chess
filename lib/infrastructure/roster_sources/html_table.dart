@@ -1,4 +1,5 @@
 import 'package:csv/csv.dart';
+import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
 
 import '../../domain/model.dart';
@@ -36,16 +37,24 @@ List<ImportRow> parseWebRoster(String source) {
         .map(
           (row) => row.children
               .where((cell) => cell.localName == 'th' || cell.localName == 'td')
-              .map((cell) => cell.text.replaceAll(RegExp(r'\s+'), ' ').trim())
+              .map(
+                (cell) =>
+                    _cellText(cell).replaceAll(RegExp(r'\s+'), ' ').trim(),
+              )
               .toList(),
         )
         .where((row) => row.isNotEmpty)
         .toList();
     // A caption or section heading may precede the actual column headings.
     for (var i = 0; i < rows.length; i++) {
-      final header = RosterTable(Csv().encode([rows[i]])).headerColumns;
+      final header = RosterTable(
+        Csv().encode([rows[i]]),
+        delimiter: ',',
+      ).headerColumns;
       if ([RosterField.name, RosterField.rating].every(header.containsKey)) {
-        candidates.add(RosterTable(Csv().encode(rows.skip(i).toList())));
+        candidates.add(
+          RosterTable(Csv().encode(rows.skip(i).toList()), delimiter: ','),
+        );
         break;
       }
     }
@@ -65,4 +74,25 @@ List<ImportRow> parseWebRoster(String source) {
     );
   }
   return rows;
+}
+
+/// A cell's text with a space where a line break or block ended, so
+/// "John<br>Smith" reads "John Smith", as a browser shows it.
+String _cellText(dom.Node node) {
+  const breaks = {'br', 'p', 'div', 'li', 'tr', 'td', 'th'};
+  final text = StringBuffer();
+  void visit(dom.Node node) {
+    if (node is dom.Text) {
+      text.write(node.data);
+    } else if (node is dom.Element && breaks.contains(node.localName)) {
+      text.write(' ');
+      node.nodes.forEach(visit);
+      text.write(' ');
+    } else {
+      node.nodes.forEach(visit);
+    }
+  }
+
+  node.nodes.forEach(visit);
+  return text.toString();
 }

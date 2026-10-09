@@ -29,6 +29,8 @@ EVENTS = ('April Ladder', 'Fall Equinox Swiss', 'March Quads', 'May Ladder',
           'Rated Friday Night Blitz', 'SpringFestival', 'Tornado #147')
 TD_FIELDS = ('H_CTD_ID', 'H_ATD_ID', 'H_OTHER_TD', 'S_CTD_ID', 'S_ATD_ID')
 MEMBER = re.compile(rb'\d{8}')
+# A TD field holds nothing, or comma-separated eight-digit IDs (H_OTHER_TD).
+TD_VALUE = re.compile(rb' *(\d{8}( *, *\d{8})*)? *')
 
 
 def slug(name):
@@ -120,6 +122,13 @@ def synthetic_name(original, token):
     return word(token, words[0]) + middles + ' ' + word('Player', words[-1])
 
 
+def td_value(value, ids, where):
+    """Map every ID in a TD field; anything that is not an ID would leak unchecked."""
+    if not TD_VALUE.fullmatch(value):
+        raise ValueError(f'{where}: unexpected TD ID content {value.rstrip()!r}')
+    return MEMBER.sub(lambda m: ids.member(m[0].decode()).encode(), value).rstrip(b' ')
+
+
 def anonymize_event(folder, ids):
     tables = {name: Table(folder / f'{name.lower()}.dbf') for name in ('THEXPORT', 'TSEXPORT', 'TDEXPORT')}
     th, ts, td = tables['THEXPORT'], tables['TSEXPORT'], tables['TDEXPORT']
@@ -128,8 +137,7 @@ def anonymize_event(folder, ids):
         for row in range(table.count):
             for field in TD_FIELDS:
                 if field in names:
-                    value = table.get(row, field)
-                    table.put(row, field, MEMBER.sub(lambda m: ids.member(m[0].decode()).encode(), value).rstrip(b' '))
+                    table.put(row, field, td_value(table.get(row, field), ids, f'{folder.name}: {field}'))
     th.put(0, 'H_AFF_ID', b'A9999999')
     for row in range(td.count):
         real = td.get(row, 'D_MEM_ID').decode('ascii')

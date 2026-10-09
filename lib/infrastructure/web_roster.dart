@@ -1,4 +1,6 @@
-import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
+
 import 'package:http/http.dart' as http;
 import '../domain/model.dart';
 import 'roster_import.dart';
@@ -34,28 +36,71 @@ class WebRoster {
         const HtmlTableRosterSource();
     final uri = _validatedUrl(source.entryListUrl(supplied).toString());
     final request = http.Request('GET', uri)..followRedirects = false;
-    final response = await client
-        .send(request)
-        .timeout(const Duration(seconds: 20));
-    if (response.statusCode != 200) {
-      throw TournamentException(
-        'Could not read the entry list (HTTP ${response.statusCode}). For a redirect, paste the final page URL. Your roster is unchanged.',
-      );
-    }
-    const limit = 2 * 1024 * 1024;
+    final unreachable =
+        'Could not reach ${uri.host}. Check the internet connection and the '
+        'URL, then try again. Your roster is unchanged.';
+    final http.StreamedResponse response;
     final bytes = <int>[];
-    await for (final chunk in response.stream.timeout(
-      const Duration(seconds: 20),
-    )) {
-      bytes.addAll(chunk);
-      if (bytes.length > limit) {
-        throw const TournamentException(
-          'This page is too large. Import a CSV instead.',
+    try {
+      response = await client
+          .send(request)
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) {
+        throw TournamentException(
+          'Could not read the entry list (HTTP ${response.statusCode}). For a redirect, paste the final page URL. Your roster is unchanged.',
         );
       }
+      const limit = 2 * 1024 * 1024;
+      await for (final chunk in response.stream.timeout(
+        const Duration(seconds: 20),
+      )) {
+        bytes.addAll(chunk);
+        if (bytes.length > limit) {
+          throw const TournamentException(
+            'This page is too large. Import a CSV instead.',
+          );
+        }
+      }
+    } on TimeoutException {
+      throw TournamentException(
+        'Could not reach ${uri.host}: no response within 20 seconds. Try '
+        'again later. Your roster is unchanged.',
+      );
+    } on http.ClientException {
+      throw TournamentException(unreachable);
+    } on IOException {
+      throw TournamentException(unreachable);
     }
-    return source.parse(utf8.decode(bytes));
+    return source.parse(
+      decodeWebText(bytes, contentType: response.headers['content-type']),
+    );
   }
+}
+
+/// Page text in the character set the server or the page declares; without
+/// one (or with one this cannot read), as [decodeRosterText] reads files.
+String decodeWebText(List<int> bytes, {String? contentType}) {
+  String? charset(String text) => RegExp(
+    r'''charset\s*=\s*["']?\s*([A-Za-z0-9._:\-]+)''',
+    caseSensitive: false,
+  ).firstMatch(text)?.group(1);
+  var declared = contentType == null ? null : charset(contentType);
+  if (declared == null) {
+    // A page's <meta charset> must appear within its first 1024 bytes.
+    final head = String.fromCharCodes(
+      bytes.take(1024).map((b) => b < 0x80 ? b : 0x3F),
+    );
+    for (final meta in RegExp(
+      r'<meta\b[^>]*>',
+      caseSensitive: false,
+    ).allMatches(head)) {
+      if (charset(meta.group(0)!) case final found?) {
+        declared = found;
+        break;
+      }
+    }
+  }
+  return decodeRosterText(bytes, charset: declared);
 }
 
 class RosterChange {

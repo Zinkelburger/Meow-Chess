@@ -431,6 +431,9 @@ ACCEPTED = [
                              [detail_cell(f, 'D_EVENT_ID', 'E1', row=r) for r in range(28)]), None),
     ('canonical_time_control', lambda f: section_cell(f, 'S_TIMECTL', 'G/60;d5'), ('D', 'G/60;d5')),
     ('multi_period_time_control', lambda f: section_cell(f, 'S_TIMECTL', '40/90,SD/30;d5'), ('R', '40/90,SD/30;d5')),
+    ('several_timed_controls', lambda f: section_cell(f, 'S_TIMECTL', '40/120,20/60,SD/30;d5'),
+     ('R', '40/120,20/60,SD/30;d5')),
+    ('timed_controls_without_sd', lambda f: section_cell(f, 'S_TIMECTL', '40/120,20/60;d5'), ('R', '40/120,20/60;d5')),
     ('increment_time_control', lambda f: section_cell(f, 'S_TIMECTL', 'G/90;+30'), ('R', 'G/90;+30')),
     ('quick_time_control', lambda f: section_cell(f, 'S_TIMECTL', 'G/15;d0'), ('Q', 'G/15;d0')),
     ('round_robin', lambda f: section_cell(f, 'S_TRN_TYPE', 'R'), None),
@@ -460,6 +463,29 @@ class LeniencyTests(unittest.TestCase):
             detail_cell(folder, 'D_MEM_ID', '')
             self.assertIn('section 1, player 1: no member ID (must be resolved in MUIR)',
                           import_package(folder)['warnings'])
+
+    def test_several_timed_controls_count_every_period(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = copy_base(temp)
+            section_cell(folder, 'S_TIMECTL', '40/120,20/60,SD/30;d5')
+            self.assertEqual(import_package(folder)['sections'][0]['totalMinutes'], 120 + 60 + 30 + 5)
+
+    def test_all_split_double_section_without_type_2(self):
+        # Every played game a split (W against W), written as type S: only a
+        # double-game reading is consistent, so both legs are rated.
+        with tempfile.TemporaryDirectory() as temp:
+            folder = copy_base(temp, FIXTURES / 'rated-friday-night-blitz')
+            section_cell(folder, 'S_TRN_TYPE', 'S')
+            _, count, _, _, fields = layout(folder, 'TDEXPORT.DBF')
+            for row in range(count):
+                for name, _ in fields:
+                    if name.startswith('D_RND'):
+                        value = read_cell(folder, 'TDEXPORT.DBF', name, row)
+                        if value[:1] in '$#%WDL':
+                            detail_cell(folder, name, 'W' + value[1:], row)
+            blitz = import_package(folder)['sections'][0]
+            self.assertEqual((blitz['pairingType'], blitz['doubleGames'], blitz['ratedRounds']), ('S', True, 12))
+            self.assertTrue(all(leg[0] in 'WLXFBHU' for p in blitz['players'] for leg in p['legs']))
 
     def test_matched_forfeit_scores(self):
         with tempfile.TemporaryDirectory() as temp:

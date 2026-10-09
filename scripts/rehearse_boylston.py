@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 import re
 import struct
+import sys
 import unicodedata
 
 from bs4 import BeautifulSoup
@@ -395,6 +396,9 @@ def main():
             print(' FAILED', error, flush=True)
         (args.output / 'comparison.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(args.output / 'comparison.json')
+    failed = [e['event'] for e in report['events'] if 'failed' in e]
+    if failed:
+        sys.exit(f'FAILED: {len(failed)} of {len(report["events"])} events: {", ".join(failed)}')
 
 
 if __name__ == '__main__':

@@ -19,14 +19,19 @@ Future<void> main(List<String> args) async {
   final cli = args.first == '--cli-root';
   var initialized = false;
   try {
-    await for (final line
-        in stdin.transform(utf8.decoder).transform(const LineSplitter())) {
+    await for (final bytes in _lines(stdin)) {
       dynamic id;
       Json response;
       try {
+        // One malformed line is answered and skipped; it never ends the
+        // session.
+        final line = utf8.decode(bytes);
+        if (line.trim().isEmpty) continue;
         final decoded = jsonDecode(line);
         if (decoded is! Json) {
-          throw const FormatException('Expected an object.');
+          stdout.writeln(jsonEncode(_error(null, -32600, 'Invalid Request')));
+          await stdout.flush();
+          continue;
         }
         final request = decoded;
         if (cli) {
@@ -41,10 +46,13 @@ Future<void> main(List<String> args) async {
             response = toolFailure(error);
           }
         } else {
-          id = request['id'];
+          final rawId = request['id'];
+          final validId = rawId == null || rawId is String || rawId is num;
+          // An id that cannot be echoed is reported as null.
+          id = validId ? rawId : null;
           if (request['jsonrpc'] != '2.0' ||
               request['method'] is! String ||
-              (id != null && id is! String && id is! num)) {
+              !validId) {
             response = _error(id, -32600, 'Invalid Request');
           } else if (!request.containsKey('id')) {
             // Notifications never produce a response (including initialized/cancelled).
@@ -113,6 +121,23 @@ Future<void> main(List<String> args) async {
   } finally {
     api.close();
   }
+}
+
+/// Input lines as bytes, so each line is decoded on its own.
+Stream<List<int>> _lines(Stream<List<int>> input) async* {
+  var line = <int>[];
+  await for (final chunk in input) {
+    for (final byte in chunk) {
+      if (byte == 0x0A) {
+        if (line.isNotEmpty && line.last == 0x0D) line.removeLast();
+        yield line;
+        line = <int>[];
+      } else {
+        line.add(byte);
+      }
+    }
+  }
+  if (line.isNotEmpty) yield line;
 }
 
 Json _result(dynamic id, Json result) => {

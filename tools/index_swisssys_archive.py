@@ -9,8 +9,13 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+class ArchiveError(Exception):
+    """The local cache does not match the archived coverage record."""
 ROUTES = [
     (r'switch state and federation', 'R04', 'Player inspector'),
     (r'changing game results', 'P05 P07', 'Rounds / History'),
@@ -89,15 +94,18 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--cache', type=Path, default=ROOT / 'research/local/swisssys-site')
     args = p.parse_args()
-    coverage = json.loads((args.cache / 'coverage.json').read_text())
-    nav = json.loads((ROOT / 'research/swisssys-navigation.json').read_text())
+    coverage = json.loads((args.cache / 'coverage.json').read_text(encoding='utf-8'))
+    nav = json.loads((ROOT / 'research/swisssys-navigation.json').read_text(encoding='utf-8'))
     pages = coverage['pages']
     rows = []
     for n in nav:
         r = pages[n['url']]
-        assert r['status'] == 200, n['url']
+        # Explicit checks, not assert: python -O must not skip them.
+        if r['status'] != 200:
+            raise ArchiveError(f'{n["url"]} archived with status {r["status"]}')
         for field, hashfield in [('raw','sha256'),('text','text_sha256')]:
-            assert hashlib.sha256((args.cache / r[field]).read_bytes()).hexdigest() == r[hashfield]
+            if hashlib.sha256((args.cache / r[field]).read_bytes()).hexdigest() != r[hashfield]:
+                raise ArchiveError(f'{r[field]} does not match its {hashfield} for {n["url"]}')
         ids, home = route(n['title'])
         rows.append(dict(source_id='SS-'+hashlib.sha256(n['url'].encode()).hexdigest()[:8],
             title=n['title'],url=n['url'],archive_status=200,sha256=r['sha256'],
@@ -105,9 +113,9 @@ def main():
             proposed_home=home,exhaustive_extraction='pending',reference_app_test='not run'))
     public = {k:v for k,v in coverage.items() if k != 'pages'}
     public['pages'] = [{**r} for r in rows]
-    (ROOT / 'research/swisssys-coverage.json').write_text(json.dumps(public,indent=2)+'\n')
+    (ROOT / 'research/swisssys-coverage.json').write_text(json.dumps(public,indent=2)+'\n', encoding='utf-8')
     lines = ['# SwissSys page-by-page research checklist', '',
-        'All 296 navigation/sitemap pages were archived with raw HTML, article text and hashes.',
+        f'All {len(rows)} navigation/sitemap pages were archived with raw HTML, article text and hashes.',
         'This table is **research triage**, not an atomic feature inventory or a parity claim.',
         'Candidate IDs are title-based suggestions; open the article and map every behavior before marking extraction complete.',
         'Every row currently needs exhaustive feature extraction and reference-application verification.',
@@ -123,9 +131,12 @@ def main():
         'specification, including counterexamples. Record explicit omissions and why they are out of scope.',
         'Mark only that review status complete; implementation and reference comparison stay separate.',
         'Release-note bug fixes should become regression fixtures even when no new menu item exists.', '']
-    (ROOT / 'research/SWISSSYS_TOPIC_LEDGER.md').write_text('\n'.join(lines))
+    (ROOT / 'research/SWISSSYS_TOPIC_LEDGER.md').write_text('\n'.join(lines), encoding='utf-8')
     print(f'Indexed {len(rows)} pages; verified {len(rows)*2} raw/text hashes; {sum(not r["candidate_feature_ids"] for r in rows)} need initial classification.')
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except ArchiveError as error:
+        sys.exit(f'FAIL: {error}')

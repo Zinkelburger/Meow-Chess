@@ -19,16 +19,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--refresh', action='store_true')
     args = parser.parse_args()
-    sources = json.loads((ROOT / 'research/sources.json').read_text())
+    sources = json.loads((ROOT / 'research/sources.json').read_text(encoding='utf-8'))
     cache = ROOT / 'research/local'
     cache.mkdir(parents=True, exist_ok=True)
     manifest_path = cache / 'manifest.json'
-    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    manifest = json.loads(manifest_path.read_text(encoding='utf-8')) if manifest_path.exists() else {}
     session = requests.Session()
     session.headers['User-Agent'] = 'Meow-Chess-research/0.1 (single-user reference archive)'
     for source in sources:
         key, url = source['id'], source['url']
-        if key in manifest and not args.refresh:
+        cached = manifest.get(key, {})
+        # Only a successful fetch is cached; errors and HTTP failures are retried next run.
+        if cached.get('status') in range(200, 300) and not args.refresh:
             continue
         # Deliberately no credentials, member-data endpoints, recursive crawling or retries.
         if urlparse(url).scheme != 'https':
@@ -46,7 +48,7 @@ def main():
                 for tag in node.select('script,style,nav'):
                     tag.decompose()
                 text_path = cache / (key + '.txt')
-                text_path.write_text(node.get_text('\n', strip=True))
+                text_path.write_text(node.get_text('\n', strip=True), encoding='utf-8')
             manifest[key] = dict(url=url, final_url=response.url, status=response.status_code,
                 retrieved_at=datetime.now(timezone.utc).isoformat(), content_type=content_type,
                 bytes=len(response.content), sha256=hashlib.sha256(response.content).hexdigest(),
@@ -55,7 +57,7 @@ def main():
         except requests.RequestException as error:
             manifest[key] = dict(url=url, error=str(error), retrieved_at=datetime.now(timezone.utc).isoformat())
             print(key, type(error).__name__, flush=True)
-        manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+        manifest_path.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
         time.sleep(0.6)
 
 if __name__ == '__main__':

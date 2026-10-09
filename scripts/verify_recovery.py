@@ -8,9 +8,20 @@ import shutil
 import signal
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import threading
 import time
+
+
+class RecoveryCheckError(Exception):
+    """The recovered event does not match what the writer acknowledged."""
+
+
+def check(condition, *detail):
+    # Not assert: python -O would strip every recovery check and print PASS.
+    if not condition:
+        raise RecoveryCheckError(*detail or ('check failed',))
 
 
 def dart_executable():
@@ -64,9 +75,9 @@ def verify():
                         _, revision_text, writer_text = line.split()
                         acknowledged = int(revision_text)
                         writer_pid = int(writer_text)
-                        assert writer_pid > 0
+                        check(writer_pid > 0, line)
                         if acknowledged == 5:
-                            assert Path(f'{event}-wal').stat().st_size > 0
+                            check(Path(f'{event}-wal').stat().st_size > 0, 'No WAL before the kill')
                             # Kill the helper identified through our own pipe,
                             # even if this SDK launches it beneath a CLI parent.
                             os.kill(writer_pid, signal.SIGTERM if os.name == 'nt' else signal.SIGKILL)
@@ -81,23 +92,23 @@ def verify():
                 reader.join(timeout=5)
                 process.stdout.close()
             errors.seek(0)
-            assert acknowledged == 5, f'Writer did not acknowledge five commits: {errors.read()}'
+            check(acknowledged == 5, f'Writer did not acknowledge five commits: {errors.read()}')
             # TerminateProcess on Windows returns a positive exit code.
-            assert process.returncode != 0, 'Expected abrupt termination, not graceful closure'
-        assert Path(f'{event}-wal').stat().st_size > 0, 'Writer must not close/checkpoint cleanly'
+            check(process.returncode != 0, 'Expected abrupt termination, not graceful closure')
+        check(Path(f'{event}-wal').stat().st_size > 0, 'Writer must not close/checkpoint cleanly')
         connection = sqlite3.connect(event)
         try:
-            assert connection.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
-            assert connection.execute('PRAGMA foreign_key_check').fetchall() == []
+            check(connection.execute('PRAGMA integrity_check').fetchone()[0] == 'ok', 'integrity_check')
+            check(connection.execute('PRAGMA foreign_key_check').fetchall() == [], 'foreign_key_check')
             revision, data = connection.execute('SELECT revision,data FROM event').fetchone()
-            assert revision == acknowledged, (revision, acknowledged)
-            assert json.loads(data)['name'] == f'Revision {revision}'
+            check(revision == acknowledged, (revision, acknowledged))
+            check(json.loads(data)['name'] == f'Revision {revision}', 'Event name')
             players = connection.execute('SELECT data FROM player').fetchall()
-            assert len(players) == 120
-            assert all(json.loads(row[0])['name'].endswith(f'revision {revision}') for row in players)
-            assert connection.execute('SELECT MAX(revision) FROM audit').fetchone()[0] == revision
-            assert connection.execute('SELECT COUNT(*) FROM audit').fetchone()[0] == revision
-            assert connection.execute('SELECT COUNT(*) FROM node').fetchone()[0] == revision
+            check(len(players) == 120, ('Players', len(players)))
+            check(all(json.loads(row[0])['name'].endswith(f'revision {revision}') for row in players), 'Player revision')
+            check(connection.execute('SELECT MAX(revision) FROM audit').fetchone()[0] == revision, 'Audit')
+            check(connection.execute('SELECT COUNT(*) FROM audit').fetchone()[0] == revision, 'Audit')
+            check(connection.execute('SELECT COUNT(*) FROM node').fetchone()[0] == revision, 'Nodes')
         finally:
             # sqlite3's context manager commits but does not close; Windows
             # cannot remove the temporary directory while the handle is open.
@@ -106,4 +117,8 @@ def verify():
 
 
 if __name__ == '__main__':
-    verify()
+    try:
+        verify()
+    except RecoveryCheckError as error:
+        print(f'FAIL: {error}', file=sys.stderr)
+        sys.exit(1)
