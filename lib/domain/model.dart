@@ -538,15 +538,16 @@ class Section {
        rounds = List.unmodifiable(rounds);
   final String id, name;
 
-  /// Rule 28R: accelerated pairings. Empty for none, `addedScore` (28R1) or
-  /// `adjustedRating` (28R2). Announced before round 1.
+  /// Rule 28R: accelerated pairings. Empty for none, `addedScore` (28R1),
+  /// `adjustedRating` (28R2) or `sixths` (28R3). Announced before round 1.
   final String accelerated;
 
   /// Rule 28N: avoid pairing team-mates using the plus-two method.
   final bool avoidTeammates;
 
-  /// Announced pairing variations by rule number, such as `29E4a`,
-  /// `29E5b1`, `29E5f1`, `29E5h`, `29E6b`, `29E8`, `29I`, `29J`, `28L2a`.
+  /// Announced pairing variations by rule number, such as `29E4a`, `29E5h`,
+  /// `29I` (full-class pairings), `29I2`, `29J`, `28L2a` and `28S5latest`
+  /// (re-entries carry the latest score); see `swissVariations`.
   final Set<String> variations;
 
   /// Rule 22C: announced bye availability. Keys: `lastHalfByeRound` (the
@@ -1135,7 +1136,7 @@ void validateEvent(Event e) {
       'Invalid section settings.',
     );
     require(
-      ['', 'addedScore', 'adjustedRating'].contains(s.accelerated),
+      ['', 'addedScore', 'adjustedRating', 'sixths'].contains(s.accelerated),
       'Invalid accelerated pairing method.',
     );
     require(['', 'crenshaw'].contains(s.rrTable), 'Invalid round-robin table.');

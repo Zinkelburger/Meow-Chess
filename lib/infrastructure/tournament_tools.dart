@@ -12,6 +12,7 @@ import '../domain/model.dart';
 import '../domain/prizes.dart';
 import '../domain/pairing.dart';
 import '../domain/standings.dart';
+import '../domain/team_standings.dart';
 import '../domain/us_chess.dart';
 import 'dbf_export.dart';
 import 'publish_file.dart';
@@ -115,8 +116,9 @@ final _playerFields = <String, dynamic>{
 };
 final _swissFields = <String, dynamic>{
   'accelerated': {
-    ..._enum(['', 'addedScore']),
-    'description': 'Rule 28R1 accelerated pairings for rounds 1–2.',
+    ..._enum(['', 'addedScore', 'adjustedRating', 'sixths']),
+    'description':
+        'Rule 28R accelerated pairings for rounds 1–2: addedScore (28R1), adjustedRating (28R2) or sixths (28R3).',
   },
   'avoidTeammates': {
     ..._bool,
@@ -130,7 +132,7 @@ final _swissFields = <String, dynamic>{
   'variations': {
     ..._array(_enum(swissVariations)),
     'description':
-        'Announced pairing variations by rule number (29E4a, 29E4b, 29E4d, 29E5h).',
+        'Announced pairing variations by rule number: 29E4a, 29E4b, 29E4d, 29E5h (colors); 28L2a (bye to a higher-rated player for colors); 29I or 29I2 (full or partial class pairings in the last round; classes from the class prizes, else 200-point classes); 29J (unrateds on plus scores paired together); 28S5latest (re-entries carry the latest score instead of the better one).',
   },
 };
 final _byeRules = _object({
@@ -163,6 +165,17 @@ final _prizeTable = _object({
     ),
   ),
 });
+
+/// Scholastic team awards (Scholastic Regulations 10.2, rule 31A1).
+final _teamAwards = {
+  ..._object({
+    'method': _enum(['off', ...TeamScoring.values.map((m) => m.code)]),
+    'counting': _integer(1),
+    'minPlayers': _integer(1),
+  }),
+  'description':
+      'Scholastic team awards, scored from Player.team: method topN (sum of the top N individual scores, Scholastic Regulations 10.2.1) or rollins (31A1: each player earns field size minus place; top N add up), or off to remove them. counting is N (default 4; 3 at Grade Nationals and blitz); minPlayers is the fewest players for a team prize (default 2, 10.2.2). Team ties: total Modified Median, Solkoff, Sonneborn-Berger, Cumulative of the counting players, then a coin flip (12.3.3). Team prizes are prize-list entries with kind team.',
+};
 final _gameFields = _object(
   {
     'white': _string('Player ID'),
@@ -292,7 +305,7 @@ class TournamentTools {
       ),
       tool(
         'update_section',
-        'Edit a section\'s name, time control (blank inherits the event default), planned rounds, first board or prize table. Format changes are GUI-only.',
+        'Edit a section\'s name, time control (blank inherits the event default), planned rounds, first board, prize table or team awards. Format changes are GUI-only.',
         {
           'sectionId': _string(),
           'name': _string(),
@@ -309,8 +322,9 @@ class TournamentTools {
           'prizes': {
             ..._prizeTable,
             'description':
-                'Rules 32–33 prize table; replaces the whole table. Amounts are cents; points are half-points; class min/max are inclusive, under max is exclusive; eligible lists player IDs for junior/senior prizes.',
+                'Rules 32–33 prize table; replaces the whole table (team awards are kept). Amounts are cents; points are half-points; class min/max are inclusive, under max is exclusive; eligible lists player IDs for junior/senior prizes; kind team is a place among the teams.',
           },
+          'teamAwards': _teamAwards,
         },
         required: ['sectionId'],
         write: true,
@@ -495,6 +509,17 @@ class TournamentTools {
           'reason': _string(),
         },
         required: ['sectionId', 'players', 'reason'],
+        write: true,
+      ),
+      tool(
+        'repair_round',
+        'Rule 29G3 selective re-pairing of the latest posted Swiss round: keep the listed games (those already started) and re-pair every other board as a separate group by the normal methods, e.g. after a player withdrew once pairings were posted (withdraw them first with update_player). The round\'s full-point bye holder rejoins the group. Boards being re-paired must have no result.',
+        {
+          'sectionId': _string(),
+          'keep': _array(_string('Game ID to keep')),
+          'reason': _string(),
+        },
+        required: ['sectionId', 'keep', 'reason'],
         write: true,
       ),
       tool(
@@ -875,11 +900,29 @@ class TournamentTools {
             case final problem?) {
           throw TournamentException(problem);
         }
-        final prizes = args['prizes'] == null
+        var prizes = args['prizes'] == null
             ? null
-            : PrizeTable.fromJson(
-                Map<String, dynamic>.from(args['prizes'] as Map),
-              ).toJson();
+            : {
+                ...PrizeTable.fromJson(
+                  Map<String, dynamic>.from(args['prizes'] as Map),
+                ).toJson(),
+                // A replaced prize table keeps the team awards.
+                'teams': ?current.prizes['teams'],
+              };
+        if (args['teamAwards'] case final Map raw) {
+          final settings = Map<String, dynamic>.from(raw);
+          final off = settings['method'] == 'off';
+          final awards = off
+              ? null
+              : TeamAwards.fromJson({
+                  ...?TeamAwards.tryOf(current)?.toJson(),
+                  ...settings,
+                });
+          prizes = withTeamAwards(
+            current.copy(prizes: prizes ?? current.prizes),
+            awards,
+          ).prizes;
+        }
         final byeRules = args['byeRules'] == null
             ? null
             : ByePolicy.fromJson(
@@ -1079,6 +1122,17 @@ class TournamentTools {
           args['reason'],
         );
         return {..._summary(), 'ladder': _section(args['sectionId']).players};
+      case 'repair_round':
+        final notes = controller.repairUnstarted(
+          args['sectionId'],
+          List<String>.from(args['keep']),
+          args['reason'],
+        );
+        return {
+          ..._summary(),
+          'round': _section(args['sectionId']).rounds.last.toJson(),
+          'explanations': notes,
+        };
       case 'start_round':
         controller.startRound(args['sectionId']);
       case 'record_result':
@@ -1099,6 +1153,9 @@ class TournamentTools {
                   'name': s.name,
                   'prizes': s.prizes,
                   ...allocatePrizes(event, s).toJson(),
+                  if (allocateTeamPrizes(event, s) case final teams
+                      when !teams.isEmpty)
+                    'teamPrizes': teams.toJson(),
                 },
           ],
         };
@@ -1134,6 +1191,24 @@ class TournamentTools {
                       'played': row.played,
                     },
                 ],
+                // Scholastic team awards (10.2, 12.3.3, 31A1).
+                if (TeamAwards.tryOf(s) case final awards?)
+                  'teams': {
+                    ...awards.toJson(),
+                    'summary': awards.summary,
+                    'tiebreakOrder': [
+                      for (final m in teamTiebreakMethods)
+                        {'code': m.code, 'label': m.label},
+                      {
+                        'code': TiebreakMethod.coinFlip.code,
+                        'label': TiebreakMethod.coinFlip.label,
+                      },
+                    ],
+                    'rows': [
+                      for (final t in teamStandings(event, s, awards: awards))
+                        t.toJson(),
+                    ],
+                  },
                 if (s.format == Format.knockout) ...{
                   'placings': [
                     for (final (id, placing) in knockoutPlacings(event, s))

@@ -15,11 +15,9 @@ void main() {
       memberId: '00000000',
       rating: 1200,
     );
-    final review = RosterReview(
-      c.event!,
-      'https://example.org/entries',
-      [ImportRow(2, 'Somebody Else', incoming, null)],
-    );
+    final review = RosterReview(c.event!, 'https://example.org/entries', [
+      ImportRow(2, 'Somebody Else', incoming, null),
+    ]);
     final change = review.changes.single;
     expect(change.existing, isNull);
     expect(change.problem, isNull);

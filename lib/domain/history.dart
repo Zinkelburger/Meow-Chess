@@ -415,7 +415,14 @@ List<String> describeChanges(
         s.doubleGames ? 'double games' : 'single games',
       if (jsonEncode(o.byeRules) != jsonEncode(s.byeRules))
         'bye policy: ${ByePolicy.fromJson(s.byeRules).describe()}',
-      if (jsonEncode(o.prizes) != jsonEncode(s.prizes)) 'prize table changed',
+      if (jsonEncode({...o.prizes}..remove('teams')) !=
+          jsonEncode({...s.prizes}..remove('teams')))
+        'prize table changed',
+      if (jsonEncode(o.prizes['teams']) != jsonEncode(s.prizes['teams']))
+        s.prizes['teams'] == null ||
+                (s.prizes['teams'] as Map)['method'] == 'off'
+            ? 'team awards off'
+            : 'team awards: ${(s.prizes['teams'] as Map)['method'] == 'rollins' ? 'Rollins' : 'top'} ${(s.prizes['teams'] as Map)['counting'] ?? 4} count',
       ..._bracketChanges(after, o, s, name),
       if (o.unrated != s.unrated)
         s.unrated ? 'left out of the rating report' : 'rated',

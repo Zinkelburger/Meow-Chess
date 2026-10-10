@@ -7,6 +7,7 @@ import '../domain/fixed_schedule.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart' show swissVariations, swissVariationLabels;
 import '../domain/prizes.dart';
+import '../domain/team_standings.dart';
 import '../domain/tiebreaks.dart';
 import '../domain/us_chess.dart';
 import 'dialogs.dart' show FieldSpec, showFailure;
@@ -87,6 +88,7 @@ Map<String, String> sectionValues(Section? section) {
     'hollandGroups': '',
     'hollandQualifiers': '',
     'hollandUnbalanced': '',
+    ...teamAwardValues(s),
   };
   for (final x in formatExtensions) {
     final probe = s != null && s.format == x.format
@@ -127,6 +129,8 @@ Map<String, String> sectionLabels() => {
   'hollandGroups': 'Preliminary groups',
   'hollandQualifiers': 'Qualifiers per group',
   'hollandUnbalanced': 'Unbalanced prelims',
+  'teamMethod': 'Team scoring',
+  'teamCounting': 'Scores that count',
   for (final x in formatExtensions)
     for (final f in x.fields(null, locked: false))
       extensionKey(x.format, f.key): f.label,
@@ -315,7 +319,46 @@ Section applySectionValues(
   if (doubleCycleProblem(next) case final problem?) {
     throw SectionFieldProblem('doubleCycle', problem);
   }
-  return next;
+  return applyTeamAwardValues(next, values);
+}
+
+// ---- Team awards (Scholastic Regulations 10.2, 12.3.3; rule 31A1) ------
+
+/// The section's team awards as the form shows them: blank method is off,
+/// blank count is the default 4.
+Map<String, String> teamAwardValues(Section? section) {
+  final awards = section == null ? null : TeamAwards.tryOf(section);
+  return {
+    'teamMethod': awards?.method.code ?? '',
+    'teamCounting': awards == null ? '' : '${awards.counting}',
+  };
+}
+
+/// [section] with the form's team awards stored under
+/// `Section.prizes['teams']`; the minimum team size is kept as stored.
+Section applyTeamAwardValues(Section section, Map<String, String> v) {
+  if (!v.containsKey('teamMethod')) return section;
+  final method = TeamScoring.values
+      .where((m) => m.code == v['teamMethod'])
+      .firstOrNull;
+  if (method == null) return withTeamAwards(section, null);
+  final text = v['teamCounting']?.trim() ?? '';
+  final counting = text.isEmpty ? 4 : int.tryParse(text);
+  if (counting == null || counting < 1 || counting > 99) {
+    throw const SectionFieldProblem(
+      'teamCounting',
+      'Scores that count is a number of players, like 4 or 3.',
+    );
+  }
+  final stored = TeamAwards.tryOf(section);
+  return withTeamAwards(
+    section,
+    TeamAwards(
+      counting: counting,
+      method: method,
+      minPlayers: stored?.minPlayers ?? 2,
+    ),
+  );
 }
 
 /// Which closed group a field lives in, so a problem there opens it.
@@ -328,6 +371,7 @@ String? sectionGroupOf(String key) {
   ].contains(key)) {
     return 'byes';
   }
+  if (key == 'teamMethod' || key == 'teamCounting') return 'teams';
   if (const ['board', 'ratingCeiling', 'sideGames'].contains(key)) {
     return 'players';
   }
@@ -484,6 +528,25 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
     return table.announcedCents == 0
         ? count
         : '${dollars(table.announcedCents)} · $count';
+  }
+
+  /// Team awards appear for a Swiss or round robin with two or more
+  /// schools among its players, or one that already has them.
+  bool get offersTeams {
+    final s = widget.current;
+    final event = c.event;
+    return s != null &&
+        event != null &&
+        offersTeamAwards(event, s.copy(format: format));
+  }
+
+  String get teamsSummary {
+    final method = TeamScoring.values
+        .where((m) => m.code == value('teamMethod'))
+        .firstOrNull;
+    if (method == null) return 'Off';
+    final n = int.tryParse(value('teamCounting').trim()) ?? 4;
+    return TeamAwards(counting: n, method: method).summary;
   }
 
   String get playersSummary {
@@ -944,6 +1007,8 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
     final accelerated = {
       '': 'None',
       'addedScore': 'Added score, rounds 1–2 (28R1)',
+      'adjustedRating': 'Adjusted rating, rounds 1–2 (28R2)',
+      'sixths': 'Sixths, rounds 1–2 (28R3)',
     };
     final tables = {
       '': 'Circle method',
@@ -995,7 +1060,7 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
           ),
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 6),
-            child: Text('Announced variations (29E)', style: muted),
+            child: Text('Announced variations', style: muted),
           ),
           for (final code in swissVariations)
             checkbox(
@@ -1135,6 +1200,59 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
     ];
   }
 
+  List<Widget> teamsFields(TextStyle muted) {
+    final on = TeamScoring.values.any((m) => m.code == value('teamMethod'));
+    final teams = c.event == null || widget.current == null
+        ? const <String>[]
+        : sectionTeams(c.event!, widget.current!);
+    return [
+      const SizedBox(height: 4),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          'Schools score together from their players\' results. '
+          '${teams.length} teams: ${teams.join(', ')}.',
+          style: muted,
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: PlainSelect<String>(
+          key: k('teamMethod'),
+          label: 'Team scoring',
+          value: on ? value('teamMethod') : '',
+          options: [
+            const SelectOption('', 'Off'),
+            for (final m in TeamScoring.values) SelectOption(m.code, m.label),
+          ],
+          onChanged: (v) => set('teamMethod', v),
+        ),
+      ),
+      if (on) ...[
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: textField(
+            'teamCounting',
+            'Scores that count (N)',
+            helper: value('teamMethod') == TeamScoring.rollins.code
+                ? 'Rule 31A1: each player earns the field size minus their place; the top N of each team add up.'
+                : 'Scholastic Regulations 10.2.1: top 4 at Spring Nationals, top 3 at Grade Nationals and blitz. Blank is 4.',
+            helperLines: 4,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            'A team needs at least 2 players for a team prize (10.2.2). '
+            'Team tie-breaks (12.3.3): ${teamTiebreakLabels.join(', ')}. '
+            'Add team prizes in Prizes with the kind Team.',
+            style: muted,
+          ),
+        ),
+      ],
+    ];
+  }
+
   List<Widget> playersFields() => [
     const SizedBox(height: 4),
     if (format != Format.quad)
@@ -1186,6 +1304,13 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
         ),
         group('prizes', 'Prizes', prizesFields(muted), summary: prizesSummary),
         group('players', 'Players', playersFields(), summary: playersSummary),
+        if (offersTeams)
+          group(
+            'teams',
+            'Team awards',
+            teamsFields(muted),
+            summary: teamsSummary,
+          ),
         const Divider(height: 1),
       ],
     );

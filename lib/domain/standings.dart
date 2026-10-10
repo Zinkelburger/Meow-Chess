@@ -1,7 +1,9 @@
 import 'model.dart';
 import 'fixed_schedule.dart';
+import 'reentry.dart';
 import 'tiebreaks.dart';
 
+export 'reentry.dart';
 export 'tiebreaks.dart';
 
 class Standing {
@@ -73,11 +75,16 @@ List<Standing> rankStandings(List<Standing> rows, {required bool tiebreaks}) {
 /// ranks by them (or when pairing asks). Forfeits and byes contribute
 /// points, never fictional opponents; the tie-break adjustments for
 /// unplayed games are rule 34E1's and 34E3's.
+///
+/// [tiebreaks] replaces the posted methods, for a caller that needs other
+/// values per player (team tie-breaks total the counting players' values,
+/// Scholastic Regulations 12.3.3); rows then rank by those methods.
 List<Standing> standings(
   Event event,
   Section section, {
   bool forPairing = false,
   bool forPrizes = false,
+  List<TiebreakMethod>? tiebreaks,
 }) {
   final excluded = <String>{};
   if (forPrizes &&
@@ -136,8 +143,14 @@ List<Standing> standings(
       }
     }
   }
+  // Rule 28S5: a re-entry carries the better score of its entries; its
+  // opponents see that entry's score (34H b).
+  final carries = reentryCarries(event, section, outcomeOf: outcomeOf);
+  for (final MapEntry(key: id, value: c) in carries.entries) {
+    scores[id] = scores[id]! + c.carried - c.own;
+  }
   final ids = section.players.where((id) => !excluded.contains(id)).toList();
-  final methods = standingsTiebreaks(event, section);
+  final methods = tiebreaks ?? standingsTiebreaks(event, section);
   final values = tiebreakValues(
     event: event,
     section: section,

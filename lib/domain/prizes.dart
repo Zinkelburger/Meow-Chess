@@ -14,8 +14,9 @@ import 'standings.dart';
 ///   'list': [
 ///     {'id': String, 'label': String,
 ///      'kind': 'place'|'class'|'under'|'unrated'|'junior'|'senior'
-///              |'points'|'computer',
-///      'place': int,           // 1-based rank within the prize group
+///              |'points'|'computer'|'team',
+///      'place': int,           // 1-based rank within the prize group;
+///                              // for 'team', the place among the teams
 ///      'min': int, 'max': int, // class: inclusive range; under: max exclusive
 ///      'points': int,          // halves, for kind 'points' (33E)
 ///      'cents': int,           // cash; 0 for trophy-only
@@ -23,9 +24,19 @@ import 'standings.dart';
 ///      'guaranteed': bool,     // optional, 32E: never reduced by based-on
 ///      'eligible': [String]}   // optional player IDs; the only way to name
 ///                              // juniors and seniors (no birth dates are kept)
-///   ]
+///   ],
+///   'teams': {                 // optional: scholastic team awards; absent = off
+///     'counting': int,         // N, the announced number of scores that
+///                              // count (Scholastic Regulations 10.2.1)
+///     'method': 'topN'|'rollins', // top N individual scores, or 31A1
+///                              // Rollins points (field size − place)
+///     'minPlayers': int}       // fewest players for a prize; 2 (10.2.2)
 /// }
 /// ```
+///
+/// Team prizes (`kind: 'team'`) go to teams, not players: [allocatePrizes]
+/// leaves them out and `allocateTeamPrizes` (team_standings.dart) awards
+/// them from the team standings.
 enum PrizeKind {
   place('place', 'Place'),
   classRange('class', 'Class'),
@@ -34,7 +45,10 @@ enum PrizeKind {
   junior('junior', 'Junior'),
   senior('senior', 'Senior'),
   points('points', 'Points'),
-  computer('computer', 'Computer');
+  computer('computer', 'Computer'),
+
+  /// Scholastic Regulations 10.2: a place among the teams.
+  team('team', 'Team');
 
   const PrizeKind(this.code, this.label);
   final String code, label;
@@ -185,6 +199,7 @@ class Prize {
       PrizeKind.senior => '${nth}Senior',
       PrizeKind.computer => '${nth}Computer',
       PrizeKind.points => '${scoreText(points)} points',
+      PrizeKind.team => '${_ordinal(place)} team',
     };
   }
 }
@@ -218,12 +233,25 @@ class PrizeTable {
     this.withdrawnEligible = false,
     this.unratedCapCents = 0,
     List<Prize> list = const [],
+    this.teams,
   }) : list = List.unmodifiable(list);
   final int basedOn, fundCents, unratedCapCents;
   final bool withdrawnEligible;
   final List<Prize> list;
 
+  /// The `teams` settings, kept as stored (see `TeamAwards`); null is off.
+  final Json? teams;
+
   bool get isEmpty => list.isEmpty;
+
+  /// The table without its team prizes, which [allocatePrizes] leaves to
+  /// `allocateTeamPrizes`.
+  PrizeTable get individual => copy(
+    list: [
+      for (final p in list)
+        if (p.kind != PrizeKind.team) p,
+    ],
+  );
 
   /// The announced fund: the stated total, else the sum of the cash prizes.
   int get announcedCents =>
@@ -264,6 +292,7 @@ class PrizeTable {
       withdrawnEligible: j['withdrawnEligible'] == true,
       unratedCapCents: integer('unratedCapCents'),
       list: list,
+      teams: j['teams'] is Map ? Map<String, dynamic>.from(j['teams']) : null,
     );
   }
 
@@ -273,6 +302,7 @@ class PrizeTable {
     'withdrawnEligible': withdrawnEligible,
     if (unratedCapCents > 0) 'unratedCapCents': unratedCapCents,
     'list': [for (final p in list) p.toJson()],
+    if (teams != null) 'teams': teams,
   };
 
   PrizeTable copy({
@@ -287,6 +317,7 @@ class PrizeTable {
     withdrawnEligible: withdrawnEligible ?? this.withdrawnEligible,
     unratedCapCents: unratedCapCents ?? this.unratedCapCents,
     list: list ?? this.list,
+    teams: teams,
   );
 }
 
@@ -401,7 +432,7 @@ class _Cash {
 
 /// Rules 32B–32G, 33C–33F: who wins what in [section].
 PrizeAllocation allocatePrizes(Event event, Section section) {
-  final table = PrizeTable.fromJson(section.prizes);
+  final table = PrizeTable.fromJson(section.prizes).individual;
   final notes = <String>[];
   final rows = standings(event, section, forPrizes: true);
   final entries = section.players
@@ -501,7 +532,7 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     PrizeKind.classRange || PrizeKind.under => 2,
     PrizeKind.unrated => 3,
     PrizeKind.junior || PrizeKind.senior => 4,
-    PrizeKind.computer => 5,
+    PrizeKind.computer || PrizeKind.team => 5,
   };
   int comparePrizes(Prize a, Prize b) {
     final k = precedence(a).compareTo(precedence(b));

@@ -13,6 +13,7 @@ import '../domain/knockout.dart';
 import '../domain/ladder.dart';
 import '../domain/scheveningen.dart';
 import '../domain/standings.dart';
+import '../domain/team_standings.dart';
 import '../domain/us_chess.dart';
 
 enum ReportKind {
@@ -145,6 +146,9 @@ String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
     if (s.format == Format.knockout) {
       lines.addAll(['', ...knockoutBracketLines(e, s)]);
     }
+    if (TeamAwards.tryOf(s) != null) {
+      lines.addAll(['', ...teamStandingsLines(e, s)]);
+    }
     lines.add('');
   }
   var text = lines.join('\n');
@@ -159,6 +163,44 @@ String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
   return text;
 }
 
+/// Scholastic team standings as text (Scholastic Regulations 10.2,
+/// 12.3.3; rule 31A1): one line per team with its place, score, tie-break
+/// totals and the players whose scores count. Empty without team awards.
+List<String> teamStandingsLines(Event e, Section s) {
+  final awards = TeamAwards.tryOf(s);
+  if (awards == null) return const [];
+  final rows = teamStandings(e, s, awards: awards);
+  final width = rows.fold(
+    12,
+    (int n, t) => reportName(t.team).length > n ? reportName(t.team).length : n,
+  );
+  // Plain figures (1.5, not 1½) so an ASCII export stays ASCII.
+  String points(TeamScoring method, int n) =>
+      method == TeamScoring.topN ? scoreText(n) : '$n';
+  String figure(TiebreakValue v) {
+    final n = v.number;
+    return n == n.roundToDouble() ? '${n.round()}' : '$n';
+  }
+
+  return [
+    'Teams — ${awards.summary}',
+    '${'Rank'.padRight(5)} ${'Team'.padRight(width)}  ${'Score'.padLeft(6)}  '
+        '${[for (final m in teamTiebreakMethods) m.short.padLeft(6)].join(' ')}  Counting players',
+    for (final t in rows)
+      '${(!t.eligible
+              ? '—'
+              : rows.where((o) => o.rank == t.rank).length > 1
+              ? 'T-${t.rank}'
+              : '${t.rank}').padRight(5)} '
+          '${reportName(t.team).padRight(width)}  ${points(t.method, t.score).padLeft(6)}  '
+          '${[for (final v in t.tiebreaks.take(teamTiebreakMethods.length)) figure(v).padLeft(6)].join(' ')}  '
+          '${t.counting.map((m) => '${reportName(m.player.name)} ${points(t.method, m.points)}').join(', ')}'
+          '${t.eligible ? '' : ' (needs ${awards.minPlayers} players, 10.2.2)'}',
+    'Team ties: ${teamTiebreakLabels.join(', ').replaceAll('–', '-')} '
+        '(Scholastic Regulations 12.3.3).',
+  ];
+}
+
 /// Rules 32–33 on screen: the prize table, who takes what, and the
 /// pooling arithmetic behind it, per section.
 String prizeReport(Event e, {String? sectionId}) {
@@ -167,14 +209,16 @@ String prizeReport(Event e, {String? sectionId}) {
     (s) => s.players.isNotEmpty && (sectionId == null || s.id == sectionId),
   )) {
     final a = allocatePrizes(e, s);
+    final teams = allocateTeamPrizes(e, s);
     lines.add(
       '${s.name} — ${a.entries} entries'
       '${a.table.basedOn > 0 ? ', based on ${a.table.basedOn}' : ''}'
       '${a.payoutPercent == 100 ? '' : ', paying ${a.payoutPercent}%'}',
     );
+    if (!teams.isEmpty) lines.addAll([..._teamPrizeLines(teams), '']);
     if (a.table.isEmpty) {
       lines
-        ..add('No prizes announced.')
+        ..add(teams.isEmpty ? 'No prizes announced.' : 'No individual prizes.')
         ..add('');
       continue;
     }
@@ -200,6 +244,33 @@ String prizeReport(Event e, {String? sectionId}) {
   }
   return lines.join('\n');
 }
+
+/// Team prizes (Scholastic Regulations 10.2): each prize, the team that
+/// takes it, then the reasoning.
+List<String> _teamPrizeLines(TeamPrizeAllocation a) => [
+  'Team prizes',
+  for (final l in a.lines)
+    '${l.prize.title.padRight(24)} ${_teamPrizeAmount(l).padLeft(16)}  ${_teamPrizeOutcome(l)}',
+  for (final x in a.explanations) '• $x',
+];
+
+String _teamPrizeAmount(TeamPrizeLine l) => [
+  if (l.prize.cents > 0)
+    l.paidCents == l.prize.cents
+        ? dollars(l.prize.cents)
+        : '${dollars(l.paidCents)} of ${dollars(l.prize.cents)}',
+  if (l.prize.trophy) 'trophy',
+].join(' + ');
+
+String _teamPrizeOutcome(TeamPrizeLine l) => [
+  if (l.cash.length == 1 && l.pooledWith.isEmpty)
+    reportName(l.cash.keys.single)
+  else if (l.cash.isNotEmpty)
+    '${l.pooledWith.isEmpty ? 'shared' : 'pooled'}: '
+        '${l.cash.entries.map((c) => '${reportName(c.key)} ${dollars(c.value)}').join(', ')}',
+  if (l.trophyTeam != null) 'trophy: ${reportName(l.trophyTeam!)}',
+  if (l.note.isNotEmpty) l.note,
+].join(' · ');
 
 String _prizeAmount(PrizeLine line) => [
   if (line.prize.cents > 0)
@@ -766,6 +837,47 @@ Future<Uint8List> reportPdf(
           style: const pw.TextStyle(fontSize: 9),
         ),
       );
+      // Scholastic team awards: the team standings under the individuals.
+      if (TeamAwards.tryOf(s) case final awards?) {
+        final teams = teamStandings(e, s, awards: awards);
+        title('Teams · ${awards.summary}');
+        grid(
+          [
+            'Rank',
+            'Team',
+            'Counting players',
+            awards.method == TeamScoring.topN ? 'Score' : 'Rollins',
+            for (final m in teamTiebreakMethods) m.short,
+          ],
+          [
+            for (final t in teams)
+              [
+                !t.eligible
+                    ? '—'
+                    : teams.where((o) => o.rank == t.rank).length > 1
+                    ? 'T-${t.rank}'
+                    : '${t.rank}',
+                reportName(t.team),
+                t.counting
+                    .map(
+                      (m) =>
+                          '${reportName(m.player.name)} ${formatTeamPoints(t.method, m.points)}',
+                    )
+                    .join(', '),
+                t.scoreText,
+                for (final v in t.tiebreaks.take(teamTiebreakMethods.length))
+                  v.text,
+              ],
+          ],
+        );
+        widgets.add(
+          pw.Text(
+            'Team score: ${awards.description}. '
+            '— = fewer than ${awards.minPlayers} players, not eligible for a team prize.',
+            style: const pw.TextStyle(fontSize: 9),
+          ),
+        );
+      }
       // A knockout places by the bracket, not by points.
       if (s.format == Format.knockout) {
         widgets.add(pw.SizedBox(height: 8));
@@ -813,13 +925,35 @@ Future<Uint8List> reportPdf(
     }
     if (kind == ReportKind.prizes) {
       final a = allocatePrizes(e, s);
+      final teamPrizes = allocateTeamPrizes(e, s);
       title(
         'Prizes · ${a.entries} entries'
         '${a.table.basedOn > 0 ? ' · based on ${a.table.basedOn}' : ''}'
         '${a.payoutPercent == 100 ? '' : ' · paying ${a.payoutPercent}%'}',
       );
+      if (!teamPrizes.isEmpty) {
+        grid(
+          ['Team prize', 'Amount', 'Awarded to'],
+          [
+            for (final l in teamPrizes.lines)
+              [l.prize.title, _teamPrizeAmount(l), _teamPrizeOutcome(l)],
+          ],
+        );
+        for (final x in teamPrizes.explanations) {
+          widgets.add(
+            pw.Bullet(text: x, style: const pw.TextStyle(fontSize: 10)),
+          );
+        }
+        widgets.add(pw.SizedBox(height: 12));
+      }
       if (a.table.isEmpty) {
-        widgets.add(pw.Text('No prizes are announced for this section.'));
+        widgets.add(
+          pw.Text(
+            teamPrizes.isEmpty
+                ? 'No prizes are announced for this section.'
+                : 'No individual prizes are announced for this section.',
+          ),
+        );
       } else {
         grid(
           ['Prize', 'Amount', 'Awarded to'],
@@ -1005,6 +1139,8 @@ Future<Uint8List> conditionsPdf(
                   ? 'added score (28R1)'
                   : s.accelerated == 'adjustedRating'
                   ? 'adjusted rating (28R2)'
+                  : s.accelerated == 'sixths'
+                  ? 'sixths (28R3)'
                   : s.accelerated}',
             if (s.avoidTeammates) 'Team-mates not paired (28N)',
             if (s.variations.isNotEmpty)
@@ -1025,6 +1161,18 @@ Future<Uint8List> conditionsPdf(
   }
   if (e.sections.isEmpty) {
     line(_conditionsTiebreaks(e, Section(id: '', name: '', players: const [])));
+  }
+
+  // Scholastic team awards: the announced team scoring (10.2.1, 31A1).
+  final teamSections = [
+    for (final s in e.sections)
+      if (TeamAwards.tryOf(s) case final awards?) (s, awards),
+  ];
+  if (teamSections.isNotEmpty) {
+    heading('Team awards (Scholastic Regulations 10.2)');
+    for (final (s, awards) in teamSections) {
+      line('${s.name}: ${awards.description}.');
+    }
   }
 
   heading('Half-point byes (rule 22C)');
@@ -1089,6 +1237,7 @@ Future<Uint8List> conditionsPdf(
                 'class' => '${entry['min'] ?? 0}–${entry['max'] ?? 0}',
                 'under' => 'Under ${entry['max'] ?? 0}',
                 'points' => '${entry['points'] ?? 0} half-points',
+                'team' => 'Team place ${entry['place'] ?? 1}',
                 final kind => kind,
               },
               [

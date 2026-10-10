@@ -14,6 +14,7 @@ import '../domain/model.dart';
 import 'membership_style.dart';
 import '../domain/pairing.dart';
 import '../domain/standings.dart';
+import '../domain/team_standings.dart' show TeamAwards;
 import '../domain/scheveningen.dart';
 import '../domain/rating_preview.dart';
 import 'dialogs.dart';
@@ -32,6 +33,7 @@ import 'paste_roster_panel.dart';
 import 'pane_controls.dart';
 import 'new_section_panel.dart';
 import 'formats/knockout_view.dart';
+import 'team_standings_view.dart';
 
 class PlayersView extends StatefulWidget {
   const PlayersView({
@@ -825,6 +827,13 @@ class _PlayersViewState extends State<PlayersView> {
               s == null ? null : tables[s.id]?[p.id],
               scores: started,
             ),
+        // Scholastic team awards: the Teams table under the individuals.
+        if (widget.standingsOnly &&
+            s != null &&
+            s.rounds.isNotEmpty &&
+            search.text.isEmpty &&
+            TeamAwards.tryOf(s) != null)
+          TeamStandingsTable(event: e, section: s),
       ],
     ];
     scores = started;

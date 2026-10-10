@@ -167,4 +167,49 @@ void main() {
       everyElement(Outcome.doubleForfeit),
     );
   });
+
+  test('repair_round re-pairs only the boards not kept (29G3)', () async {
+    final added = await write('add_players', {
+      'players': [
+        for (var i = 0; i < 6; i++) {'name': 'P$i', 'rating': 1800 - 50 * i},
+      ],
+    });
+    final ids = [for (final p in added['added']) p['id'] as String];
+    final created = await write('create_section', {
+      'name': 'Open',
+      'players': ids,
+      'format': 'swiss',
+      'plannedRounds': 4,
+      'boardStart': 1,
+    });
+    final sectionId = created['section']['id'] as String;
+    final proposal = await tools.call('propose_pairings', {
+      'sectionId': sectionId,
+    });
+    await write('post_pairings', {'proposalId': proposal['proposalId']});
+    final posted = tools.event.sections.single.rounds.single;
+    final gone = posted.games.last.black;
+    await write('update_player', {'playerId': gone, 'withdrawn': true});
+    final keep = [posted.games[0].id, posted.games[1].id];
+    await expectLater(
+      write('repair_round', {
+        'sectionId': sectionId,
+        'keep': keep,
+        'reason': ' ',
+      }),
+      throwsA(isA<TournamentException>()),
+    );
+    final result = await write('repair_round', {
+      'sectionId': sectionId,
+      'keep': keep,
+      'reason': '${tools.event.player(gone).name} withdrew',
+    });
+    expect((result['explanations'] as List).first, contains('29G3'));
+    final round = tools.event.sections.single.rounds.single;
+    expect(round.revision, posted.revision + 1);
+    expect(round.games.map((g) => g.id).take(2), keep);
+    expect(round.games, hasLength(2));
+    expect(round.byes.any((b) => b.player == gone && b.points == 0), isTrue);
+    expect(round.byes.where((b) => b.allocated), hasLength(1));
+  });
 }

@@ -72,7 +72,7 @@ All four are fixed and covered by fixtures (`28J and 29E2 first round`, `S1`, `2
 | 28L2 | Bye: lowest-rated rated player in the lowest group; then a recent unrated member; then NEW | Done | NEW = unrated without a US Chess ID. |
 | 28L3 | No second full-point bye; none to a forfeit winner | Done | Relaxed, with an explanation, only when nobody is eligible. |
 | 28L4 / 22C6 | No full-point bye to a holder of a half-point bye, unless everyone in the group has had one | Done | Past and future requested byes count. |
-| 28L2a (variation) | Bye to a higher-rated player for colors | Missing | Optional. |
+| 28L2a (variation) | Bye to a higher-rated player for colors | Done | Variation `28L2a`: a higher-rated player of the lowest group takes the bye when that reduces the group's color conflicts, within 80 points (200 when it removes a two-game imbalance or a third color in a row). |
 | 28L5 | Four-round events: avoid a NEW player's bye | Done | The group above is tried first. |
 | 28K | Late entrant: half-point bye or forfeit for missed rounds | Partial | Missed-round scoring is still a manual bye. |
 | 28M1 | House player: paired only when the field is odd | Done | `Player.house`; sits out with a 0-point bye when the field is even. |
@@ -81,13 +81,13 @@ All four are fixed and covered by fixtures (`28J and 29E2 first round`, `S1`, `2
 | 28T | Requested non-pairings | Done (stricter) | A hard constraint. |
 | 28Q / 29H5–7 | Pair around unfinished games | Done | |
 | 29H2–4, 29H8 | Non-reporters held out | Done | `holdOutNonReporters` (29H3 double forfeit, 29H4 half-point byes) via MCP; see §4. |
-| 29G1–3 | Re-pair a round | Partial | Unstarted rounds can be replaced; no selective re-pair of started rounds. |
+| 29G1–3 | Re-pair a round | Done | Unstarted rounds can be replaced. 29G3: `repairUnstarted` (MCP `repair_round`) keeps the listed games and re-pairs the waiting boards as a separate group; the round's bye holder rejoins it. No GUI control yet. |
 | 28R1 | Accelerated pairings, added score | Done | `Section.accelerated = addedScore`: the upper half of the round-1 field pairs with an extra point in rounds 1–2. |
-| 28R2 / 28R3 | Adjusted rating method; sixths | Missing | |
+| 28R2 / 28R3 | Adjusted rating method; sixths | Done | `Section.accelerated = adjustedRating` or `sixths`. Round 1: A1 v B1, C1 v D1 (or sixths), even-sized groups with any extra boards on top. Round 2: A2, B2 v C2, D2 with the ±100 draw adjustments and the B2/C2 balancing, all listed in the explanations; when the groups cannot be balanced (C2 larger than B2 and D2 together) the round pairs by score groups and says so. |
 | 28S1–S3 | Re-entries: no repeat against the earlier entry's opponents unless both re-entered; colors restart | Done | `Player.reentryOf`, set in the player panel or MCP. |
-| 28S4 / 28S5 | Re-entry byes and the better score carried forward | Partial | The score comparison and the carried byes are entered by hand. |
+| 28S4 / 28S5 | Re-entry byes and the better score carried forward | Done | `reentryCarries` (`lib/domain/reentry.dart`): scores compared through the earlier (withdrawn) entry's last round; the better carries, the latest when equal, always the latest under variation `28S5latest`. Used by pairing (with the carried entry's colors) and by every standings table, so prizes too. 28S4 byes are still entered by hand; a carried entry's own tie-breaks (34H a) still come from the re-entry's games. |
 | 28I | Expelled player's opponents | Missing | |
-| 29I / 29J | Class pairings; unrateds in class sections | Missing | Optional variations. |
+| 29I / 29J | Class pairings; unrateds in class sections | Done | Variations `29I` (full-class, 29I1) and `29I2` (class-prize contenders), last round only. Classes come from the class and under prizes, else the 200-point classes; a class with a player who can still win a place prize above its class prize is paired normally. `29J`: unrateds on plus scores in one score group play each other. |
 | 29K / 29L / 29L1 | Small Swiss to round robin | Done (hint) | Section settings show the 29K hint; the Crenshaw-Berger tables are available for the round robin (§5). No 1-v-2 mode. |
 | 29E4a, 29E4b, 29E4d, 29E5h | Announced color and priority variations | Done | `Section.variations` (section settings and MCP); listed on the event conditions sheet. 29E5b1, 29E5f1, 29E6b and 29E8 are not separate settings (29E8 is the default behaviour). |
 | 20M3 / 35 | Fixed boards | Done | `Player.fixedBoard`; other games fill around it. |
@@ -100,9 +100,8 @@ All four are fixed and covered by fixtures (`28J and 29E2 first round`, `S1`, `2
    Boylston archive's 49 Swiss rounds and explains every board that differs from
    SwissSys (27 rounds identical, 172 of 240 boards; see BOYLSTON_REHEARSAL.md).
    A certified TD still needs to read those differences.
-2. 28R2 adjusted-rating acceleration, 28L2a, 29I/29J class pairings, 28I and the
-   28S5 score carry-over.
-3. A selective re-pair of a started round (29G3).
+2. 28I (an expelled player's opponents).
+3. A GUI control for 29G3 selective re-pairing (MCP `repair_round` exists).
 
 ---
 
@@ -154,8 +153,8 @@ All four are fixed and covered by fixtures (`28J and 29E2 first round`, `S1`, `2
 | 30F | Double round robin: second cycle with colors reversed | Done | `doubleCycle` appends a second cycle with every color reversed; planned rounds must be the full double length (2(n−1), or 2n for an odd field), checked in section settings and MCP. `doubleGames` (both games in one round) is unchanged. |
 | 30G | Quads in rating order: 1–4, 2–3; 3–1, 4–2; 1–2, 3–4 with a toss | Done | Bottom 5–7 become a Swiss, as the rule suggests. |
 | 30H / 30I | Holland and unbalanced Holland (blitz) | Missing | Low priority. |
-| 31A–31G | Team tournaments: match points, team average rating, board order, team wall charts | Missing | Later tranche (PRODUCT_PLAN). |
-| 31A1 / 28N | Combined individual/team scoring (top-N scorers, Rollins) | Missing | Scholastic events need this. |
+| 31A–31G | Team tournaments: match points, team average rating, board order, team wall charts | Partial | 31A combined individual/team events are done (see 31A1); fixed-roster team events (31B–31G) are a later tranche (PRODUCT_PLAN). |
+| 31A1 / 28N | Combined individual/team scoring (top-N scorers, Rollins) | Done | `lib/domain/team_standings.dart`: settings in `Section.prizes['teams']`; top N (Scholastic Regulations 10.2.1) or Rollins (31A1: field size − place); 2-player minimum (10.2.2); team tie-breaks total Modified Median, Solkoff, SB, Cumulative, then coin flip (12.3.3); team prizes `kind: 'team'`. |
 
 ## 6. Prizes (Rules 32–33)
 
@@ -250,9 +249,9 @@ alphabetical pairing list (§5, §9).
 1. **TD review** of full event replays against the engine's explanations
    (DELIVERY.md exit criterion), and a check of the reconstructed Crenshaw-Berger
    tables for 5–6 and 7+ players against the printed Chapter 12.
-2. **Swiss remainder:** 28R2 adjusted-rating acceleration, 28L2a, 29I/29J class
-   pairings, 28I, the 28S5 score carry-over, selective re-pairing (29G3).
-3. **Scholastic team scoring** (31A1 / 28N) and team tie-breaks (34G).
+2. **Swiss remainder:** 28I, and a GUI control for selective re-pairing (29G3).
+3. ~~**Scholastic team scoring** (31A1 / 28N) and team tie-breaks~~: done
+   (`team_standings.dart`, Scholastic Regulations 10.2 and 12.3.3).
 4. **Prizes:** trophy-follows-the-money (33D2a), playoffs, a shared based-on goal
    across sections, birth dates for junior/senior eligibility.
 5. **Administration:** enforce the bye request deadline against the clock (22C2),

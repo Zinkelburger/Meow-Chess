@@ -241,6 +241,42 @@ mixin _RoundCommands on _CommandContext {
     );
   }
 
+  /// Rule 29G3: re-pairs the boards of the latest round that have not
+  /// started, keeping the games in [keep], for example after a player
+  /// withdrew once pairings were posted. Withdraw the player first; the
+  /// waiting players are re-paired as a separate group by the normal
+  /// methods. Returns the new round's explanations.
+  List<String> repairUnstarted(
+    String sectionId,
+    List<String> keep,
+    String reason,
+  ) {
+    final e = event!;
+    final s = _section(sectionId);
+    if (reason.trim().isEmpty) {
+      throw const TournamentException(
+        'Record why the posted pairing is changing.',
+      );
+    }
+    final r = repairUnstartedRound(e, s, keep.toSet(), newId);
+    checkPairingRequests(e, r.games);
+    final repaired = r.copy(note: reason.trim());
+    change(
+      'Re-pair round ${r.number} boards not started',
+      e.copy(
+        sections: [
+          for (final x in e.sections)
+            x.id != sectionId
+                ? x
+                : x.copy(
+                    rounds: [...x.rounds.take(x.rounds.length - 1), repaired],
+                  ),
+        ],
+      ),
+    );
+    return repaired.explanations;
+  }
+
   void replacePairing(
     String sectionId,
     int number,

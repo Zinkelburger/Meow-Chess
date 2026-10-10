@@ -241,6 +241,120 @@ Round proposeRound(Event event, Section section, String Function() id) {
   );
 }
 
+/// Rule 29G3 selective re-pairing: the latest round of a Swiss [section]
+/// keeps the games in [keep] (those already started) and re-pairs everyone
+/// else as a separate group by the normal methods, for instance after a
+/// player withdrew once pairings were posted. The holder of the round's
+/// full-point bye and any house player left out rejoin that group, so an
+/// odd group settles the bye again. Kept games keep their IDs and boards;
+/// the new games take the freed boards first.
+Round repairUnstartedRound(
+  Event event,
+  Section section,
+  Set<String> keep,
+  String Function() id,
+) {
+  if (pairingFormat(section) != Format.swiss) {
+    throw const TournamentException(
+      'Selective re-pairing (29G3) applies to Swiss rounds.',
+    );
+  }
+  final round = section.rounds.lastOrNull;
+  if (round == null) {
+    throw const TournamentException('No round has been posted.');
+  }
+  final n = round.number;
+  final known = round.games.map((g) => g.id).toSet();
+  final unknown = keep.difference(known);
+  if (unknown.isNotEmpty) {
+    throw TournamentException(
+      'Game ${unknown.first} is not in round $n. Choose the games to keep from the latest round.',
+    );
+  }
+  // A double-game pairing is kept or re-paired as a whole.
+  bool kept(Game g) => round.games.any(
+    (k) =>
+        keep.contains(k.id) &&
+        {k.white, k.black}.containsAll([g.white, g.black]) &&
+        k.board == g.board,
+  );
+  final redo = round.games.where((g) => !kept(g)).toList();
+  if (redo.isEmpty) {
+    throw const TournamentException(
+      'Every game is kept: there is nothing to re-pair.',
+    );
+  }
+  for (final g in redo) {
+    if (g.outcome != Outcome.unreported || g.pairingAssumption != null) {
+      throw TournamentException(
+        'Board ${g.board} already has a result. Keep every game that has started (29G2) and re-pair only the waiting boards.',
+      );
+    }
+  }
+  final waiting = <String>{
+    for (final g in redo) ...[g.white, g.black],
+    for (final b in round.byes)
+      if (b.allocated || b.reason == 'House player not needed') b.player,
+  };
+  final byes = <ByeAward>[
+    for (final b in round.byes)
+      if (!waiting.contains(b.player)) b,
+  ];
+  final available = <String>[];
+  for (final pid in section.players.where(waiting.contains)) {
+    final p = event.player(pid);
+    if (p.withdrawn) {
+      byes.add(ByeAward(pid, 0, 'Withdrawn'));
+    } else if (p.byes.containsKey(n)) {
+      byes.add(ByeAward(pid, p.byes[n]!, 'Requested bye'));
+    } else {
+      available.add(pid);
+    }
+  }
+  // Pair from the history before this round.
+  final before = section.copy(rounds: section.rounds.sublist(0, n - 1));
+  final history = event.copy(
+    sections: [for (final s in event.sections) s.id == section.id ? before : s],
+  );
+  final proposal = pairSwiss(history, before, n, available, byes);
+  final keptGames = round.games.where(kept).toList();
+  final taken = keptGames.map((g) => g.board).toSet();
+  final freed = (redo.map((g) => g.board).toSet().toList()..sort());
+  var next = section.boardStart;
+  int board() {
+    if (freed.isNotEmpty) return freed.removeAt(0);
+    while (taken.contains(next)) {
+      next++;
+    }
+    taken.add(next);
+    return next++;
+  }
+
+  final games = [...keptGames];
+  for (final (white, black) in proposal.games) {
+    final b = board();
+    taken.add(b);
+    games.add(Game(id: id(), white: white, black: black, board: b));
+    if (section.doubleGames) {
+      games.add(Game(id: id(), white: black, black: white, board: b, leg: 2));
+    }
+  }
+  games.sort(
+    (a, b) => a.board != b.board
+        ? a.board.compareTo(b.board)
+        : a.leg.compareTo(b.leg),
+  );
+  return round.copy(
+    games: games,
+    byes: proposal.byes,
+    revision: round.revision + 1,
+    explanations: [
+      'Selective re-pairing (29G3): ${keptGames.length} game${keptGames.length == 1 ? '' : 's'} kept; ${available.length} waiting player${available.length == 1 ? '' : 's'} re-paired as a separate group.',
+      ...proposal.explanations,
+    ],
+  );
+}
+
 /// Boards follow [pairs] from the section's first board; a double-game pair
 /// plays its second leg on the same board with colors reversed. A player
 /// with a fixed board (rule 20M3 / 35) keeps it; the other games fill the
