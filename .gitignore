@@ -20,3 +20,5 @@ flatpak-repo/
 
 # Local Claude Code settings and installed skills
 .claude/
+.agents/
+skills-lock.json

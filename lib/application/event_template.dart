@@ -5,7 +5,8 @@ import '../domain/prizes.dart';
 
 /// A new event set up like [source]: its sections (names, formats,
 /// announcement lines, pairing rules, bye rules, prizes, team and home
-/// settings), tie-break order, time control, venue, TD and affiliate IDs.
+/// settings), tie-break order, time control, venue, TD and affiliate IDs,
+/// and FIDE officials.
 /// Never its players, results, rulings, notes or history: the sections come
 /// back empty, with fresh ids, ready for a new roster.
 Event templateFrom(
@@ -33,6 +34,8 @@ Event templateFrom(
     tiebreaks: source.tiebreaks,
     policy: source.policy,
     online: source.online,
+    fide: source.fide,
+    fideTiebreaks: source.fideTiebreaks,
     sections: [for (final s in source.sections) _sectionTemplate(s, id())],
   );
 }
@@ -74,6 +77,9 @@ Section _sectionTemplate(Section s, String id) => Section(
       if (e.key != 'seeds' && e.key != 'rounds') e.key: e.value,
   },
   unrated: s.unrated,
+  fideRated: s.fideRated,
+  fideRanking: s.fideRanking,
+  pabPoints: s.pabPoints,
 );
 
 /// The one-line note shown when an event is created from a template.

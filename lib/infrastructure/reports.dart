@@ -1056,7 +1056,10 @@ Future<Uint8List> reportPdf(
 
 /// Rule 34B: the announced tie-break order, or the US Chess default for
 /// the section's format (34E for Swiss, 34F for round robins).
-String _conditionsTiebreaks(Event e, Section s) => e.tiebreaks.isNotEmpty
+/// A FIDE-rated section announces its C.07 order instead.
+String _conditionsTiebreaks(Event e, Section s) => s.fideRated
+    ? 'FIDE (C.07): ${fideSectionTiebreaks(e, s).map((m) => '${m.label} (${m.code})').join(', ')}'
+    : e.tiebreaks.isNotEmpty
     ? e.tiebreaks.map(tiebreakLabel).join(', ')
     : 'US Chess default: ${defaultTiebreaks(s.format).map((m) => m.label).join(', ')}';
 

@@ -163,7 +163,7 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
           contentPadding: EdgeInsets.zero,
           dense: true,
           controlAffinity: ListTileControlAffinity.leading,
-          title: const Text('Withdrawn players stay eligible (32C1)'),
+          title: const Text('Withdrawn players stay eligible'),
           value: table.withdrawnEligible,
           onChanged: (v) => apply((t) => t.copy(withdrawnEligible: v ?? false)),
         ),
@@ -384,7 +384,7 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
               contentPadding: EdgeInsets.zero,
               dense: true,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Guaranteed in full (32E)'),
+              title: const Text('Guaranteed in full'),
               value: p.guaranteed,
               onChanged: (v) =>
                   editPrize(p.id, (x) => x.copy(guaranteed: v ?? false)),

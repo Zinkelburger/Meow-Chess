@@ -175,7 +175,11 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
   if (sections.isEmpty) add('Create sections and add players first.');
   for (final s in e.sections.where((s) => s.unrated && s.players.isNotEmpty)) {
     add(
-      '${s.name}: ${s.format == Format.bughouse ? 'Bughouse' : 'Unrated'} section left out of the report.',
+      '${s.name}: ${s.format == Format.bughouse
+          ? 'Bughouse'
+          : s.fideRated
+          ? 'FIDE-only'
+          : 'Unrated'} section left out of the report.',
       blocking: false,
     );
   }
@@ -185,7 +189,7 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
       repairs: [
         for (final s in sections.where((s) => !s.finished))
           ReportRepair(
-            'Open ${s.name} results',
+            'Go to ${s.name} results',
             ReportDestination.results,
             id: s.id,
           ),
@@ -413,7 +417,7 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
         '${s.name}: ${a.name} and ${b.name} play each other ${same.length} games${wholeSection ? ' and nobody else' : ''}. US Chess rates that as a match (FAQ: a two-player section with two or more games is a match). Mark it as a match when uploading. Both players need established ratings within 400 points, and the rating change is capped at 50 points per match, 100 in 180 days and 200 in three years.$eligibility',
         repairs: [
           ReportRepair(
-            'Open ${s.name} results',
+            'Go to ${s.name} results',
             ReportDestination.results,
             id: s.id,
           ),
@@ -604,7 +608,8 @@ Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
       'S_SCH_LVL': e.level,
       'S_GR_PRIX': 'N',
       'S_GP_PTS': '0',
-      'S_FIDE': 'N',
+      // The section's "FIDE Rated" box: US Chess forwards it to FIDE.
+      'S_FIDE': s.fideRated ? 'Y' : 'N',
     });
     for (final id in s.players) {
       final player = e.player(id);

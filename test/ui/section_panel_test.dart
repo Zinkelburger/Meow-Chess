@@ -89,14 +89,21 @@ void main() {
       find.byKey(const ValueKey('field-avoidTeammates')),
     );
     await tester.tap(find.byKey(const ValueKey('field-avoidTeammates')));
+    // Variations stay folded until asked for.
+    expect(find.byKey(const ValueKey('field-variation-29E4a')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('field-variations-group')));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(
       find.byKey(const ValueKey('field-variation-29E4a')),
     );
     await tester.tap(find.byKey(const ValueKey('field-variation-29E4a')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Tie-breaks:'), findsOneWidget);
+    expect(
+      find.textContaining('Tie-breaks  ', findRichText: true),
+      findsOneWidget,
+    );
     await openGroup(tester, 'pairing');
-    expect(summaryOf(tester, 'pairing'), 'Team-mates apart · 29E4a');
+    expect(summaryOf(tester, 'pairing'), 'Team-mates apart · 1 variation');
 
     await tester.ensureVisible(find.byKey(const ValueKey('save-section')));
     await tester.tap(find.byKey(const ValueKey('save-section')));
@@ -245,7 +252,7 @@ void main() {
       for (final f in Format.values.where((f) => !f.common)) {
         expect(find.text(f.label), findsWidgets);
       }
-      expect(find.text('Holland system (30H)'), findsOneWidget);
+      expect(find.text('Holland system'), findsOneWidget);
       await tester.tap(find.text('Knockout').last);
       await tester.pumpAndSettle();
       final segments = tester.widget<SegmentedButton<Format>>(

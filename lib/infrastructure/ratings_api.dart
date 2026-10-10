@@ -253,6 +253,10 @@ class RatingsApi {
       state: result.state,
       reportName: result.reportName,
       provider: publicAccess ? 'US Chess public v1' : 'US Chess API v2',
+      fideId: result.fideId,
+      fideTitle: result.fideTitle,
+      fideCountry: result.fideCountry,
+      gender: result.gender,
     );
   }
 }
@@ -286,5 +290,13 @@ MemberObservation _parseMember(Json json, DateTime retrieved) {
             ].where((x) => x.trim().isNotEmpty).join(', '),
           )?.toUpperCase()
         : null,
+    fideId: switch (json['fideId']) {
+      final String id when id.trim().isNotEmpty => id.trim(),
+      final int id when id > 0 => '$id',
+      _ => null,
+    },
+    fideTitle: json['fideTitle'] as String?,
+    fideCountry: json['fideCountry'] as String?,
+    gender: json['gender'] as String?,
   );
 }

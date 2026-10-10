@@ -75,7 +75,7 @@ void main() {
           .repairs
           .single
           .label,
-      'Open Playoff results',
+      'Go to Playoff results',
     );
   });
 

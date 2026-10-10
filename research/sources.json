@@ -513,5 +513,220 @@
     "id": "chessroster-public-quad",
     "url": "https://fmca.chessroster.com/quad-oct-3-2026",
     "title": "chessroster-public-quad"
+  },
+  {
+    "id": "fide-download-lists",
+    "url": "https://ratings.fide.com/download_lists.phtml",
+    "title": "FIDE Ratings - Download rating lists"
+  },
+  {
+    "id": "fide-c0401-basic-swiss-2026",
+    "url": "https://handbook.fide.com/chapter/C0401202507",
+    "title": "C.04.1 Basic rules for Swiss Systems (effective from 1 February 2026)"
+  },
+  {
+    "id": "fide-c0402-general-handling-2026",
+    "url": "https://handbook.fide.com/chapter/GeneralHandlingRulesForSwissTournaments202602",
+    "title": "C.04.2 General handling rules for Swiss Tournaments (effective from 1 February 2026)"
+  },
+  {
+    "id": "fide-c0403-dutch-2026",
+    "url": "https://handbook.fide.com/chapter/C0403202602",
+    "title": "C.04.3 FIDE (Dutch) System (effective from 1 February 2026)"
+  },
+  {
+    "id": "fide-c0407-accelerated-2026",
+    "url": "https://handbook.fide.com/chapter/C0407202602",
+    "title": "C.04.7 FIDE-approved Accelerated Systems (effective from 1 February 2026)"
+  },
+  {
+    "id": "fide-c07-tiebreak-2026",
+    "url": "https://handbook.fide.com/chapter/TieBreakRegulations032026",
+    "title": "C.07 Play-Off and Tie-Break Regulations (effective from 1 March 2026)"
+  },
+  {
+    "id": "fide-c07-tiebreak-2024",
+    "url": "https://handbook.fide.com/chapter/TieBreakRegulations082024",
+    "title": "C.07 Play-Off and Tie-Break Regulations (effective 1 August 2024 till 28 February 2026)"
+  },
+  {
+    "id": "fide-b02-rating-2024",
+    "url": "https://handbook.fide.com/chapter/B022024",
+    "title": "FIDE Rating Regulations effective from 1 March 2024"
+  },
+  {
+    "id": "fide-b02-rapid-blitz-2024",
+    "url": "https://handbook.fide.com/chapter/B02RBRegulations2024",
+    "title": "FIDE Rapid and Blitz Rating Regulations effective from 1 March 2024"
+  },
+  {
+    "id": "fide-c04-annex3-fep22",
+    "url": "https://handbook.fide.com/files/handbook/C04Annex3_FEP22.pdf",
+    "title": "C.04 Annex 3: FIDE Endorsement Procedure for pairing programs (FEP22)"
+  },
+  {
+    "id": "fide-tec-endorsement",
+    "url": "https://tec.fide.com/endorsement/",
+    "title": "FIDE TEC - FIDE Endorsed programs"
+  },
+  {
+    "id": "fide-tec-official-documents",
+    "url": "https://tec.fide.com/official-documents/",
+    "title": "FIDE TEC - Official Documents"
+  },
+  {
+    "id": "fide-swisssys-endorsement-report",
+    "url": "https://tec.fide.com/wp-content/uploads/2024/05/SwissSysReport.pdf",
+    "title": "FIDE TEC endorsement report: SwissSys 9.6"
+  },
+  {
+    "id": "fide-c07-tiebreak-2023",
+    "url": "https://handbook.fide.com/chapter/TieBreakRegulations2023",
+    "title": "C.07 Tie-Break Regulations (effective 1 September 2023 till 31 March 2024)"
+  },
+  {
+    "id": "fide-c07-tiebreak-pre2023",
+    "url": "https://handbook.fide.com/chapter/TieBreakRegulationsPre2023",
+    "title": "C.07 Tie-Break Regulations (effective till 31 August 2023)"
+  },
+  {
+    "id": "fide-trf26-mandatory-tiebreaks",
+    "url": "https://tec.fide.com/wp-content/uploads/2025/04/MandatoryTieBreaks-TRF26.pdf",
+    "title": "TRF26 attachment: Mandatory Tie-Breaks codes"
+  },
+  {
+    "id": "fide-trf26-tournament-type-codes",
+    "url": "https://tec.fide.com/wp-content/uploads/2025/04/TournamentTypeCodeTable192-TRF26.pdf",
+    "title": "TRF26 attachment: Tournament-Type Code Table (192)"
+  },
+  {
+    "id": "fide-trf26-tec-draft",
+    "url": "https://tec.fide.com/wp-content/uploads/2025/04/TRF-2026.pdf",
+    "title": "TEC: TRF-2026 (tec.fide.com copy)"
+  },
+  {
+    "id": "pairing-bbp-readme",
+    "url": "https://raw.githubusercontent.com/BieremaBoyzProgramming/bbpPairings/master/README.txt",
+    "title": "bbpPairings README (master)"
+  },
+  {
+    "id": "pairing-bbp-releases",
+    "url": "https://api.github.com/repos/BieremaBoyzProgramming/bbpPairings/releases",
+    "title": "bbpPairings GitHub releases (API JSON)"
+  },
+  {
+    "id": "pairing-javafo",
+    "url": "http://www.rrweb.org/javafo/JaVaFo.htm",
+    "title": "JaVaFo, a pairing engine for the FIDE (Dutch) System"
+  },
+  {
+    "id": "pairing-javafo-aum",
+    "url": "http://www.rrweb.org/javafo/aum/JaVaFo2_AUM.htm",
+    "title": "JaVaFo 2 Advanced User Manual"
+  },
+  {
+    "id": "fide-c04-annex1-fe1",
+    "url": "https://handbook.fide.com/files/handbook/C04Annex1_FE1.pdf",
+    "title": "C.04 Annex 1: FE-1 endorsement application form"
+  },
+  {
+    "id": "fide-c04-annex4-vcl17",
+    "url": "https://www.fide.com/FIDE/handbook/C04Annex4_VCL17.pdf",
+    "title": "C.04 Annex 4: Verification Check List (VCL17)"
+  },
+  {
+    "id": "fide-c04a-endorsement-appendix",
+    "url": "https://web.archive.org/web/20260215045754id_/http://spp.fide.com/c-04-a-appendix-endorsement-of-a-software-program/",
+    "title": "C.04.A Appendix: Endorsement of a software program (spp.fide.com, Wayback snapshot 2026-02-15; live site in maintenance 2026-10-10)"
+  },
+  {
+    "id": "fide-tec-2026-congress-meeting",
+    "url": "https://tec.fide.com/wp-content/uploads/2026/09/TEC-2026-Congress-Meeting.pdf",
+    "title": "FIDE TEC 2026 Congress Meeting report (Samarkand)"
+  },
+  {
+    "id": "fide-c0201-equipment-general-2026",
+    "url": "https://handbook.fide.com/chapter/GeneralRulesAndRegulations032026",
+    "title": "C.02.01 General Rules and Regulations for chess equipment and software (effective 1 March 2026)"
+  },
+  {
+    "id": "fide-c0203-electronic-equipment-software-2026",
+    "url": "https://handbook.fide.com/chapter/ChessEquipmentWithElectronicComponenets032026",
+    "title": "C.02.03 Chess equipment with electronic components incl. software (effective 1 March 2026)"
+  },
+  {
+    "id": "fide-c0204-certified-endorsed-2026",
+    "url": "https://handbook.fide.com/chapter/FIDECertifiedAndEndorsedEquipment032026",
+    "title": "C.02.04 FIDE Certified and Endorsed Equipment register (effective 1 March 2026)"
+  },
+  {
+    "id": "pairing-gacrux-tiebreakserver-readme",
+    "url": "https://raw.githubusercontent.com/OttoMilvang/TieBreakServer/main/README.md",
+    "title": "Gacrux / TieBreakServer README (Otto Milvang)"
+  },
+  {
+    "id": "fide-ett26",
+    "url": "https://handbook.fide.com/files/handbook/ETT26.pdf",
+    "title": "C.02.03 Annexure C: ETT26 Encoded Type (of tournament) Table (TRF record 192)"
+  },
+  {
+    "id": "fide-mtb26",
+    "url": "https://handbook.fide.com/files/handbook/MTB26.pdf",
+    "title": "C.02.03 Annexure B: MTB26 Mandatory Tie-Breaks"
+  },
+  {
+    "id": "fide-tec-annotated-dutch-2026",
+    "url": "https://tec.fide.com/wp-content/uploads/2026/08/AnnotatedDutch-V2026.pdf",
+    "title": "TEC: Annotated FIDE (Dutch) System V2026"
+  },
+  {
+    "id": "fide-players-list-excerpt",
+    "url": "https://ratings.fide.com/download/players_list.zip",
+    "title": "FIDE combined rating list (TXT) - header and sample lines excerpt (Oct 2026 list; full file not archived)"
+  },
+  {
+    "id": "fide-ratings-endpoints-probe",
+    "url": "https://ratings.fide.com/profile/1503014",
+    "title": "FIDE ratings site profile/AJAX endpoint probe (unofficial, undocumented endpoints)"
+  },
+  {
+    "id": "fide-trf16-annexure-c",
+    "url": "http://tec.fide.com/wp-content/uploads/2025/10/Annexure-C-TRF06-%E2%80%93-Version-2016.pdf",
+    "title": "TEC Manual Annexure C: TRF16 (Version 2016)"
+  },
+  {
+    "id": "fide-tec-manual-2026",
+    "url": "https://tec.fide.com/fide-technical-manual/",
+    "title": "FIDE Technical Commission Policies and Procedures Manual, version 1.24 (7 March 2026)"
+  },
+  {
+    "id": "fide-vega-endorsement-report",
+    "url": "http://tec.fide.com/wp-content/uploads/2024/05/VegaReport.pdf",
+    "title": "FIDE TEC endorsement report: Vega"
+  },
+  {
+    "id": "fide-swissmaster-endorsement-report",
+    "url": "http://tec.fide.com/wp-content/uploads/2024/05/SwissMasterReport.pdf",
+    "title": "FIDE TEC endorsement report: Swiss Master"
+  },
+  {
+    "id": "fide-swissmanager-endorsement-report",
+    "url": "http://tec.fide.com/wp-content/uploads/2024/05/SwissManagerReport.pdf",
+    "title": "FIDE TEC endorsement report: Swiss-Manager"
+  },
+  {
+    "id": "fide-swisschess-endorsement-report",
+    "url": "http://tec.fide.com/wp-content/uploads/2024/05/SwissChessReport.pdf",
+    "title": "FIDE TEC endorsement report: Swiss-Chess (WinSwiss 9)"
+  },
+  {
+    "id": "fide-copp-endorsement-report",
+    "url": "http://tec.fide.com/wp-content/uploads/2024/05/COPP-Report.pdf",
+    "title": "FIDE TEC endorsement report: Chess Online Pairings Program (COPP) 7.7"
+  },
+  {
+    "id": "gacrux-tiebreakserver",
+    "url": "https://github.com/OttoMilvang/TieBreakServer",
+    "title": "Gacrux (TieBreakServer): TEC's open reference pairing checker, tie-break calculator and tournament generator"
   }
 ]

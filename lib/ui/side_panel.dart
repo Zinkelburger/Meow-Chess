@@ -70,10 +70,15 @@ class SidePanel extends StatelessWidget {
     this.footer = const [],
     this.width = 360,
     this.scrolls = true,
+    this.backLabel,
     super.key,
   });
   final String title;
   final VoidCallback onClose;
+
+  /// The panel this one was opened from, when closing returns there
+  /// rather than to the table: named above the title as the way back.
+  final String? backLabel;
   final List<Widget> children;
   final List<Widget> footer;
   final double width;
@@ -99,8 +104,35 @@ class SidePanel extends StatelessWidget {
             type: MaterialType.transparency,
             child: Column(
               children: [
+                if (backLabel case final back?)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        key: const ValueKey('panel-back'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          visualDensity: VisualDensity.compact,
+                          textStyle: const TextStyle(fontSize: 13),
+                        ),
+                        icon: const Icon(Icons.arrow_back, size: 16),
+                        label: Text(
+                          back,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onPressed: onClose,
+                      ),
+                    ),
+                  ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    backLabel == null ? 8 : 0,
+                    8,
+                    8,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -112,7 +144,9 @@ class SidePanel extends StatelessWidget {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Close (Esc)',
+                        tooltip: backLabel == null
+                            ? 'Close (Esc)'
+                            : 'Back to $backLabel (Esc)',
                         icon: const Icon(Icons.close),
                         onPressed: onClose,
                       ),
@@ -163,6 +197,7 @@ class DisclosureGroup extends StatefulWidget {
     this.focusNode,
     this.locked = false,
     this.headerKey,
+    this.nested = false,
     super.key,
   });
   final String title;
@@ -180,6 +215,10 @@ class DisclosureGroup extends StatefulWidget {
   /// Identifies the header button: tests tap it and read its semantics
   /// (title as label, the closed summary as value).
   final Key? headerKey;
+
+  /// A group inside a group: a field-sized header with no rule above, its
+  /// contents indented under the chevron.
+  final bool nested;
 
   @override
   State<DisclosureGroup> createState() => _DisclosureGroupState();
@@ -217,8 +256,11 @@ class _DisclosureGroupState extends State<DisclosureGroup> {
           behavior: HitTestBehavior.opaque,
           onTap: widget.onToggle,
           child: Container(
-            constraints: const BoxConstraints(minHeight: 44),
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            constraints: BoxConstraints(minHeight: widget.nested ? 36 : 44),
+            padding: EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: widget.nested ? 6 : 8,
+            ),
             decoration: BoxDecoration(
               color: hovered ? colors.onSurface.withValues(alpha: 0.04) : null,
               borderRadius: BorderRadius.circular(4),
@@ -243,7 +285,9 @@ class _DisclosureGroupState extends State<DisclosureGroup> {
                     children: [
                       Text(
                         widget.title,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: widget.nested
+                            ? Theme.of(context).textTheme.labelLarge
+                            : Theme.of(context).textTheme.titleMedium,
                       ),
                       if (summary != null)
                         Row(
@@ -286,11 +330,13 @@ class _DisclosureGroupState extends State<DisclosureGroup> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Divider(height: 1),
+        if (!widget.nested) const Divider(height: 1),
         header,
         if (widget.open)
           Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 16),
+            padding: widget.nested
+                ? const EdgeInsets.only(left: 28, top: 4, bottom: 4)
+                : const EdgeInsets.only(top: 4, bottom: 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: widget.children,

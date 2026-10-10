@@ -34,6 +34,22 @@ class DockController extends ChangeNotifier {
     show(owner, null);
   }
 
+  /// Opens [owner] from inside the panel showing now, as a step away
+  /// from it: the opened panel's header names [backLabel], and closing it
+  /// brings this panel back, rebuilt from its draft. [onBack] runs just
+  /// before it rebuilds, so it can leave word of where to land.
+  void detour(Object owner, {required String backLabel, VoidCallback? onBack}) {
+    if (id == owner) return;
+    final from = (id: id, panel: panel, label: backLabel, onBack: onBack);
+    show(owner, null);
+    if (from.id != null) _back = from;
+  }
+
+  ({Object? id, Widget? panel, String label, VoidCallback? onBack})? _back;
+
+  /// Set while a [detour] is showing: what closing it returns to.
+  String? get backLabel => _back?.label;
+
   Widget? panel;
 
   /// What [panel] is for, so asking for it again toggles it closed.
@@ -41,6 +57,7 @@ class DockController extends ChangeNotifier {
 
   void show(Object id, Widget? panel) {
     if (this.id == null) _returnFocus = FocusManager.instance.primaryFocus;
+    _back = null;
     this.id = id;
     this.panel = panel == null || tournament == null
         ? panel
@@ -49,6 +66,14 @@ class DockController extends ChangeNotifier {
   }
 
   void close() {
+    if (_back case final back?) {
+      _back = null;
+      back.onBack?.call();
+      id = back.id;
+      panel = back.panel;
+      notifyListeners();
+      return;
+    }
     if (id == null) return;
     id = panel = null;
     notifyListeners();

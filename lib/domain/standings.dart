@@ -43,8 +43,11 @@ class Standing {
 }
 
 /// The tie-break methods [section] ranks by, in posted order (rule 34B).
+/// A FIDE-rated section ranks by the FIDE order (C.07).
 List<TiebreakMethod> standingsTiebreaks(Event event, Section section) =>
-    sectionTiebreaks(event, pairingFormat(section));
+    section.fideRated
+    ? fideSectionTiebreaks(event, section)
+    : sectionTiebreaks(event, pairingFormat(section));
 
 /// Whether two adjacent rows share a place: equal points and, when
 /// [tiebreaks] rank, equal on every posted method.
@@ -191,7 +194,8 @@ List<Standing> standings(
       tiebreaks: values[id]!,
     );
   }).toList();
-  final ranked = event.useTiebreaks || forPairing;
+  // C.07 2.1: FIDE ranks tied participants by the announced tie-breaks.
+  final ranked = event.useTiebreaks || forPairing || section.fideRated;
   rows.sort((a, b) {
     for (final c in [
       b.points.compareTo(a.points),

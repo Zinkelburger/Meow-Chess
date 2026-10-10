@@ -38,6 +38,15 @@ mixin _RosterCommands on _CommandContext {
         },
       );
     }
+    if (previous != null &&
+        fideRatingsLocked(e, previous) &&
+        (previous.fideStandard != player.fideStandard ||
+            previous.fideRapid != player.fideRapid ||
+            previous.fideBlitz != player.fideBlitz)) {
+      throw TournamentException(
+        '${previous.name}\'s FIDE ratings stay as they were when round 1 was paired; the FIDE-rated section is ranked and reported with them.',
+      );
+    }
     if (previous == null ||
         previous.pairingRating != player.pairingRating ||
         previous.prizeRating != player.prizeRating ||

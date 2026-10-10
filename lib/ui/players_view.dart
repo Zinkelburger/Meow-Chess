@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../application/tournament_controller.dart';
 import 'rating_refresh.dart';
 import 'rating_review_panel.dart';
+import '../domain/fide.dart';
 import '../domain/model.dart';
 import 'membership_style.dart';
 import '../domain/pairing.dart';
@@ -26,6 +27,7 @@ import '../infrastructure/reports.dart' show ReportKind;
 import 'theme.dart';
 import 'result_format.dart';
 
+import 'fide_list_panel.dart';
 import 'side_panel.dart';
 import 'player_format.dart';
 import 'player_panel.dart';
@@ -302,9 +304,24 @@ class _PlayersViewState extends State<PlayersView> {
 
   bool showIds = true;
 
+  /// The sections this view lists: one, or all of them.
+  Iterable<Section> get viewedSections => c.event!.sections.where(
+    (s) => widget.sectionId == null || s.id == widget.sectionId,
+  );
+
+  /// US Chess columns are left out where nothing listed is US Chess rated
+  /// (a FIDE-only section or event).
+  bool get usChessView =>
+      viewedSections.isEmpty || viewedSections.any((s) => !s.unrated);
+
+  /// FIDE ID and rating columns where a listed section is FIDE rated.
+  bool get showsFide =>
+      !widget.standingsOnly && viewedSections.any((s) => s.fideRated);
+
   /// A rating review compares IDs, so it always shows them.
   bool get showsIds =>
-      !widget.standingsOnly && (showIds || refreshDraft != null);
+      !widget.standingsOnly &&
+      (refreshDraft != null || (showIds && usChessView));
   bool showRatingPreview = false;
   TournamentController get c => widget.controller;
   RatingRefresh? get refreshDraft =>
@@ -922,7 +939,7 @@ class _PlayersViewState extends State<PlayersView> {
               FilterChip(
                 key: const ValueKey('prize-standings'),
                 chipAnimationStyle: noChipAnimation,
-                label: const Text('Prize standings (30B)'),
+                label: const Text('Prize standings'),
                 selected: prizeStandings,
                 onSelected: (v) {
                   setState(() => prizeStandings = v);
@@ -1004,7 +1021,14 @@ class _PlayersViewState extends State<PlayersView> {
                                 icon: const Icon(Icons.add, size: 18),
                                 label: const Text('Add player'),
                               ),
-                              if (widget.onRefreshRatings != null)
+                              // A FIDE-only view refreshes from FIDE's list.
+                              if (!usChessView && refreshDraft == null)
+                                OutlinedButton(
+                                  key: const ValueKey('refresh-fide'),
+                                  onPressed: () => showFideList(context, c),
+                                  child: const Text('Update FIDE ratings'),
+                                )
+                              else if (widget.onRefreshRatings != null)
                                 OutlinedButton(
                                   key: const ValueKey('refresh-uscf'),
                                   onPressed: refreshDraft == null
@@ -1166,6 +1190,13 @@ class _PlayersViewState extends State<PlayersView> {
         onPressed: () => showSide(_Side.paste),
         child: const Text('Paste'),
       ),
+      if (hasFideSection(c.event!))
+        MenuItemButton(
+          key: const ValueKey('fide-ratings'),
+          leadingIcon: const Icon(Icons.public),
+          onPressed: () => showFideList(context, c),
+          child: const Text('FIDE ratings…'),
+        ),
       const Divider(),
       CheckboxMenuButton(
         key: const ValueKey('show-rating-preview'),
@@ -1482,15 +1513,16 @@ class _PlayersViewState extends State<PlayersView> {
             cell(_number, '#'),
             const Expanded(child: Text('Name')),
             if (showsIds) cell(_id, 'USCF ID'),
-            if (!widget.standingsOnly)
+            if (!widget.standingsOnly && (usChessView || refreshDraft != null))
               cell(_rating, refreshDraft == null ? 'Rating' : 'Entered'),
+            if (showsFide) ...[cell(_id, 'FIDE ID'), cell(_rating, 'FIDE')],
             if (refreshDraft case final draft?) ...[
               cell(_proposal, proposedHeading(draft)),
               cell(_uscfName, 'USCF name'),
             ],
             if (showRatingPreview) cell(_preview, 'Est. regular (Δ)'),
             if (!widget.standingsOnly) ...[
-              cell(_membership, 'USCF expires'),
+              if (usChessView) cell(_membership, 'USCF expires'),
               cell(_note, 'Registration note'),
             ],
             for (var r = 1; r <= rounds; r++) cell(_round, 'R$r', center: true),
@@ -1836,18 +1868,38 @@ class _PlayersViewState extends State<PlayersView> {
                         p.memberId.isEmpty ? '—' : p.memberId,
                         muted.copyWith(fontFamily: 'SourceCodePro'),
                       ),
-                    if (!widget.standingsOnly)
+                    if (!widget.standingsOnly &&
+                        (usChessView || refreshDraft != null))
                       cell(
                         _rating,
                         ratingText(p.rating),
                         const TextStyle(fontFamily: 'SourceCodePro'),
                       ),
+                    if (showsFide) ...[
+                      cell(
+                        _id,
+                        p.fideId.isEmpty ? '—' : p.fideId,
+                        muted.copyWith(fontFamily: 'SourceCodePro'),
+                      ),
+                      () {
+                        // The rating the player's section uses.
+                        final rating = fideRating(
+                          p,
+                          s == null ? null : sectionFideCategory(c.event!, s),
+                        );
+                        return cell(
+                          _rating,
+                          rating == 0 ? 'UNR' : '$rating',
+                          const TextStyle(fontFamily: 'SourceCodePro'),
+                        );
+                      }(),
+                    ],
                     if (refreshDraft case final draft?) ...[
                       _proposedRatingCell(context, p, draft),
                       _uscfNameCell(context, p, draft),
                     ],
                     if (showRatingPreview) _ratingPreviewCell(context, p, s),
-                    if (!widget.standingsOnly)
+                    if (!widget.standingsOnly && usChessView)
                       SizedBox(
                         width: _columnWidth(context, _membership),
                         child: MembershipCell(

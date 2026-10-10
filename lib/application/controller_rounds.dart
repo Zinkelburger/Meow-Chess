@@ -146,6 +146,12 @@ mixin _RoundCommands on _CommandContext {
           ...s.rounds,
           r.copy(postedAt: now),
         ],
+        // C.04.2: FIDE pairing numbers are fixed by round 1, and so is the
+        // Baku method's group A (C.04.7 1.3.2).
+        fideOrder: s.fideRated && s.rounds.isEmpty
+            ? [for (final p in fidePairingOrder(e, s)) p.id]
+            : null,
+        bakuLast: s.rounds.isEmpty ? bakuGroupLast(e, s) ?? '' : null,
       );
       // A knockout freezes its seeding at round 1 and records the bracket
       // round just posted.
@@ -158,7 +164,9 @@ mixin _RoundCommands on _CommandContext {
     final tossed =
         e.colorToss.isEmpty &&
         batch.rounds.values.any(
-          (r) => r.policy == swissPolicy && r.number == 1,
+          (r) =>
+              (r.policy == swissPolicy || r.policy == fideDutchPolicy) &&
+              r.number == 1,
         );
     final colorToss = tossed ? effectiveColorToss(e) : e.colorToss;
     // Board numbers reserve physical space across independently progressing sections.
@@ -379,13 +387,7 @@ PairingBatch _proposeRounds(Event snapshot, String? sectionId, bool onlyReady) {
         (!onlyReady || !hasFixedQuadSchedule(s)) &&
         (sectionId == null || s.id == sectionId) &&
         (knockout(s) || !s.finished) &&
-        (!onlyReady ||
-            (roundsLeft(s) &&
-                !s.rounds
-                    .expand((r) => r.games)
-                    .any(
-                      (g) => !g.outcome.resolved && g.pairingAssumption == null,
-                    ))),
+        (!onlyReady || (roundsLeft(s) && readyToPair(s))),
   )) {
     try {
       rounds[s.id] = proposeRound(snapshot, s, () => const Uuid().v4());

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'fide.dart';
+import 'tiebreaks.dart' show tiebreakMethod;
 import 'us_chess.dart';
 
 /// Scores are stored as integer half-points. IDs never depend on list order.
@@ -56,18 +58,29 @@ enum Outcome {
   blackForfeit,
   doubleForfeit,
   unfinished,
-  disputed;
+  disputed,
+
+  /// Played games scored unusually, as an arbiter's penalty can leave them
+  /// (FIDE VCL.13): ½–0, 0–½ and a played 0–0. US Chess cannot report
+  /// them, so only sections it does not rate use them ([unusual]).
+  whiteHalf,
+  blackHalf,
+  bothLose;
 
   bool get resolved => ![unreported, unfinished, disputed].contains(this);
-  bool get played => [whiteWin, draw, blackWin].contains(this);
+  bool get played =>
+      [whiteWin, draw, blackWin, whiteHalf, blackHalf, bothLose].contains(this);
+
+  /// A played result whose scores do not add up to one game.
+  bool get unusual => [whiteHalf, blackHalf, bothLose].contains(this);
   int get whiteScore => switch (this) {
     whiteWin || whiteForfeit => 2,
-    draw => 1,
+    draw || whiteHalf => 1,
     _ => 0,
   };
   int get blackScore => switch (this) {
     blackWin || blackForfeit => 2,
-    draw => 1,
+    draw || blackHalf => 1,
     _ => 0,
   };
   String get label => switch (this) {
@@ -80,6 +93,9 @@ enum Outcome {
     doubleForfeit => 'F–F',
     unfinished => 'Playing',
     disputed => 'Disputed',
+    whiteHalf => '½–0',
+    blackHalf => '0–½',
+    bothLose => '0–0',
   };
 }
 
@@ -113,8 +129,18 @@ class Player {
     this.reentryOf = '',
     Set<int> irrevocableByes = const {},
     this.computer = false,
+    this.fideId = '',
+    this.fideStandard = 0,
+    this.fideRapid = 0,
+    this.fideBlitz = 0,
+    this.title = '',
+    this.federation = '',
+    this.birthDate = '',
+    this.sex = '',
+    Json fideEvidence = const {},
   }) : membershipEvidence = Map.unmodifiable(membershipEvidence),
        ratingEvidence = Map.unmodifiable(ratingEvidence),
+       fideEvidence = Map.unmodifiable(fideEvidence),
        byes = Map.unmodifiable(byes),
        irrevocableByes = Set.unmodifiable(irrevocableByes),
        avoid = Set.unmodifiable(avoid);
@@ -145,6 +171,28 @@ class Player {
 
   /// Rule 36: a computer entrant, never paired against another computer.
   final bool computer;
+
+  /// FIDE identity for FIDE-rated sections (TRF record 001). Empty or zero
+  /// when unknown. The ratings are FIDE's published standard, rapid and
+  /// blitz ratings; see `fide.dart` for which one a section uses.
+  final String fideId;
+  final int fideStandard, fideRapid, fideBlitz;
+
+  /// FIDE title code (`GM`, `IM`, `WGM`, `FM`, `WIM`, `CM`, `WFM`, `WCM`).
+  final String title;
+
+  /// FIDE three-letter federation (`USA`, `CAN`, …).
+  final String federation;
+
+  /// `YYYY` or `YYYY-MM-DD`; FIDE needs at least the year for new players.
+  final String birthDate;
+
+  /// `m` or `w`, as TRF writes it; empty when unknown.
+  final String sex;
+
+  /// Where the FIDE ratings came from: `source`, `list` (the rating list
+  /// month, `YYYY-MM`) and `retrievedAt`.
+  final Json fideEvidence;
 
   /// The rating the pairing engine ranks by (rule 28A TIP, 28F).
   int get effectivePairingRating => pairingRating > 0 ? pairingRating : rating;
@@ -200,6 +248,15 @@ class Player {
     String? reentryOf,
     Set<int>? irrevocableByes,
     bool? computer,
+    String? fideId,
+    int? fideStandard,
+    int? fideRapid,
+    int? fideBlitz,
+    String? title,
+    String? federation,
+    String? birthDate,
+    String? sex,
+    Json? fideEvidence,
   }) => Player(
     id: id,
     personId: personId,
@@ -231,6 +288,21 @@ class Player {
     reentryOf: reentryOf ?? this.reentryOf,
     irrevocableByes: irrevocableByes ?? this.irrevocableByes,
     computer: computer ?? this.computer,
+    fideId: fideId ?? this.fideId,
+    fideStandard: fideStandard ?? this.fideStandard,
+    fideRapid: fideRapid ?? this.fideRapid,
+    fideBlitz: fideBlitz ?? this.fideBlitz,
+    title: title ?? this.title,
+    federation: federation ?? this.federation,
+    birthDate: birthDate ?? this.birthDate,
+    sex: sex ?? this.sex,
+    // A new FIDE ID invalidates evidence about the old one, unless the same
+    // change brings evidence for the new one.
+    fideEvidence:
+        fideEvidence ??
+        (fideId != null && fideId != this.fideId
+            ? const {}
+            : this.fideEvidence),
   );
   Json toJson() => {
     'id': id,
@@ -262,6 +334,15 @@ class Player {
     if (irrevocableByes.isNotEmpty)
       'irrevocableByes': irrevocableByes.toList()..sort(),
     if (computer) 'computer': computer,
+    if (fideId.isNotEmpty) 'fideId': fideId,
+    if (fideStandard != 0) 'fideStandard': fideStandard,
+    if (fideRapid != 0) 'fideRapid': fideRapid,
+    if (fideBlitz != 0) 'fideBlitz': fideBlitz,
+    if (title.isNotEmpty) 'title': title,
+    if (federation.isNotEmpty) 'federation': federation,
+    if (birthDate.isNotEmpty) 'birthDate': birthDate,
+    if (sex.isNotEmpty) 'sex': sex,
+    if (fideEvidence.isNotEmpty) 'fideEvidence': fideEvidence,
   };
   factory Player.fromJson(Json j) => Player(
     id: j['id'],
@@ -300,6 +381,15 @@ class Player {
       for (final r in j['irrevocableByes'] as List? ?? const []) r as int,
     },
     computer: j['computer'] ?? false,
+    fideId: j['fideId'] ?? '',
+    fideStandard: j['fideStandard'] ?? 0,
+    fideRapid: j['fideRapid'] ?? 0,
+    fideBlitz: j['fideBlitz'] ?? 0,
+    title: j['title'] ?? '',
+    federation: j['federation'] ?? '',
+    birthDate: j['birthDate'] ?? '',
+    sex: j['sex'] ?? '',
+    fideEvidence: Map<String, dynamic>.from(j['fideEvidence'] ?? const {}),
   );
 }
 
@@ -318,6 +408,7 @@ class Game {
     this.prizeOutcome,
     this.whitePartner = '',
     this.blackPartner = '',
+    this.shortGame = false,
   });
   final String id, white, black, note;
 
@@ -336,6 +427,11 @@ class Game {
   /// differs from [outcome] (which is what the wall chart and the rating
   /// report carry). Null means prizes use [outcome].
   final Outcome? prizeOutcome;
+
+  /// FIDE: the game lasted less than one move, so its result stands but
+  /// FIDE does not rate it (TRF codes W, D, L). Only on a played result in
+  /// a FIDE-rated section; US Chess still sees the result itself.
+  final bool shortGame;
   Game copy({
     String? id,
     Outcome? outcome,
@@ -349,6 +445,7 @@ class Game {
     Object? prizeOutcome = _unset,
     String? whitePartner,
     String? blackPartner,
+    bool? shortGame,
   }) => Game(
     id: id ?? this.id,
     white: white ?? this.white,
@@ -367,6 +464,7 @@ class Game {
         : prizeOutcome as Outcome?,
     whitePartner: whitePartner ?? this.whitePartner,
     blackPartner: blackPartner ?? this.blackPartner,
+    shortGame: shortGame ?? this.shortGame,
   );
   Json toJson() => {
     'id': id,
@@ -382,6 +480,7 @@ class Game {
     if (prizeOutcome != null) 'prizeOutcome': prizeOutcome!.name,
     if (whitePartner.isNotEmpty) 'whitePartner': whitePartner,
     if (blackPartner.isNotEmpty) 'blackPartner': blackPartner,
+    if (shortGame) 'shortGame': shortGame,
   };
   factory Game.fromJson(Json j) => Game(
     id: j['id'],
@@ -401,6 +500,7 @@ class Game {
         : Outcome.values.byName(j['prizeOutcome']),
     whitePartner: j['whitePartner'] ?? '',
     blackPartner: j['blackPartner'] ?? '',
+    shortGame: j['shortGame'] ?? false,
   );
 }
 
@@ -523,7 +623,13 @@ class Section {
     Json bracket = const {},
     List<List<String>> partners = const [],
     this.unrated = false,
-  }) : players = List.unmodifiable(players),
+    this.fideRated = false,
+    this.fideRanking = '',
+    List<String> fideOrder = const [],
+    this.pabPoints = 2,
+    this.bakuLast = '',
+  }) : fideOrder = List.unmodifiable(fideOrder),
+       players = List.unmodifiable(players),
        holland = Map.unmodifiable(holland),
        bracket = Map.unmodifiable(bracket),
        partners = List.unmodifiable(
@@ -539,7 +645,9 @@ class Section {
   final String id, name;
 
   /// Rule 28R: accelerated pairings. Empty for none, `addedScore` (28R1),
-  /// `adjustedRating` (28R2) or `sixths` (28R3). Announced before round 1.
+  /// `adjustedRating` (28R2) or `sixths` (28R3). A FIDE-rated Swiss may use
+  /// only `baku`, the Baku Acceleration Method (C.04.7 1). Announced before
+  /// round 1.
   final String accelerated;
 
   /// Rule 28N: avoid pairing team-mates using the plus-two method.
@@ -587,6 +695,32 @@ class Section {
 
   /// Left out of the rating report (bughouse, ladders, unrated events).
   final bool unrated;
+
+  /// Rated by FIDE: FIDE registers each section as its own tournament.
+  /// With [unrated] false the section is dual rated (US Chess and FIDE);
+  /// with [unrated] true it is FIDE only. A FIDE-rated Swiss is paired with
+  /// the FIDE Dutch system.
+  final bool fideRated;
+
+  /// TRF record 172: how players are ranked for pairing numbers. Empty uses
+  /// the default for the section (see `fideRankingMethod`).
+  final String fideRanking;
+
+  /// C.04.2: the FIDE pairing numbers fixed when round 1 was posted, as
+  /// player IDs in order. Later rating or name edits do not renumber the
+  /// section; late entries are slotted in by rating. Ignored while the
+  /// section has no rounds.
+  final List<String> fideOrder;
+
+  /// C.04.1 3: the half-points a pairing-allocated bye scores in a
+  /// FIDE-rated Swiss: 2 (a win, the default), 1 (a draw) or 0. The same
+  /// for every bye of the section, so it is fixed once one is given.
+  final int pabPoints;
+
+  /// C.04.7 1.3.2: with the Baku acceleration, the last player of group A,
+  /// fixed when round 1 is paired so late entries do not move the group's
+  /// boundary. Empty before round 1.
+  final String bakuLast;
 
   /// Empty inherits the event default. Ladders may use different controls.
   final String timeControl;
@@ -636,6 +770,11 @@ class Section {
     Json? bracket,
     List<List<String>>? partners,
     bool? unrated,
+    bool? fideRated,
+    String? fideRanking,
+    List<String>? fideOrder,
+    int? pabPoints,
+    String? bakuLast,
   }) => Section(
     id: id,
     name: name ?? this.name,
@@ -661,6 +800,11 @@ class Section {
     bracket: bracket ?? this.bracket,
     partners: partners ?? this.partners,
     unrated: unrated ?? this.unrated,
+    fideRated: fideRated ?? this.fideRated,
+    fideRanking: fideRanking ?? this.fideRanking,
+    fideOrder: fideOrder ?? this.fideOrder,
+    pabPoints: pabPoints ?? this.pabPoints,
+    bakuLast: bakuLast ?? this.bakuLast,
   );
   Json toJson() => {
     'id': id,
@@ -687,6 +831,11 @@ class Section {
     if (bracket.isNotEmpty) 'bracket': bracket,
     if (partners.isNotEmpty) 'partners': partners,
     if (unrated) 'unrated': unrated,
+    if (fideRated) 'fideRated': fideRated,
+    if (fideRanking.isNotEmpty) 'fideRanking': fideRanking,
+    if (fideOrder.isNotEmpty) 'fideOrder': fideOrder,
+    if (pabPoints != 2) 'pabPoints': pabPoints,
+    if (bakuLast.isNotEmpty) 'bakuLast': bakuLast,
   };
   factory Section.fromJson(Json j) => Section(
     id: j['id'],
@@ -717,7 +866,113 @@ class Section {
       for (final p in j['partners'] as List? ?? const []) List<String>.from(p),
     ],
     unrated: j['unrated'] ?? false,
+    fideRated: j['fideRated'] ?? false,
+    fideRanking: j['fideRanking'] ?? '',
+    fideOrder: List<String>.from(j['fideOrder'] ?? const []),
+    pabPoints: j['pabPoints'] ?? 2,
+    bakuLast: j['bakuLast'] ?? '',
   );
+}
+
+/// A FIDE official: an arbiter's name and FIDE ID.
+class FideOfficial {
+  const FideOfficial({this.name = '', this.id = ''});
+  final String name;
+  final String id;
+
+  bool get isEmpty => name.isEmpty && id.isEmpty;
+  Json toJson() => {'name': name, 'id': id};
+
+  @override
+  bool operator ==(Object other) =>
+      other is FideOfficial && other.name == name && other.id == id;
+  @override
+  int get hashCode => Object.hash(name, id);
+}
+
+/// FIDE registration details shared by the event's FIDE-rated sections
+/// (TRF records 032, 102 and 112). Stored under `Event.fide` as
+/// `federation`, `chiefArbiter`, `chiefArbiterId` and `deputies` (a list
+/// of `{name, id}`).
+class FideRegistration {
+  const FideRegistration({
+    this.federation = '',
+    this.chiefArbiter = const FideOfficial(),
+    this.deputies = const [],
+  });
+
+  /// Three capital letters; blank reports as [defaultFederation].
+  final String federation;
+  final FideOfficial chiefArbiter;
+  final List<FideOfficial> deputies;
+
+  static const defaultFederation = 'USA';
+
+  /// The federation TRF record 032 reports.
+  String get reportFederation =>
+      federation.trim().isEmpty ? defaultFederation : federation.trim();
+
+  bool get isEmpty =>
+      federation.isEmpty && chiefArbiter.isEmpty && deputies.isEmpty;
+
+  /// Every official with a role label: the chief arbiter, then deputies.
+  List<(String, FideOfficial)> get officials => [
+    if (!chiefArbiter.isEmpty) ('Chief arbiter', chiefArbiter),
+    for (final d in deputies) ('Deputy ${d.name}'.trim(), d),
+  ];
+
+  FideRegistration copy({
+    String? federation,
+    FideOfficial? chiefArbiter,
+    List<FideOfficial>? deputies,
+  }) => FideRegistration(
+    federation: federation ?? this.federation,
+    chiefArbiter: chiefArbiter ?? this.chiefArbiter,
+    deputies: deputies ?? this.deputies,
+  );
+
+  Json toJson() => {
+    if (federation.isNotEmpty) 'federation': federation,
+    if (chiefArbiter.name.isNotEmpty) 'chiefArbiter': chiefArbiter.name,
+    if (chiefArbiter.id.isNotEmpty) 'chiefArbiterId': chiefArbiter.id,
+    if (deputies.isNotEmpty) 'deputies': [for (final d in deputies) d.toJson()],
+  };
+
+  /// Reads the stored object. Malformed values (automation, a hand-edited
+  /// file) are refused with a message rather than a type error.
+  factory FideRegistration.fromJson(Object? j) {
+    if (j == null) return const FideRegistration();
+    if (j is! Map) {
+      throw const TournamentException(
+        'FIDE registration is an object with the officials and federation.',
+      );
+    }
+    String text(Object? value) => switch (value) {
+      null => '',
+      final String s => s,
+      final num n => '$n',
+      _ => throw const TournamentException(
+        'FIDE officials and the federation are text.',
+      ),
+    };
+    final deputies = j['deputies'] ?? const [];
+    if (deputies is! List || deputies.any((d) => d is! Map)) {
+      throw const TournamentException(
+        'Deputy arbiters are a list of names and FIDE IDs.',
+      );
+    }
+    return FideRegistration(
+      federation: text(j['federation']),
+      chiefArbiter: FideOfficial(
+        name: text(j['chiefArbiter']),
+        id: text(j['chiefArbiterId']),
+      ),
+      deputies: List.unmodifiable([
+        for (final d in deputies.cast<Map>())
+          FideOfficial(name: text(d['name']), id: text(d['id'])),
+      ]),
+    );
+  }
 }
 
 class Event {
@@ -753,7 +1008,10 @@ class Event {
     List<String> tiebreaks = const [],
     this.online = false,
     List<Json> rulings = const [],
+    this.fide = const FideRegistration(),
+    List<String> fideTiebreaks = const [],
   }) : rosterSource = Map.unmodifiable(rosterSource),
+       fideTiebreaks = List.unmodifiable(fideTiebreaks),
        players = List.unmodifiable(players),
        sections = List.unmodifiable(sections),
        tiebreaks = List.unmodifiable(tiebreaks),
@@ -774,6 +1032,13 @@ class Event {
 
   /// Chapter 10: an online event, reported with online rating categories.
   final bool online;
+
+  /// FIDE registration details shared by the event's FIDE-rated sections.
+  final FideRegistration fide;
+
+  /// C.07: the announced FIDE tie-break order for FIDE-rated sections, by
+  /// TRF code (`BH:C1`, `BH`, `SB`, …). Empty uses the C.07 recommendation.
+  final List<String> fideTiebreaks;
 
   /// Rules 13I, 20K, 21H–L, 18G: the ruling, penalty and appeal log.
   /// Each entry has `id`, `at`, `kind`, `round`, `section`, `players`,
@@ -848,6 +1113,8 @@ class Event {
     List<String>? tiebreaks,
     bool? online,
     List<Json>? rulings,
+    FideRegistration? fide,
+    List<String>? fideTiebreaks,
   }) => Event(
     id: id,
     name: name ?? this.name,
@@ -881,6 +1148,8 @@ class Event {
     tiebreaks: tiebreaks ?? this.tiebreaks,
     online: online ?? this.online,
     rulings: rulings ?? this.rulings,
+    fide: fide ?? this.fide,
+    fideTiebreaks: fideTiebreaks ?? this.fideTiebreaks,
   );
   Json toJson() => {
     'id': id,
@@ -913,6 +1182,8 @@ class Event {
     if (tiebreaks.isNotEmpty) 'tiebreaks': tiebreaks,
     if (online) 'online': online,
     if (rulings.isNotEmpty) 'rulings': rulings,
+    if (!fide.isEmpty) 'fide': fide.toJson(),
+    if (fideTiebreaks.isNotEmpty) 'fideTiebreaks': fideTiebreaks,
   };
   factory Event.fromJson(Json j) => Event(
     id: j['id'],
@@ -949,6 +1220,8 @@ class Event {
         (r) => Map<String, dynamic>.from(r as Map),
       ),
     ),
+    fide: FideRegistration.fromJson(j['fide']),
+    fideTiebreaks: List<String>.from(j['fideTiebreaks'] ?? const []),
   );
   String encode() => jsonEncode(toJson());
   factory Event.decode(String source) => Event.fromJson(jsonDecode(source));
@@ -1083,6 +1356,8 @@ void validateEvent(Event e) {
       p.byes.entries.every((b) => b.key > 0 && b.value >= 0 && b.value <= 2),
       'Invalid bye reservation.',
     );
+    final fideProblem = fideFieldsProblem(p);
+    require(fideProblem == null, fideProblem ?? '');
     require(
       [
         p.pairingRating,
@@ -1107,8 +1382,46 @@ void validateEvent(Event e) {
   );
   final liveBoards = <int>{};
   final livePeople = <String>{};
+  require(
+    e.fide.federation.isEmpty || isFederationCode(e.fide.federation),
+    'The FIDE federation is three capital letters, such as USA.',
+  );
+  require(
+    e.fide.officials.every((o) => o.$2.id.isEmpty || isFideId(o.$2.id)),
+    'A FIDE ID is digits only, up to eleven.',
+  );
+  for (final code in e.fideTiebreaks) {
+    require(
+      tiebreakMethod(code)?.fide ?? false,
+      'Unknown FIDE tie-break "$code".',
+    );
+  }
   for (final s in e.sections) {
     final sectionPeople = <String>{};
+    require(
+      !s.fideRated || fideFormats.contains(s.format),
+      'FIDE rates Swiss, round-robin and quad sections only.',
+    );
+    require(
+      !s.fideRated ||
+          s.format != Format.swiss ||
+          (!s.doubleGames &&
+              (s.accelerated.isEmpty || s.accelerated == 'baku')),
+      'A FIDE-rated Swiss plays one game per round; its only acceleration is the Baku method.',
+    );
+    require(
+      s.accelerated != 'baku' || (s.fideRated && s.format == Format.swiss),
+      'The Baku acceleration is for FIDE-rated Swiss sections.',
+    );
+    require(
+      const {0, 1, 2}.contains(s.pabPoints) &&
+          (s.pabPoints == 2 || (s.fideRated && s.format == Format.swiss)),
+      'A pairing-allocated bye scores a win, a draw or nothing, and only a FIDE-rated Swiss changes it.',
+    );
+    require(
+      s.fideRanking.isEmpty || fideRankingMethods.containsKey(s.fideRanking),
+      'Unknown FIDE ranking method "${s.fideRanking}".',
+    );
     if (s.quadPairings.isNotEmpty) {
       require(
         s.quadPairings.length == 3 &&
@@ -1136,7 +1449,13 @@ void validateEvent(Event e) {
       'Invalid section settings.',
     );
     require(
-      ['', 'addedScore', 'adjustedRating', 'sixths'].contains(s.accelerated),
+      [
+        '',
+        'addedScore',
+        'adjustedRating',
+        'sixths',
+        'baku',
+      ].contains(s.accelerated),
       'Invalid accelerated pairing method.',
     );
     require(['', 'crenshaw'].contains(s.rrTable), 'Invalid round-robin table.');
@@ -1195,8 +1514,19 @@ void validateEvent(Event e) {
           g.pairingAssumption == null ||
               (!g.outcome.resolved &&
                   g.pairingAssumption!.played &&
+                  !g.pairingAssumption!.unusual &&
                   g.pairingReason.trim().isNotEmpty),
           'A temporary pairing treatment needs an unresolved game and a reason.',
+        );
+        require(
+          !g.outcome.unusual && !(g.prizeOutcome?.unusual ?? false) ||
+              s.unrated,
+          'US Chess cannot report ½–0, 0–½ or a played 0–0. Use them only in a section US Chess does not rate.',
+        );
+        require(
+          !g.shortGame ||
+              (s.fideRated && g.outcome.played && !g.outcome.unusual),
+          'Only a played 1–0, ½–½ or 0–1 in a FIDE-rated section can be marked as lasting less than one move.',
         );
         require(
           ids.contains(g.white) && ids.contains(g.black) && g.white != g.black,

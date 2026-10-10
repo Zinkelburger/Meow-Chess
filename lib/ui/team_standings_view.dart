@@ -85,7 +85,7 @@ class TeamStandingsTable extends StatelessWidget {
                 ),
                 for (final m in teamTiebreakMethods)
                   Tooltip(
-                    message: '${m.label} total (12.3.3)',
+                    message: '${m.label} total',
                     child: cell(56, Text(m.short)),
                   ),
               ],

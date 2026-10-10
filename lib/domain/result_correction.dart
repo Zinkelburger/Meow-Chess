@@ -82,6 +82,7 @@ class ResultCorrection {
     int? reopenFrom,
     bool confirmedUnstarted = false,
     bool? adjudicated,
+    bool? shortGame,
   }) {
     if (reopenFrom != null &&
         (!canReopenFrom(reopenFrom) || !confirmedUnstarted)) {
@@ -111,6 +112,14 @@ class ResultCorrection {
                                             // stays marked until unmarked.
                                             adjudicated:
                                                 adjudicated ?? g.adjudicated,
+                                            // FIDE: a game of less than one
+                                            // move, kept only on a played
+                                            // 1–0, ½–½ or 0–1.
+                                            shortGame:
+                                                (shortGame ?? g.shortGame) &&
+                                                outcome.played &&
+                                                !outcome.unusual &&
+                                                section.fideRated,
                                             // The note is optional; an empty
                                             // one keeps what the game had.
                                             note: reason.trim().isEmpty

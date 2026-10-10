@@ -82,6 +82,49 @@ const helpArticles = [
     ],
   ),
   HelpArticle(
+    'fide',
+    'FIDE-rated sections',
+    'Rate a section by FIDE, alone or with US Chess, and make its FIDE report.',
+    [
+      (
+        'Choose how a section is rated',
+        'Open the section\'s settings and set Rated by: US Chess, US Chess and FIDE, FIDE only, or Not rated. FIDE rates Swiss, round-robin and quad sections, and registers each section as its own tournament. The time control decides FIDE\'s list: standard from 60 minutes per player for 60 moves, rapid above 10 and under 60, blitz above 3 up to 10. A delay counts as an increment.',
+      ),
+      (
+        'How a FIDE Swiss is paired',
+        'A FIDE-rated Swiss is paired by the FIDE Dutch system (C.04.3, the rules in force since 1 February 2026) using BBP Pairings, the engine SwissSys uses for its FIDE pairings. Pairing numbers come from FIDE ratings, then title, then name; in a dual-rated section a player FIDE has not rated is ranked by their US Chess rating (Pairing rules → Pairing numbers by). Requested byes and do-not-pair requests carry over. The choice is made before round 1, because it changes the pairing system.',
+      ),
+      (
+        'Acceleration and the bye\'s value',
+        'Pairing rules offers the Baku acceleration (C.04.7), FIDE\'s only one: the top half of the field, rounded up to an even number, pairs with a virtual point in the first rounds and half a point in the next, so leaders meet sooner. The same group holds after late entries. Pairing-allocated bye scores sets what the odd player out receives: a win (the default), a draw or nothing. Both are announced before round 1 and fixed once the section is paired.',
+      ),
+      (
+        'Unusual results, adjourned games and byes',
+        'Correct a result offers ½–0, 0–½ and a played 0–0 in sections US Chess does not rate, and marks a game that lasted less than one move: its result stands, FIDE does not rate it. An adjourned game (Still playing) counts as a draw for the next pairing only; enter its result before pairing the round after. A full-point bye is allowed but FIDE deprecates it, and the player panel says so. Do-not-pair requests from round 3 on are noted in the pairing explanation.',
+      ),
+      (
+        'FIDE identity',
+        'Each player in a FIDE-rated section needs a FIDE ID; the player panel\'s FIDE group holds it with the standard, rapid and blitz ratings, title, federation, birth date and sex. Checking a player with US Chess offers the FIDE ID US Chess has on file. Player tools → FIDE ratings downloads FIDE\'s monthly rating list (or uses a list ZIP you already have) and fills ratings, titles, federations and birth years by FIDE ID, reviewed before they apply. Find on the FIDE list in a player\'s FIDE group searches it by name.',
+      ),
+      (
+        'Tie-breaks',
+        'FIDE-rated sections rank ties by FIDE tie-breaks (C.07, 2026). C.07 sets no default, so Meow-Chess starts from Buchholz Cut-1, Buchholz, Sonneborn–Berger, direct encounter and wins for a Swiss, and direct encounter, wins, Sonneborn–Berger and Koya for a round robin. Change the order in Event details → Standings → Tie-breaks before round 1. Byes, forfeits and withdrawals count as Article 16 says.',
+      ),
+      (
+        'The FIDE report',
+        'Export shows the FIDE rating report below the US Chess one, with what still needs fixing. Generate TRF files writes one TRF-2026 file per FIDE-rated section, the format FIDE\'s rating server reads. Event details → FIDE holds the chief arbiter, deputies and federation. In the United States, US Chess takes FIDE-rated events only as the file of a FIDE-endorsed pairing program, not as TRF. Meow-Chess is not endorsed. SwissSys, for one, can open a TRF file.',
+      ),
+      (
+        'Import a TRF file',
+        'Import FIDE report, on the start screen, makes a new event from a TRF file (TRF26, TRF16 or TRF06, as other pairing programs write them): players with their FIDE data, every round with its games, forfeits and byes, the tie-break order, the bye\'s value and the Baku acceleration. Absences announced for later rounds become requested byes, so a tournament begun elsewhere can be paired on here. Anything the file holds that Meow-Chess cannot keep is listed in the event\'s notes.',
+      ),
+      (
+        'Check a tournament, or simulate one',
+        'The FIDE tools run from a terminal. meow_chess -check FILE.trf rebuilds the tournament in a TRF, pairs every round again with the FIDE Dutch engine, ranks the standings by the file\'s tie-breaks and lists every difference (--inputs DIR also saves what the engine read for each round). meow_chess -generate --output FILE simulates FIDE Swiss tournaments with results drawn from the FIDE rating table, with options for byes, forfeits, withdrawals, late entries, the Baku acceleration and the bye\'s value. meow_chess -pair FILE pairs the next round of a TRF. meow_chess -help lists every option.',
+      ),
+    ],
+  ),
+  HelpArticle(
     'round-robin',
     'How round robins work',
     'A fixed schedule lets every player meet every other player.',

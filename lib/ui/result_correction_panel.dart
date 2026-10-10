@@ -72,6 +72,9 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
 
   /// Rule 18G: the result was adjudicated by the director.
   bool adjudicated = false;
+
+  /// FIDE: the game lasted less than one move (TRF W, D, L).
+  bool shortGame = false;
   String? error;
 
   /// What was saved, so the panel can confirm it and offer Undo in place.
@@ -105,6 +108,7 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
     reopenFrom = draft['reopenFrom'] as int?;
     adjudicated =
         draft['adjudicated'] as bool? ?? review?.game.adjudicated ?? false;
+    shortGame = draft['shortGame'] as bool? ?? review?.game.shortGame ?? false;
     note.addListener(remember);
     c.addListener(changed);
     final initial = outcome ?? review?.game.outcome;
@@ -139,6 +143,7 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
       'note': note.text,
       'reopenFrom': ?reopenFrom,
       'adjudicated': adjudicated,
+      'shortGame': shortGame,
     });
   }
 
@@ -170,9 +175,23 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
     Outcome.unreported,
   ];
 
+  /// FIDE VCL.13: ½–0, 0–½ and a played 0–0, offered where US Chess does
+  /// not rate the section.
+  static const _unusual = [
+    Outcome.whiteHalf,
+    Outcome.blackHalf,
+    Outcome.bothLose,
+  ];
+
+  /// FIDE keeps the result of a game that lasted less than one move but
+  /// does not rate it; only a played 1–0, ½–½ or 0–1 can be one.
+  bool offersShortGame(ResultCorrection r, Outcome chosen) =>
+      r.section.fideRated && chosen.played && !chosen.unusual;
+
   /// Why Save is unavailable, said beside it instead of greying it silently.
   String? blocker(ResultCorrection r, Outcome chosen) {
-    if (chosen == r.game.outcome) {
+    if (chosen == r.game.outcome &&
+        (!offersShortGame(r, chosen) || shortGame == r.game.shortGame)) {
       return 'Choose a result different from the recorded ${r.game.outcome.label}.';
     }
     if (reopenFrom != null && !confirmed) {
@@ -197,6 +216,7 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
         reopenFrom: reopened,
         confirmedUnstarted: confirmed,
         adjudicated: adjudicated,
+        shortGame: offersShortGame(r, chosen) ? shortGame : false,
       );
       c.workspaceState.write(draftKey, '');
       setState(() {
@@ -284,7 +304,11 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
     final g = r.game, e = r.event, colors = Theme.of(context).colorScheme;
     final white = e.player(g.white).name, black = e.player(g.black).name;
     final chosen = outcome ?? g.outcome;
-    final visible = [..._main, if (more) ..._more];
+    final visible = [
+      ..._main,
+      if (more) ..._more,
+      if (more && r.section.unrated) ..._unusual,
+    ];
     final why = blocker(r, chosen);
     final muted = TextStyle(fontSize: 13, color: colors.onSurfaceVariant);
     String name(Outcome o) => switch (o) {
@@ -297,6 +321,9 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
       Outcome.unfinished => 'Still playing',
       Outcome.disputed => 'Disputed',
       Outcome.unreported => 'No result',
+      Outcome.whiteHalf => '$white ½, $black 0',
+      Outcome.blackHalf => '$white 0, $black ½',
+      Outcome.bothLose => 'Both scored 0',
     };
     String keys(Outcome o) => switch (o) {
       Outcome.whiteWin => '1',
@@ -308,6 +335,7 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
       Outcome.unfinished => 'P',
       Outcome.disputed => '?',
       Outcome.unreported => 'Del',
+      Outcome.whiteHalf || Outcome.blackHalf || Outcome.bothLose => '',
     };
     final later = [
       for (final round in r.later) (r.section, round, false),
@@ -390,7 +418,7 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 key: const ValueKey('correction-more'),
-                onPressed: _more.contains(chosen)
+                onPressed: _more.contains(chosen) || _unusual.contains(chosen)
                     ? null
                     : () => setState(() => more = !more),
                 icon: Icon(more ? Icons.expand_less : Icons.expand_more),
@@ -483,6 +511,17 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
                 remember();
               }),
             ),
+            if (offersShortGame(r, chosen))
+              _Confirm(
+                key: const ValueKey('result-short-game'),
+                value: shortGame,
+                label:
+                    'Lasted less than one move: the result stands, FIDE does not rate the game',
+                onChanged: (v) => setState(() {
+                  shortGame = v;
+                  remember();
+                }),
+              ),
             const SizedBox(height: 8),
             // Enter saves from the note too; Shift+Enter starts a new line.
             CallbackShortcuts(

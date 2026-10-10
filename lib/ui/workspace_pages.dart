@@ -239,10 +239,11 @@ class PostControl extends StatelessWidget {
     );
   }
   final open = active.where((s) => s.rounds.length < s.plannedRounds).toList();
-  int waiting(Section s) => s.rounds
-      .expand((r) => r.games)
-      .where((g) => !g.outcome.resolved && g.pairingAssumption == null)
-      .length;
+  int waiting(Section s) => [
+    for (final r in s.rounds)
+      for (final g in r.games)
+        if (!g.outcome.resolved && !pairsWithoutResult(s, r.number, g)) g,
+  ].length;
   if (open.isEmpty) {
     final missing = active
         .expand((s) => s.rounds)

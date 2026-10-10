@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'bye_policy.dart';
 import 'knockout.dart';
 import 'ladder.dart';
+import 'fide.dart';
 import 'model.dart';
 import 'tiebreaks.dart';
 
@@ -298,6 +299,16 @@ List<String> describeChanges(
           : 'Tie-break order: ${after.tiebreaks.map(tiebreakLabel).join(', ')}',
     );
   }
+  if (before.fideTiebreaks.join('|') != after.fideTiebreaks.join('|')) {
+    out.add(
+      after.fideTiebreaks.isEmpty
+          ? 'FIDE tie-break order: C.07 default'
+          : 'FIDE tie-break order: ${after.fideTiebreaks.join(', ')}',
+    );
+  }
+  if (jsonEncode(before.fide.toJson()) != jsonEncode(after.fide.toJson())) {
+    out.add('FIDE officials and federation changed');
+  }
   if (jsonEncode(before.rosterSource) != jsonEncode(after.rosterSource)) {
     out.add('Roster source changed');
   }
@@ -358,6 +369,22 @@ List<String> describeChanges(
         'rating evidence changed',
       if (o.membershipEvidence.toString() != p.membershipEvidence.toString())
         'US Chess membership: ${p.membershipEvidence['expiration'] ?? 'date unavailable'} (${p.membershipEvidence['status'] ?? 'unknown'})',
+      if (o.fideId != p.fideId)
+        'FIDE ID ${value(o.fideId.isEmpty ? '(none)' : o.fideId, p.fideId.isEmpty ? '(none)' : p.fideId)}',
+      for (final (label, a, b) in [
+        ('FIDE standard', o.fideStandard, p.fideStandard),
+        ('FIDE rapid', o.fideRapid, p.fideRapid),
+        ('FIDE blitz', o.fideBlitz, p.fideBlitz),
+      ])
+        if (a != b)
+          '$label ${value(a == 0 ? 'unrated' : a, b == 0 ? 'unrated' : b)}',
+      if (o.title != p.title)
+        'title ${value(o.title.isEmpty ? '(none)' : o.title, p.title.isEmpty ? '(none)' : p.title)}',
+      if (o.federation != p.federation)
+        'federation ${value(_short(o.federation), _short(p.federation))}',
+      if (o.birthDate != p.birthDate)
+        'birth date ${value(_short(o.birthDate), _short(p.birthDate))}',
+      if (o.sex != p.sex) 'sex ${value(_short(o.sex), _short(p.sex))}',
       if (o.memberId != p.memberId)
         'US Chess ID ${value(o.memberId.isEmpty ? '(none)' : o.memberId, p.memberId.isEmpty ? '(none)' : p.memberId)}',
       if (o.checkedIn != p.checkedIn)
@@ -424,8 +451,12 @@ List<String> describeChanges(
             ? 'team awards off'
             : 'team awards: ${(s.prizes['teams'] as Map)['method'] == 'rollins' ? 'Rollins' : 'top'} ${(s.prizes['teams'] as Map)['counting'] ?? 4} count',
       ..._bracketChanges(after, o, s, name),
-      if (o.unrated != s.unrated)
-        s.unrated ? 'left out of the rating report' : 'rated',
+      if (o.unrated != s.unrated || o.fideRated != s.fideRated)
+        'rated by ${RatedBy.of(s).label}',
+      if (o.fideRanking != s.fideRanking)
+        'FIDE ranking ${s.fideRanking.isEmpty ? 'default' : s.fideRanking}',
+      if (o.pabPoints != s.pabPoints)
+        'pairing-allocated bye scores ${const ['nothing', 'a draw', 'a win'][s.pabPoints]}',
       if (jsonEncode(o.partners) != jsonEncode(s.partners))
         s.partners.isEmpty
             ? 'partnerships cleared'

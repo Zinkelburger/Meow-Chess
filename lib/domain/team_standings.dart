@@ -19,7 +19,7 @@ enum TeamScoring {
   /// Rule 31A1, Rollins (military) scoring: each player earns the field
   /// size minus their overall place (the winner of a 100-player event
   /// earns 99), and a team adds its top N players' points.
-  rollins('rollins', 'Rollins (31A1)');
+  rollins('rollins', 'Rollins points');
 
   const TeamScoring(this.code, this.label);
   final String code, label;

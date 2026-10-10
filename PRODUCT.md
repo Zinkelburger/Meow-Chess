@@ -30,14 +30,15 @@ Secondary strengths that support that position: keyboard-speed results, walk-up 
 - **Events are files:** each event is a local `.meow` SQLite file, opened from a recent-event library or by double-click. No account or network is needed to run rounds; network only enriches ratings and identity, and a failed lookup never blocks result entry or printing.
 - **Paper is a real output:** pairings, wall sheets, ASCII crosstables and round packets are printed on white paper.
 - **Inputs:** pasted or imported registration tables (often messy, with stale or conflicting data), the US Chess ratings API, TD decisions at the door.
-- **Output to the federation:** the US Chess DBF rating-report package.
+- **Output to the federation:** the US Chess DBF rating-report package, and a TRF26 file per FIDE-rated section.
 - **One workspace:** an Event tab plus one tab per section; within a section, Players, Rounds, Standings, Reports and Section settings. A contextual, closable inspector or side panel, not a second permanent sidebar.
 
 ## Capabilities and Constraints
 
 - Shipped (1.0.0): event library and workspace, roster import, identity review, quads and individual Swiss/round-robin sections, keyboard results entry, standings and crosstables, reports and printing, history tree with undo/redo and restore, US Chess DBF export. `docs/IMPLEMENTATION.md` is the authority on what is built and tested.
 - Unverified: US Chess federation acceptance of exports and full Swiss pairing-priority conformance. Never claim either.
-- Planned scope (team standings, bughouse, online events, leagues, accelerated pairings, FIDE) lives in `docs/PRODUCT_PLAN.md` and `docs/FULL_FEATURE_MAP.md`; it is not shipped.
+- FIDE-rated sections (built 2026-10-10, `docs/FIDE.md`): per-section Rated by (US Chess, US Chess and FIDE, FIDE only), FIDE Dutch pairings through the bundled BBP Pairings engine, C.07 tie-breaks, the FIDE monthly rating list, and TRF26 report files. Meow-Chess is not a FIDE-endorsed program, and US Chess does not process TRF files; never claim either.
+- Planned scope (team standings, bughouse, online events, leagues, accelerated pairings) lives in `docs/PRODUCT_PLAN.md` and `docs/FULL_FEATURE_MAP.md`; it is not shipped.
 - New events use the normal creation flow; no practice-event or practice-copy creation. Legacy practice files retain their identity and reporting restrictions.
 - Empty inputs have labels, without example placeholders or suggested values; preserve saved user values and drafts.
 - No attendance/check-in workflow: pair all eligible registered players. Record no-shows as forfeits and offer withdrawal; do not require an arrival flag before pairing. This is the user’s explicit direction.

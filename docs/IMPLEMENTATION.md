@@ -181,8 +181,11 @@ from source reports and the remaining portal-validation boundary.
   testing on each OS and working-TD usability rehearsal. Linux/Windows native
   workflows and recovery, Windows installer launch, and macOS artifact publication
   have automated gates described in [TESTING.md](TESTING.md).
-- Later tranches: team matches, bughouse, native SwissSys interchange, FIDE and hosted
-  services. They remain in the product plan and are not represented by empty screens.
+- Later tranches: team matches, native SwissSys interchange, FIDE endorsement and
+  hosted services. FIDE-rated sections (Dutch pairings with Baku acceleration, all
+  MTB26 tie-breaks, TRF26 reports and TRF import, the FIDE rating list, and a
+  pairings and tie-breaks checker with a random tournament generator) are built;
+  see [FIDE](FIDE.md) for what is and is not verified. They remain in the product plan and are not represented by empty screens.
 
 The application is a development pilot. It must not be described as having passed
 all P0 requirements or full SwissSys parity.

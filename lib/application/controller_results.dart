@@ -17,6 +17,7 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
     int? reopenFrom,
     bool confirmedUnstarted = false,
     bool? adjudicated,
+    bool? shortGame,
   }) {
     if (event!.id != review.event.id ||
         event!.revision != review.event.revision) {
@@ -31,12 +32,17 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
         reopenFrom: reopenFrom,
         confirmedUnstarted: confirmedUnstarted,
         adjudicated: adjudicated,
+        shortGame: shortGame,
       ),
       review.gameId,
     );
+    final shortChanged =
+        outcome == review.game.outcome &&
+        shortGame != null &&
+        shortGame != review.game.shortGame;
     change(
       'Correct ${review.section.name} round ${review.round.number}, board ${review.game.board}: '
-      '${review.game.outcome.label} → ${outcome.label}'
+      '${shortChanged ? (shortGame ? 'lasted less than one move' : 'a full game') : '${review.game.outcome.label} → ${outcome.label}'}'
       '${reopenFrom == null ? '' : ', unpair from round $reopenFrom'}'
       '${reason.trim().isEmpty ? '' : ' · ${reason.trim()}'}',
       next,
@@ -110,9 +116,21 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
 
   void setPairingAssumption(String gameId, Outcome assumption, String reason) {
     final (e, game) = _materialize(gameId);
-    if (game.outcome.resolved || !assumption.played || reason.trim().isEmpty) {
+    if (game.outcome.resolved ||
+        !assumption.played ||
+        assumption.unusual ||
+        reason.trim().isEmpty) {
       throw const TournamentException(
         'Choose a win, draw or loss assumption for an unresolved game and record the TD’s reason.',
+      );
+    }
+    // C.04.2 3.1: FIDE pairs an adjourned game as a draw.
+    final section = e.sections.firstWhere(
+      (s) => s.rounds.any((r) => r.games.any((g) => g.id == gameId)),
+    );
+    if (section.fideRated && assumption != Outcome.draw) {
+      throw const TournamentException(
+        'A FIDE section pairs an unfinished game as a draw (C.04.2 3.1). Assume a draw.',
       );
     }
     change(

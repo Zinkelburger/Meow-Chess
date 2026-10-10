@@ -8,13 +8,17 @@ import '../application/member_lookup_batch.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
+import '../domain/fide.dart';
+import '../domain/fixed_schedule.dart';
 import '../infrastructure/dbf_export.dart';
+import '../infrastructure/fide_export.dart';
 import 'dialogs.dart';
 import 'panels.dart';
 import 'prize_panel.dart';
 import '../infrastructure/reports.dart' show ReportKind;
 import 'drafts.dart';
 import 'event_panel.dart';
+import 'fide_list_panel.dart';
 import 'player_panel.dart';
 import 'side_panel.dart';
 import '../infrastructure/member_directory.dart';
@@ -39,7 +43,7 @@ class ReportsView extends StatefulWidget {
 class _ReportsViewState extends State<ReportsView> {
   final detailsKey = GlobalKey<ReportDetailsState>();
   final scroll = ScrollController();
-  bool fetchingStates = false, showAdvice = false;
+  bool fetchingStates = false, showAdvice = false, showFideAdvice = false;
   String? stateNotice;
   TournamentController get controller => widget.controller;
   @override
@@ -146,6 +150,25 @@ class _ReportsViewState extends State<ReportsView> {
     }
   }
 
+  Future<void> exportFide(BuildContext context) async {
+    final event = controller.event!;
+    try {
+      final folder = await getDirectoryPath(confirmButtonText: 'Save here');
+      if (folder == null) return;
+      final path = await writeFideReport(event, folder);
+      if (controller.event?.id == event.id) {
+        controller.secondaryBackup();
+        controller.repository.writePreference(
+          'lastFideExport',
+          '$path|${event.revision}',
+        );
+        if (mounted) setState(() {});
+      }
+    } catch (e) {
+      if (context.mounted) showFailure(context, e);
+    }
+  }
+
   /// Players in reported sections who have no state yet.
   List<Player> _stateless(Event e) => [
     for (final s in reportedSections(e))
@@ -221,6 +244,8 @@ class _ReportsViewState extends State<ReportsView> {
   @override
   Widget build(BuildContext context) {
     final e = controller.event!, all = ratingIssues(e);
+    final fide = hasFideSection(e);
+    final usChess = !fide || reportedSections(e).isNotEmpty;
     final issues = [
           for (final i in all)
             if (i.blocking) i,
@@ -239,12 +264,19 @@ class _ReportsViewState extends State<ReportsView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _header(context, e, issues),
-              if (issues.isNotEmpty || advice.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                _checks(context, e, issues, advice),
+              // A FIDE-only event has no US Chess report to make.
+              if (usChess) ...[
+                _header(context, e, issues),
+                if (issues.isNotEmpty || advice.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  _checks(context, e, issues, advice),
+                ],
+                const SizedBox(height: 32),
               ],
-              const SizedBox(height: 32),
+              if (fide && !usChess) ...[
+                _fideReport(context, e),
+                const SizedBox(height: 32),
+              ],
               ReportDetails(
                 key: detailsKey,
                 controller: controller,
@@ -255,8 +287,14 @@ class _ReportsViewState extends State<ReportsView> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
-              _sections(context, e),
+              if (usChess) ...[
+                const SizedBox(height: 32),
+                _sections(context, e),
+              ],
+              if (fide && usChess) ...[
+                const SizedBox(height: 48),
+                _fideReport(context, e),
+              ],
               const SizedBox(height: 32),
               _prizes(context, e),
               const SizedBox(height: 32),
@@ -616,6 +654,224 @@ class _ReportsViewState extends State<ReportsView> {
     );
   }
 
+  /// The FIDE report: one TRF26 file per FIDE-rated section, its checks
+  /// beside their fixes, and how FIDE will rate each section. Its own
+  /// region, so it has its own filled action.
+  Widget _fideReport(BuildContext context, Event e) {
+    final theme = Theme.of(context), colors = theme.colorScheme;
+    final muted = TextStyle(color: colors.onSurfaceVariant);
+    final all = fideIssues(e);
+    final issues = [
+      for (final i in all)
+        if (i.blocking) i,
+    ];
+    final advice = [
+      for (final i in all)
+        if (!i.blocking) i,
+    ];
+    final sections = fideSections(e);
+    final saved = controller.repository.readPreference('lastFideExport');
+    final fix = MediaQuery.textScalerOf(context).scale(200);
+    final dual = sections.any((s) => !s.unrated);
+    return Column(
+      key: const ValueKey('fide-report'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('FIDE rating report', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 4),
+                  Text(
+                    issues.isEmpty
+                        ? 'Ready to generate · ${sections.length == 1 ? '1 file' : '${sections.length} files'}'
+                        : '${issues.length} ${issues.length == 1 ? 'problem' : 'problems'} to fix before generating',
+                    key: ValueKey(
+                      issues.isEmpty ? 'fide-ready' : 'fide-blocked',
+                    ),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    dual
+                        ? 'One TRF file per FIDE-rated section, for FIDE\'s rating server. US Chess does not accept TRF files (see Help). Not yet tested with FIDE.'
+                        : 'One TRF file per FIDE-rated section, for your federation\'s rating officer. Not yet tested with FIDE.',
+                    style: muted,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 24),
+            FilledButton.icon(
+              key: const ValueKey('generate-trf'),
+              onPressed: issues.isEmpty ? () => exportFide(context) : null,
+              icon: const Icon(Icons.folder_outlined, size: 18),
+              label: const Text('Generate TRF files'),
+            ),
+          ],
+        ),
+        if (saved != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Semantics(
+              liveRegion: true,
+              child: SelectableText(
+                'TRF files saved to ${saved.substring(0, saved.lastIndexOf('|'))}\n'
+                '${saved.split('|').last == '${e.revision}' ? 'Includes the current event revision.' : 'Newer changes are not included. Save again to update the report.'}',
+                style: muted,
+              ),
+            ),
+          ),
+        if (issues.isNotEmpty || advice.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _Sheet(
+            key: const ValueKey('fide-checks'),
+            children: [
+              _ColumnHeader([
+                const Expanded(child: Text('Problem')),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: fix,
+                  child: const Padding(
+                    padding: EdgeInsets.only(left: 8),
+                    child: Text('Fix'),
+                  ),
+                ),
+              ]),
+              for (final issue in issues) _issueRow(issue, fix),
+              if (advice.isNotEmpty)
+                Semantics(
+                  button: true,
+                  expanded: showFideAdvice,
+                  child: InkWell(
+                    key: const ValueKey('fide-advice-details'),
+                    onTap: () =>
+                        setState(() => showFideAdvice = !showFideAdvice),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+                      decoration: BoxDecoration(
+                        color: colors.surfaceContainerLow.withValues(
+                          alpha: 0.5,
+                        ),
+                        border: Border(
+                          top: BorderSide(color: colors.outlineVariant),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            showFideAdvice
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                            size: 20,
+                            color: colors.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Optional · ${advice.length}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'The files can be made without these; FIDE may ask for them.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: colors.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              if (showFideAdvice)
+                for (final issue in advice) _issueRow(issue, fix),
+            ],
+          ),
+        ],
+        const SizedBox(height: 32),
+        Wrap(
+          spacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              'Sections in the FIDE report',
+              style: theme.textTheme.titleMedium,
+            ),
+            TextButton(
+              key: const ValueKey('report-fide-ratings'),
+              onPressed: () => showFideList(context, controller),
+              child: const Text('Update FIDE ratings…'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        _Sheet(
+          key: const ValueKey('fide-summary'),
+          children: [
+            _ColumnHeader(const [
+              Expanded(child: Text('Section')),
+              SizedBox(width: 12),
+              Expanded(child: Text('Rated by')),
+              SizedBox(width: 12),
+              Expanded(child: Text('FIDE list')),
+              SizedBox(width: 12),
+              Expanded(child: Text('Pairings')),
+            ]),
+            for (final s in sections)
+              _Ruled(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        s.name,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(RatedBy.of(s).label)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: switch (sectionFideCategory(e, s)) {
+                        final category? => Text(category.label),
+                        null => Text(
+                          '${s.effectiveTimeControl(e)} is not FIDE rated',
+                          style: TextStyle(
+                            color: colors.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        pairingFormat(s) == Format.swiss
+                            ? 'FIDE Dutch'
+                            : pairingFormat(s).label,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
   /// Rules 32–33: each section's prize table and the printed allocation.
   Widget _prizes(BuildContext context, Event e) {
     final dock = Dock.maybeOf(context);
@@ -717,7 +973,7 @@ class _ReportsViewState extends State<ReportsView> {
               kind: ReportKind.conditions,
             ),
             icon: const Icon(Icons.print_outlined, size: 18),
-            label: const Text('Event conditions sheet (rules 26A, 34B, 25)'),
+            label: const Text('Event conditions sheet'),
           ),
         ),
       ],
@@ -846,6 +1102,11 @@ class ReportDetailsState extends State<ReportDetails> {
   final fieldFocus = <String, FocusNode>{};
   TournamentController get c => widget.controller;
   bool get dirty => draft.dirty;
+
+  /// Whether the event has a US Chess report at all (any section US Chess
+  /// rated, or no sections yet).
+  bool get usChess =>
+      c.event!.sections.isEmpty || reportedSections(c.event!).isNotEmpty;
   Map<String, String> get stored {
     final e = c.event!;
     return {'city': e.city, 'state': e.state, 'zip': e.zip};
@@ -971,10 +1232,16 @@ class ReportDetailsState extends State<ReportDetails> {
                 ),
               ),
             ),
-            _Ruled(child: _Pair('Chief TD', id(e.tdId))),
-            if (e.assistantTdId.isNotEmpty)
-              _Ruled(child: _Pair('Assistant TD', id(e.assistantTdId))),
-            _Ruled(child: _Pair('Affiliate', id(e.affiliateId))),
+            // A FIDE-only event has no US Chess officials or affiliate.
+            if (usChess) ...[
+              _Ruled(child: _Pair('Chief TD', id(e.tdId))),
+              if (e.assistantTdId.isNotEmpty)
+                _Ruled(child: _Pair('Assistant TD', id(e.assistantTdId))),
+              _Ruled(child: _Pair('Affiliate', id(e.affiliateId))),
+            ] else if (e.fide.chiefArbiter.name.isNotEmpty)
+              _Ruled(
+                child: _Pair('Chief arbiter', Text(e.fide.chiefArbiter.name)),
+              ),
             _Ruled(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -985,61 +1252,63 @@ class ReportDetailsState extends State<ReportDetails> {
                     runSpacing: 8,
                     children: [
                       for (final (key, label, width) in _fields)
-                        SizedBox(
-                          width: width,
-                          child: TextField(
-                            key: ValueKey('report-$key'),
-                            controller: text[key],
-                            focusNode: fieldFocus.putIfAbsent(
-                              key,
-                              () => FocusNode(debugLabel: key),
+                        if (usChess || key == 'city')
+                          SizedBox(
+                            width: width,
+                            child: TextField(
+                              key: ValueKey('report-$key'),
+                              controller: text[key],
+                              focusNode: fieldFocus.putIfAbsent(
+                                key,
+                                () => FocusNode(debugLabel: key),
+                              ),
+                              textCapitalization: key == 'state'
+                                  ? TextCapitalization.characters
+                                  : TextCapitalization.words,
+                              decoration: InputDecoration(labelText: label),
+                              onChanged: (_) => setState(() {}),
+                              onSubmitted: (_) => commit(),
                             ),
-                            textCapitalization: key == 'state'
-                                ? TextCapitalization.characters
-                                : TextCapitalization.words,
-                            decoration: InputDecoration(labelText: label),
-                            onChanged: (_) => setState(() {}),
-                            onSubmitted: (_) => commit(),
                           ),
-                        ),
                     ],
                   ),
                 ),
               ),
             ),
-            _Ruled(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: _Pair(
-                  'Event type',
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Semantics(
-                      label: 'Event type',
-                      child: SizedBox(
-                        width: 300,
-                        child: PlainSelect<String?>(
-                          key: ValueKey('report-level-${e.level}'),
-                          focusNode: fieldFocus.putIfAbsent(
-                            'level',
-                            () => FocusNode(debugLabel: 'event type'),
+            if (usChess)
+              _Ruled(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: _Pair(
+                    'Event type',
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Semantics(
+                        label: 'Event type',
+                        child: SizedBox(
+                          width: 300,
+                          child: PlainSelect<String?>(
+                            key: ValueKey('report-level-${e.level}'),
+                            focusNode: fieldFocus.putIfAbsent(
+                              'level',
+                              () => FocusNode(debugLabel: 'event type'),
+                            ),
+                            value: sectionLevels.containsKey(e.level)
+                                ? e.level
+                                : null,
+                            options: [
+                              for (final MapEntry(:key, :value)
+                                  in sectionLevels.entries)
+                                SelectOption(key, value),
+                            ],
+                            onChanged: setLevel,
                           ),
-                          value: sectionLevels.containsKey(e.level)
-                              ? e.level
-                              : null,
-                          options: [
-                            for (final MapEntry(:key, :value)
-                                in sectionLevels.entries)
-                              SelectOption(key, value),
-                          ],
-                          onChanged: setLevel,
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
         if (error != null)

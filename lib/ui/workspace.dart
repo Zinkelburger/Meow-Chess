@@ -611,6 +611,7 @@ class _WorkspaceState extends State<Workspace> {
                                                   key: eventPanel,
                                                   controller: c,
                                                   onClose: toggleEvent,
+                                                  backLabel: dock.backLabel,
                                                 ),
                                               ),
                                             if (historyOpen)

@@ -164,8 +164,10 @@ void main() {
   test(
     'all nonblank outcomes protect play, including disputed and unfinished games',
     () async {
+      // ½–0, 0–½ and a played 0–0 are refused where US Chess rates the
+      // section (see the unusual-results test).
       for (final outcome in Outcome.values.where(
-        (o) => o != Outcome.unreported,
+        (o) => o != Outcome.unreported && !o.unusual,
       )) {
         final c = fixture();
         try {

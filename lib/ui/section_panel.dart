@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/bye_policy.dart';
+import '../domain/fide.dart';
 import '../domain/fixed_schedule.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart' show swissVariations, swissVariationLabels;
@@ -14,6 +15,7 @@ import 'dialogs.dart' show FieldSpec, showFailure;
 import 'drafts.dart';
 import 'event_panel.dart' show eventPanelFocusKey;
 import 'format_extensions.dart';
+import 'membership_style.dart' show attentionColor;
 import 'panels.dart' show Dock;
 import 'prize_panel.dart' show PrizeTableEditor;
 import 'select.dart';
@@ -76,6 +78,11 @@ Map<String, String> sectionValues(Section? section) {
     'rrTable': s?.rrTable ?? '',
     'doubleCycle': '${s?.doubleCycle ?? false}',
     'accelerated': s?.accelerated ?? '',
+    'ratedBy': s == null
+        ? (fideModeDefault ? RatedBy.fide.name : '')
+        : RatedBy.of(s).name,
+    'fideRanking': s?.fideRanking ?? '',
+    'pabPoints': '${s?.pabPoints ?? 2}',
     'avoidTeammates': '${s?.avoidTeammates ?? false}',
     'variations': ((s?.variations ?? const {}).toList()..sort()).join(', '),
     'lastHalfByeRound': policy == null ? '' : '${policy.lastHalfByeRound}',
@@ -119,6 +126,9 @@ Map<String, String> sectionLabels() => {
   'rrTable': 'Round-robin table',
   'doubleCycle': 'Second cycle',
   'accelerated': 'Accelerated pairings',
+  'ratedBy': 'Rated by',
+  'fideRanking': 'FIDE pairing numbers',
+  'pabPoints': 'Pairing-allocated bye',
   'avoidTeammates': 'Keep team-mates apart',
   'variations': 'Pairing variations',
   'lastHalfByeRound': 'Last round for half-point byes',
@@ -302,11 +312,61 @@ Section applySectionValues(
     timeControl: n.timeControl,
     byeRules: n.byeRules,
   );
+  if (!offersFide(next.format) && next.fideRated) {
+    // A FIDE-only section moved to a format FIDE does not rate goes back
+    // to US Chess rather than silently becoming unrated. This runs before
+    // the format extension so its own choice (a ladder's Not rated, a
+    // bughouse section's fixed unrated) has the last word.
+    next = next.copy(
+      fideRated: false,
+      fideRanking: '',
+      unrated: false,
+      pabPoints: 2,
+    );
+  }
   if (extensionFor(n.format) case final x?) {
     next = x.apply(next, extensionValues(n.format, values));
     if (x.problem?.call(event, next) case final problem?) {
       throw TournamentException(problem);
     }
+  }
+  if (offersFide(next.format) && values['ratedBy'] != null) {
+    final rated = RatedBy.values
+        .where((r) => r.name == values['ratedBy'])
+        .firstOrNull;
+    if (rated != null) {
+      final fideSwiss = rated.fideRated && next.format == Format.swiss;
+      next = next.copy(
+        unrated: !rated.usChessRated,
+        fideRated: rated.fideRated,
+        fideRanking: rated.fideRated ? values['fideRanking'] ?? '' : '',
+        pabPoints: fideSwiss ? int.tryParse(values['pabPoints'] ?? '') ?? 2 : 2,
+      );
+    }
+  }
+  if (next.fideRated && next.doubleGames && next.format == Format.swiss) {
+    throw const SectionFieldProblem(
+      'ratedBy',
+      'FIDE Dutch pairings play one game per round. Choose one game per round, or rate this section by US Chess only.',
+    );
+  }
+  if (next.fideRated &&
+      next.accelerated.isNotEmpty &&
+      next.accelerated != 'baku') {
+    throw const SectionFieldProblem(
+      'ratedBy',
+      'US Chess accelerated pairings (28R) do not apply to a FIDE-rated section; its only acceleration is the Baku method. Set Accelerated pairings to Off first.',
+    );
+  }
+  if (next.accelerated == 'baku' &&
+      !(next.fideRated && next.format == Format.swiss)) {
+    next = next.copy(accelerated: '');
+  }
+  if (fideSettingsChangeProblem(section, next) case final problem?) {
+    throw SectionFieldProblem(
+      next.fideRated != section.fideRated ? 'ratedBy' : 'accelerated',
+      problem,
+    );
   }
   if (next.rrTable == crenshawTable &&
       next.format == Format.roundRobin &&
@@ -361,6 +421,9 @@ Section applyTeamAwardValues(Section section, Map<String, String> v) {
   );
 }
 
+/// FIDE rates individual Swiss, round-robin and quad sections.
+bool offersFide(Format format) => fideFormats.contains(format);
+
 /// Which closed group a field lives in, so a problem there opens it.
 String? sectionGroupOf(String key) {
   if (const [
@@ -381,6 +444,8 @@ String? sectionGroupOf(String key) {
         'accelerated',
         'avoidTeammates',
         'variations',
+        'fideRanking',
+        'pabPoints',
       ].contains(key) ||
       key.contains('.')) {
     return 'pairing';
@@ -404,6 +469,10 @@ String _formatSentence(Format format) => switch (format) {
 };
 
 const _setBeforeRound1 = 'Set before round 1';
+
+/// Workspace-state key naming the form (by key prefix) that sent the TD to
+/// Event details for tie-breaks, so coming back lands on that link again.
+const _tiebreakReturnKey = 'section-panel-tiebreak-return';
 
 /// The format row, the announcement band and the four groups.
 class SectionFormFields extends StatefulWidget {
@@ -450,6 +519,31 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
   /// "Other format…" was pressed: the rare-format select is showing.
   bool choosingOther = false;
 
+  /// Back from Event details: focus returns to the tie-break link instead
+  /// of the name field, and the panel scrolls to it.
+  late final bool returning;
+  final tiebreakLink = FocusNode(debugLabel: 'event-tiebreaks');
+
+  @override
+  void initState() {
+    super.initState();
+    returning = c.workspaceState.read(_tiebreakReturnKey) == widget.keyPrefix;
+    if (!returning) return;
+    c.workspaceState.write(_tiebreakReturnKey, '');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final link = tiebreakLink.context;
+      if (!mounted || link == null) return;
+      tiebreakLink.requestFocus();
+      Scrollable.ensureVisible(link, alignment: 0.5);
+    });
+  }
+
+  @override
+  void dispose() {
+    tiebreakLink.dispose();
+    super.dispose();
+  }
+
   TournamentController get c => widget.controller;
   Map<String, TextEditingController> get text => widget.text;
   String value(String key) => text[key]?.text ?? '';
@@ -495,6 +589,10 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
     return parts.isEmpty ? 'US Chess default' : parts.join(' · ');
   }
 
+  int get variationCount => value(
+    'variations',
+  ).split(RegExp(r'[,\s]+')).where((c) => c.trim().isNotEmpty).toSet().length;
+
   String get pairingSummary {
     if (locked) return _setBeforeRound1;
     final x = extensionFor(format);
@@ -503,11 +601,23 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
         widget.current!.format == format) {
       if (x.summary?.call(widget.current!) case final own?) return own;
     }
+    if (offersFide(format) &&
+        (value('ratedBy') == RatedBy.dual.name ||
+            value('ratedBy') == RatedBy.fide.name)) {
+      if (format != Format.swiss) return 'FIDE';
+      return [
+        'FIDE Dutch',
+        if (value('accelerated') == 'baku') 'Baku acceleration',
+        if (value('pabPoints') == '1') 'Bye scores a draw',
+        if (value('pabPoints') == '0') 'Bye scores nothing',
+      ].join(' · ');
+    }
     final parts = switch (format) {
       Format.swiss || Format.bughouse => [
         if (value('accelerated').isNotEmpty) 'Accelerated rounds 1–2',
         if (flag('avoidTeammates')) 'Team-mates apart',
-        if (value('variations').trim().isNotEmpty) value('variations').trim(),
+        if (variationCount case final n when n > 0)
+          n == 1 ? '1 variation' : '$n variations',
       ],
       Format.roundRobin => [
         if (value('rrTable') == crenshawTable) 'Crenshaw-Berger table',
@@ -723,7 +833,7 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
       for (final f in Format.values)
         if (!f.common) SelectOption(f.name, f.label),
       if (widget.allowHolland)
-        const SelectOption(hollandChoice, 'Holland system (30H)'),
+        const SelectOption(hollandChoice, 'Holland system'),
     ];
     final current = widget.current;
     final convertedQuad =
@@ -853,14 +963,14 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
           const SizedBox(height: 8),
           checkbox(
             'hollandUnbalanced',
-            'Unbalanced prelims (30I): groups of different sizes',
+            'Unbalanced prelims: groups of different sizes',
           ),
         ],
         if (smallSwiss)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              'Rule 29K: a small Swiss with this many rounds can be run as a round robin; change the format before posting round 1.',
+              'A small Swiss with this many rounds can be run as a round robin; change the format before posting round 1.',
               style: muted.copyWith(color: colors.onSurfaceVariant),
             ),
           ),
@@ -973,13 +1083,201 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
     );
   }
 
+  /// How the section is rated: US Chess, dual, FIDE only or not at all.
+  /// FIDE rating changes how a Swiss is paired, so for a Swiss that
+  /// switch is made before round 1; the US Chess part can change later.
+  Widget ratingRow(TextStyle muted) {
+    final e = c.event!;
+    final colors = Theme.of(context).colorScheme;
+    final chosen =
+        RatedBy.values.where((r) => r.name == value('ratedBy')).firstOrNull ??
+        RatedBy.usChess;
+    final control = value('timeControl').trim().isEmpty
+        ? e.timeControl
+        : value('timeControl').trim();
+    FideCategory? category;
+    try {
+      category = fideCategory(TimeControl.parse(control));
+    } on TournamentException {
+      category = null;
+    }
+    String label(RatedBy r) => switch (r) {
+      RatedBy.usChess => 'US Chess',
+      RatedBy.dual => 'US Chess and FIDE',
+      RatedBy.fide => 'FIDE only',
+      RatedBy.none => 'Not rated',
+    };
+    // A paired Swiss keeps its pairing system: stated, not editable.
+    final fixed = locked && format == Format.swiss;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (fixed) ...[
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            children: [const Text('Rated by'), lockNote()],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label(chosen),
+            key: k('ratedBy-locked'),
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ] else
+          PlainSelect<String>(
+            key: k('ratedBy'),
+            label: 'Rated by',
+            value: chosen.name,
+            options: [
+              for (final r in RatedBy.values) SelectOption(r.name, label(r)),
+            ],
+            onChanged: (v) => set('ratedBy', v),
+          ),
+        if (widget.problems['ratedBy'] case final problem?)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(problem, style: TextStyle(color: colors.error)),
+          ),
+        if (chosen.fideRated && category == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.warning_amber_outlined,
+                  size: 16,
+                  color: attentionColor(colors),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'FIDE does not rate $control: a game needs more than 3 minutes for 60 moves.',
+                    key: k('fide-note'),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: attentionColor(colors),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else if (chosen.fideRated)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              [
+                'FIDE ${category!.label.toLowerCase()}',
+                if (format == Format.swiss) 'FIDE Dutch pairings',
+                chosen == RatedBy.dual
+                    ? 'FIDE report is a TRF file, which US Chess does not accept'
+                    : 'FIDE report is a TRF file',
+              ].join(' · '),
+              key: k('fide-note'),
+              style: muted.copyWith(fontSize: 12),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// The FIDE part of Pairing rules: the Dutch system has no announced
+  /// variations, only how pairing numbers are ranked (TRF record 172).
+  List<Widget> fidePairingFields(TextStyle muted) {
+    final dual = value('ratedBy') == RatedBy.dual.name;
+    final methods = {
+      '': dual ? 'FIDE rating, then US Chess rating' : 'FIDE rating',
+      if (dual)
+        for (final m in fideRankingMethods.entries)
+          if (m.key != 'FIDON') m.key: m.value,
+    };
+    const acceleration = {'': 'Off', 'baku': 'Baku acceleration'};
+    const byeValue = {'2': 'A win', '1': 'A draw', '0': 'Nothing'};
+    return [
+      if (format == Format.swiss) ...[
+        readOnlyLine('Pairing system', 'FIDE Dutch'),
+        if (locked) ...[
+          readOnlyLine(
+            'Acceleration',
+            acceleration[value('accelerated')] ?? 'Off',
+          ),
+          readOnlyLine(
+            'Pairing-allocated bye scores',
+            byeValue[value('pabPoints')] ?? 'A win',
+          ),
+        ] else ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: PlainSelect<String>(
+              key: k('accelerated'),
+              label: 'Acceleration',
+              value: acceleration.containsKey(value('accelerated'))
+                  ? value('accelerated')
+                  : '',
+              options: [
+                for (final o in acceleration.entries)
+                  SelectOption(o.key, o.value),
+              ],
+              onChanged: (v) => set('accelerated', v),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 12, bottom: 12),
+            child: Text(
+              'Baku gives the top half a virtual point in the first rounds, '
+              'so leaders meet sooner. Announce it before round 1.',
+              style: muted.copyWith(fontSize: 12),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: PlainSelect<String>(
+              key: k('pabPoints'),
+              label: 'Pairing-allocated bye scores',
+              value: byeValue.containsKey(value('pabPoints'))
+                  ? value('pabPoints')
+                  : '2',
+              options: [
+                for (final o in byeValue.entries) SelectOption(o.key, o.value),
+              ],
+              onChanged: (v) => set('pabPoints', v),
+            ),
+          ),
+        ],
+      ],
+      if (locked || !dual)
+        readOnlyLine(
+          'Pairing numbers by',
+          methods[value('fideRanking')] ?? methods['']!,
+        )
+      else
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: PlainSelect<String>(
+            key: k('fideRanking'),
+            label: 'Pairing numbers by',
+            value: methods.containsKey(value('fideRanking'))
+                ? value('fideRanking')
+                : '',
+            options: [
+              for (final o in methods.entries) SelectOption(o.key, o.value),
+            ],
+            onChanged: (v) => set('fideRanking', v),
+          ),
+        ),
+    ];
+  }
+
   List<Widget> byesFields() => [
     const SizedBox(height: 4),
     for (final (key, label) in const [
-      ('lastHalfByeRound', 'Last round for half-point byes (0 = any, 22C1)'),
-      ('maxHalfByes', 'Half-point byes per player (0 = no limit, 22C3)'),
-      ('byeDeadline', 'Requests close, minutes before the round (22C2)'),
-      ('irrevocableFromRound', 'Byes irrevocable from round (0 = never, 22C4)'),
+      ('lastHalfByeRound', 'Last round for half-point byes (0 = any)'),
+      ('maxHalfByes', 'Half-point byes per player (0 = no limit)'),
+      ('byeDeadline', 'Requests close, minutes before the round'),
+      ('irrevocableFromRound', 'Byes irrevocable from round (0 = never)'),
     ])
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
@@ -991,9 +1289,24 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
     final e = c.event!;
     final s = widget.current;
     final x = extensionFor(format);
-    final tiebreaks = e.useTiebreaks
+    final fideRated =
+        offersFide(format) &&
+        (RatedBy.values
+                .where((r) => r.name == value('ratedBy'))
+                .firstOrNull
+                ?.fideRated ??
+            false);
+    final tiebreaks = fideRated
+        ? fideSectionTiebreaks(
+            e,
+            (s ?? Section(id: '', name: '', players: const [])).copy(
+              format: format,
+              fideRated: true,
+            ),
+          ).map((m) => m.label).join(', ')
+        : e.useTiebreaks
         ? sectionTiebreaks(e, format).map((m) => m.label).join(', ')
-        : 'off (equal scores share a place)';
+        : 'Off, tied players share a place';
     final variations = {
       for (final code in value('variations').split(RegExp(r'[,\s]+')))
         if (code.trim().isNotEmpty) code.trim(),
@@ -1005,45 +1318,67 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
     }
 
     final accelerated = {
-      '': 'None',
-      'addedScore': 'Added score, rounds 1–2 (28R1)',
-      'adjustedRating': 'Adjusted rating, rounds 1–2 (28R2)',
-      'sixths': 'Sixths, rounds 1–2 (28R3)',
+      '': 'Off, normal Swiss pairings',
+      'addedScore': 'Added score, rounds 1–2',
+      'adjustedRating': 'Adjusted rating, rounds 1–2',
+      'sixths': 'Sixths, rounds 1–2',
     };
-    final tables = {
-      '': 'Circle method',
-      crenshawTable: 'Crenshaw-Berger (Chapter 12)',
+    final variationsSummary = switch (variations.length) {
+      0 => 'Not used',
+      1 => '1 announced',
+      final n => '$n announced',
     };
+    final tables = {'': 'Circle method', crenshawTable: 'Crenshaw-Berger'};
     final canDrawLots =
         s != null &&
         hasFixedSchedule(s) &&
         !s.sideGames &&
         s.rounds.isEmpty &&
         s.format == format;
+    final fide =
+        offersFide(format) &&
+        (RatedBy.values
+                .where((r) => r.name == value('ratedBy'))
+                .firstOrNull
+                ?.fideRated ??
+            false);
     return [
       const SizedBox(height: 4),
-      if (format == Format.swiss || format == Format.bughouse) ...[
+      if (fide) ...fidePairingFields(muted),
+      if (!fide && (format == Format.swiss || format == Format.bughouse)) ...[
         if (locked) ...[
           readOnlyLine(
-            'Accelerated pairings (28R)',
+            'Accelerated pairings',
             accelerated[value('accelerated')] ?? value('accelerated'),
           ),
           readOnlyLine(
-            'Keep team-mates apart (28N1)',
+            'Keep team-mates apart',
             flag('avoidTeammates') ? 'Yes' : 'No',
           ),
           readOnlyLine(
             'Announced variations',
             variations.isEmpty
-                ? 'None'
-                : (variations.toList()..sort()).join(', '),
+                ? 'Not used'
+                : [
+                    for (final code in swissVariations)
+                      if (variations.contains(code))
+                        swissVariationLabels[code]!,
+                  ].join('; '),
           ),
         ] else ...[
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'The standard US Chess rules apply. Change these only when '
+              'your announcement says so.',
+              style: muted,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
             child: PlainSelect<String>(
               key: k('accelerated'),
-              label: 'Accelerated pairings (28R)',
+              label: 'Accelerated pairings',
               value: accelerated.containsKey(value('accelerated'))
                   ? value('accelerated')
                   : '',
@@ -1054,21 +1389,34 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
               onChanged: (v) => set('accelerated', v),
             ),
           ),
-          checkbox(
-            'avoidTeammates',
-            'Keep team-mates apart, plus-two method (28N1)',
-          ),
           Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 6),
-            child: Text('Announced variations', style: muted),
-          ),
-          for (final code in swissVariations)
-            checkbox(
-              'variation-$code',
-              '${swissVariationLabels[code]} ($code)',
-              on: variations.contains(code),
-              toggle: () => toggleVariation(code),
+            padding: const EdgeInsets.only(left: 12, bottom: 12),
+            child: Text(
+              'Keeps the top players from meeting each other in the first '
+              'two rounds of a large section.',
+              style: muted.copyWith(fontSize: 12),
             ),
+          ),
+          checkbox('avoidTeammates', 'Keep team-mates apart'),
+          DisclosureGroup(
+            headerKey: k('variations-group'),
+            nested: true,
+            title: 'Announced variations',
+            summary: variationsSummary,
+            open:
+                groupOpen('variations') ||
+                widget.problems.containsKey('variations'),
+            onToggle: () => toggleGroup('variations'),
+            children: [
+              for (final code in swissVariations)
+                checkbox(
+                  'variation-$code',
+                  swissVariationLabels[code]!,
+                  on: variations.contains(code),
+                  toggle: () => toggleVariation(code),
+                ),
+            ],
+          ),
           if (widget.problems['variations'] case final problem?)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -1081,13 +1429,10 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
       ],
       if (format == Format.roundRobin) ...[
         if (locked) ...[
-          readOnlyLine(
-            'Table (30A)',
-            tables[value('rrTable')] ?? value('rrTable'),
-          ),
+          readOnlyLine('Table', tables[value('rrTable')] ?? value('rrTable')),
           if (flag('doubleGames'))
             readOnlyLine(
-              'Second cycle with colors reversed (30F)',
+              'Second cycle with colors reversed',
               flag('doubleCycle') ? 'Yes' : 'No',
             ),
         ] else ...[
@@ -1095,7 +1440,7 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
             padding: const EdgeInsets.only(bottom: 12),
             child: PlainSelect<String>(
               key: k('rrTable'),
-              label: 'Table (30A)',
+              label: 'Table',
               value: tables.containsKey(value('rrTable'))
                   ? value('rrTable')
                   : '',
@@ -1116,7 +1461,7 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
           if (flag('doubleGames'))
             checkbox(
               'doubleCycle',
-              'Second cycle with colors reversed (30F), not both games in one round',
+              'Second cycle with colors reversed, not both games in one round',
             ),
           if (widget.problems['doubleCycle'] case final problem?)
             Padding(
@@ -1153,29 +1498,35 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
                   showFailure(context, e);
                 }
               },
-              child: const Text('Draw lots for pairing numbers (30A)'),
+              child: const Text('Draw lots for pairing numbers'),
             ),
           ),
         ),
-      Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text('Tie-breaks: $tiebreaks', style: muted),
-          const SizedBox(width: 4),
-          TextButton(
-            key: k('event-tiebreaks'),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              visualDensity: VisualDensity.compact,
-              textStyle: const TextStyle(fontSize: 13),
-            ),
-            onPressed: () {
-              c.workspaceState.write(eventPanelFocusKey, 'tiebreaks');
-              Dock.maybeOf(context)?.claim('event');
-            },
-            child: const Text('Event details'),
+      const SizedBox(height: 8),
+      readOnlyLine('Tie-breaks', tiebreaks),
+      // Tie-breaks belong to the whole event. Event details opens as a
+      // step away from this panel; closing it comes back here, draft kept.
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton(
+          key: k('event-tiebreaks'),
+          focusNode: tiebreakLink,
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            visualDensity: VisualDensity.compact,
+            textStyle: const TextStyle(fontSize: 13),
           ),
-        ],
+          onPressed: () {
+            c.workspaceState.write(eventPanelFocusKey, 'tiebreaks');
+            final prefix = widget.keyPrefix;
+            Dock.maybeOf(context)?.detour(
+              'event',
+              backLabel: s == null ? 'New section' : '${s.name} settings',
+              onBack: () => c.workspaceState.write(_tiebreakReturnKey, prefix),
+            );
+          },
+          child: const Text('Change for the whole event'),
+        ),
       ),
     ];
   }
@@ -1235,16 +1586,16 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
             'teamCounting',
             'Scores that count (N)',
             helper: value('teamMethod') == TeamScoring.rollins.code
-                ? 'Rule 31A1: each player earns the field size minus their place; the top N of each team add up.'
-                : 'Scholastic Regulations 10.2.1: top 4 at Spring Nationals, top 3 at Grade Nationals and blitz. Blank is 4.',
+                ? 'Each player earns the field size minus their place; the top N of each team add up.'
+                : 'Top 4 at Spring Nationals, top 3 at Grade Nationals and blitz. Blank is 4.',
             helperLines: 4,
           ),
         ),
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Text(
-            'A team needs at least 2 players for a team prize (10.2.2). '
-            'Team tie-breaks (12.3.3): ${teamTiebreakLabels.join(', ')}. '
+            'A team needs at least 2 players for a team prize. '
+            'Team tie-breaks: ${teamTiebreakLabels.join(', ')}. '
             'Add team prizes in Prizes with the kind Team.',
             style: muted,
           ),
@@ -1274,7 +1625,7 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
       child: textField(
         'ratingCeiling',
         'Rating cap: Under (blank = open)',
-        helper: 'Rule 28H: entrants rated at or above this are refused.',
+        helper: 'Entrants rated at or above this are refused.',
       ),
     ),
   ];
@@ -1289,10 +1640,18 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
         formatRow(muted),
         const SizedBox(height: 16),
         if ((format != Format.quad || widget.current != null) && !holland) ...[
-          textField('name', 'Section name', autofocus: widget.nameAutofocus),
+          textField(
+            'name',
+            'Section name',
+            autofocus: widget.nameAutofocus && !returning,
+          ),
           const SizedBox(height: 12),
         ],
         announcementBand(muted),
+        if (offersFide(format) && !holland) ...[
+          const SizedBox(height: 16),
+          ratingRow(muted),
+        ],
         const SizedBox(height: 16),
         group('byes', 'Byes', byesFields(), summary: byesSummary),
         group(

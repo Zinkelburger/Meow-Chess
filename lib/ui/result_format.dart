@@ -10,7 +10,7 @@ String scoreMark(Outcome o, {required bool white}) => switch (o) {
   Outcome.disputed => '?',
   Outcome.doubleForfeit => 'F',
   _ when !o.played => (white ? o.whiteScore : o.blackScore) == 2 ? 'X' : 'F',
-  _ => (white ? o.whiteScore : o.blackScore) == 2 ? '1' : '0',
+  _ => const ['0', '½', '1'][white ? o.whiteScore : o.blackScore],
 };
 
 /// A bye as US Chess crosstables print it: B full point, H half point,

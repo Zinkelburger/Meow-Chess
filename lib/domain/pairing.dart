@@ -3,6 +3,7 @@ import 'dart:math';
 import 'fixed_schedule.dart';
 import 'model.dart';
 import 'bughouse.dart';
+import 'fide_pairing.dart';
 import 'knockout.dart';
 import 'scheveningen.dart';
 import 'swiss_pairing.dart';
@@ -190,6 +191,24 @@ Round paperRound(Section section, int n) {
   );
 }
 
+/// Whether [g], unresolved in round [round] of [section], may stand while
+/// the next round is paired: it carries a pairing assumption, or it is an
+/// adjourned game of a FIDE Swiss's latest round, which counts as a draw
+/// for that one pairing (C.04.2 3.1).
+bool pairsWithoutResult(Section section, int round, Game g) =>
+    g.pairingAssumption != null ||
+    (g.outcome == Outcome.unfinished &&
+        section.fideRated &&
+        pairingFormat(section) == Format.swiss &&
+        round == section.rounds.length);
+
+/// Whether every game of [section] has a result the next pairing can use.
+bool readyToPair(Section section) => section.rounds.every(
+  (r) => r.games.every(
+    (g) => g.outcome.resolved || pairsWithoutResult(section, r.number, g),
+  ),
+);
+
 /// The next round of [section]: a fixed schedule for quads and round robins,
 /// otherwise US Chess Swiss pairings (rules 27–29) from `swiss_pairing.dart`.
 Round proposeRound(Event event, Section section, String Function() id) {
@@ -202,12 +221,20 @@ Round proposeRound(Event event, Section section, String Function() id) {
   if (n > section.plannedRounds) {
     throw const TournamentException('All planned rounds have been posted.');
   }
-  if (section.rounds
-      .expand((r) => r.games)
-      .any((g) => !g.outcome.resolved && g.pairingAssumption == null)) {
-    throw const TournamentException(
-      'Resolve outstanding games or record a TD-approved temporary pairing treatment before posting.',
-    );
+  for (final r in section.rounds) {
+    for (final g in r.games) {
+      if (g.outcome.resolved || pairsWithoutResult(section, r.number, g)) {
+        continue;
+      }
+      if (section.fideRated && g.outcome == Outcome.unfinished) {
+        throw TournamentException(
+          'Board ${g.board} of round ${r.number} is still adjourned. An adjourned game counts as a draw for one pairing only; enter its result before pairing round $n.',
+        );
+      }
+      throw const TournamentException(
+        'Resolve outstanding games or record a TD-approved temporary pairing treatment before posting.',
+      );
+    }
   }
   switch (pairingFormat(section)) {
     case Format.quad || Format.roundRobin:
@@ -226,7 +253,9 @@ Round proposeRound(Event event, Section section, String Function() id) {
       break;
   }
   final (available, byes) = roundAvailability(event, section, n);
-  final proposal = pairSwiss(event, section, n, available, byes);
+  final proposal = section.fideRated
+      ? pairFideDutch(event, section, n, byes)
+      : pairSwiss(event, section, n, available, byes);
   return _round(
     section,
     n,
@@ -234,6 +263,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
     proposal.byes,
     (_, _, _) => id(),
     explanations: proposal.explanations,
+    policy: section.fideRated ? fideDutchPolicy : null,
     fixedBoards: {
       for (final p in event.players)
         if (p.fixedBoard > 0) p.id: p.fixedBoard,
@@ -257,6 +287,11 @@ Round repairUnstartedRound(
   if (pairingFormat(section) != Format.swiss) {
     throw const TournamentException(
       'Selective re-pairing (29G3) applies to Swiss rounds.',
+    );
+  }
+  if (section.fideRated) {
+    throw const TournamentException(
+      'Selective re-pairing is US Chess rule 29G3. In a FIDE section, unpair the round and pair it again, or change the waiting pairings by hand.',
     );
   }
   final round = section.rounds.lastOrNull;
@@ -367,6 +402,7 @@ Round _round(
   GameIdFor id, {
   List<String> explanations = const [],
   Map<String, int> fixedBoards = const {},
+  String? policy,
 }) {
   final format = pairingFormat(section);
   final colorLot = quadColorLot(section);
@@ -426,15 +462,17 @@ Round _round(
               ? 'Manual quad pairings.'
               : 'Recorded final-round color lot: $colorLot (derived from the randomly assigned section ID).'
         : '',
-    policy: format == Format.quad
-        ? section.quadPairings.isNotEmpty
-              ? 'quad-manual-v1'
-              : 'quad-30G-seeded-v1'
-        : format == Format.swiss
-        ? swissPolicy
-        : section.rrTable == crenshawTable
-        ? 'crenshaw-rr-v1'
-        : 'circle-rr-v1',
+    policy:
+        policy ??
+        (format == Format.quad
+            ? section.quadPairings.isNotEmpty
+                  ? 'quad-manual-v1'
+                  : 'quad-30G-seeded-v1'
+            : format == Format.swiss
+            ? swissPolicy
+            : section.rrTable == crenshawTable
+            ? 'crenshaw-rr-v1'
+            : 'circle-rr-v1'),
   );
 }
 

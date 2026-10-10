@@ -52,8 +52,8 @@ Every P0 must pass its acceptance scenario before that release is called complet
 | N04 | P0 | Three-desktop-platform qualification | File chooser, fonts, printing/PDF, keyboard, secure key storage and recovery tested on each |
 | N05 | P0 | Accessible dense UI | Keyboard-only use, screen-reader labels, non-color status and 200% text verified |
 | N06 | P0 | Data minimization and export boundaries | Public reports omit contact/birth/private notes and credentials |
-| F01 | Future | Federation-independent IDs/rating categories | FIDE ID/rating can coexist without changing US Chess entry identity |
-| F02 | Future | FIDE Dutch/TRF26 | Current rules, exact engine version and official validation path documented |
+| F01 | P1 | Federation-independent IDs/rating categories | FIDE ID/rating can coexist without changing US Chess entry identity (built: `Player` FIDE fields, `docs/FIDE.md`) |
+| F02 | P1 | FIDE Dutch/TRF26 | Current rules, exact engine version and official validation path documented (built and documented in `docs/FIDE.md`, including TRF import, the checker and generator of TEC Manual 3.9.4, and FIDE's checklist; FIDE endorsement not sought) |
 
 ## Core TD flexibility — explicit first-release gates
 

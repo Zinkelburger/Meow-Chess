@@ -31,7 +31,7 @@ Blitz 5–10 (all rounds the same time control), Online per chapter 10 (never du
 | Ladder | Player | Challenge the player above; not a rated format | Position | Clubs | Rare | Done: standing list, challenge up to 2 places, a win takes the place; rated unless marked Not rated |
 | Bughouse (Scholastic Regulations App. B) | Two-player partnership | Swiss on match score; one match per pairing (two coupled boards), G/5 d0, 5–6 rounds | Match points 1/½/0 to both partners | Scholastic side events, clubs | Rare | Done: partnerships formed before round 1 (Partners panel, `set_partners`), partnership Swiss (`bughouse-swiss-v1`), partners share the match points, always unrated and left out of the rating report |
 | Simul, knockout, arena | Various | Not US Chess ratable (ch. 10 3B) or not defined by the rulebook | — | Side events, online | Rare / online only | Knockout done: seeded single-elimination bracket of 1- or 2-game matches, byes to the top seeds, the director decides drawn matches or rapid/blitz/armageddon tie-break legs are posted, placings instead of points (`knockout.dart`); simul and arena out of scope |
-| FIDE Swiss (Dutch, Burstein, Lim), FIDE team Swiss | Player / team | C.04 | C.07 | FIDE-rated clubs | Common at big clubs | Missing (planned tranche) |
+| FIDE Swiss (Dutch, Burstein, Lim), FIDE team Swiss | Player / team | C.04 | C.07 | FIDE-rated clubs | Common at big clubs | Dutch done (2026 rules, BBP Pairings), with C.07 tie-breaks and TRF26 reports for FIDE-rated Swiss, round-robin and quad sections (`docs/FIDE.md`); Burstein, Lim and team Swiss missing |
 
 Sources: rulebook 27–31, 34, chapter 10; [Scholastic Regulations 2026–27](https://new.uschess.org/sites/default/files/media/documents/us-chess-scholastic-regulations-2026-2027-v1.0_8-9-2026.pdf) §5, §10, §12, App. A–B; [USAT East 2027](https://njscf.org/world-amateur-team-2027); [USAT North 2026](https://www.kingregistration.com/event/usatn2026); [Texas Teams 2026](https://sites.google.com/view/2026-texas-teams/tournament-format-regulations); [FIDE C.04](https://handbook.fide.com/chapter/C0401202507); [FIDE team Swiss](https://handbook.fide.com/chapter/SwissTeamPairingSystem202602); US Chess FAQ on matches (`research/local/uscf-faq.txt`); [Lichess arena](https://lichess.org/tournament/help?system=arena).
 
@@ -116,7 +116,7 @@ Mode: Operate. Visual world: the incumbent "Wall Sheet" system in `DESIGN.md`; t
 2. New event like… on the welcome screen.
 3. Scholastic team awards: top-N team standings, team tie-breaks (Scholastic Regulations §12.3.3), a team standings report and a Team awards group.
 4. Fixed-roster team events (31B–31G, 34G2) as the Teams format, after a TD confirms the demand.
-5. FIDE Dutch pairings and FIDE tie-breaks for FIDE-rated clubs (planned tranche).
+5. FIDE Dutch pairings and FIDE tie-breaks for FIDE-rated clubs (built 2026-10-10; see `docs/FIDE.md`).
 
 ## 7. The rare formats (built 2026-10-09)
 

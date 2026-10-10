@@ -75,7 +75,7 @@ mixin _RatingCommands on _CommandContext {
       final state = observation['state'] is String
           ? (observation['state'] as String).trim().toUpperCase()
           : '';
-      updated[playerId] = player.copy(
+      final checkedPlayer = player.copy(
         membershipEvidence: {
           for (final key in [
             'id',
@@ -85,10 +85,23 @@ mixin _RatingCommands on _CommandContext {
             'retrievedAt',
             'provider',
             'state',
+            'fideId',
+            'fideTitle',
+            'fideCountry',
+            'gender',
           ])
-            key: observation[key],
+            if (observation.containsKey(key)) key: observation[key],
         },
         state: player.state.isEmpty && isStateCode(state) ? state : null,
+      );
+      String? text(String key) =>
+          observation[key] is String ? observation[key] as String : null;
+      updated[playerId] = withUsChessFideIdentity(
+        checkedPlayer,
+        fideId: text('fideId'),
+        fideTitle: text('fideTitle'),
+        fideCountry: text('fideCountry'),
+        gender: text('gender'),
       );
     }
     if (updated.isEmpty) return const {};
@@ -100,6 +113,14 @@ mixin _RatingCommands on _CommandContext {
     );
     return updated.keys.toSet();
   }
+}
+
+/// Whether [p]'s FIDE ratings are fixed: their FIDE-rated section is
+/// paired, and the section is ranked and reported with the ratings it
+/// started with. [TournamentControllerCore.savePlayer] refuses a change.
+bool fideRatingsLocked(Event e, Player p) {
+  final s = e.sectionOf(p.id);
+  return s != null && s.fideRated && s.rounds.isNotEmpty;
 }
 
 /// Rules 28D2, 28D5, 28E1 and 28E2 for a TD-assigned pairing or prize

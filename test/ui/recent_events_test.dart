@@ -42,7 +42,8 @@ void main() {
     await tester.pumpAndSettle();
     final reveal = find.byTooltip('View in file explorer');
     final remove = find.byTooltip('Remove from recent events');
-    await tester.ensureVisible(reveal);
+    // The recent list sits below the start actions; scroll it into view.
+    await tester.scrollUntilVisible(reveal, 100);
     await tester.pumpAndSettle();
     expect(tester.getCenter(reveal).dx, lessThan(tester.getCenter(remove).dx));
 
@@ -72,6 +73,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final remove = find.byTooltip('Remove from recent events').first;
+    await tester.scrollUntilVisible(find.text('Recent events'), 100);
     await tester.ensureVisible(remove);
     await tester.pumpAndSettle();
     await tester.tap(remove);
@@ -92,7 +94,10 @@ void main() {
     });
     await tester.pumpWidget(MeowApp(dataDirectory: directory));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byTooltip('View in file explorer'));
+    await tester.scrollUntilVisible(
+      find.byTooltip('View in file explorer'),
+      100,
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('View in file explorer'));
     await tester.pumpAndSettle();

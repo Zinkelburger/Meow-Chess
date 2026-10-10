@@ -9,6 +9,7 @@ import '../domain/model.dart';
 import '../domain/membership.dart';
 import 'membership_style.dart';
 import '../domain/bye_policy.dart';
+import '../domain/fide.dart';
 import '../domain/us_chess.dart';
 import 'drafts.dart';
 import 'theme.dart';
@@ -17,6 +18,7 @@ import 'member_identity_lookup.dart';
 import '../domain/member_observation.dart';
 
 import 'player_actions.dart';
+import 'fide_list_panel.dart';
 import 'side_panel.dart';
 import 'player_format.dart';
 import 'rating_refresh.dart';
@@ -74,13 +76,21 @@ class PlayerPanelState extends State<PlayerPanel> {
     ('team', 'Team', 1),
     ('notes', 'Notes', 3),
     // Rules 28E/28F, 28C2/28D1: TD-assigned and disclosed foreign ratings.
-    ('pairingRating', 'Pairing rating (blank = published, rule 28F)', 1),
-    ('prizeRating', 'Prize rating (blank = published, rule 28F)', 1),
-    ('ratingNote', 'Cause for the assigned rating (rule 28E2)', 2),
-    ('foreignRating', 'Foreign or FIDE rating (rule 28C2)', 1),
+    ('pairingRating', 'Pairing rating (blank = published)', 1),
+    ('prizeRating', 'Prize rating (blank = published)', 1),
+    ('ratingNote', 'Cause for the assigned rating', 2),
+    ('foreignRating', 'Foreign or FIDE rating', 1),
     ('foreignFederation', 'Federation', 1),
     // Rule 20M3 / 35: a board this player always sits at.
-    ('fixedBoard', 'Fixed board number (rule 20M3; blank = none)', 1),
+    ('fixedBoard', 'Fixed board number (blank = none)', 1),
+    ('fideId', 'FIDE ID', 1),
+    ('fideStandard', 'Standard', 1),
+    ('fideRapid', 'Rapid', 1),
+    ('fideBlitz', 'Blitz', 1),
+    ('title', 'FIDE title', 1),
+    ('federation', 'Federation', 1),
+    ('birthDate', 'Birth date', 1),
+    ('sex', 'Sex', 1),
   ];
   final text = {for (final f in _fields) f.$1: TextEditingController()};
   final fieldFocus = {for (final f in _fields) f.$1: FocusNode()};
@@ -90,6 +100,7 @@ class PlayerPanelState extends State<PlayerPanel> {
   static const _groups = [
     'byes',
     'uschess',
+    'fide',
     'assigned',
     'requests',
     'team',
@@ -104,7 +115,7 @@ class PlayerPanelState extends State<PlayerPanel> {
 
   String? groupOf(String field) => widget.player == null
       ? switch (field) {
-          'state' || 'reportName' || 'team' || 'notes' => 'more',
+          'state' || 'reportName' || 'team' || 'notes' || 'fideId' => 'more',
           _ => null,
         }
       : switch (field) {
@@ -113,6 +124,14 @@ class PlayerPanelState extends State<PlayerPanel> {
           'notes' => 'notes',
           'byes' => 'byes',
           'avoid' || 'fixedBoard' => 'requests',
+          'fideId' ||
+          'fideStandard' ||
+          'fideRapid' ||
+          'fideBlitz' ||
+          'title' ||
+          'federation' ||
+          'birthDate' ||
+          'sex' => 'fide',
           'pairingRating' ||
           'prizeRating' ||
           'ratingNote' ||
@@ -133,6 +152,8 @@ class PlayerPanelState extends State<PlayerPanel> {
         p != null &&
             MembershipSummary(p, eventDate: e.lastDate).severity !=
                 MembershipSeverity.normal,
+      // A FIDE-rated section needs the ID: show where it goes.
+      'fide' => p != null && (s?.fideRated ?? false) && p.fideId.isEmpty,
       _ => false,
     };
     for (final group in _groups) {
@@ -257,6 +278,14 @@ class PlayerPanelState extends State<PlayerPanel> {
         : '${p.foreignRating}',
     'foreignFederation': p?.foreignFederation ?? '',
     'fixedBoard': p == null || p.fixedBoard == 0 ? '' : '${p.fixedBoard}',
+    'fideId': p?.fideId ?? '',
+    'fideStandard': p == null || p.fideStandard == 0 ? '' : '${p.fideStandard}',
+    'fideRapid': p == null || p.fideRapid == 0 ? '' : '${p.fideRapid}',
+    'fideBlitz': p == null || p.fideBlitz == 0 ? '' : '${p.fideBlitz}',
+    'title': p?.title ?? '',
+    'federation': p?.federation ?? '',
+    'birthDate': p?.birthDate ?? '',
+    'sex': p?.sex ?? '',
   };
 
   void load() {
@@ -418,6 +447,7 @@ class PlayerPanelState extends State<PlayerPanel> {
         return n;
       }
 
+      final fideLocked = !adding && fideRatingsLocked(c.event!, fresh);
       final saved = (adding ? Player(id: c.newId(), name: '') : fresh).copy(
         name: v['name']!.trim(),
         memberId: v['memberId']!.trim(),
@@ -433,7 +463,25 @@ class PlayerPanelState extends State<PlayerPanel> {
         foreignRating: assigned('foreignRating', 'foreign rating'),
         foreignFederation: v['foreignFederation']!.trim(),
         fixedBoard: assigned('fixedBoard', 'fixed board number'),
+        fideId: v['fideId']!.trim(),
+        // Paired FIDE sections rank by these: they stay, like the rating.
+        fideStandard: fideLocked
+            ? fresh.fideStandard
+            : assigned('fideStandard', 'FIDE standard rating'),
+        fideRapid: fideLocked
+            ? fresh.fideRapid
+            : assigned('fideRapid', 'FIDE rapid rating'),
+        fideBlitz: fideLocked
+            ? fresh.fideBlitz
+            : assigned('fideBlitz', 'FIDE blitz rating'),
+        title: v['title']!.trim(),
+        federation: v['federation']!.trim().toUpperCase(),
+        birthDate: v['birthDate']!.trim(),
+        sex: v['sex']!.trim(),
       );
+      if (fideFieldsProblem(saved) case final problem?) {
+        throw TournamentException(problem);
+      }
       c.savePlayer(saved);
       notice = c.playerNotice;
       if (adding) joined = joinNew(saved);
@@ -593,7 +641,32 @@ class PlayerPanelState extends State<PlayerPanel> {
         ),
       );
     }
-    final locked = key == 'rating' && ratingLocked;
+    if (key == 'title' || key == 'sex') {
+      return Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 8),
+        child: PlainSelect<String>(
+          key: ValueKey('panel-$key'),
+          value: text[key]!.text,
+          label: label,
+          options: key == 'title'
+              ? [
+                  const SelectOption('', 'None'),
+                  for (final t in fideTitles) SelectOption(t, t),
+                ]
+              : const [
+                  SelectOption('', 'Unknown'),
+                  SelectOption('m', 'Male'),
+                  SelectOption('w', 'Female'),
+                ],
+          onChanged: (v) => setState(() => text[key]!.text = v),
+        ),
+      );
+    }
+    final locked =
+        (key == 'rating' && ratingLocked) ||
+        (_narrow.contains(key) &&
+            widget.player != null &&
+            fideRatingsLocked(c.event!, fresh));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -606,13 +679,17 @@ class PlayerPanelState extends State<PlayerPanel> {
             autofocus: key == (widget.focusField ?? 'name'),
             maxLines: lines,
             enabled: !locked,
-            textCapitalization: key == 'state'
+            textCapitalization: key == 'state' || key == 'federation'
                 ? TextCapitalization.characters
                 : TextCapitalization.none,
             decoration: InputDecoration(
               labelText: label,
-              helperText: locked ? ratingLockedNote : null,
+              helperText: locked && key == 'rating' ? ratingLockedNote : null,
               alignLabelWithHint: lines > 1,
+              // Three FIDE ratings share one row of the 360px panel.
+              contentPadding: _narrow.contains(key)
+                  ? const EdgeInsets.symmetric(horizontal: 8, vertical: 8)
+                  : null,
             ),
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) => commit(),
@@ -649,6 +726,74 @@ class PlayerPanelState extends State<PlayerPanel> {
   String summaryOf(String key) {
     final value = text[key]!.text.trim();
     return value.isEmpty ? 'None' : value.split('\n').first;
+  }
+
+  static const _narrow = {'fideStandard', 'fideRapid', 'fideBlitz'};
+
+  /// The FIDE group's closed summary: title, the rating the section uses
+  /// (or the standard one), federation; or what is missing.
+  String fideSummary(Player p, Section? s) {
+    if (p.fideId.isEmpty) {
+      return (s?.fideRated ?? false) ? 'FIDE ID needed' : 'No FIDE ID';
+    }
+    final category = s == null ? null : sectionFideCategory(c.event!, s);
+    final rating = fideRating(p, category);
+    return [
+      if (p.title.isNotEmpty) p.title,
+      rating > 0
+          ? '$rating ${(category ?? FideCategory.standard).label.toLowerCase()}'
+          : 'FIDE unrated',
+      if (p.federation.isNotEmpty) p.federation,
+    ].join(' · ');
+  }
+
+  List<Widget> fideFields(Player p, Section? s, TextStyle muted) {
+    Widget rating(String key) => Expanded(child: field(key));
+    return [
+      field('fideId'),
+      FideListFinder(
+        key: ValueKey('fide-finder-${p.id}'),
+        controller: c,
+        playerId: p.id,
+        // What the TD has typed, saved or not.
+        name: () => text['name']!.text,
+        fideId: () => text['fideId']!.text,
+      ),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          rating('fideStandard'),
+          const SizedBox(width: 8),
+          rating('fideRapid'),
+          const SizedBox(width: 8),
+          rating('fideBlitz'),
+        ],
+      ),
+      if (fideRatingsLocked(c.event!, p))
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            'FIDE ratings stay as they were when round 1 was paired.',
+            style: muted,
+          ),
+        ),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: field('title')),
+          const SizedBox(width: 8),
+          Expanded(child: field('federation')),
+        ],
+      ),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: field('birthDate')),
+          const SizedBox(width: 8),
+          Expanded(child: field('sex')),
+        ],
+      ),
+    ];
   }
 
   DisclosureGroup group(
@@ -719,15 +864,24 @@ class PlayerPanelState extends State<PlayerPanel> {
             [
               field('state'),
               field('reportName'),
+              if (hasFideSection(c.event!)) field('fideId'),
               field('team'),
               field('notes'),
             ],
             summary:
                 [
-                  for (final key in ['state', 'reportName', 'team', 'notes'])
+                  for (final key in [
+                    'state',
+                    'reportName',
+                    'fideId',
+                    'team',
+                    'notes',
+                  ])
                     if (text[key]!.text.trim().isNotEmpty) key,
                 ].isEmpty
-                ? 'State, team, notes'
+                ? hasFideSection(c.event!)
+                      ? 'State, FIDE ID, team, notes'
+                      : 'State, team, notes'
                 : 'Filled in',
           ),
           const SizedBox(height: 12),
@@ -920,10 +1074,22 @@ class PlayerPanelState extends State<PlayerPanel> {
                 () => c.reserveBye(p.id, r, p.byes[r] == points ? -1 : points),
               ),
             ),
+            // FIDE checklist VCL.17: a full-point bye is allowed but
+            // deprecated, and the arbiter is told so when it is given.
+            if (s != null && s.fideRated && open.any((r) => p.byes[r] == 2))
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'FIDE deprecates full-point byes. Round ${[for (final r in open)
+                    if (p.byes[r] == 2) r].join(', ')} scores a win without a game; a half-point bye is the usual choice.',
+                  key: const ValueKey('fide-full-bye-warning'),
+                  style: muted.copyWith(color: colors.error),
+                ),
+              ),
             if (s != null) ...[
               const SizedBox(height: 8),
               Text(
-                'Rule 22C: ${ByePolicy.fromJson(s.byeRules).describe()}.',
+                'Section rules: ${ByePolicy.fromJson(s.byeRules).describe()}.',
                 key: const ValueKey('bye-policy'),
                 style: muted,
               ),
@@ -940,8 +1106,8 @@ class PlayerPanelState extends State<PlayerPanel> {
                   controlAffinity: ListTileControlAffinity.leading,
                   title: Text(
                     p.byes[r] == null
-                        ? 'Round $r irrevocable bye cancelled: a win counts as a draw for prizes (22C5)'
-                        : 'Round $r bye is irrevocable (22C4)',
+                        ? 'Round $r irrevocable bye cancelled: a win counts as a draw for prizes'
+                        : 'Round $r bye is irrevocable',
                   ),
                   value: p.irrevocableByes.contains(r),
                   onChanged: (v) => attempt(
@@ -1056,6 +1222,19 @@ class PlayerPanelState extends State<PlayerPanel> {
                           (player) => c.savePlayer(player.copy(reportName: rn)),
                         ),
                       ),
+                    if (m.fideId case final fid?
+                        when isFideId(fid) && fid != p.fideId)
+                      ActionChip(
+                        key: const ValueKey('use-uscf-fide-id'),
+                        chipAnimationStyle: noChipAnimation,
+                        label: Text('Use FIDE ID $fid, title and federation'),
+                        onPressed: () => applyMember(
+                          m,
+                          (player) => c.savePlayer(
+                            m.fideIdentityInto(player, replaceFideId: true),
+                          ),
+                        ),
+                      ),
                     if (m.name.isNotEmpty && m.name != p.name)
                       ActionChip(
                         chipAnimationStyle: noChipAnimation,
@@ -1123,9 +1302,21 @@ class PlayerPanelState extends State<PlayerPanel> {
           summary: checked ? 'Expires ${membership.label}' : membership.label,
           summaryColor: membershipColor(colors, membership),
         ),
+        if (hasFideSection(e) ||
+            p.fideId.isNotEmpty ||
+            p.fideStandard + p.fideRapid + p.fideBlitz > 0)
+          group(
+            'fide',
+            'FIDE',
+            fideFields(p, s, muted),
+            summary: fideSummary(p, s),
+            summaryColor: (s?.fideRated ?? false) && p.fideId.isEmpty
+                ? attentionColor(colors)
+                : null,
+          ),
         group('assigned', 'Assigned ratings', [
           Text(
-            'Rule 28E1: an assigned rating is never lower than the published one. Rule 28F: a pairing-only rating is not valid for prizes.',
+            'An assigned rating is never lower than the published one. A pairing-only rating is not valid for prizes.',
             style: muted,
           ),
           const SizedBox(height: 4),
@@ -1201,7 +1392,7 @@ class PlayerPanelState extends State<PlayerPanel> {
             // entry's opponents again and restarts their colors.
             PlainSelect<String>(
               key: const ValueKey('panel-reentry'),
-              label: 'Re-entry for (rule 28S)',
+              label: 'Re-entry for',
               value: p.reentryOf,
               options: [
                 const SelectOption('', 'Not a re-entry'),

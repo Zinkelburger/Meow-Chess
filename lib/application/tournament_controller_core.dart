@@ -7,6 +7,8 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../domain/bye_policy.dart';
+import '../domain/fide.dart';
+import '../domain/fide_pairing.dart' show fideDutchPolicy;
 import '../domain/history.dart';
 import '../domain/holland.dart';
 import '../domain/knockout.dart';
@@ -17,6 +19,7 @@ import '../domain/member_observation.dart';
 import '../domain/rating_update.dart';
 import '../domain/ladder.dart';
 import '../domain/pairing.dart';
+import '../domain/trf.dart' show bakuGroupLast;
 import '../domain/us_chess.dart';
 import 'event_repository.dart';
 import 'diagnostics.dart';

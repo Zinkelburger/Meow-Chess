@@ -113,7 +113,7 @@ void main() {
     await chooseOption(
       tester,
       find.byKey(const ValueKey('field-teamMethod')),
-      'Rollins (31A1)',
+      'Rollins points',
     );
     await tester.enterText(
       find.byKey(const ValueKey('field-teamCounting')),

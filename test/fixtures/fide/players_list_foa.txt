@@ -1,0 +1,7 @@
+ID Number      Name                                                         Fed Sex Tit  WTit OTit           FOA SRtng SGm SK RRtng RGm Rk BRtng BGm BK B-day Flag
+7128762        Ababil                                                       INA M             FA             AIM 1709  0   40 1620  0   40 0     0   0  1978      
+3501418        Arribas Robaina, Maritza                                     CUB F   WGM  WGM  IA                 2235  9   20 2191  0   20 2200  0   20 1971  w   
+1503014        Carlsen, Magnus                                              NOR M   GM                           2823  0   10 2801  12  10 2860  0   10 1990      
+8603677        Ding, Liren                                                  CHN M   GM                           2723  11  10 2693  0   10 2736  0   10 1992      
+2016192        Nakamura, Hikaru                                             USA M   GM                           2792  0   10 2738  0   10 2800  0   10 1987      
+3101959        Cruz Arce, Francisco J.                                      PUR M             SI,FI,LSI,SLI,NAAFM 1938  0   20 1956  0   20 1927  0   20 1982      

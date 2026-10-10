@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import '../application/failures.dart';
 import '../application/tournament_controller_core.dart';
 import '../domain/bye_policy.dart';
+import '../domain/fide.dart';
 import '../domain/knockout.dart';
 import '../domain/ladder.dart';
 import '../domain/model.dart';
@@ -15,6 +16,7 @@ import '../domain/standings.dart';
 import '../domain/team_standings.dart';
 import '../domain/us_chess.dart';
 import 'dbf_export.dart';
+import 'fide_export.dart';
 import 'publish_file.dart';
 import 'reports.dart';
 import 'sqlite_event_repository.dart';
@@ -83,8 +85,35 @@ final _metadata = <String, dynamic>{
     'type': 'array',
     'items': {
       'type': 'string',
-      'enum': [for (final m in TiebreakMethod.values) m.code],
+      'enum': [
+        for (final m in TiebreakMethod.values)
+          if (!m.fide) m.code,
+      ],
     },
+  },
+  // C.07: the FIDE order for FIDE-rated sections, by TRF code; empty
+  // restores Meow-Chess's default (BH/C1, BH, SB, DE, WIN for a Swiss;
+  // DE, WIN, SB, KS for a round robin).
+  'fideTiebreaks': {
+    'type': 'array',
+    'items': {
+      'type': 'string',
+      'enum': [
+        for (final m in TiebreakMethod.values)
+          if (m.fide) m.code,
+      ],
+    },
+  },
+  // FIDE registration for FIDE-rated sections (TRF records 032, 102, 112).
+  'fide': {
+    ..._object({
+      'federation': _string('Three-letter FIDE federation; default USA.'),
+      'chiefArbiter': _string(),
+      'chiefArbiterId': _string('FIDE ID'),
+      'deputies': _array(_object({'name': _string(), 'id': _string()})),
+    }),
+    'description':
+        'FIDE officials and federation for the FIDE report; replaces the stored object.',
   },
 };
 final _playerFields = <String, dynamic>{
@@ -98,8 +127,18 @@ final _playerFields = <String, dynamic>{
     'notes',
     'ratingNote',
     'foreignFederation',
+    // FIDE identity (TRF record 001): ID, title (GM, IM, WGM, FM, WIM, CM,
+    // WFM, WCM), three-letter federation, YYYY or YYYY-MM-DD, m or w.
+    'fideId',
+    'title',
+    'federation',
+    'birthDate',
+    'sex',
   ])
     key: _string(),
+  'fideStandard': {'type': 'integer', 'minimum': 0, 'maximum': 3500},
+  'fideRapid': {'type': 'integer', 'minimum': 0, 'maximum': 3500},
+  'fideBlitz': {'type': 'integer', 'minimum': 0, 'maximum': 3500},
   'rating': {'type': 'integer', 'minimum': 0, 'maximum': 4000},
   // Rules 28E/28F: TD-assigned ratings (0 = use the published rating), the
   // stated cause (28E2), a disclosed foreign rating (28C2/28D1) and rule 36.
@@ -116,9 +155,16 @@ final _playerFields = <String, dynamic>{
 };
 final _swissFields = <String, dynamic>{
   'accelerated': {
-    ..._enum(['', 'addedScore', 'adjustedRating', 'sixths']),
+    ..._enum(['', 'addedScore', 'adjustedRating', 'sixths', 'baku']),
     'description':
-        'Rule 28R accelerated pairings for rounds 1–2: addedScore (28R1), adjustedRating (28R2) or sixths (28R3).',
+        'Rule 28R accelerated pairings for rounds 1–2: addedScore (28R1), adjustedRating (28R2) or sixths (28R3). A FIDE-rated Swiss may use only baku, the Baku Acceleration Method (C.04.7). Set before round 1.',
+  },
+  'pabPoints': {
+    'type': 'integer',
+    'minimum': 0,
+    'maximum': 2,
+    'description':
+        'FIDE-rated Swiss only (C.04.1 3): half-points the pairing-allocated bye scores, 2 (a win, the default), 1 (a draw) or 0. Set before round 1.',
   },
   'avoidTeammates': {
     ..._bool,
@@ -128,6 +174,16 @@ final _swissFields = <String, dynamic>{
     ..._bool,
     'description':
         'Leave the section out of the US Chess rating report (ladders, unrated events). Bughouse is always unrated.',
+  },
+  'fideRated': {
+    ..._bool,
+    'description':
+        'FIDE rated: Swiss, round-robin and quad sections only. With unrated false the section is dual rated; with unrated true it is FIDE only. A FIDE-rated Swiss is paired by the FIDE Dutch system (C.04.3) and set before round 1.',
+  },
+  'fideRanking': {
+    ..._enum(['', ...fideRankingMethods.keys]),
+    'description':
+        'TRF record 172: how pairing numbers rank players. Empty: FIDON for dual-rated sections, FIDE for FIDE-only.',
   },
   'variations': {
     ..._array(_enum(swissVariations)),
@@ -557,7 +613,7 @@ class TournamentTools {
       ),
       tool(
         'export_event',
-        'Write JSON, CSV, text crosstable, preflight and (when valid) the three DBFs into a NEW directory. Never submits results. Returns DBF blockers.',
+        'Write JSON, CSV, text crosstable, preflight and (when valid) the three DBFs into a NEW directory, plus one FIDE TRF26 file per FIDE-rated section when its checks pass. Never submits results. Returns DBF and FIDE blockers.',
         {
           'directory': _string(),
           'sectionId': _string(
@@ -634,6 +690,12 @@ class TournamentTools {
     }
     if (args['tiebreaks'] case final List codes) {
       if (tiebreakCodesProblem(List<String>.from(codes)) case final problem?) {
+        throw TournamentException(problem);
+      }
+    }
+    if (args['fideTiebreaks'] case final List codes) {
+      if (fideTiebreakCodesProblem(List<String>.from(codes))
+          case final problem?) {
         throw TournamentException(problem);
       }
     }
@@ -811,6 +873,15 @@ class TournamentTools {
           }
         }
         _checkControl(args['timeControl']);
+        // With fideModeDefault on, a new section without rating choices is
+        // FIDE only.
+        final fideOnly =
+            args['fideRated'] == null &&
+            args['unrated'] == null &&
+            fideModeDefault &&
+            fideFormats.contains(
+              Format.values.byName(args['format'] ?? 'swiss'),
+            );
         final section = Section(
           id: controller.newId(),
           name: args['name'],
@@ -830,8 +901,11 @@ class TournamentTools {
           // Bughouse is never US Chess rated.
           unrated:
               args['format'] == Format.bughouse.name ||
-              (args['unrated'] ?? false),
+              (args['unrated'] ?? fideOnly),
           variations: Set<String>.from(args['variations'] ?? const []),
+          fideRated: args['fideRated'] ?? fideOnly,
+          fideRanking: args['fideRanking'] ?? '',
+          pabPoints: args['pabPoints'] ?? 2,
           partners: [
             for (final p in args['partners'] as List? ?? const [])
               List<String>.from(p),
@@ -875,6 +949,17 @@ class TournamentTools {
           throw const TournamentException(
             'Pairing format cannot change after rounds are posted.',
           );
+        }
+        if (fideSettingsChangeProblem(
+              current,
+              current.copy(
+                fideRated: args['fideRated'],
+                accelerated: args['accelerated'],
+                pabPoints: args['pabPoints'],
+              ),
+            )
+            case final problem?) {
+          throw TournamentException(problem);
         }
         final bracket = _bracketArg(args['bracket'], current.bracket);
         if (args['bracket'] != null) {
@@ -956,6 +1041,9 @@ class TournamentTools {
                             : args['unrated'] ?? x.unrated,
                         avoidTeammates:
                             args['avoidTeammates'] ?? x.avoidTeammates,
+                        fideRated: args['fideRated'] ?? x.fideRated,
+                        fideRanking: args['fideRanking'] ?? x.fideRanking,
+                        pabPoints: args['pabPoints'] ?? x.pabPoints,
                         variations: args['variations'] == null
                             ? x.variations
                             : Set<String>.from(args['variations']),
@@ -1051,6 +1139,15 @@ class TournamentTools {
           args['points'],
           irrevocable: args['irrevocable'],
         );
+        // FIDE checklist VCL.17: a full-point bye is allowed but deprecated.
+        if (args['points'] == 2 &&
+            (event.sectionOf(args['playerId'])?.fideRated ?? false)) {
+          return {
+            ..._summary(),
+            'warning':
+                'FIDE deprecates full-point byes; a half-point bye is the usual choice.',
+          };
+        }
       case 'cancel_bye':
         controller.reserveBye(
           args['playerId'],
@@ -1259,6 +1356,13 @@ class TournamentTools {
         final dbfs = issues.isEmpty
             ? ratingPackage(snapshot)
             : <String, List<int>>{};
+        // FIDE-rated sections also get their TRF26 files when complete.
+        final fideIssues = fideSections(snapshot).isEmpty
+            ? const <String>[]
+            : fidePreflight(snapshot);
+        final trfs = fideSections(snapshot).isEmpty || fideIssues.isNotEmpty
+            ? const <String, String>{}
+            : fideReport(snapshot);
         final texts = {
           'event.json': const JsonEncoder.withIndent(
             '  ',
@@ -1294,6 +1398,11 @@ class TournamentTools {
               p.join(staging.path, entry.key),
             ).writeAsBytesSync(entry.value, flush: true);
           }
+          for (final entry in trfs.entries) {
+            File(
+              p.join(staging.path, entry.key),
+            ).writeAsBytesSync(utf8.encode(entry.value), flush: true);
+          }
           publishDirectory(staging.path, directory.path);
         } catch (_) {
           if (staging.existsSync()) staging.deleteSync(recursive: true);
@@ -1301,8 +1410,9 @@ class TournamentTools {
         }
         return {
           'directory': directory.path,
-          'files': [...texts.keys, ...dbfs.keys],
+          'files': [...texts.keys, ...dbfs.keys, ...trfs.keys],
           'dbfIssues': issues,
+          if (fideSections(snapshot).isNotEmpty) 'fideIssues': fideIssues,
           'advice': [
             for (final issue in ratingIssues(snapshot))
               if (!issue.blocking) issue.message,

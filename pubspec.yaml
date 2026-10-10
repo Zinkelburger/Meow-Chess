@@ -20,6 +20,10 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   window_manager: ^0.5.2
   html: ^0.15.7
+  archive: ^4.3.0
+  hooks: ^2.2.0
+  code_assets: ^2.1.0
+  native_toolchain_c: ^0.19.5
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -35,6 +39,7 @@ flutter:
     - assets/fonts/Inter-SemiBold.ttf
     - assets/fonts/LICENSE-Inter.txt
     - assets/fonts/LICENSE-SourceCodePro.txt
+    - assets/licenses/LICENSE-bbpPairings.txt
   fonts:
     - family: Inter
       fonts:

@@ -71,6 +71,13 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(c.event!.useTiebreaks, isFalse);
+      // Tie-breaks stay folded away until the TD opens them.
+      expect(find.byKey(const ValueKey('event-use-tiebreaks')), findsNothing);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('event-group-tiebreaks')),
+      );
+      await tester.tap(find.byKey(const ValueKey('event-group-tiebreaks')));
+      await tester.pumpAndSettle();
       final toggle = find.byKey(const ValueKey('event-use-tiebreaks'));
       await tester.ensureVisible(toggle);
       await tester.tap(toggle);

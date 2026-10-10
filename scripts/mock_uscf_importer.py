@@ -219,8 +219,9 @@ def import_package(folder):
             warnings.append(f"{where}: S_R_SYSTEM {s['S_R_SYSTEM']} but {s['S_TIMECTL']!r} rates as "
                             f'{parsed[2]} (MUIR derives the category from the time control)')
         require(s['S_SCH_LVL'] in ('', 'N', 'S', 'P', 'J'), where, 'invalid classification')
-        require(s['S_GR_PRIX'] == 'N' and s['S_GP_PTS'] in ('', '0') and s['S_FIDE'] == 'N',
-                where, 'mock supports non-GP, non-FIDE only')
+        require(s['S_GR_PRIX'] == 'N' and s['S_GP_PTS'] in ('', '0'),
+                where, 'mock supports non-Grand Prix sections only')
+        require(s['S_FIDE'] in ('Y', 'N'), where, 'S_FIDE must be Y or N')
         require(h['H_BEG_DATE'] <= s['S_BEG_DATE'] <= s['S_END_DATE'] <= h['H_END_DATE'],
                 where, 'section dates outside event')
         member(s['S_CTD_ID'], where + '.S_CTD_ID', optional=True)

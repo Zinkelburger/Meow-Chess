@@ -1,4 +1,8 @@
+import 'fide_tiebreaks.dart';
 import 'model.dart';
+
+export 'fide_tiebreaks.dart'
+    show defaultFideTiebreaks, fideSectionTiebreaks, fideTiebreakCodesProblem;
 
 /// How a tie-break value is scaled and printed.
 enum TiebreakUnit {
@@ -13,6 +17,16 @@ enum TiebreakUnit {
 
   /// A plus/minus balance, printed with its sign.
   signed,
+
+  /// A place or pairing number stored negated, so a lower number ranks
+  /// higher (direct encounter's place among the tied, TPN).
+  rank,
+
+  /// Hundredths of a point (averages).
+  hundredths,
+
+  /// Thousandths of a point (averages of Buchholz).
+  thousandths,
 }
 
 /// US Chess rule 34 tie-break methods. [code] is what `Event.tiebreaks`
@@ -97,14 +111,491 @@ enum TiebreakMethod {
 
   /// 34E13: a recorded draw, fixed by the event and player IDs so it can
   /// be reproduced.
-  coinFlip('coinFlip', 'Coin flip', '34E13', 'Coin', TiebreakUnit.whole);
+  coinFlip('coinFlip', 'Coin flip', '34E13', 'Coin', TiebreakUnit.whole),
 
-  const TiebreakMethod(this.code, this.label, this.rule, this.short, this.unit);
+  // FIDE C.07 (2026) methods for FIDE-rated sections, by their TRF codes;
+  // computed in `fide_tiebreaks.dart`.
+  fideBhC1(
+    'BH/C1',
+    'Buchholz Cut-1',
+    'C.07 8.1, 14.1',
+    'BH-C1',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideBh('BH', 'Buchholz', 'C.07 8.1', 'BH', TiebreakUnit.halves, fide: true),
+  fideBhC2(
+    'BH/C2',
+    'Buchholz Cut-2',
+    'C.07 8.1, 14.2',
+    'BH-C2',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideBhM1(
+    'BH/M1',
+    'Median Buchholz',
+    'C.07 8.1, 14.3',
+    'BH-M1',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideBhM2(
+    'BH/M2',
+    'Median Buchholz 2',
+    'C.07 8.1, 14.4',
+    'BH-M2',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideSb(
+    'SB',
+    'Sonneborn–Berger',
+    'C.07 9.1',
+    'SB',
+    TiebreakUnit.quarters,
+    fide: true,
+  ),
+  fideSbC1(
+    'SB/C1',
+    'Sonneborn–Berger Cut-1',
+    'C.07 9.1, 14.1',
+    'SB-C1',
+    TiebreakUnit.quarters,
+    fide: true,
+  ),
+  fideDe(
+    'DE',
+    'Direct encounter',
+    'C.07 6',
+    'DE',
+    TiebreakUnit.rank,
+    fide: true,
+  ),
+  fideWin('WIN', 'Wins', 'C.07 7.1', 'WIN', TiebreakUnit.whole, fide: true),
+  fideWon(
+    'WON',
+    'Games won',
+    'C.07 7.2',
+    'WON',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideBpg(
+    'BPG',
+    'Games with black',
+    'C.07 7.3',
+    'BPG',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideBwg(
+    'BWG',
+    'Wins with black',
+    'C.07 7.4',
+    'BWG',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fidePs(
+    'PS',
+    'Progressive score',
+    'C.07 7.5',
+    'PS',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fidePsC1(
+    'PS/C1',
+    'Progressive score Cut-1',
+    'C.07 7.5, 14.1',
+    'PS-C1',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideRep(
+    'REP',
+    'Rounds elected to play',
+    'C.07 7.6',
+    'REP',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideKs('KS', 'Koya', 'C.07 9.2', 'KS', TiebreakUnit.halves, fide: true),
+  fideAro(
+    'ARO',
+    'Average rating of opponents',
+    'C.07 10.1',
+    'ARO',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideAroC1(
+    'ARO/C1',
+    'Average rating of opponents Cut-1',
+    'C.07 10.1, 14.1',
+    'ARO-C1',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideRtng(
+    'RTNG',
+    'Rating',
+    'C.07 10.6',
+    'RTNG',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideTpr(
+    'TPR',
+    'Performance rating',
+    'C.07 10.2',
+    'TPR',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fidePtp(
+    'PTP',
+    'Perfect performance',
+    'C.07 10.3',
+    'PTP',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideApro(
+    'APRO',
+    'Opponents\' average performance',
+    'C.07 10.4',
+    'APRO',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideAppo(
+    'APPO',
+    'Opponents\' average perfect performance',
+    'C.07 10.5',
+    'APPO',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideAob(
+    'AOB',
+    'Opponents\' average Buchholz',
+    'C.07 8.2',
+    'AOB',
+    TiebreakUnit.thousandths,
+    fide: true,
+  ),
+  fideFb(
+    'FB',
+    'Fore Buchholz',
+    'C.07 8.3',
+    'FB',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideFbC1(
+    'FB/C1',
+    'Fore Buchholz Cut-1',
+    'C.07 8.3, 14.1',
+    'FB-C1',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideTpn(
+    'TPN',
+    'Pairing number',
+    'C.07 7.8',
+    'TPN',
+    TiebreakUnit.rank,
+    fide: true,
+  ),
+  fideDeP(
+    'DE/P',
+    'Direct encounter, forfeits counted',
+    'C.07 6.1.1',
+    'DE-P',
+    TiebreakUnit.rank,
+    fide: true,
+  ),
+  fideStd(
+    'STD',
+    'Standard points',
+    'C.07 7.7',
+    'STD',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideSbC2(
+    'SB/C2',
+    'Sonneborn–Berger Cut-2',
+    'C.07 9.1, 14.2',
+    'SB-C2',
+    TiebreakUnit.quarters,
+    fide: true,
+  ),
+  fideSbP(
+    'SB/P',
+    'Sonneborn–Berger, forfeits as played',
+    'C.07 9.1',
+    'SB-P',
+    TiebreakUnit.quarters,
+    fide: true,
+  ),
+  fideSbC1P(
+    'SB/C1/P',
+    'Sonneborn–Berger Cut-1, forfeits as played',
+    'C.07 9.1, 14.1',
+    'SB-C1-P',
+    TiebreakUnit.quarters,
+    fide: true,
+  ),
+  fideSbC2P(
+    'SB/C2/P',
+    'Sonneborn–Berger Cut-2, forfeits as played',
+    'C.07 9.1, 14.2',
+    'SB-C2-P',
+    TiebreakUnit.quarters,
+    fide: true,
+  ),
+  fideAroC2(
+    'ARO/C2',
+    'Average rating of opponents Cut-2',
+    'C.07 10.1, 14.2',
+    'ARO-C2',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideAroM1(
+    'ARO/M1',
+    'Average rating of opponents Median-1',
+    'C.07 10.1, 14.3',
+    'ARO-M1',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideAroM2(
+    'ARO/M2',
+    'Average rating of opponents Median-2',
+    'C.07 10.1, 14.4',
+    'ARO-M2',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideRtngR(
+    'RTNG/R',
+    'Rating, lowest first',
+    'C.07 10.6',
+    'RTNG-R',
+    TiebreakUnit.rank,
+    fide: true,
+  ),
+  fidePsC2(
+    'PS/C2',
+    'Progressive score Cut-2',
+    'C.07 7.5, 14.2',
+    'PS-C2',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideTpnR(
+    'TPN/R',
+    'Pairing number, highest first',
+    'C.07 7.8',
+    'TPN-R',
+    TiebreakUnit.whole,
+    fide: true,
+  ),
+  fideBhP(
+    'BH/P',
+    'Buchholz, forfeits as played',
+    'C.07 8.1',
+    'BH-P',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideBhC1P(
+    'BH/C1/P',
+    'Buchholz Cut-1, forfeits as played',
+    'C.07 8.1, 14.1',
+    'BH-C1-P',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideBhC2P(
+    'BH/C2/P',
+    'Buchholz Cut-2, forfeits as played',
+    'C.07 8.1, 14.2',
+    'BH-C2-P',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideBhM1P(
+    'BH/M1/P',
+    'Median Buchholz, forfeits as played',
+    'C.07 8.1, 14.3',
+    'BH-M1-P',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideBhM2P(
+    'BH/M2/P',
+    'Median Buchholz 2, forfeits as played',
+    'C.07 8.1, 14.4',
+    'BH-M2-P',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideFbC2(
+    'FB/C2',
+    'Fore Buchholz Cut-2',
+    'C.07 8.3, 14.2',
+    'FB-C2',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideFbM1(
+    'FB/M1',
+    'Fore Buchholz Median-1',
+    'C.07 8.3, 14.3',
+    'FB-M1',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideFbM2(
+    'FB/M2',
+    'Fore Buchholz Median-2',
+    'C.07 8.3, 14.4',
+    'FB-M2',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideFbP(
+    'FB/P',
+    'Fore Buchholz, forfeits as played',
+    'C.07 8.3',
+    'FB-P',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideFbC1P(
+    'FB/C1/P',
+    'Fore Buchholz Cut-1, forfeits as played',
+    'C.07 8.3, 14.1',
+    'FB-C1-P',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideFbC2P(
+    'FB/C2/P',
+    'Fore Buchholz Cut-2, forfeits as played',
+    'C.07 8.3, 14.2',
+    'FB-C2-P',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideFbM1P(
+    'FB/M1/P',
+    'Fore Buchholz Median-1, forfeits as played',
+    'C.07 8.3, 14.3',
+    'FB-M1-P',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideFbM2P(
+    'FB/M2/P',
+    'Fore Buchholz Median-2, forfeits as played',
+    'C.07 8.3, 14.4',
+    'FB-M2-P',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideAobF(
+    'AOB/F',
+    'Opponents\' average Fore Buchholz',
+    'C.07 8.2, 8.3',
+    'AOB-F',
+    TiebreakUnit.thousandths,
+    fide: true,
+  ),
+  fideKsLm1(
+    'KS/L-1',
+    'Koya, limit ½ below 50%',
+    'C.07 9.2, 14.5',
+    'KS-L-1',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideKsLm2(
+    'KS/L-2',
+    'Koya, limit 1 below 50%',
+    'C.07 9.2, 14.5',
+    'KS-L-2',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideKsLm3(
+    'KS/L-3',
+    'Koya, limit 1½ below 50%',
+    'C.07 9.2, 14.5',
+    'KS-L-3',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideKsLp1(
+    'KS/L+1',
+    'Koya, limit ½ above 50%',
+    'C.07 9.2, 14.5',
+    'KS-L+1',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideKsLp2(
+    'KS/L+2',
+    'Koya, limit 1 above 50%',
+    'C.07 9.2, 14.5',
+    'KS-L+2',
+    TiebreakUnit.halves,
+    fide: true,
+  ),
+  fideKsLp3(
+    'KS/L+3',
+    'Koya, limit 1½ above 50%',
+    'C.07 9.2, 14.5',
+    'KS-L+3',
+    TiebreakUnit.halves,
+    fide: true,
+  );
+
+  const TiebreakMethod(
+    this.code,
+    this.label,
+    this.rule,
+    this.short,
+    this.unit, {
+    this.fide = false,
+  });
   final String code, label, rule, short;
   final TiebreakUnit unit;
 
-  /// Methods whose value depends on who else is tied (34E5, 34E10).
-  bool get groupwise => this == headToHead || this == opponentsPerformance;
+  /// A FIDE C.07 method, for FIDE-rated sections; the others are US Chess
+  /// rule 34 methods.
+  final bool fide;
+
+  /// C.07 Art. 8: Buchholz methods, never used in a round robin.
+  bool get buchholz =>
+      code.startsWith('BH') || code.startsWith('FB') || code == 'AOB';
+
+  /// Methods whose value depends on who else is tied (34E5, 34E10, C.07 6).
+  bool get groupwise =>
+      this == headToHead ||
+      this == opponentsPerformance ||
+      this == fideDe ||
+      this == fideDeP;
+
+  /// The MTB26 acronym, without modifiers: `BH` for `BH/C1/P`. US Chess
+  /// methods return their code.
+  String get base => fide ? code.split('/').first : code;
 
   /// Printed value for [value] in this method's [unit].
   String format(int value) => switch (unit) {
@@ -117,11 +608,19 @@ enum TiebreakMethod {
           : value < 0
           ? '−${-value}'
           : '0',
+    TiebreakUnit.rank => '${-value}',
+    TiebreakUnit.hundredths =>
+      '${value ~/ 100}.${(value % 100).toString().padLeft(2, '0')}',
+    TiebreakUnit.thousandths =>
+      '${value ~/ 1000}.${(value % 1000).toString().padLeft(3, '0')}',
   };
 
   /// [value] as a number in points (or rating points, games, etc.).
   num number(int value) => switch (unit) {
     TiebreakUnit.halves => value / 2,
+    TiebreakUnit.rank => -value,
+    TiebreakUnit.hundredths => value / 100,
+    TiebreakUnit.thousandths => value / 1000,
     TiebreakUnit.quarters => value / 4,
     _ => value,
   };
@@ -163,9 +662,11 @@ String tiebreakLabel(String code) => tiebreakMethod(code)?.label ?? code;
 
 /// Codes that are not rule 34 methods, or that repeat.
 String? tiebreakCodesProblem(List<String> codes) {
-  final unknown = codes.where((c) => tiebreakMethod(c) == null).toList();
+  final unknown = codes
+      .where((c) => tiebreakMethod(c) == null || tiebreakMethod(c)!.fide)
+      .toList();
   if (unknown.isNotEmpty) {
-    return 'Unknown tie-break method ${unknown.join(', ')}. Use ${TiebreakMethod.values.map((m) => m.code).join(', ')}.';
+    return 'Unknown tie-break method ${unknown.join(', ')}. Use ${TiebreakMethod.values.where((m) => !m.fide).map((m) => m.code).join(', ')}.';
   }
   if (codes.toSet().length != codes.length) {
     return 'A tie-break method may appear only once in the order.';
@@ -176,7 +677,11 @@ String? tiebreakCodesProblem(List<String> codes) {
 /// The methods this section ranks by, in order: the event's posted list,
 /// or the rule 34E / 34F default for the section's pairing format.
 List<TiebreakMethod> sectionTiebreaks(Event event, Format format) {
-  final posted = event.tiebreaks.map(tiebreakMethod).nonNulls.toList();
+  final posted = event.tiebreaks
+      .map(tiebreakMethod)
+      .nonNulls
+      .where((m) => !m.fide)
+      .toList();
   return posted.isEmpty ? defaultTiebreaks(format) : posted;
 }
 
@@ -298,7 +803,17 @@ class _Calculator {
   int adjustedScore(String id) =>
       played(id).fold(0, (sum, g) => sum + g.result) + unplayedSlots(id);
 
+  late final _fide = FideTiebreaks(event, section, outcomeOf);
+
   int value(TiebreakMethod method, String id, List<String> group) {
+    if (method.fide) {
+      return method.groupwise
+          ? _fide.value(method, id, group)
+          : (_cache[method] ??= {}).putIfAbsent(
+              id,
+              () => _fide.value(method, id, group),
+            );
+    }
     if (method.groupwise) {
       return switch (method) {
         TiebreakMethod.headToHead => _headToHead(id, group),
@@ -329,6 +844,7 @@ class _Calculator {
     TiebreakMethod.coinFlip => _coin(id),
     TiebreakMethod.headToHead || TiebreakMethod.opponentsPerformance =>
       throw StateError('$method is groupwise'),
+    _ => throw StateError('$method is a FIDE tie-break'),
   };
 
   /// 34E1: two from each end in a nine-round or longer event.

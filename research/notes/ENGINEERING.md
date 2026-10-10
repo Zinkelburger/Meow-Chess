@@ -77,6 +77,10 @@ before shipping it; an independently licensed alternative also needs review.
 
 ## FIDE later: leave boundaries now, earn compatibility later
 
+Update 2026-10-10: FIDE-rated sections are built; [docs/FIDE.md](../../docs/FIDE.md) records
+what is implemented, what was verified and what is not claimed (endorsement, US Chess
+acceptance of TRF). The notes below are the original plan.
+
 FIDE's [updated Swiss rules](https://www.fide.com/fide-reminds-organizers-and-arbiters-of-updated-swiss-rules-effective-from-february-1-2026/)
 took effect February 1, 2026. Its official [TRF26 specification](https://handbook.fide.com/files/handbook/TRF26.pdf)
 has separate requirements for rating and pairing/data interchange; the header

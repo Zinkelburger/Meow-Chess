@@ -82,6 +82,14 @@ jobs:
           PYTHONUTF8: '1'
         run: |
           python scripts/test_boylston_replay.py
+      - name: FIDE events replayed through the BBP Pairings checker
+        if: runner.os == 'Linux'
+        run: python scripts/check_fide_trf.py
+      # TEC Manual 3.9.4: random tournaments from each program's generator,
+      # checked by the other's checker.
+      - name: FIDE checker and generator against BBP Pairings
+        if: runner.os == 'Linux'
+        run: python scripts/check_fide_rtg.py --count 300
       - name: Abrupt process termination and SQLite recovery
         run: python scripts/verify_recovery.py
       - name: Linux desktop tournament day

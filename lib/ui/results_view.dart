@@ -527,40 +527,51 @@ class ResultsViewState extends State<ResultsView> {
     });
   }
 
-  Widget assumePanel(String gameId) => FieldsPanel(
-    key: ValueKey('assume-$gameId'),
-    controller: c,
-    draftKey: 'draft-assume-$gameId',
-    title: 'Assume a result for pairing',
-    description:
-        'Use when a game is still going but the next round must be paired. This is not a real result and does not count for points or ratings.',
-    fields: const [
-      FieldSpec(
-        'score',
-        'Assume',
-        options: {'0.5': 'Draw', '1': 'White wins', '0': 'Black wins'},
-      ),
-      FieldSpec('reason', 'Reason', required: true),
-    ],
-    values: const {'score': '0.5'},
-    saveLabel: 'Assume for pairing',
-    onClose: () {
-      Dock.maybeOf(context)?.close();
-      setState(() => assumeFor = null);
-    },
-    onSave: (values) {
-      final outcome = switch (values['score']) {
-        '1' => Outcome.whiteWin,
-        '0.5' => Outcome.draw,
-        '0' => Outcome.blackWin,
-        _ => null,
-      };
-      if (outcome == null) {
-        throw const TournamentException('Choose a result.');
-      }
-      c.setPairingAssumption(gameId, outcome, values['reason']!.trim());
-    },
-  );
+  Widget assumePanel(String gameId) {
+    // C.04.2 3.1: a FIDE section pairs an unfinished game as a draw.
+    final fide = c.event!.sections.any(
+      (s) =>
+          s.fideRated &&
+          s.rounds.any((r) => r.games.any((g) => g.id == gameId)),
+    );
+    return FieldsPanel(
+      key: ValueKey('assume-$gameId'),
+      controller: c,
+      draftKey: 'draft-assume-$gameId',
+      title: 'Assume a result for pairing',
+      description: fide
+          ? 'Use when a game is still going but the next round must be paired. FIDE pairs it as a draw; it does not count for points or ratings.'
+          : 'Use when a game is still going but the next round must be paired. This is not a real result and does not count for points or ratings.',
+      fields: [
+        FieldSpec(
+          'score',
+          'Assume',
+          options: fide
+              ? const {'0.5': 'Draw'}
+              : const {'0.5': 'Draw', '1': 'White wins', '0': 'Black wins'},
+        ),
+        const FieldSpec('reason', 'Reason', required: true),
+      ],
+      values: const {'score': '0.5'},
+      saveLabel: 'Assume for pairing',
+      onClose: () {
+        Dock.maybeOf(context)?.close();
+        setState(() => assumeFor = null);
+      },
+      onSave: (values) {
+        final outcome = switch (values['score']) {
+          '1' => Outcome.whiteWin,
+          '0.5' => Outcome.draw,
+          '0' => Outcome.blackWin,
+          _ => null,
+        };
+        if (outcome == null) {
+          throw const TournamentException('Choose a result.');
+        }
+        c.setPairingAssumption(gameId, outcome, values['reason']!.trim());
+      },
+    );
+  }
 
   /// First click picks a player; the second swaps the two, saved as a new
   /// pairing revision. Two players on one board swap colours.

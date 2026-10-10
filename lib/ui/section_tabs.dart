@@ -133,8 +133,12 @@ class SectionTabs extends StatelessWidget {
     );
   }
 
-  /// A section tab's second line: players, then the latest round's state.
-  static String progress(Section s) => s.sideGames
+  /// A section tab's second line: players, then the latest round's state,
+  /// marked FIDE when FIDE rates the section.
+  static String progress(Section s) =>
+      s.fideRated ? 'FIDE · ${_progress(s)}' : _progress(s);
+
+  static String _progress(Section s) => s.sideGames
       ? '${s.players.length} players · Side games'
       : s.rounds.isEmpty
       ? '${s.players.length} players'

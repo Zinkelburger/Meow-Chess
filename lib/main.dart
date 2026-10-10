@@ -11,11 +11,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 import 'application/event_template.dart';
 import 'application/failures.dart';
 import 'application/tournament_controller.dart';
 import 'domain/model.dart';
+import 'domain/trf_read.dart';
 import 'domain/us_chess.dart';
+import 'infrastructure/fide_cli.dart';
 import 'infrastructure/native_file_requests.dart';
 import 'infrastructure/sqlite_event_repository.dart';
 import 'infrastructure/save_location.dart';
@@ -26,7 +29,12 @@ import 'ui/select.dart';
 import 'ui/theme.dart';
 import 'ui/workspace.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
+  // The FIDE checker and generator run from the command line without the
+  // window: `meow_chess -check file.trf` (TEC Manual 3.9.4).
+  if (args.isNotEmpty && isFideCliCommand(args.first)) {
+    exit(await runFideCli(args));
+  }
   WidgetsFlutterBinding.ensureInitialized();
   final configured = Platform.environment['MEOW_DATA_DIR'];
   final directory = configured == null
@@ -65,6 +73,10 @@ Future<void> main() async {
         font,
       ], await rootBundle.loadString('assets/fonts/LICENSE-$font.txt'));
     }
+    // The FIDE Dutch engine compiled into the app (third_party/bbpPairings).
+    yield LicenseEntryWithLineBreaks([
+      'BBP Pairings',
+    ], await rootBundle.loadString('assets/licenses/LICENSE-bbpPairings.txt'));
   });
   runApp(
     // A .meow named on the command line arrives through NativeFileRequests,
@@ -407,6 +419,77 @@ class _MeowAppState extends State<MeowApp> {
     }
   }
 
+  /// Import FIDE report: a TRF (TRF26, TRF16 or TRF06) becomes a new event
+  /// file with one FIDE-rated section, saved where the TD chooses. What the
+  /// file holds that Meow-Chess cannot keep is listed in the event's notes.
+  Future<void> importTrf(BuildContext context) async {
+    String? destination;
+    try {
+      final file = await openFile(
+        acceptedTypeGroups: [
+          const XTypeGroup(
+            label: 'FIDE tournament report',
+            extensions: ['trf', 'txt', 'fid'],
+          ),
+        ],
+      );
+      if (file == null) return;
+      final imported = trfToEvent(
+        TrfFile.parse(await readTrfFile(file.path)),
+        newId: const Uuid().v4,
+        today: DateTime.now().toIso8601String().substring(0, 10),
+      );
+      var event = imported.event;
+      if (imported.warnings.isNotEmpty) {
+        event = event.copy(
+          notes: [
+            'Imported from ${p.basename(file.path)}. Not carried over:',
+            for (final w in imported.warnings) '- $w',
+          ].join('\n'),
+        );
+      }
+      if (!context.mounted) return;
+      final location = await chooseSaveLocation(
+        suggestedName: '${fileStem(event.name)}.meow',
+      );
+      if (location == null || !context.mounted) return;
+      destination = location.path;
+      final fresh = TournamentController(SqliteEventRepository(':memory:'));
+      try {
+        fresh.change('Import ${p.basename(file.path)}', event);
+        await saveSelectedEvent(fresh.repository, location.path);
+      } finally {
+        fresh.dispose();
+      }
+      Diagnostics.record(
+        'import TRF',
+        'succeeded',
+        context: {'path': destination},
+      );
+      await rememberFileAccess(location.path);
+      if (!mounted) return;
+      open(location.path);
+      if (imported.warnings.isNotEmpty) {
+        _notify(
+          'Imported. ${imported.warnings.length} ${imported.warnings.length == 1 ? 'thing' : 'things'} could not be carried over; the event notes list them.',
+        );
+      }
+    } catch (e, stack) {
+      Diagnostics.record(
+        'import TRF',
+        'failed',
+        error: e,
+        stack: stack,
+        context: {'path': ?destination},
+      );
+      if (context.mounted) {
+        // A format problem names the line at fault.
+        final why = e is TrfFormatException ? '$e.' : plainMessage(e);
+        showFailure(context, 'Could not import this file. $why');
+      }
+    }
+  }
+
   void _notify(String message) {
     final context = navigator.currentContext;
     if (context != null && context.mounted) showFailure(context, message);
@@ -491,6 +574,12 @@ class _MeowAppState extends State<MeowApp> {
                                 onPressed: choose,
                                 icon: const Icon(Icons.folder_open),
                                 label: const Text('Open event'),
+                              ),
+                              OutlinedButton.icon(
+                                key: const ValueKey('import-trf'),
+                                onPressed: () => importTrf(context),
+                                icon: const Icon(Icons.upload_file_outlined),
+                                label: const Text('Import FIDE report'),
                               ),
                             ],
                           ),
