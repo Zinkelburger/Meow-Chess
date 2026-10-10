@@ -13,7 +13,6 @@ import 'package:meow_chess/ui/history_panel.dart';
 import 'package:meow_chess/ui/new_section_panel.dart';
 import 'package:meow_chess/ui/panels.dart';
 import 'package:meow_chess/ui/player_panel.dart';
-import 'package:meow_chess/ui/select.dart';
 import 'package:meow_chess/ui/theme.dart';
 import 'package:meow_chess/ui/workspace.dart';
 import 'package:printing/printing.dart';
@@ -188,9 +187,10 @@ void main() {
       final q1 = c.event!.sections.first;
       await mount(tester, c);
       await sectionMenu(tester, q1.id, 'Rename / section settings…');
-      PlainSelect<String> format() =>
-          tester.widget(find.byKey(const ValueKey('field-format')));
-      expect(format().onChanged, isNotNull);
+      // Before round 1 the format is a choice; after, it is stated with a
+      // lock, never a greyed control.
+      expect(find.byKey(const ValueKey('field-format')), findsOneWidget);
+      expect(find.text('Set before round 1'), findsNothing);
       await postRound(tester, c, sectionId: q1.id);
       c.change(
         'Rename',
@@ -202,7 +202,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(format().onChanged, isNull);
+      expect(find.byKey(const ValueKey('field-format')), findsNothing);
+      expect(find.byKey(const ValueKey('field-format-locked')), findsOneWidget);
+      expect(find.text('Set before round 1'), findsWidgets);
       expect(find.text('Top settings'), findsOneWidget);
     });
   });

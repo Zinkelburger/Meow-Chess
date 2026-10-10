@@ -8,7 +8,44 @@ String scoreText(int halves) =>
 typedef Json = Map<String, dynamic>;
 const _unset = Object();
 
-enum Format { quad, swiss, roundRobin }
+/// How a section is paired. The first three are the common formats; the
+/// rest are the rulebook's and the club scene's rarer ones, offered behind
+/// "Other format" in the section panel.
+enum Format {
+  quad,
+  swiss,
+  roundRobin,
+
+  /// Two sides (teams) where every player meets every opposing player on a
+  /// fixed table; rounds = boards. Side A is [Section.homeTeam].
+  scheveningen,
+
+  /// A single-elimination bracket of mini-matches ([Section.bracket]).
+  knockout,
+
+  /// A standing challenge list: positions are the order of
+  /// [Section.players]; games are recorded by hand and swap positions.
+  ladder,
+
+  /// Two-player partnerships paired as a Swiss on match score; always
+  /// unrated ([Section.partners]).
+  bughouse;
+
+  /// The label a director sees.
+  String get label => switch (this) {
+    quad => 'Quads',
+    swiss => 'Swiss',
+    roundRobin => 'Round robin',
+    scheveningen => 'Scheveningen',
+    knockout => 'Knockout',
+    ladder => 'Ladder',
+    bughouse => 'Bughouse',
+  };
+
+  /// The three everyday formats sit on the format row; the others are
+  /// disclosed behind "Other format".
+  bool get common => index <= roundRobin.index;
+}
 
 enum Outcome {
   unreported,
@@ -279,8 +316,14 @@ class Game {
     this.pairingReason = '',
     this.adjudicated = false,
     this.prizeOutcome,
+    this.whitePartner = '',
+    this.blackPartner = '',
   });
   final String id, white, black, note;
+
+  /// Bughouse: the second-board partner of each side. The game is one match
+  /// result for the partnership; empty for ordinary chess.
+  final String whitePartner, blackPartner;
   final int board, leg;
   final Outcome outcome;
   final Outcome? pairingAssumption;
@@ -304,6 +347,8 @@ class Game {
     String? pairingReason,
     bool? adjudicated,
     Object? prizeOutcome = _unset,
+    String? whitePartner,
+    String? blackPartner,
   }) => Game(
     id: id ?? this.id,
     white: white ?? this.white,
@@ -320,6 +365,8 @@ class Game {
     prizeOutcome: identical(prizeOutcome, _unset)
         ? this.prizeOutcome
         : prizeOutcome as Outcome?,
+    whitePartner: whitePartner ?? this.whitePartner,
+    blackPartner: blackPartner ?? this.blackPartner,
   );
   Json toJson() => {
     'id': id,
@@ -333,6 +380,8 @@ class Game {
     'pairingReason': pairingReason,
     if (adjudicated) 'adjudicated': adjudicated,
     if (prizeOutcome != null) 'prizeOutcome': prizeOutcome!.name,
+    if (whitePartner.isNotEmpty) 'whitePartner': whitePartner,
+    if (blackPartner.isNotEmpty) 'blackPartner': blackPartner,
   };
   factory Game.fromJson(Json j) => Game(
     id: j['id'],
@@ -350,6 +399,8 @@ class Game {
     prizeOutcome: j['prizeOutcome'] == null
         ? null
         : Outcome.values.byName(j['prizeOutcome']),
+    whitePartner: j['whitePartner'] ?? '',
+    blackPartner: j['blackPartner'] ?? '',
   );
 }
 
@@ -467,7 +518,17 @@ class Section {
     Json prizes = const {},
     this.rrTable = '',
     this.doubleCycle = false,
+    this.homeTeam = '',
+    Json holland = const {},
+    Json bracket = const {},
+    List<List<String>> partners = const [],
+    this.unrated = false,
   }) : players = List.unmodifiable(players),
+       holland = Map.unmodifiable(holland),
+       bracket = Map.unmodifiable(bracket),
+       partners = List.unmodifiable(
+         partners.map((p) => List<String>.unmodifiable(p)),
+       ),
        quadPairings = List.unmodifiable(
          quadPairings.map((r) => List<int>.unmodifiable(r)),
        ),
@@ -507,6 +568,25 @@ class Section {
   /// reversed, instead of both games in the same round.
   final bool doubleCycle;
 
+  /// Scheveningen: the team label of side A; every other player is side B.
+  final String homeTeam;
+
+  /// Rule 30H / 30I Holland system. Keys: `group` (shared by the prelims and
+  /// their final), `role` (`prelim` or `final`), `qualifiers` (how many
+  /// advance from each prelim), `unbalanced` (30I).
+  final Json holland;
+
+  /// Knockout bracket. Keys: `gamesPerMatch` (default 2), `tiebreak`
+  /// (`none`, `rapid`, `blitz`, `armageddon`; default `none`), `seeds`
+  /// (player IDs in seeding order), `rounds` (the bracket as played).
+  final Json bracket;
+
+  /// Bughouse partnerships: two player IDs each.
+  final List<List<String>> partners;
+
+  /// Left out of the rating report (bughouse, ladders, unrated events).
+  final bool unrated;
+
   /// Empty inherits the event default. Ladders may use different controls.
   final String timeControl;
   final bool sideGames;
@@ -525,8 +605,12 @@ class Section {
   /// Three rounds of White/Black roster slots, independent of player identity.
   /// Empty uses the standard quad schedule.
   final List<List<int>> quadPairings;
-  bool get finished =>
-      rounds.length >= plannedRounds && rounds.every((r) => r.complete);
+
+  /// A ladder has no planned round count: it is finished whenever every
+  /// recorded challenge game has a result.
+  bool get finished => format == Format.ladder
+      ? rounds.isNotEmpty && rounds.every((r) => r.complete)
+      : rounds.length >= plannedRounds && rounds.every((r) => r.complete);
   Section copy({
     String? name,
     List<String>? players,
@@ -546,6 +630,11 @@ class Section {
     Json? prizes,
     String? rrTable,
     bool? doubleCycle,
+    String? homeTeam,
+    Json? holland,
+    Json? bracket,
+    List<List<String>>? partners,
+    bool? unrated,
   }) => Section(
     id: id,
     name: name ?? this.name,
@@ -566,6 +655,11 @@ class Section {
     prizes: prizes ?? this.prizes,
     rrTable: rrTable ?? this.rrTable,
     doubleCycle: doubleCycle ?? this.doubleCycle,
+    homeTeam: homeTeam ?? this.homeTeam,
+    holland: holland ?? this.holland,
+    bracket: bracket ?? this.bracket,
+    partners: partners ?? this.partners,
+    unrated: unrated ?? this.unrated,
   );
   Json toJson() => {
     'id': id,
@@ -587,6 +681,11 @@ class Section {
     if (prizes.isNotEmpty) 'prizes': prizes,
     if (rrTable.isNotEmpty) 'rrTable': rrTable,
     if (doubleCycle) 'doubleCycle': doubleCycle,
+    if (homeTeam.isNotEmpty) 'homeTeam': homeTeam,
+    if (holland.isNotEmpty) 'holland': holland,
+    if (bracket.isNotEmpty) 'bracket': bracket,
+    if (partners.isNotEmpty) 'partners': partners,
+    if (unrated) 'unrated': unrated,
   };
   factory Section.fromJson(Json j) => Section(
     id: j['id'],
@@ -610,6 +709,13 @@ class Section {
     prizes: Map<String, dynamic>.from(j['prizes'] ?? const {}),
     rrTable: j['rrTable'] ?? '',
     doubleCycle: j['doubleCycle'] ?? false,
+    homeTeam: j['homeTeam'] ?? '',
+    holland: Map<String, dynamic>.from(j['holland'] ?? const {}),
+    bracket: Map<String, dynamic>.from(j['bracket'] ?? const {}),
+    partners: [
+      for (final p in j['partners'] as List? ?? const []) List<String>.from(p),
+    ],
+    unrated: j['unrated'] ?? false,
   );
 }
 
@@ -1033,6 +1139,19 @@ void validateEvent(Event e) {
       'Invalid accelerated pairing method.',
     );
     require(['', 'crenshaw'].contains(s.rrTable), 'Invalid round-robin table.');
+    final partnered = <String>{};
+    for (final pair in s.partners) {
+      require(
+        pair.length == 2 &&
+            pair[0] != pair[1] &&
+            pair.every((id) => s.players.contains(id) && partnered.add(id)),
+        'A bughouse partnership is two distinct players of the section, each in one partnership.',
+      );
+    }
+    require(
+      s.format != Format.bughouse || s.unrated,
+      'Bughouse sections are always unrated.',
+    );
     for (final id in s.players) {
       require(
         ids.contains(id) && assigned.add(id),

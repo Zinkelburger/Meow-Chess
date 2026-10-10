@@ -29,8 +29,13 @@ class PlainSelect<T> extends StatefulWidget {
     this.hint,
     this.focusNode,
     this.dense = false,
+    this.openOnMount = false,
     super.key,
   });
+
+  /// Opens the list as soon as the field appears, for a select that a text
+  /// action reveals ("Other format…"): one press, one list.
+  final bool openOnMount;
 
   /// The current choice. A value with no matching option shows [hint].
   final T value;
@@ -60,6 +65,18 @@ class _PlainSelectState<T> extends State<PlainSelect<T>> {
 
   bool get enabled => widget.onChanged != null;
   int get current => widget.options.indexWhere((o) => o.value == widget.value);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.openOnMount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || menu.isOpen) return;
+        focus.requestFocus();
+        open();
+      });
+    }
+  }
 
   @override
   void dispose() {

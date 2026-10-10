@@ -142,13 +142,13 @@ class TiebreakValue {
 /// Rule 34E's announced default order for a Swiss; rule 34F's for a round
 /// robin or quad.
 List<TiebreakMethod> defaultTiebreaks(Format format) => switch (format) {
-  Format.swiss => const [
+  Format.swiss || Format.bughouse || Format.knockout || Format.ladder => const [
     TiebreakMethod.modifiedMedian,
     TiebreakMethod.solkoff,
     TiebreakMethod.cumulative,
     TiebreakMethod.cumulativeOpposition,
   ],
-  Format.roundRobin || Format.quad => const [
+  Format.roundRobin || Format.quad || Format.scheveningen => const [
     TiebreakMethod.sonnebornBerger,
     TiebreakMethod.headToHead,
   ],
@@ -243,16 +243,22 @@ class _Calculator {
         for (final g in r.games) {
           if (!counts(g)) continue;
           final o = outcomeOf(g);
-          _add(g.white, r.number, o.whiteScore);
-          _add(g.black, r.number, o.blackScore);
-          if (o.played) {
-            (_played[g.white] ??= []).add(
-              _Played(g.black, o.whiteScore, false),
-            );
-            (_played[g.black] ??= []).add(_Played(g.white, o.blackScore, true));
-          } else {
-            _unplayed[g.white] = (_unplayed[g.white] ?? 0) + o.whiteScore;
-            _unplayed[g.black] = (_unplayed[g.black] ?? 0) + o.blackScore;
+          // Bughouse partners share the match: each is credited like the
+          // board-1 player of their side, against the other side's board 1.
+          for (final (me, opponent, result, black) in [
+            (g.white, g.black, o.whiteScore, false),
+            (g.black, g.white, o.blackScore, true),
+            if (g.whitePartner.isNotEmpty)
+              (g.whitePartner, g.black, o.whiteScore, true),
+            if (g.blackPartner.isNotEmpty)
+              (g.blackPartner, g.white, o.blackScore, false),
+          ]) {
+            _add(me, r.number, result);
+            if (o.played) {
+              (_played[me] ??= []).add(_Played(opponent, result, black));
+            } else {
+              _unplayed[me] = (_unplayed[me] ?? 0) + result;
+            }
           }
         }
       }

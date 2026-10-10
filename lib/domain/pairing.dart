@@ -2,6 +2,9 @@ import 'dart:math';
 
 import 'fixed_schedule.dart';
 import 'model.dart';
+import 'bughouse.dart';
+import 'knockout.dart';
+import 'scheveningen.dart';
 import 'swiss_pairing.dart';
 import 'us_chess.dart';
 
@@ -101,8 +104,9 @@ void checkPairingRequests(Event event, Iterable<Game> games) {
 /// pair is unique, so a derived ID never outlives the pairing it names.
 typedef GameIdFor = String Function(int round, String white, String black);
 
-/// Players unavailable in round [n] receive their bye award up front.
-(List<String>, List<ByeAward>) _availability(
+/// Players unavailable in round [n] receive their bye award up front. Shared
+/// by every format that pairs round by round or from a fixed table.
+(List<String>, List<ByeAward>) roundAvailability(
   Event event,
   Section section,
   int n,
@@ -126,7 +130,7 @@ typedef GameIdFor = String Function(int round, String white, String black);
 /// Round [n] of a fixed (quad or round-robin) schedule, refused exactly as
 /// posting refuses it: an absence or a do-not-pair request cannot be skipped.
 Round scheduledRound(Event event, Section section, int n, GameIdFor id) {
-  final (available, byes) = _availability(event, section, n);
+  final (available, byes) = roundAvailability(event, section, n);
   final schedule = sectionSchedule(section);
   if (n > schedule.length) {
     throw const TournamentException('The round-robin schedule is complete.');
@@ -190,6 +194,11 @@ Round paperRound(Section section, int n) {
 /// otherwise US Chess Swiss pairings (rules 27–29) from `swiss_pairing.dart`.
 Round proposeRound(Event event, Section section, String Function() id) {
   final n = section.rounds.length + 1;
+  // A knockout's length follows its bracket (tie-break postings add
+  // rounds), and it names unreported boards itself.
+  if (pairingFormat(section) == Format.knockout) {
+    return knockoutRound(event, section, n, id);
+  }
   if (n > section.plannedRounds) {
     throw const TournamentException('All planned rounds have been posted.');
   }
@@ -200,10 +209,23 @@ Round proposeRound(Event event, Section section, String Function() id) {
       'Resolve outstanding games or record a TD-approved temporary pairing treatment before posting.',
     );
   }
-  if (pairingFormat(section) != Format.swiss) {
-    return scheduledRound(event, section, n, (_, _, _) => id());
+  switch (pairingFormat(section)) {
+    case Format.quad || Format.roundRobin:
+      return scheduledRound(event, section, n, (_, _, _) => id());
+    case Format.scheveningen:
+      return scheveningenRound(event, section, n, id);
+    case Format.knockout:
+      throw StateError('Knockout is paired above.');
+    case Format.ladder:
+      throw const TournamentException(
+        'A ladder has no rounds to create: record challenge games from the ladder.',
+      );
+    case Format.bughouse:
+      return bughouseRound(event, section, n, id);
+    case Format.swiss:
+      break;
   }
-  final (available, byes) = _availability(event, section, n);
+  final (available, byes) = roundAvailability(event, section, n);
   final proposal = pairSwiss(event, section, n, available, byes);
   return _round(
     section,

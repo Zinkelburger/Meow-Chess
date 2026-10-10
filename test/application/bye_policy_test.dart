@@ -122,14 +122,20 @@ void main() {
       final games = s.rounds.single.games;
       c.recordResult(games.last.id, Outcome.draw);
       final before = c.event!.revision;
-      final boards = c.holdOutNonReporters(s.id, treatment: 'doubleForfeit');
+      final boards = c.holdOutNonReporters(
+        s.id,
+        treatment: NonReporterTreatment.doubleForfeit,
+      );
       expect(boards, [games.first.board]);
       expect(c.event!.revision, before + 1);
       final treated = c.event!.games.firstWhere((g) => g.id == games.first.id);
       expect(treated.outcome, Outcome.doubleForfeit);
       expect(treated.note, contains('29H3'));
       expect(
-        () => c.holdOutNonReporters(s.id, treatment: 'doubleForfeit'),
+        () => c.holdOutNonReporters(
+          s.id,
+          treatment: NonReporterTreatment.doubleForfeit,
+        ),
         refuses('has a result'),
       );
     },
@@ -144,7 +150,10 @@ void main() {
       final s = c.event!.sections.single;
       final game = s.rounds.single.games.first;
       c.recordResult(s.rounds.single.games.last.id, Outcome.draw);
-      c.holdOutNonReporters(s.id, treatment: 'halfPointByes');
+      c.holdOutNonReporters(
+        s.id,
+        treatment: NonReporterTreatment.halfPointByes,
+      );
       expect(c.event!.player(game.white).byes[2], 1);
       expect(c.event!.player(game.black).byes[2], 1);
       expect(
@@ -162,8 +171,37 @@ void main() {
     c.post(await c.propose());
     final s = c.event!.sections.single;
     expect(
-      () => c.holdOutNonReporters(s.id, treatment: 'halfPointByes'),
+      () => c.holdOutNonReporters(
+        s.id,
+        treatment: NonReporterTreatment.halfPointByes,
+      ),
       refuses('not available for round 2'),
+    );
+  });
+
+  test('a bye needs a real round and at most a full point', () {
+    final c = swiss();
+    addTearDown(c.dispose);
+    final before = c.event!.revision;
+    expect(() => c.reserveBye('p3', 0, 1), refuses('Choose a round from 1'));
+    expect(() => c.reserveBye('p3', 4, 3), refuses('zero, half or one point'));
+    expect(c.event!.revision, before);
+    c.reserveBye('p3', 4, 2);
+    expect(c.event!.player('p3').byes[4], 2);
+  });
+
+  test('treatment names parse at the tool boundary and refuse others', () {
+    expect(NonReporterTreatment.values.map((t) => t.name), [
+      'doubleForfeit',
+      'halfPointByes',
+    ]);
+    expect(
+      NonReporterTreatment.parse('halfPointByes'),
+      NonReporterTreatment.halfPointByes,
+    );
+    expect(
+      () => NonReporterTreatment.parse('forfeit'),
+      refuses('Unknown treatment "forfeit". Choose doubleForfeit'),
     );
   });
 

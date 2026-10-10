@@ -20,6 +20,10 @@ import 'drafts.dart';
 import 'workspace_actions.dart';
 
 /// Event details, docked at the right like a player.
+/// Workspace-state key naming the field or group the event panel should
+/// show when it opens next; `tiebreaks` is the Standings group.
+const eventPanelFocusKey = 'event-panel-focus';
+
 class EventPanel extends StatefulWidget {
   const EventPanel({
     required this.controller,
@@ -90,7 +94,17 @@ class EventPanelState extends State<EventPanel> {
     super.initState();
     load();
     draft = FormDraft(c.workspaceState, 'draft-event', text, stored);
-    focusField(widget.initialField ?? 'name');
+    // A section panel's "Tie-breaks · Event details" link asks for the
+    // Standings group through the workspace state, since the panel opens
+    // from the workspace rather than from that link.
+    final requested = c.workspaceState.read(eventPanelFocusKey);
+    if (requested != null && requested.isNotEmpty) {
+      c.workspaceState.write(eventPanelFocusKey, '');
+    }
+    focusField(
+      widget.initialField ??
+          (requested != null && requested.isNotEmpty ? requested : 'name'),
+    );
   }
 
   @override
@@ -278,7 +292,13 @@ class EventPanelState extends State<EventPanel> {
               ),
             ],
           ),
-        heading('Standings'),
+        Focus(
+          focusNode: fieldFocus.putIfAbsent(
+            'tiebreaks',
+            () => FocusNode(debugLabel: 'tiebreaks'),
+          ),
+          child: heading('Standings'),
+        ),
         SwitchListTile(
           key: const ValueKey('event-use-tiebreaks'),
           contentPadding: EdgeInsets.zero,
@@ -505,11 +525,7 @@ class _TiebreakOrderEditorState extends State<TiebreakOrderEditor> {
       for (final s in e.sections) pairingFormat(s),
       if (e.sections.isEmpty) Format.swiss,
     };
-    String formatName(Format f) => switch (f) {
-      Format.swiss => 'Swiss',
-      Format.roundRobin => 'Round robin',
-      Format.quad => 'Quad',
-    };
+    String formatName(Format f) => f.label;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

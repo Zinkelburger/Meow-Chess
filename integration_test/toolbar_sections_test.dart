@@ -106,6 +106,16 @@ void main() {
     expect(find.byKey(const ValueKey('new-section-panel')), findsOneWidget);
     expect(c.event!.sections.length, sections);
     await capture('toolbar-section-editor');
+    // The announcement band and the four rule groups below the format row.
+    await tester.drag(
+      find.descendant(
+        of: find.byKey(const ValueKey('new-section-panel')),
+        matching: find.byType(Scrollable),
+      ).first,
+      const Offset(0, -330),
+    );
+    await tester.pumpAndSettle();
+    await capture('section-panel-groups');
     await tester.tap(find.byTooltip('Close (Esc)').last);
     dark.value = true;
     await tester.pumpAndSettle();

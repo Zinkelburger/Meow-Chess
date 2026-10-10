@@ -209,7 +209,7 @@ void main() {
       const problem = 'A round robin of 4 has 3 rounds. Enter 3 or fewer.';
       expect(find.text(problem), findsOneWidget);
       // Two games each still meet in the same rounds.
-      await tester.tap(find.text('Two games each'));
+      await tester.tap(find.text('Two'));
       await tester.pumpAndSettle();
       expect(find.text(problem), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('create-section')));

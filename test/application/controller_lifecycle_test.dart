@@ -25,21 +25,34 @@ void main() {
     expect(c.dispose, returnsNormally);
   });
 
-  test('a failing listener does not log a successful save as failed', () {
+  test('a failing listener cannot turn a committed save into a failure', () {
     final c = TournamentControllerCore(SqliteEventRepository(':memory:'));
     addTearDown(c.dispose);
     c.create('Listener check');
     final revision = c.event!.revision;
+    var later = 0;
     c.addListener(() => throw StateError('listener broke'));
+    c.addListener(() => later++);
     final lines = captureDiagnostics();
-    expect(
-      () => c.change('Rename', c.event!.copy(name: 'Renamed')),
-      throwsStateError,
-    );
+    // A CLI or MCP caller sees the command succeed, as the save did.
+    c.change('Rename', c.event!.copy(name: 'Renamed'));
     expect(c.event!.revision, revision + 1);
     expect(c.repository.load()!.name, 'Renamed');
-    expect(lines.last, contains('save event — succeeded'));
-    expect(lines.where((l) => l.contains('— failed')), isEmpty);
+    expect(later, 1);
+    expect(lines.where((l) => l.contains('save event — failed')), isEmpty);
+    expect(
+      lines.where((l) => l.contains('save event — succeeded')),
+      hasLength(1),
+    );
+    final failure = lines.singleWhere(
+      (l) => l.contains('notify listeners — failed'),
+    );
+    expect(failure, contains('notifier: TournamentControllerCore'));
+    expect(failure, contains('Error: Bad state: listener broke'));
+    // History moves notify the same way.
+    c.undo();
+    expect(c.repository.load()!.name, 'Listener check');
+    expect(later, 2);
   });
 
   test('a failed backup copy is recorded in diagnostics', () {
@@ -102,6 +115,35 @@ void main() {
     expect(c.workspaceState.read('draft'), 'unsaved');
     expect(c.workspaceState.read('never written'), isNull);
     expect(c.workspaceState.readMap('never written'), isEmpty);
+    c.dispose();
+  });
+
+  test('a closed event refuses an unread history graph plainly', () {
+    final c = fixture(count: 4);
+    c.releaseResources();
+    // Nothing read the graph before the file closed, so there is none to show.
+    expect(
+      () => c.graph,
+      throwsA(
+        isA<TournamentException>().having(
+          (e) => e.message,
+          'message',
+          'This event has closed.',
+        ),
+      ),
+    );
+    expect(() => c.canUndo, throwsA(isA<TournamentException>()));
+    c.dispose();
+  });
+
+  test('a closed event still shows the history it had read', () {
+    final c = fixture(count: 4);
+    c.savePlayer(c.event!.players.first.copy(rating: 1600));
+    expect(c.canUndo, isTrue);
+    final graph = c.graph;
+    c.releaseResources();
+    expect(c.graph, same(graph));
+    expect(c.undoLabel, 'Edit Player 00');
     c.dispose();
   });
 

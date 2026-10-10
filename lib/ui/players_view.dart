@@ -14,6 +14,7 @@ import '../domain/model.dart';
 import 'membership_style.dart';
 import '../domain/pairing.dart';
 import '../domain/standings.dart';
+import '../domain/scheveningen.dart';
 import '../domain/rating_preview.dart';
 import 'dialogs.dart';
 import 'result_correction_panel.dart';
@@ -30,6 +31,7 @@ import 'player_panel.dart';
 import 'paste_roster_panel.dart';
 import 'pane_controls.dart';
 import 'new_section_panel.dart';
+import 'formats/knockout_view.dart';
 
 class PlayersView extends StatefulWidget {
   const PlayersView({
@@ -730,7 +732,7 @@ class _PlayersViewState extends State<PlayersView> {
     // Rule 30B: a round-robin player who withdrew before half their games
     // leaves the prize standings; the chip below switches the view.
     final prizeSection =
-        rankedSection != null && pairingFormat(rankedSection) != Format.swiss;
+        rankedSection != null && hasFixedSchedule(rankedSection);
     final tables = <String, Map<String, Standing>>{
       for (final s in e.sections)
         if (s.rounds.isNotEmpty)
@@ -738,10 +740,7 @@ class _PlayersViewState extends State<PlayersView> {
             for (final row in standings(
               e,
               s,
-              forPrizes:
-                  prizeStandings &&
-                  prizeSection &&
-                  pairingFormat(s) != Format.swiss,
+              forPrizes: prizeStandings && prizeSection && hasFixedSchedule(s),
             ))
               row.player.id: row,
           },
@@ -812,16 +811,20 @@ class _PlayersViewState extends State<PlayersView> {
               style: TextStyle(color: colors.onSurfaceVariant),
             ),
           ),
-        for (final p in players)
-          _row(
-            context,
-            s == null ? '' : '${numbers[p.id]}',
-            p,
-            s,
-            rounds,
-            s == null ? null : tables[s.id]?[p.id],
-            scores: started,
-          ),
+        // A knockout places by its bracket, not by points.
+        if (widget.standingsOnly && s != null && s.format == Format.knockout)
+          KnockoutBracketView(controller: c, section: s)
+        else
+          for (final p in players)
+            _row(
+              context,
+              s == null ? '' : '${numbers[p.id]}',
+              p,
+              s,
+              rounds,
+              s == null ? null : tables[s.id]?[p.id],
+              scores: started,
+            ),
       ],
     ];
     scores = started;
@@ -839,14 +842,38 @@ class _PlayersViewState extends State<PlayersView> {
         tiebreakColumns.length * _tiebreak +
         28;
     if (widget.standingsOnly) {
+      // A Scheveningen shows its match score beside the title.
+      final match = e.sections
+          .where(
+            (s) =>
+                s.id == widget.sectionId &&
+                s.format == Format.scheveningen &&
+                scheveningenProblem(e, s) == null,
+          )
+          .firstOrNull;
       final heading = PaneHeading(
-        child: Text(
-          'Crosstable',
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            height: 1.2,
-          ),
+        child: Wrap(
+          spacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text(
+              'Crosstable',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+              ),
+            ),
+            if (match != null)
+              Text(
+                key: const ValueKey('match-score'),
+                scheveningenScoreLine(e, match),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
         ),
       );
       final toolbar = Padding(
@@ -2069,11 +2096,7 @@ class _PlayersViewState extends State<PlayersView> {
   }
 }
 
-String formatName(Format f) => switch (f) {
-  Format.swiss => 'Swiss',
-  Format.quad => 'Quad',
-  Format.roundRobin => 'Round robin',
-};
+String formatName(Format f) => f.label;
 
 /// Edits one player beside the table, so the list stays in view. Field edits
 /// save on Enter, on Save, when another player is opened, or when the panel

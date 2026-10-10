@@ -6,9 +6,9 @@ import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart' show planQuads;
-import '../domain/us_chess.dart' show TimeControl;
 import 'drafts.dart';
 import 'player_format.dart';
+import 'section_panel.dart';
 import 'side_panel.dart';
 import 'theme.dart';
 
@@ -76,46 +76,29 @@ class NewSectionPanel extends StatefulWidget {
 }
 
 class _NewSectionPanelState extends State<NewSectionPanel> {
-  final name = TextEditingController(),
-      rounds = TextEditingController(),
-      board = TextEditingController(),
-      timeControl = TextEditingController(),
-      configuration = TextEditingController();
+  late final Map<String, TextEditingController> text;
   late final FormDraft draft;
-  Format format = Format.swiss;
+  final problems = <String, String>{};
   NewSectionPool? pool;
-  bool doubleGames = false, sideGames = false, more = false;
   String? error;
   TournamentController get c => widget.controller;
+
+  Format get format =>
+      Format.values.byName(text['format']?.text ?? Format.swiss.name);
+  bool get holland => text['holland']?.text == 'true';
 
   @override
   void initState() {
     super.initState();
-    draft = FormDraft(
-      c.workspaceState,
-      'draft-new-section',
-      {
-        'name': name,
-        'rounds': rounds,
-        'board': board,
-        'timeControl': timeControl,
-        'configuration': configuration,
-      },
-      const {
-        'name': '',
-        'rounds': '',
-        'board': '',
-        'timeControl': '',
-        'configuration': '',
-      },
-    );
-    try {
-      final saved = jsonDecode(configuration.text) as Map;
-      format = Format.values.byName(saved['format'] as String);
-      doubleGames = saved['doubleGames'] == true;
-      sideGames = saved['sideGames'] == true;
-    } catch (_) {
-      // No saved choices: start with a Swiss.
+    final base = sectionValues(null);
+    text = {for (final key in base.keys) key: TextEditingController()};
+    draft = FormDraft(c.workspaceState, 'draft-new-section', text, base);
+    for (final key in text.keys) {
+      if (draft.isEdited(key)) {
+        if (sectionGroupOf(key) case final group?) {
+          c.workspaceState.write(sectionGroupPref(group), 'open');
+        }
+      }
     }
     // Ticked players are the obvious intent; otherwise whoever is left
     // out; otherwise an empty section.
@@ -123,10 +106,13 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
         ? NewSectionPool.ticked
         : pools.unassigned.isNotEmpty
         ? NewSectionPool.unassigned
-        : format == Format.quad
+        : needsPlayers
         ? null
         : NewSectionPool.none;
   }
+
+  /// Quads and Holland prelims are made from players, never empty.
+  bool get needsPlayers => format == Format.quad || holland;
 
   @override
   void didUpdateWidget(covariant NewSectionPanel old) {
@@ -137,36 +123,24 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
     } else if (widget.ticked.isEmpty && pool == NewSectionPool.ticked) {
       pool = pools.unassigned.isNotEmpty
           ? NewSectionPool.unassigned
-          : format == Format.quad
+          : needsPlayers
           ? null
           : NewSectionPool.none;
     }
-  }
-
-  /// The format choices ride in the draft as one hidden field. Defaults are
-  /// stored as blank, so choosing a pool or reopening is not an edit.
-  @override
-  void setState(VoidCallback fn) {
-    super.setState(fn);
-    final choices = format == Format.swiss && !doubleGames && !sideGames
-        ? ''
-        : jsonEncode({
-            'format': format.name,
-            'doubleGames': doubleGames,
-            'sideGames': sideGames,
-          });
-    if (configuration.text != choices) configuration.text = choices;
   }
 
   /// Why [rounds] cannot work for [players] entrants, or null. A round robin
   /// plays everyone once (twice with two games each, in the same round), so
   /// more rounds than its schedule could never be completed.
   String? roundsProblem(int players) {
-    final text = rounds.text.trim();
-    if (format != Format.roundRobin || text.isEmpty || players < 2) {
+    final rounds = text['rounds']!.text.trim();
+    if (format != Format.roundRobin ||
+        holland ||
+        rounds.isEmpty ||
+        players < 2) {
       return null;
     }
-    final n = int.tryParse(text);
+    final n = int.tryParse(rounds);
     final schedule = players.isOdd ? players : players - 1;
     if (n == null || n <= schedule) return null;
     return 'A round robin of $players has $schedule '
@@ -176,7 +150,7 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
   @override
   void dispose() {
     draft.dispose();
-    for (final field in [name, rounds, board, timeControl, configuration]) {
+    for (final field in text.values) {
       field.dispose();
     }
     super.dispose();
@@ -189,8 +163,27 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
   /// The groups this would create: name, format and players in order.
   /// Sections in [emptied] give up their names.
   List<_Group> preview(List<Player> players, Set<String> emptied) {
+    if (holland) {
+      final groups = int.tryParse(text['hollandGroups']!.text.trim()) ?? 0;
+      if (groups < 1 || players.length < 2 * groups) return const [];
+      // Rating order, dealt round-robin style across the groups, as the
+      // controller plans them; the exact split is its decision.
+      final sorted = [...players]..sort((a, b) => b.rating.compareTo(a.rating));
+      return [
+        for (var g = 0; g < groups; g++)
+          (
+            name: 'Prelim ${g + 1}',
+            format: Format.roundRobin,
+            players: [
+              for (var i = g; i < sorted.length; i += groups) sorted[i],
+            ],
+          ),
+      ];
+    }
     if (format != Format.quad) {
-      return [(name: name.text.trim(), format: format, players: players)];
+      return [
+        (name: text['name']!.text.trim(), format: format, players: players),
+      ];
     }
     if (players.length < 4) return const [];
     return planQuads(
@@ -202,51 +195,104 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
     );
   }
 
+  void changed() => setState(() {
+    error = null;
+    problems.clear();
+  });
+
   void create() {
     final ids = [for (final p in pools.of(pool)) p.id];
     try {
       if (pool == null) {
         throw const TournamentException('Choose who goes in the section.');
       }
-      final n = int.tryParse(rounds.text.trim());
-      final first = board.text.trim().isEmpty
-          ? null
-          : int.tryParse(board.text.trim());
-      if (format != Format.quad && (n == null || n < 1 || n > 32)) {
-        throw const TournamentException(
-          'Number of rounds must be between 1 and 32.',
+      final v = draft.values;
+      if (holland) {
+        final groups = int.tryParse(v['hollandGroups']!.trim());
+        if (groups == null || groups < 1) {
+          throw const SectionFieldProblem(
+            'hollandGroups',
+            'Enter how many preliminary groups to make.',
+          );
+        }
+        final qualifiers = int.tryParse(v['hollandQualifiers']!.trim());
+        if (qualifiers == null || qualifiers < 1) {
+          throw const SectionFieldProblem(
+            'hollandQualifiers',
+            'Enter how many qualify from each group.',
+          );
+        }
+        final created = c.makeHolland(
+          groups: groups,
+          qualifiers: qualifiers,
+          unbalanced: v['hollandUnbalanced'] == 'true',
+          players: ids,
         );
+        draft.reset(sectionValues(null));
+        widget.onCreated(created);
+        return;
       }
+      final n = readSection(v, boardRequired: false);
       if (roundsProblem(ids.length) case final problem?) {
-        throw TournamentException(problem);
+        throw SectionFieldProblem('rounds', problem);
       }
-      if (board.text.trim().isNotEmpty && (first == null || first < 1)) {
-        throw const TournamentException(
-          'The first board number must be 1 or more.',
-        );
-      }
-      final control = timeControl.text.trim();
-      if (control.isNotEmpty) TimeControl.parse(control);
       final created = c.createSections(
         ids,
-        format: format,
-        name: name.text,
-        rounds: n ?? 3,
-        doubleGames: format == Format.roundRobin && doubleGames,
-        sideGames: format != Format.quad && sideGames,
-        boardStart: first,
-        timeControl: control,
+        format: n.format,
+        name: n.name,
+        rounds: n.rounds,
+        doubleGames: n.doubleGames,
+        sideGames: n.format != Format.quad && n.sideGames,
+        boardStart: n.board,
+        timeControl: n.timeControl,
       );
-      draft.reset(const {
-        'name': '',
-        'rounds': '',
-        'board': '',
-        'timeControl': '',
-        'configuration': '',
-      });
+      // Everything beyond what createSections takes: the announced rules
+      // and the format's own fields. Applied as one more step only when
+      // something differs from the defaults the sections were born with.
+      final made = [
+        for (final s in c.event!.sections)
+          if (created.contains(s.id)) s,
+      ];
+      final configured = <String, Section>{};
+      for (final s in made) {
+        final next = applySectionValues(c.event!, s, {
+          ...v,
+          'name': s.name,
+          'format': s.format.name,
+          'rounds': '${s.plannedRounds}',
+          'board': '${s.boardStart}',
+          'doubleGames': '${s.doubleGames}',
+          'sideGames': '${s.sideGames}',
+        });
+        if (jsonEncode(next.toJson()) != jsonEncode(s.toJson())) {
+          configured[s.id] = next;
+        }
+      }
+      if (configured.isNotEmpty) {
+        c.change(
+          'Set up ${made.length == 1 ? made.single.name : '${made.length} sections'}',
+          c.event!.copy(
+            sections: [
+              for (final s in c.event!.sections) configured[s.id] ?? s,
+            ],
+          ),
+        );
+      }
+      draft.reset(sectionValues(null));
       widget.onCreated(created);
+    } on SectionFieldProblem catch (e) {
+      setState(() {
+        error = null;
+        problems
+          ..clear()
+          ..[e.field] = e.message;
+      });
+      revealSectionField(c, 'new-section-', e.field);
     } catch (e) {
-      setState(() => error = plainMessage(e));
+      setState(() {
+        problems.clear();
+        error = plainMessage(e);
+      });
     }
   }
 
@@ -256,7 +302,7 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
     final muted = TextStyle(fontSize: 13, color: colors.onSurfaceVariant);
     final pools = this.pools;
     final entrants = pools.of(pool);
-    final quads = format == Format.quad;
+    final quads = format == Format.quad && !holland;
     final emptiedIds = sectionsEmptiedBy(e, {for (final p in entrants) p.id});
     final groups = quads && entrants.length < 4
         ? null
@@ -275,41 +321,28 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
       padding: const EdgeInsets.only(top: 20, bottom: 8),
       child: Text(text, style: Theme.of(context).textTheme.titleMedium),
     );
-    Widget field(
-      String key,
-      TextEditingController controller,
-      String label, {
-      bool autofocus = false,
-      String? helper,
-      String? problem,
-    }) => Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextField(
-        key: ValueKey('new-section-$key'),
-        controller: controller,
-        autofocus: autofocus,
-        decoration: InputDecoration(
-          labelText: label,
-          helperText: helper,
-          errorText: problem,
-          errorMaxLines: 3,
-        ),
-        onChanged: (_) => setState(() => error = null),
-        onSubmitted: (_) => create(),
-      ),
-    );
     final count = entrants.length;
-    final createLabel = quads
+    final createLabel = holland
+        ? groups == null || groups.isEmpty
+              ? 'Create Holland prelims'
+              : 'Create ${groups.length} Holland ${groups.length == 1 ? 'prelim' : 'prelims'}'
+        : quads
         ? groups == null || groups.isEmpty
               ? 'Create quads'
               : 'Create ${groups.length} ${groups.length == 1 ? 'section' : 'sections'}'
         : count == 0
         ? 'Create empty section'
         : 'Create section with $count ${count == 1 ? 'player' : 'players'}';
+    // Problems beside a field the form shows; the rounds check is live.
+    final shown = {
+      ...problems,
+      if (roundsProblem(count) case final problem?
+          when !problems.containsKey('rounds'))
+        'rounds': problem,
+    };
     return SidePanel(
       key: const ValueKey('new-section-panel'),
       title: 'New section',
-      width: 400,
       onClose: widget.onClose,
       footer: [
         if (error != null)
@@ -327,14 +360,18 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
           children: [
             FilledButton(
               key: const ValueKey('create-section'),
-              onPressed: pool == null || (quads && (groups?.isEmpty ?? true))
+              onPressed:
+                  pool == null || (needsPlayers && (groups?.isEmpty ?? true))
                   ? null
                   : create,
               child: Text(createLabel),
             ),
-            OutlinedButton(
-              onPressed: widget.onClose,
-              child: const Text('Cancel'),
+            TextButton(
+              onPressed: () {
+                draft.reset(sectionValues(null));
+                changed();
+              },
+              child: const Text('Discard draft'),
             ),
           ],
         ),
@@ -377,7 +414,7 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
                 selected: pool == NewSectionPool.everyone,
                 onTap: () => setState(() => pool = NewSectionPool.everyone),
               ),
-            if (!quads)
+            if (!needsPlayers)
               _Choice(
                 key: const ValueKey('pool-none'),
                 label: 'No one yet',
@@ -387,29 +424,19 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
               ),
           ],
         ),
-        heading('Format'),
-        SegmentedButton<Format>(
-          key: const ValueKey('new-section-format'),
-          expandedInsets: EdgeInsets.zero,
-          // Room for "Round robin" on one line in the 360px column.
-          style: const ButtonStyle(
-            padding: WidgetStatePropertyAll(
-              EdgeInsets.symmetric(horizontal: 4),
-            ),
-          ),
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(value: Format.quad, label: Text('Quads')),
-            ButtonSegment(value: Format.swiss, label: Text('Swiss')),
-            ButtonSegment(value: Format.roundRobin, label: Text('Round robin')),
-          ],
-          selected: {format},
-          onSelectionChanged: (v) => setState(() {
-            format = v.first;
-            error = null;
-            // Quads need players; fall back to the likeliest group.
-            if (format == Format.quad &&
-                (pool == null || pool == NewSectionPool.none)) {
+        const SizedBox(height: 20),
+        SectionFormFields(
+          controller: c,
+          current: null,
+          text: text,
+          keyPrefix: 'new-section-',
+          problems: shown,
+          playerCount: count,
+          nameAutofocus: true,
+          allowHolland: true,
+          onChanged: () {
+            // Quads and prelims need players; fall back to the likeliest group.
+            if (needsPlayers && (pool == null || pool == NewSectionPool.none)) {
               pool = pools.ticked.isNotEmpty
                   ? NewSectionPool.ticked
                   : pools.unassigned.isNotEmpty
@@ -418,83 +445,14 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
                   ? NewSectionPool.everyone
                   : null;
             }
-          }),
-        ),
-        const SizedBox(height: 8),
-        Text(switch (format) {
-          Format.quad =>
-            'Groups of four by rating, three rounds each. Five to seven left over play a small Swiss.',
-          Format.swiss => 'Players meet others on the same score each round.',
-          Format.roundRobin => 'Everyone plays everyone.',
-        }, style: muted),
-        const SizedBox(height: 16),
-        if (!quads) ...[
-          field('name', name, 'Section name', autofocus: true),
-          field(
-            'rounds',
-            rounds,
-            'Number of rounds',
-            helper: format == Format.roundRobin && count >= 2
-                ? '$count players: ${count.isOdd ? count : count - 1} rounds'
-                : null,
-            problem: roundsProblem(count),
-          ),
-          if (format == Format.roundRobin)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: SegmentedButton<bool>(
-                key: const ValueKey('new-section-double'),
-                showSelectedIcon: false,
-                segments: const [
-                  ButtonSegment(value: false, label: Text('One game each')),
-                  ButtonSegment(value: true, label: Text('Two games each')),
-                ],
-                selected: {doubleGames},
-                onSelectionChanged: (v) =>
-                    setState(() => doubleGames = v.first),
-              ),
-            ),
-        ],
-        DisclosureGroup(
-          key: const ValueKey('new-section-more'),
-          title: 'More settings',
-          open: more,
-          onToggle: () => setState(() => more = !more),
-          summary: [
-            if (!quads && sideGames) 'Side games',
-            if (board.text.trim().isNotEmpty) 'Board ${board.text.trim()}',
-            if (timeControl.text.trim().isNotEmpty) timeControl.text.trim(),
-          ].join(' · '),
-          children: [
-            const SizedBox(height: 8),
-            if (!quads)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    PlainCheckbox(
-                      key: const ValueKey('new-section-side-games'),
-                      label: 'Side games',
-                      value: sideGames,
-                      onChanged: (v) => setState(() => sideGames = v ?? false),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Side games'),
-                  ],
-                ),
-              ),
-            field('board', board, 'First board (blank continues numbering)'),
-            field(
-              'time-control',
-              timeControl,
-              'Time control (blank uses event default)',
-            ),
-          ],
+            changed();
+          },
+          onSubmit: create,
         ),
         heading(
           groups == null
               ? 'Goes in'
-              : quads
+              : quads || holland
               ? 'Goes in · ${groups.length} ${groups.length == 1 ? 'section' : 'sections'}'
               : 'Goes in · $count ${count == 1 ? 'player' : 'players'}',
         ),
@@ -505,10 +463,15 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
             'Quads need at least four players. Choose more, or pick Swiss.',
             style: TextStyle(color: colors.error),
           )
+        else if (holland && groups.isEmpty)
+          Text(
+            'Enter the number of preliminary groups; each needs at least two players.',
+            style: muted,
+          )
         else ...[
           for (final (name: title, format: _, :players) in groups)
             _PreviewGroup(
-              title: quads
+              title: quads || holland
                   ? title
                   : title.isEmpty
                   ? 'New section'

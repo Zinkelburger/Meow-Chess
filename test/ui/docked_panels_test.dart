@@ -186,15 +186,24 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
     expectFieldFocus(tester, 'field-name');
     await tester.enterText(find.byKey(const ValueKey('field-name')), 'Top');
-    await tester.enterText(find.byKey(const ValueKey('field-rounds')), '0');
+    // Quads play their fixed three rounds and show no rounds field (design
+    // brief §5.2), so the bad value goes in the first board number, which
+    // lives in the closed Players group.
+    expect(find.byKey(const ValueKey('field-rounds')), findsNothing);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('section-group-players')),
+    );
+    await tester.tap(find.byKey(const ValueKey('section-group-players')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('field-board')), '0');
     // The settings panel is taller than the window; Save is below the fold.
     await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     // The problem stays beside the field and nothing changes.
-    expect(find.text('Number of rounds must be between 1 and 32.'), findsOne);
+    expect(find.text('The first board number must be 1 or more.'), findsOne);
     expect(c.event!.sections.first.name, q1.name);
-    await tester.enterText(find.byKey(const ValueKey('field-rounds')), '3');
+    await tester.enterText(find.byKey(const ValueKey('field-board')), '1');
     await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();

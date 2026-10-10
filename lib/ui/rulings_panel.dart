@@ -4,6 +4,7 @@ import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/rulings.dart';
+import 'controller_listener.dart';
 import 'history_panel.dart' show historyTime;
 import 'select.dart';
 import 'side_panel.dart';
@@ -24,8 +25,11 @@ class RulingsPanel extends StatefulWidget {
   State<RulingsPanel> createState() => _RulingsPanelState();
 }
 
-class _RulingsPanelState extends State<RulingsPanel> {
+class _RulingsPanelState extends State<RulingsPanel>
+    with ListensToController<RulingsPanel> {
   TournamentController get c => widget.controller;
+  @override
+  Listenable controllerOf(RulingsPanel widget) => widget.controller;
   final text = TextEditingController();
   final outcome = TextEditingController();
   final decidedBy = TextEditingController();
@@ -40,16 +44,10 @@ class _RulingsPanelState extends State<RulingsPanel> {
   void initState() {
     super.initState();
     decidedBy.text = c.event!.tdId;
-    c.addListener(changed);
-  }
-
-  void changed() {
-    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    c.removeListener(changed);
     for (final t in [text, outcome, decidedBy, round, playerSearch]) {
       t.dispose();
     }

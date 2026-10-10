@@ -591,13 +591,16 @@ void main() {
       find.byKey(const ValueKey('new-section-name')),
       'Extra games',
     );
-    await tester.ensureVisible(find.byKey(const ValueKey('new-section-more')));
-    await tester.tap(find.byKey(const ValueKey('new-section-more')));
+    // Side games live in the closed Players group.
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('section-group-players')),
+    );
+    await tester.tap(find.byKey(const ValueKey('section-group-players')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(
-      find.byKey(const ValueKey('new-section-side-games')),
+      find.byKey(const ValueKey('new-section-sideGames')),
     );
-    await tester.tap(find.byKey(const ValueKey('new-section-side-games')));
+    await tester.tap(find.byKey(const ValueKey('new-section-sideGames')));
     await tester.tap(find.byKey(const ValueKey('create-section')));
     await tester.pumpAndSettle();
     expect(c.event!.sections.length, count + 1);
@@ -627,7 +630,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('New section opens again after Cancel', (tester) async {
+  testWidgets('New section opens again after closing it', (tester) async {
     final c = fixture();
     addTearDown(c.dispose);
     await mount(tester, c);
@@ -637,7 +640,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(panel, findsOneWidget);
       await tester.tap(
-        find.descendant(of: panel, matching: find.text('Cancel')),
+        find.descendant(of: panel, matching: find.byTooltip('Close (Esc)')),
       );
       await tester.pumpAndSettle();
       expect(panel, findsNothing);

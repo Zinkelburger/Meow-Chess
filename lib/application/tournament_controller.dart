@@ -3,7 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'tournament_controller_core.dart';
 import 'workspace_state.dart';
 
-export 'tournament_controller_core.dart' show PairingBatch;
+export 'tournament_controller_core.dart'
+    show NonReporterTreatment, PairingBatch;
 
 /// Flutter notifications over the same commands used by the standalone CLI.
 class TournamentController extends TournamentControllerCore

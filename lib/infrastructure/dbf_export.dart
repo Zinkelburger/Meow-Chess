@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
 import 'publish_file.dart';
+import '../domain/pairing.dart';
 
 class DbfField {
   const DbfField(this.name, this.width, {this.type = 'C'});
@@ -72,9 +73,10 @@ Uint8List encodeDbf(
   return bytes;
 }
 
-/// Sections that appear in the report: every section with entrants.
+/// Sections that appear in the report: every section with entrants, except
+/// unrated ones (bughouse is never US Chess rated).
 List<Section> reportedSections(Event e) =>
-    e.sections.where((s) => s.players.isNotEmpty).toList();
+    e.sections.where((s) => s.players.isNotEmpty && !s.unrated).toList();
 
 String _list(Iterable<String> names) {
   final all = names.toList();
@@ -171,6 +173,12 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
   final sections = reportedSections(e);
   if (e.practice) add('Practice copies cannot produce rating reports.');
   if (sections.isEmpty) add('Create sections and add players first.');
+  for (final s in e.sections.where((s) => s.unrated && s.players.isNotEmpty)) {
+    add(
+      '${s.name}: ${s.format == Format.bughouse ? 'Bughouse' : 'Unrated'} section left out of the report.',
+      blocking: false,
+    );
+  }
   if (sections.any((s) => !s.finished)) {
     add(
       'Complete all scheduled rounds and results.',
@@ -380,6 +388,40 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
       );
     }
   }
+  // US Chess FAQ on rated matches: "If two players play two or more games,
+  // the section is automatically considered a match" and "any section with
+  // only two players and more than one game will be flagged if not coded
+  // as a match". Advice, not a blocker: the report is still valid.
+  for (final s in sections) {
+    final games = s.rounds.expand((r) => r.games).toList();
+    final meetings = <String, List<Game>>{};
+    for (final g in games) {
+      final pair = [g.white, g.black]..sort();
+      meetings.putIfAbsent(pair.join('/'), () => []).add(g);
+    }
+    for (final MapEntry(value: same) in meetings.entries) {
+      final wholeSection = s.players.length == 2 && games.length >= 2;
+      if (same.length < 2 || !(wholeSection || s.sideGames)) continue;
+      final a = e.player(same.first.white), b = e.player(same.first.black);
+      final gap = (a.rating - b.rating).abs();
+      final eligibility = a.rating == 0 || b.rating == 0
+          ? ' ${a.rating == 0 ? a.name : b.name} has no published rating, so US Chess may not rate the match; ask them to review it.'
+          : gap > 400
+          ? ' Their published ratings are $gap points apart, more than the 400 the FAQ allows; ask US Chess to review it.'
+          : '';
+      add(
+        '${s.name}: ${a.name} and ${b.name} play each other ${same.length} games${wholeSection ? ' and nobody else' : ''}. US Chess rates that as a match (FAQ: a two-player section with two or more games is a match). Mark it as a match when uploading. Both players need established ratings within 400 points, and the rating change is capped at 50 points per match, 100 in 180 days and 200 in three years.$eligibility',
+        repairs: [
+          ReportRepair(
+            'Open ${s.name} results',
+            ReportDestination.results,
+            id: s.id,
+          ),
+        ],
+        blocking: false,
+      );
+    }
+  }
   final noState = [
     for (final (_, p) in entrants)
       if (p.state.isEmpty) p,
@@ -554,7 +596,7 @@ Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
       // rated as round robins (March Quads 202603070523): type R, the number
       // of rounds played, and chronological cells naming each opponent.
       // Double-game rounds are reported as two single-game Swiss rounds.
-      'S_TRN_TYPE': s.format != Format.swiss && !s.doubleGames ? 'R' : 'S',
+      'S_TRN_TYPE': hasFixedSchedule(s) && !s.doubleGames ? 'R' : 'S',
       'S_TOT_RNDS': '${reportedRounds(s)}',
       'S_LST_PAIR': '${s.players.length}',
       'S_BEG_DATE': begin,
@@ -635,8 +677,14 @@ Map<String, dynamic> ratingManifest(Event e, Map<String, List<int>> files) {
   };
 }
 
-Future<String> writeRatingPackage(Event e, String parent) async {
-  final files = ratingPackage(e);
+/// Writes the package into a new folder under [parent]. [now] is the clock the
+/// event dates are checked against (an event cannot end after today).
+Future<String> writeRatingPackage(
+  Event e,
+  String parent, {
+  DateTime Function() now = DateTime.now,
+}) async {
+  final files = ratingPackage(e, today: now());
   // OS-created unique directories keep simultaneous exports from sharing
   // staging files, even on clocks with coarse timestamp resolution.
   final root = Directory(parent);

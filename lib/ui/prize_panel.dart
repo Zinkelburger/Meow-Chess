@@ -8,12 +8,13 @@ import '../domain/model.dart';
 import '../domain/prizes.dart';
 import '../infrastructure/reports.dart' show ReportKind;
 import 'panels.dart' show showPrint;
+import 'controller_listener.dart';
 import 'select.dart';
 import 'side_panel.dart';
 
 /// Rules 32–33: the announced prize table of one section, edited in place.
 /// Every change applies at once as its own undoable step.
-class PrizeTablePanel extends StatefulWidget {
+class PrizeTablePanel extends StatelessWidget {
   const PrizeTablePanel({
     required this.controller,
     required this.sectionId,
@@ -23,28 +24,47 @@ class PrizeTablePanel extends StatefulWidget {
   final TournamentController controller;
   final String sectionId;
   final VoidCallback onClose;
+
   @override
-  State<PrizeTablePanel> createState() => _PrizeTablePanelState();
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) {
+      final s = controller.event?.sections
+          .where((s) => s.id == sectionId)
+          .firstOrNull;
+      return SidePanel(
+        key: ValueKey('prizes-$sectionId'),
+        title: s == null ? 'Section removed' : '${s.name} prizes',
+        onClose: onClose,
+        children: [
+          PrizeTableEditor(controller: controller, sectionId: sectionId),
+        ],
+      );
+    },
+  );
 }
 
-class _PrizeTablePanelState extends State<PrizeTablePanel> {
+/// The prize table itself: fund, terms and one row per prize, with the
+/// summary and the prize report at the end. Lives in the section panel's
+/// Prizes group and in [PrizeTablePanel].
+class PrizeTableEditor extends StatefulWidget {
+  const PrizeTableEditor({
+    required this.controller,
+    required this.sectionId,
+    super.key,
+  });
+  final TournamentController controller;
+  final String sectionId;
+  @override
+  State<PrizeTableEditor> createState() => _PrizeTableEditorState();
+}
+
+class _PrizeTableEditorState extends State<PrizeTableEditor>
+    with ListensToController<PrizeTableEditor> {
   String? error;
 
   @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(changed);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(changed);
-    super.dispose();
-  }
-
-  void changed() {
-    if (mounted) setState(() {});
-  }
+  Listenable controllerOf(PrizeTableEditor widget) => widget.controller;
 
   Section? get section => widget.controller.event?.sections
       .where((s) => s.id == widget.sectionId)
@@ -92,44 +112,11 @@ class _PrizeTablePanelState extends State<PrizeTablePanel> {
   @override
   Widget build(BuildContext context) {
     final s = section, colors = Theme.of(context).colorScheme;
-    if (s == null) {
-      return SidePanel(
-        key: ValueKey('prizes-${widget.sectionId}'),
-        title: 'Section removed',
-        onClose: widget.onClose,
-        children: const [Text('This section no longer exists.')],
-      );
-    }
+    if (s == null) return const Text('This section no longer exists.');
     final table = PrizeTable.fromJson(s.prizes);
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
-    return SidePanel(
-      key: ValueKey('prizes-${widget.sectionId}'),
-      title: '${s.name} prizes',
-      onClose: widget.onClose,
-      footer: [
-        Wrap(
-          spacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              '${table.list.length} ${table.list.length == 1 ? 'prize' : 'prizes'}'
-              ' · ${dollars(table.list.fold(0, (sum, p) => sum + p.cents))} in cash',
-              key: const ValueKey('prize-summary'),
-              style: muted,
-            ),
-            TextButton(
-              key: const ValueKey('prize-report'),
-              onPressed: () => showPrint(
-                context,
-                widget.controller.event!,
-                sectionId: s.id,
-                kind: ReportKind.prizes,
-              ),
-              child: const Text('Prize report…'),
-            ),
-          ],
-        ),
-      ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           'The prizes as announced. Tied cash prizes pool and split; '
@@ -206,6 +193,29 @@ class _PrizeTablePanelState extends State<PrizeTablePanel> {
               style: TextStyle(color: colors.error),
             ),
           ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              '${table.list.length} ${table.list.length == 1 ? 'prize' : 'prizes'}'
+              ' · ${dollars(table.list.fold(0, (sum, p) => sum + p.cents))} in cash',
+              key: const ValueKey('prize-summary'),
+              style: muted,
+            ),
+            TextButton(
+              key: const ValueKey('prize-report'),
+              onPressed: () => showPrint(
+                context,
+                widget.controller.event!,
+                sectionId: s.id,
+                kind: ReportKind.prizes,
+              ),
+              child: const Text('Prize report…'),
+            ),
+          ],
+        ),
       ],
     );
   }

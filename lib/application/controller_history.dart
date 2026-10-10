@@ -11,7 +11,15 @@ mixin _ControllerHistory on ChangeNotifier {
   bool get _closed;
 
   HistoryGraph? _graph;
-  HistoryGraph get graph => _graph ??= repository.historyGraph();
+
+  /// The saved history. History lives in the event file, so once the event
+  /// has closed only a graph already read remains; otherwise it refuses
+  /// plainly instead of surfacing a database error.
+  HistoryGraph get graph {
+    if (_graph case final graph?) return graph;
+    if (_closed) throw const TournamentException('This event has closed.');
+    return _graph = repository.historyGraph();
+  }
 
   /// The step Back would undo, and the one Forward would redo.
   String? get undoLabel =>

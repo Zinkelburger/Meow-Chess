@@ -2,6 +2,10 @@ import 'result_format.dart';
 import 'result_keys.dart';
 import 'player_actions.dart';
 import 'quad_pairings_panel.dart';
+import 'formats/bughouse_panel.dart' show showBughousePartners;
+import 'formats/holland_panel.dart';
+import '../domain/holland.dart' show isHollandPrelim;
+import 'formats/ladder_view.dart';
 import '../infrastructure/reports.dart';
 import 'dart:math' as math;
 
@@ -586,6 +590,11 @@ class ResultsViewState extends State<ResultsView> {
   @override
   Widget build(BuildContext context) {
     final e = c.event!;
+    // A ladder has no rounds to show: its own view records challenge games.
+    if (e.sections.where((s) => s.id == widget.sectionId).firstOrNull
+        case final ladder? when ladder.format == Format.ladder) {
+      return LadderView(controller: c, section: ladder);
+    }
     final roundNumbers =
         sections.expand((s) => s.rounds).map((r) => r.number).toSet().toList()
           ..sort();
@@ -891,6 +900,22 @@ class ResultsViewState extends State<ResultsView> {
           // An earlier round says so in words beside its title; the way in
           // (Correct a result) and out (Done correcting) is in the toolbar.
           if (viewingPast) line(_pastStatus(context)),
+          // Bughouse pairs partnerships: form them here before round 1.
+          if (numbers.isEmpty)
+            for (final s
+                in sections
+                    .where(
+                      (s) => s.format == Format.bughouse && s.rounds.isEmpty,
+                    )
+                    .take(1))
+              line(
+                TextButton(
+                  key: const ValueKey('bughouse-partners'),
+                  onPressed: () =>
+                      showBughousePartners(context, c, sectionId: s.id),
+                  child: const Text('Partners'),
+                ),
+              ),
           // The round chips share the title's line, so a section with them
           // is no taller than one without.
           if (roundNumbers.length > 1)
@@ -957,6 +982,12 @@ class ResultsViewState extends State<ResultsView> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           search,
+          // A finished Holland prelim offers its final from here.
+          if (sections
+                  .where((s) => s.id == widget.sectionId && isHollandPrelim(s))
+                  .firstOrNull
+              case final prelim?)
+            HollandFinalsAction(c, prelim),
           if (viewingPast && correcting)
             OutlinedButton(
               key: const ValueKey('done-correcting'),
@@ -1563,7 +1594,13 @@ class ResultsViewState extends State<ResultsView> {
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
-            TextSpan(text: p.name),
+            // A bughouse side is both partners: "Chen / Patel".
+            TextSpan(
+              text: switch (p.id == g.white ? g.whitePartner : g.blackPartner) {
+                '' => p.name,
+                final partner => '${p.name} / ${e.player(partner).name}',
+              },
+            ),
             if (score != null && !right)
               TextSpan(
                 text: '  (${halves(score)})',

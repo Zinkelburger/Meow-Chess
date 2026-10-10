@@ -329,6 +329,18 @@ int _byRating(_Card a, _Card b) {
   return n != 0 ? n : a.id.compareTo(b.id);
 }
 
+/// Lowest rank first: the lowest rating, then the highest pairing number,
+/// the exact reverse of [_byRating] (28A: the pairing number ranks equal
+/// ratings).
+int _lowestFirst(_Card a, _Card b) => _byRating(b, a);
+
+/// Who drops from a score group first (29D1a): rated players before
+/// unrated ones (29D1c), each lowest rank first.
+List<_Card> _dropOrder(Iterable<_Card> cards) {
+  final order = [...cards]..sort(_lowestFirst);
+  return [...order.where((c) => !c.unrated), ...order.where((c) => c.unrated)];
+}
+
 /// 28L2–28L5: who may take the full-point bye, best candidate first, each
 /// with the reason it would be recorded with.
 List<(_Card, String)> _byeCandidates(
@@ -357,12 +369,11 @@ List<(_Card, String)> _byeCandidates(
         eligible.add(c);
       }
     }
-    // Lowest rank first: lowest rating, then the highest pairing number.
-    int lowestFirst(_Card a, _Card b) => _byRating(b, a);
-    final rated = eligible.where((c) => !c.unrated).toList()..sort(lowestFirst);
+    final rated = eligible.where((c) => !c.unrated).toList()
+      ..sort(_lowestFirst);
     final recent = eligible.where((c) => c.unrated && !c.isNew).toList()
-      ..sort(lowestFirst);
-    final fresh = eligible.where((c) => c.isNew).toList()..sort(lowestFirst);
+      ..sort(_lowestFirst);
+    final fresh = eligible.where((c) => c.isNew).toList()..sort(_lowestFirst);
     for (final c in rated) {
       result.add((
         c,
@@ -389,7 +400,7 @@ List<(_Card, String)> _byeCandidates(
                       !c.halfBye,
                 )
                 .toList()
-              ..sort(lowestFirst)) {
+              ..sort(_lowestFirst)) {
           result.add((
             c,
             'Bye moved one group up so a NEW player keeps playing in a four-round event (28L5)',
@@ -418,7 +429,7 @@ List<(_Card, String)> _byeCandidates(
         final score = a.score.compareTo(b.score);
         if (score != 0) return score;
         final unrated = (a.unrated ? 1 : 0).compareTo(b.unrated ? 1 : 0);
-        return unrated != 0 ? unrated : a.rating.compareTo(b.rating);
+        return unrated != 0 ? unrated : _lowestFirst(a, b);
       });
     for (final c in all) {
       result.add((
@@ -608,9 +619,9 @@ class _GroupContext {
         ..sort((b, c) {
           final db = (a.score - b.score).abs(), dc = (a.score - c.score).abs();
           if (db != dc) return db.compareTo(dc);
-          return (position[b.id]! - target).abs().compareTo(
-            (position[c.id]! - target).abs(),
-          );
+          final pb = (position[b.id]! - target).abs();
+          final pc = (position[c.id]! - target).abs();
+          return pb != pc ? pb.compareTo(pc) : _byRank(b, c);
         });
       for (final b in choices) {
         final rest = go(left.where((c) => c != a && c != b).toList());
@@ -660,7 +671,7 @@ class _GroupContext {
     // 29D1b: try the next-lowest rated player first, and take the first
     // alternative that does better than the natural odd player.
     final alternatives = members.where((c) => c != odd && !c.unrated).toList()
-      ..sort((a, b) => a.rating.compareTo(b.rating));
+      ..sort(_lowestFirst);
     for (final alt in alternatives) {
       final diff = (alt.rating - odd.rating).abs();
       if (diff > 200 && !odd.unrated && !rules.has('29E5h')) continue;
@@ -815,7 +826,7 @@ class _GroupContext {
     if (belowPlusTwo && !matchable(pool, spare: pool.length.isOdd ? 1 : 0)) {
       final movable =
           pool.where((c) => pool.any((d) => d != c && teammates(c, d))).toList()
-            ..sort((a, b) => a.rating.compareTo(b.rating));
+            ..sort(_lowestFirst);
       for (final c in movable) {
         final rest = pool.where((x) => x != c).toList();
         if (matchable(rest, spare: rest.length.isOdd ? 1 : 0) &&
@@ -842,12 +853,7 @@ class _GroupContext {
       if (next == null) {
         throw _Failure('the $label cannot be paired among itself');
       }
-      final order = [...pool]..sort((a, b) => a.rating.compareTo(b.rating));
-      final ratedFirst = [
-        ...order.where((c) => !c.unrated),
-        ...order.where((c) => c.unrated),
-      ];
-      final drop = ratedFirst
+      final drop = _dropOrder(pool)
           .where(
             (c) =>
                 forcedOdd != c &&
@@ -873,17 +879,12 @@ class _GroupContext {
     // from here; the lowest-rated who can play below go first.
     for (var k = 0; k < extraDrops; k++) {
       if (next == null) throw _Failure('the $label has no group below');
-      final order = [...pool]..sort((a, b) => a.rating.compareTo(b.rating));
-      final drop =
-          [
-            ...order.where((c) => !c.unrated),
-            ...order.where((c) => c.unrated),
-          ].where((c) {
-            if (c == forcedOdd) return false;
-            final rest = pool.where((x) => x != c).toList();
-            return below.any((m) => legal(c, m, teamsBlocked: false)) &&
-                matchable(rest, spare: rest.length.isOdd ? 1 : 0);
-          }).firstOrNull;
+      final drop = _dropOrder(pool).where((c) {
+        if (c == forcedOdd) return false;
+        final rest = pool.where((x) => x != c).toList();
+        return below.any((m) => legal(c, m, teamsBlocked: false)) &&
+            matchable(rest, spare: rest.length.isOdd ? 1 : 0);
+      }).firstOrNull;
       if (drop == null) {
         throw _Failure('the $label cannot send another player down');
       }
@@ -899,13 +900,7 @@ class _GroupContext {
       if (next == null) {
         throw _Failure('the $label cannot be paired evenly');
       }
-      final order = forcedOdd != null
-          ? [forcedOdd]
-          : ([...pool]..sort((a, b) => a.rating.compareTo(b.rating)));
-      final ratedFirst = [
-        ...order.where((c) => !c.unrated),
-        ...order.where((c) => c.unrated),
-      ];
+      final ratedFirst = _dropOrder(forcedOdd != null ? [forcedOdd] : pool);
       _Card? odd;
       // 29D1a: the odd player must have an opponent in the next group;
       // 29D2: failing that, in a lower one. Either way the rest of the
@@ -1047,7 +1042,7 @@ class _GroupContext {
             ..sort((x, y) {
               final tx = (x.rating - (natural[a.id]?.rating ?? x.rating)).abs();
               final ty = (y.rating - (natural[a.id]?.rating ?? y.rating)).abs();
-              return tx.compareTo(ty);
+              return tx != ty ? tx.compareTo(ty) : _byRating(x, y);
             });
       for (final b in choices) {
         final rest = solve(left.where((c) => c != a && c != b).toList());

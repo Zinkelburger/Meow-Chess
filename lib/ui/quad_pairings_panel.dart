@@ -6,6 +6,7 @@ import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
+import 'controller_listener.dart';
 import 'panels.dart';
 import 'side_panel.dart';
 import 'select.dart';
@@ -43,7 +44,8 @@ class QuadPairingsPanel extends StatefulWidget {
   State<QuadPairingsPanel> createState() => _QuadPairingsPanelState();
 }
 
-class _QuadPairingsPanelState extends State<QuadPairingsPanel> {
+class _QuadPairingsPanelState extends State<QuadPairingsPanel>
+    with ListensToController<QuadPairingsPanel> {
   late String sectionId;
   late int revision;
   late List<List<String>> pairings;
@@ -60,13 +62,20 @@ class _QuadPairingsPanelState extends State<QuadPairingsPanel> {
     load(
       quads.where((s) => s.id == widget.sectionId).firstOrNull ?? quads.first,
     );
-    c.addListener(sync);
   }
 
   @override
-  void dispose() {
-    c.removeListener(sync);
-    super.dispose();
+  Listenable controllerOf(QuadPairingsPanel widget) => widget.controller;
+
+  @override
+  void controllerChanged() => sync();
+
+  /// Another event's controller: its schedule replaces the draft.
+  @override
+  void controllerReplaced() {
+    final s =
+        quads.where((s) => s.id == sectionId).firstOrNull ?? quads.firstOrNull;
+    if (s != null) load(s);
   }
 
   /// Posted rounds as posted; the rest from the saved schedule, whether or not
@@ -91,7 +100,6 @@ class _QuadPairingsPanelState extends State<QuadPairingsPanel> {
       jsonEncode([s.players, s.boardStart, s.doubleGames]);
 
   void sync() {
-    if (!mounted) return;
     final s = quads.where((s) => s.id == sectionId).firstOrNull;
     setState(() {
       if (s == null) return;

@@ -23,13 +23,14 @@ Blitz 5–10 (all rounds the same time control), Online per chapter 10 (never du
 | Combined individual/team Swiss (scholastic) | Player, team tracked | Swiss, team-mates kept apart (28N1; scholastic regs: never until +3 in the last two rounds) | Individual plus team = top 4 (top 3 at grade/blitz); team tie-breaks total Median, Solkoff, SB, Cumulative | Scholastic events, state and national | **Common** (10–15% of listings) | Avoidance done; team standings and team tie-breaks missing |
 | Fixed-roster team Swiss (USAT East/North/South/West, Texas Teams) | Team | 31B–31G: 4 boards plus alternate, board order by rating, team average cap, paired by match points then average rating, colors follow board 1 | Match points (1/½/0; variation 2.5 of 4 to win), tie-break 34G2 | A few large events a year | Occasional, large | Missing |
 | Team league (Boylston Metropolitan League, high-school leagues) | Team | Scheduled fixtures, two games per board (one each color), home team black in game 1 | Match points, board prizes | Clubs, school leagues | Occasional | Missing (side games cover single matches) |
-| Scheveningen (club vs club) | Player | Fixed tables, rounds = boards | Aggregate | Clubs | Rare | Missing |
-| Holland, unbalanced Holland | Player | Round-robin prelims then finals | 1/½/0 | Blitz events | Rare | Missing |
-| Match (two players, 2+ games) | Pair | Fixed; 400-point gap, rating caps | 1/½/0 | Playoffs, challenges | Rare | Side games cover it |
+| Scheveningen (club vs club) | Player | Fixed tables, rounds = boards | Aggregate | Clubs | Rare | Done (`Format.scheveningen`: home team is side A, sides may differ in size, every round printed, match score in the heading) |
+| Holland, unbalanced Holland | Player | Round-robin prelims then finals | 1/½/0 | Blitz events | Rare | Done (guided: `make_holland` prelims, `make_holland_final` from standings; 30I qualification) |
+| Match (two players, 2+ games) | Pair | Fixed; 400-point gap, rating caps | 1/½/0 | Playoffs, challenges | Rare | Side games cover it; the rating preflight flags a match (400-point gap, caps) |
 | Online rated events | Player | Any OTB format; online ratings, never dual | Same | Clubs | Occasional | Flag only |
 | Unrated events | Any | Same mechanics | No rating | Clubs | Occasional | Done (no report) |
-| Ladder | Player | Challenge the player above; not a rated format | Position | Clubs | Rare | Manual pairings cover it |
-| Simul, bughouse, knockout, arena | Various | Not US Chess ratable (ch. 10 3B) or not defined by the rulebook | — | Side events, online | Rare / online only | Out of scope |
+| Ladder | Player | Challenge the player above; not a rated format | Position | Clubs | Rare | Done: standing list, challenge up to 2 places, a win takes the place; rated unless marked Not rated |
+| Bughouse (Scholastic Regulations App. B) | Two-player partnership | Swiss on match score; one match per pairing (two coupled boards), G/5 d0, 5–6 rounds | Match points 1/½/0 to both partners | Scholastic side events, clubs | Rare | Done: partnerships formed before round 1 (Partners panel, `set_partners`), partnership Swiss (`bughouse-swiss-v1`), partners share the match points, always unrated and left out of the rating report |
+| Simul, knockout, arena | Various | Not US Chess ratable (ch. 10 3B) or not defined by the rulebook | — | Side events, online | Rare / online only | Knockout done: seeded single-elimination bracket of 1- or 2-game matches, byes to the top seeds, the director decides drawn matches or rapid/blitz/armageddon tie-break legs are posted, placings instead of points (`knockout.dart`); simul and arena out of scope |
 | FIDE Swiss (Dutch, Burstein, Lim), FIDE team Swiss | Player / team | C.04 | C.07 | FIDE-rated clubs | Common at big clubs | Missing (planned tranche) |
 
 Sources: rulebook 27–31, 34, chapter 10; [Scholastic Regulations 2026–27](https://new.uschess.org/sites/default/files/media/documents/us-chess-scholastic-regulations-2026-2027-v1.0_8-9-2026.pdf) §5, §10, §12, App. A–B; [USAT East 2027](https://njscf.org/world-amateur-team-2027); [USAT North 2026](https://www.kingregistration.com/event/usatn2026); [Texas Teams 2026](https://sites.google.com/view/2026-texas-teams/tournament-format-regulations); [FIDE C.04](https://handbook.fide.com/chapter/C0401202507); [FIDE team Swiss](https://handbook.fide.com/chapter/SwissTeamPairingSystem202602); US Chess FAQ on matches (`research/local/uscf-faq.txt`); [Lichess arena](https://lichess.org/tournament/help?system=arena).
@@ -116,3 +117,29 @@ Mode: Operate. Visual world: the incumbent "Wall Sheet" system in `DESIGN.md`; t
 3. Scholastic team awards: top-N team standings, team tie-breaks (Scholastic Regulations §12.3.3), a team standings report and a Team awards group.
 4. Fixed-roster team events (31B–31G, 34G2) as the Teams format, after a TD confirms the demand.
 5. FIDE Dutch pairings and FIDE tie-breaks for FIDE-rated clubs (planned tranche).
+
+## 7. The rare formats (built 2026-10-09)
+
+Arena and simuls are skipped on purpose (nothing to pair; not ratable). Everything
+else is being built on one shared contract so the main UI does not grow:
+
+- `Format` gained `scheveningen`, `knockout`, `ladder` and `bughouse`; `Format.common`
+  says which three sit on the format row, and the rest are reached through
+  **Other format…**. Holland is not a format but a guided creation (prelim round
+  robins, then a final) carried by `Section.holland`.
+- The model carries each format's own data: `Section.homeTeam` (Scheveningen side A),
+  `Section.bracket` (knockout seeds, games per match, optional tiebreak games, the
+  bracket as played), `Section.partners` and `Game.whitePartner`/`blackPartner`
+  (bughouse), `Section.unrated` (left out of the rating report), and a ladder's
+  positions are simply the order of `Section.players`.
+- `proposeRound` dispatches by format to `scheveningenRound`, `knockoutRound` and
+  `bughouseRound`; a ladder has no rounds to create and refuses with a plain
+  message; quads and round robins keep their fixed schedule; `hasFixedSchedule`
+  replaces every "not Swiss" test that really meant "quad or round robin".
+- The section panel never learns a format's fields: each format registers a
+  `FormatExtension` (fields, values, apply, summary, problem) in
+  `lib/ui/format_extensions.dart`, and the panel shows them inside Pairing rules
+  for that format only. Adding a format later is one domain file, one extension
+  and one line in the pairer's switch.
+- Knockout ties: the director decides who advances by default; rapid, blitz or
+  armageddon tiebreak games are an option, never the default.

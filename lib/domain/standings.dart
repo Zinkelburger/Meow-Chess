@@ -83,7 +83,7 @@ List<Standing> standings(
   if (forPrizes &&
       !section.sideGames &&
       section.players.length >= 2 &&
-      pairingFormat(section) != Format.swiss) {
+      hasFixedSchedule(section)) {
     // Count actual opponents in the planned schedule; odd fields have sit-outs.
     final scheduled = <String, int>{for (final id in section.players) id: 0};
     for (final round in sectionSchedule(section).take(section.plannedRounds)) {
@@ -124,6 +124,15 @@ List<Standing> standings(
         final outcome = outcomeOf(g);
         scores[g.white] = scores[g.white]! + outcome.whiteScore;
         scores[g.black] = scores[g.black]! + outcome.blackScore;
+        // Bughouse: the match result belongs to both partners.
+        if (g.whitePartner.isNotEmpty) {
+          scores[g.whitePartner] =
+              (scores[g.whitePartner] ?? 0) + outcome.whiteScore;
+        }
+        if (g.blackPartner.isNotEmpty) {
+          scores[g.blackPartner] =
+              (scores[g.blackPartner] ?? 0) + outcome.blackScore;
+        }
       }
     }
   }
@@ -144,14 +153,20 @@ List<Standing> standings(
       (g) =>
           contributes(g) &&
           outcomeOf(g).played &&
-          (g.white == id || g.black == id),
+          (g.white == id ||
+              g.black == id ||
+              g.whitePartner == id ||
+              g.blackPartner == id),
     )) {
-      final opponent = g.white == id ? g.black : g.white;
+      // A bughouse partner's opponent is the other partnership; either of
+      // its players carries the partnership's score.
+      final asWhite = g.white == id || g.whitePartner == id;
+      final opponent = asWhite ? g.black : g.white;
       final outcome = outcomeOf(g);
       bh += scores[opponent]!;
       sb +=
           scores[opponent]! *
-          (g.white == id ? outcome.whiteScore : outcome.blackScore);
+          (asWhite ? outcome.whiteScore : outcome.blackScore);
       played++;
     }
     return Standing(

@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'bye_policy.dart';
+import 'knockout.dart';
+import 'ladder.dart';
 import 'model.dart';
 import 'tiebreaks.dart';
 
@@ -180,11 +182,56 @@ String _list(Iterable<String> names) {
       : '${all.take(3).join(', ')} and ${all.length - 3} more';
 }
 
-String _format(Format f) => switch (f) {
-  Format.swiss => 'Swiss',
-  Format.quad => 'Quad',
-  Format.roundRobin => 'Round robin',
-};
+String _format(Format f) => f.label;
+
+/// Knockout bracket changes: the seeding set, and the director's decisions
+/// on drawn matches ("X advances over Y: reason").
+List<String> _bracketChanges(
+  Event after,
+  Section o,
+  Section s,
+  String Function(String) name,
+) {
+  if (jsonEncode(o.bracket) == jsonEncode(s.bracket)) return const [];
+  final out = <String>[];
+  if (jsonEncode(o.bracket['seeds']) != jsonEncode(s.bracket['seeds'])) {
+    out.add('seeding set');
+  }
+  if (o.bracket['gamesPerMatch'] != s.bracket['gamesPerMatch']) {
+    out.add('${knockoutGamesPerMatch(s)}-game matches');
+  }
+  if (o.bracket['tiebreak'] != s.bracket['tiebreak']) {
+    out.add(
+      'ties: ${knockoutTiebreakLabels[knockoutTiebreak(s)]?.toLowerCase()}',
+    );
+  }
+  String key(Map d) => '${d['board']}/${d['advanced']}/${d['reason']}';
+  Set<String> decisions(Section x) => {
+    for (final r in x.bracket['rounds'] as List? ?? const [])
+      if (r is Map)
+        for (final d in r['decisions'] as List? ?? const [])
+          if (d is Map) key(d),
+  };
+  final before = decisions(o);
+  final matches = s.format == Format.knockout && s.players.length >= 2
+      ? knockoutBracket(after, s).stages.expand((st) => st.matches).toList()
+      : const <KnockoutMatch>[];
+  for (final r in s.bracket['rounds'] as List? ?? const []) {
+    if (r is! Map) continue;
+    for (final d in r['decisions'] as List? ?? const []) {
+      if (d is! Map || before.contains(key(d))) continue;
+      final who = '${d['advanced']}';
+      final match = matches
+          .where((m) => m.board == d['board'] && m.advanced == who)
+          .firstOrNull;
+      final over = match?.eliminated;
+      out.add(
+        '${name(who)} advances${over == null ? '' : ' over ${name(over)}'}: ${d['reason']}',
+      );
+    }
+  }
+  return out;
+}
 
 String _short(String text) {
   final line = text.replaceAll('\n', ' ').trim();
@@ -369,6 +416,13 @@ List<String> describeChanges(
       if (jsonEncode(o.byeRules) != jsonEncode(s.byeRules))
         'bye policy: ${ByePolicy.fromJson(s.byeRules).describe()}',
       if (jsonEncode(o.prizes) != jsonEncode(s.prizes)) 'prize table changed',
+      ..._bracketChanges(after, o, s, name),
+      if (o.unrated != s.unrated)
+        s.unrated ? 'left out of the rating report' : 'rated',
+      if (jsonEncode(o.partners) != jsonEncode(s.partners))
+        s.partners.isEmpty
+            ? 'partnerships cleared'
+            : 'partnerships ${_list(s.partners.map((p) => p.map(name).join(' / ')))}',
     ];
     if (settings.isNotEmpty) out.add('$label: ${settings.join(', ')}');
     final joined = s.players.where((id) => !o.players.contains(id));
@@ -378,7 +432,11 @@ List<String> describeChanges(
     if (joined.isEmpty &&
         left.isEmpty &&
         jsonEncode(o.players) != jsonEncode(s.players)) {
-      out.add('$label: player order changed');
+      out.add(
+        s.format == Format.ladder
+            ? '$label: ${ladderMoves(o.players, s.players, name)}'
+            : '$label: player order changed',
+      );
     }
 
     for (final r in o.rounds.skip(s.rounds.length)) {

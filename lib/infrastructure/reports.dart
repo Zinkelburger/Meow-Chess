@@ -9,6 +9,9 @@ import '../domain/bye_policy.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import '../domain/prizes.dart';
+import '../domain/knockout.dart';
+import '../domain/ladder.dart';
+import '../domain/scheveningen.dart';
 import '../domain/standings.dart';
 import '../domain/us_chess.dart';
 
@@ -101,8 +104,13 @@ String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
   for (final s in e.sections.where(
     (s) => s.players.isNotEmpty && (sectionId == null || s.id == sectionId),
   )) {
-    final rows = standings(e, s);
     final numbers = {for (final (i, id) in s.players.indexed) id: i + 1};
+    // A ladder reads top down: # is the place, not a pairing number.
+    final rows = s.format == Format.ladder
+        ? (standings(e, s)..sort(
+            (a, b) => numbers[a.player.id]!.compareTo(numbers[b.player.id]!),
+          ))
+        : standings(e, s);
     final nameWidth = rows.fold(
       12,
       (int n, Standing r) => reportName(r.player.name).length > n
@@ -111,7 +119,11 @@ String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
     );
     // Rule 28O: each cell is the result, then the score so far.
     final cellWidth = s.doubleGames ? 22 : 12;
-    lines.add('${s.name} — ${s.rounds.length}/${s.plannedRounds} rounds');
+    lines.add(
+      s.format == Format.ladder
+          ? '${s.name} — ladder, ${s.rounds.length} ${s.rounds.length == 1 ? 'batch' : 'batches'} of challenge games'
+          : '${s.name} — ${s.rounds.length}/${s.plannedRounds} rounds',
+    );
     lines.add(
       '${'#'.padLeft(3)}  ${'Name'.padRight(nameWidth)}  ${'Rtg'.padLeft(4)}  ${'Pts'.padLeft(4)}  ${[for (final r in s.rounds) 'R${r.number}'.padRight(cellWidth)].join(' ')}',
     );
@@ -128,6 +140,10 @@ String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
       lines.add(
         '${numbers[id].toString().padLeft(3)}  ${reportName(row.player.name).padRight(nameWidth)}  ${wallChartRating(row.player).padLeft(4)}  ${scoreText(row.points).padLeft(4)}  $cells',
       );
+    }
+    // A knockout places by the bracket, not by points.
+    if (s.format == Format.knockout) {
+      lines.addAll(['', ...knockoutBracketLines(e, s)]);
     }
     lines.add('');
   }
@@ -261,9 +277,16 @@ List<Round> reportPairingRounds(
   Section section, {
   int? roundNumber,
   bool currentRoundOnly = false,
+  Event? event,
 }) {
+  // A Scheveningen is a fixed table too; with the event's team labels its
+  // sheet lists every round like a round robin's.
+  final scheveningen =
+      event != null &&
+      section.format == Format.scheveningen &&
+      scheveningenProblem(event, section) == null;
   if (currentRoundOnly ||
-      pairingFormat(section) == Format.swiss ||
+      !(hasFixedSchedule(section) || scheveningen) ||
       section.sideGames) {
     if (roundNumber == null) {
       return [if (section.rounds.isNotEmpty) section.rounds.last];
@@ -277,11 +300,18 @@ List<Round> reportPairingRounds(
     }
     return [round];
   }
-  final count = min(section.plannedRounds, sectionSchedule(section).length);
+  final count = min(
+    section.plannedRounds,
+    scheveningen
+        ? scheveningenSchedule(event, section).length
+        : sectionSchedule(section).length,
+  );
   return [
     for (var n = 1; n <= count; n++)
       section.rounds.where((r) => r.number == n).firstOrNull ??
-          paperRound(section, n),
+          (scheveningen
+              ? scheveningenPaperRound(event, section, n)
+              : paperRound(section, n)),
   ];
 }
 
@@ -574,6 +604,7 @@ Future<Uint8List> reportPdf(
         scope,
         roundNumber: number,
         currentRoundOnly: currentRoundOnly && !quadGrid,
+        event: source,
       );
       if (rounds.isEmpty) {
         title('Pairings');
@@ -614,8 +645,15 @@ Future<Uint8List> reportPdf(
                 [
                   '${g.board}${scope.doubleGames ? ' / ${g.leg}' : ''}',
                   '',
-                  reportName(source.player(g.white).name),
-                  reportName(source.player(g.black).name),
+                  // A bughouse side is both partners.
+                  [
+                    g.white,
+                    if (g.whitePartner.isNotEmpty) g.whitePartner,
+                  ].map((id) => reportName(source.player(id).name)).join(' / '),
+                  [
+                    g.black,
+                    if (g.blackPartner.isNotEmpty) g.blackPartner,
+                  ].map((id) => reportName(source.player(id).name)).join(' / '),
                   '',
                 ],
             ],
@@ -671,7 +709,30 @@ Future<Uint8List> reportPdf(
         }
       }
     }
-    if (kind == ReportKind.standings) {
+    if (kind == ReportKind.standings && s.format == Format.ladder) {
+      title('Ladder');
+      String name(String id) => reportName(e.player(id).name);
+      grid(
+        ['#', 'Player', 'Rating', 'Games', 'Last result'],
+        [
+          for (final (i, id) in s.players.indexed)
+            [
+              '${i + 1}',
+              name(id),
+              wallChartRating(e.player(id)),
+              '${ladderGames(s, id).length}',
+              ladderLastResult(s, id, name),
+            ],
+        ],
+      );
+      widgets.add(
+        pw.Text(
+          'Challenge up to $ladderChallengeRange places above you. A win takes the loser\'s place; '
+          'a draw or a loss changes nothing.',
+          style: const pw.TextStyle(fontSize: 9),
+        ),
+      );
+    } else if (kind == ReportKind.standings) {
       title(
         'Standings${ceiling == 0 ? '' : ' · Under $ceiling'}${forPrizes ? ' · Excluding early round-robin withdrawals' : ''}',
       );
@@ -705,6 +766,16 @@ Future<Uint8List> reportPdf(
           style: const pw.TextStyle(fontSize: 9),
         ),
       );
+      // A knockout places by the bracket, not by points.
+      if (s.format == Format.knockout) {
+        widgets.add(pw.SizedBox(height: 8));
+        widgets.add(
+          pw.Text(
+            knockoutBracketLines(e, s).join('\n'),
+            style: const pw.TextStyle(fontSize: 9),
+          ),
+        );
+      }
     }
     if (kind == ReportKind.crosstable) {
       title('Crosstable');
@@ -922,11 +993,7 @@ Future<Uint8List> conditionsPdf(
       for (final s in e.sections)
         [
           s.name,
-          switch (s.format) {
-            Format.swiss => 'Swiss',
-            Format.quad => 'Quad',
-            Format.roundRobin => 'Round robin',
-          },
+          s.format.label,
           '${s.plannedRounds}',
           [
             s.effectiveTimeControl(e),
@@ -942,7 +1009,7 @@ Future<Uint8List> conditionsPdf(
             if (s.avoidTeammates) 'Team-mates not paired (28N)',
             if (s.variations.isNotEmpty)
               'Variations: ${(s.variations.toList()..sort()).join(', ')}',
-            if (s.format != Format.swiss && s.rrTable.isNotEmpty)
+            if (hasFixedSchedule(s) && s.rrTable.isNotEmpty)
               'Table: ${s.rrTable}',
             if (s.doubleCycle) 'Double round robin, second cycle (30F)',
             if (s.doubleGames) 'Both colors each round',

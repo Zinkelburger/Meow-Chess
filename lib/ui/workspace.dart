@@ -1,39 +1,36 @@
-import '../application/member_lookup.dart';
-import 'player_actions.dart';
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
+import '../application/member_lookup.dart';
 import '../application/tournament_controller.dart';
-import 'rating_refresh.dart';
-import '../infrastructure/member_directory.dart';
-import '../infrastructure/sqlite_event_repository.dart';
 import '../domain/model.dart';
-import '../domain/pairing.dart';
-import '../infrastructure/roster_import.dart' show ImportRow;
-import 'dialogs.dart';
-import 'desktop_window.dart';
-import 'event_panel.dart';
-import 'history_panel.dart';
-import 'panels.dart';
-import 'prize_panel.dart';
+import '../infrastructure/member_directory.dart';
 import '../infrastructure/reports.dart' show ReportKind;
-import 'side_panel.dart';
-import 'theme.dart' show controlHeight;
-import 'players_view.dart';
-import 'results_view.dart';
-import 'reports_view.dart';
-import 'workspace_actions.dart';
-import 'update_panels.dart';
-import 'rulings_panel.dart';
+import '../infrastructure/roster_import.dart' show ImportRow;
+import '../infrastructure/sqlite_event_repository.dart';
+import 'dialogs.dart';
+import 'event_panel.dart';
 import 'help_panel.dart';
-import 'side_game_panel.dart';
+import 'history_panel.dart';
+import 'pairing_review.dart';
+import 'panels.dart';
+import 'players_view.dart';
 import 'quad_pairings_panel.dart';
+import 'rating_refresh.dart';
+import 'reports_view.dart';
+import 'results_view.dart';
+import 'rulings_panel.dart';
+import 'section_tabs.dart';
+import 'side_game_panel.dart';
+import 'side_panel.dart';
+import 'update_panels.dart';
+import 'workspace_pages.dart';
+import 'workspace_status.dart';
+import 'workspace_toolbar.dart';
 
-enum TaskView { players, results, reports }
+export 'workspace_pages.dart' show TaskView, postState;
 
 class Workspace extends StatefulWidget {
   const Workspace({
@@ -252,27 +249,7 @@ class _WorkspaceState extends State<Workspace> {
       // pairing, post says so.
       c.post(batch);
       if (!mounted) return;
-      final notes = [
-        for (final MapEntry(key: id, value: note) in batch.issues.entries)
-          if (c.event!.sections.where((s) => s.id == id).firstOrNull
-              case final s?)
-            '${s.name}: $note',
-        // Rule 29E TIP: the director reviews what the pairer did. Routine
-        // transpositions stay in the round's explanations (history and
-        // MCP); only what a TD would want to check at once is shown here.
-        for (final MapEntry(key: id, value: round) in batch.rounds.entries)
-          if (c.event!.sections.where((s) => s.id == id).firstOrNull
-              case final s?)
-            for (final line in round.explanations.where(
-              (x) =>
-                  x.contains('meeting is allowed') ||
-                  x.contains('28L3 could not') ||
-                  x.contains('third time') ||
-                  x.contains('closest legal pairing'),
-            ))
-              '${s.name}: $line',
-      ];
-      setState(() => postNotes = notes);
+      setState(() => postNotes = postReviewNotes(c.event!, batch));
       if (sectionId == null || batch.rounds.containsKey(sectionId)) {
         go(TaskView.results);
       } else {
@@ -288,19 +265,9 @@ class _WorkspaceState extends State<Workspace> {
   /// Notes from the last post, kept until the TD dismisses them.
   List<String> postNotes = const [];
 
-  WorkspaceActions get actions => WorkspaceActions(context, c);
   void sectionSettings() => dock.show(
     'settings-$sectionId',
     sectionSettingsPanel(c, sectionId!, dock.close),
-  );
-  void prizes() => dock.show(
-    'prizes-$sectionId',
-    PrizeTablePanel(
-      key: ValueKey('prizes-$sectionId'),
-      controller: c,
-      sectionId: sectionId!,
-      onClose: dock.close,
-    ),
   );
   void combine() => dock.show(
     'combine-$sectionId',
@@ -425,12 +392,12 @@ class _WorkspaceState extends State<Workspace> {
                 (shortcutLabel('P'), 'Print this view'),
                 (shortcutLabel('Z'), 'Undo'),
                 (
-                  mac
+                  macShortcuts
                       ? shortcutLabel('Z', shift: true)
                       : '${shortcutLabel('Z', shift: true)} / ${shortcutLabel('Y')}',
                   'Redo',
                 ),
-                (shortcutLabel(mac ? 'Y' : 'H'), 'History'),
+                (historyShortcut, 'History'),
                 ('Esc', 'Close the panel; keep its draft'),
                 ('F1', 'This reference'),
               ])
@@ -444,7 +411,7 @@ class _WorkspaceState extends State<Workspace> {
 
   @override
   Widget build(BuildContext context) {
-    final e = c.event!, colors = Theme.of(context).colorScheme;
+    final e = c.event!;
     final section = e.sections.where((s) => s.id == sectionId).firstOrNull;
     final content = switch (view) {
       TaskView.players => PlayersView(
@@ -475,9 +442,16 @@ class _WorkspaceState extends State<Workspace> {
         ),
       ),
     };
-    final dark = Theme.of(context).brightness == Brightness.dark;
+    // The rating report always covers every section.
+    final showSections = view != TaskView.reports;
+    if (showSections) followSectionViewport(context);
     SingleActivator command(LogicalKeyboardKey key, {bool shift = false}) =>
-        SingleActivator(key, control: !mac, meta: mac, shift: shift);
+        SingleActivator(
+          key,
+          control: !macShortcuts,
+          meta: macShortcuts,
+          shift: shift,
+        );
     return Shortcuts(
       shortcuts: {
         const SingleActivator(LogicalKeyboardKey.escape): _KeyIntent(
@@ -492,11 +466,15 @@ class _WorkspaceState extends State<Workspace> {
           redo,
           inText: false,
         ),
-        if (!mac)
+        if (!macShortcuts)
           command(LogicalKeyboardKey.keyY): _KeyIntent(redo, inText: false),
         // ⌘H hides the app on a Mac; ⌘Y is History there, as in browsers.
-        command(mac ? LogicalKeyboardKey.keyY : LogicalKeyboardKey.keyH):
-            _KeyIntent(toggleHistory, inText: false),
+        command(
+          macShortcuts ? LogicalKeyboardKey.keyY : LogicalKeyboardKey.keyH,
+        ): _KeyIntent(
+          toggleHistory,
+          inText: false,
+        ),
       },
       child: Actions(
         actions: {_KeyIntent: _KeyAction(() => editingText)},
@@ -512,229 +490,51 @@ class _WorkspaceState extends State<Workspace> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Top bar: event name and pages on the left, tool icons pinned
-                      // to the right.
-                      WorkspaceToolbar(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final navigation = SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              hitTestBehavior: HitTestBehavior.deferToChild,
-                              child: Row(
-                                children: [
-                                  ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: constraints.maxWidth < 1100
-                                          ? 160
-                                          : 260,
-                                    ),
-                                    child: Tooltip(
-                                      message: 'Event details',
-                                      child: TextButton.icon(
-                                        key: const ValueKey('event-details'),
-                                        onPressed: toggleEvent,
-                                        iconAlignment: IconAlignment.end,
-                                        icon: Icon(
-                                          Icons.edit_outlined,
-                                          size: 16,
-                                          color: colors.onSurfaceVariant,
-                                        ),
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: colors.onSurface,
-                                          backgroundColor: eventOpen
-                                              ? colors.primary.withValues(
-                                                  alpha: 0.12,
-                                                )
-                                              : null,
-                                          minimumSize: const Size(0, 32),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                          ),
-                                        ),
-                                        label: Text(
-                                          e.name,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 15,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                            final actions = Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _barIcon(
-                                  Icons.help_outline,
-                                  'Help articles',
-                                  () => dock.id == 'help'
-                                      ? dock.close()
-                                      : dock.show(
-                                          'help',
-                                          HelpPanel(
-                                            controller: c,
-                                            onClose: dock.close,
-                                          ),
-                                        ),
-                                  selected: dock.id == 'help',
-                                ),
-                                _barIcon(
-                                  Icons.gavel,
-                                  'Rulings, penalties and appeals',
-                                  () => dock.id == 'rulings'
-                                      ? dock.close()
-                                      : dock.show(
-                                          'rulings',
-                                          RulingsPanel(
-                                            controller: c,
-                                            onClose: dock.close,
-                                          ),
-                                        ),
-                                  selected: dock.id == 'rulings',
-                                  key: const ValueKey('rulings'),
-                                ),
-                                _barIcon(
-                                  Icons.keyboard_outlined,
-                                  'Keyboard shortcuts (F1)',
-                                  keyboardHelp,
-                                  selected: dock.id == 'keyboard-help',
-                                ),
-                                _toolbarDivider(),
-                                _barIcon(
-                                  Icons.arrow_back,
-                                  c.canUndo
-                                      ? 'Undo ${c.undoLabel} (${shortcutLabel('Z')})'
-                                      : 'Nothing to undo',
-                                  c.canUndo ? undo : null,
-                                  key: const ValueKey('undo'),
-                                ),
-                                _barIcon(
-                                  Icons.arrow_forward,
-                                  c.canRedo
-                                      ? 'Redo ${c.redoLabel} (${shortcutLabel('Z', shift: true)})'
-                                      : 'Nothing to redo',
-                                  c.canRedo ? redo : null,
-                                ),
-                                _barIcon(
-                                  Icons.history,
-                                  historyOpen
-                                      ? 'Hide history (${shortcutLabel(mac ? 'Y' : 'H')})'
-                                      : 'History (${shortcutLabel(mac ? 'Y' : 'H')})',
-                                  toggleHistory,
-                                  selected: historyOpen,
-                                ),
-                                _toolbarDivider(),
-                                _barIcon(
-                                  dark
-                                      ? Icons.light_mode_outlined
-                                      : Icons.dark_mode_outlined,
-                                  dark ? 'Light mode' : 'Dark mode',
-                                  widget.onTheme,
-                                ),
-                                _barIcon(
-                                  Icons.home_outlined,
-                                  'Close event',
-                                  widget.onClose,
-                                ),
-                              ],
-                            );
-                            if (constraints.maxWidth /
-                                    MediaQuery.textScalerOf(context).scale(1) <
-                                640) {
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  navigation,
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: actions,
-                                  ),
-                                ],
-                              );
-                            }
-                            return Row(
-                              children: [
-                                Expanded(child: navigation),
-                                const SizedBox(width: 12),
-                                actions,
-                              ],
-                            );
-                          },
+                      WorkspaceTopBar(
+                        eventName: e.name,
+                        eventOpen: eventOpen,
+                        onToggleEvent: toggleEvent,
+                        helpOpen: dock.id == 'help',
+                        onHelp: help,
+                        rulingsOpen: dock.id == 'rulings',
+                        onRulings: rulings,
+                        keyboardHelpOpen: dock.id == 'keyboard-help',
+                        onKeyboardHelp: keyboardHelp,
+                        undoLabel: c.undoLabel,
+                        onUndo: c.canUndo ? undo : null,
+                        redoLabel: c.redoLabel,
+                        onRedo: c.canRedo ? redo : null,
+                        historyOpen: historyOpen,
+                        onToggleHistory: toggleHistory,
+                        onTheme: widget.onTheme,
+                        onClose: widget.onClose,
+                      ),
+                      if (e.practice) const PracticeBanner(),
+                      WorkspacePageRow(
+                        view: view,
+                        onGo: go,
+                        action: PostControl(
+                          event: e,
+                          pairingEvent: c.pairingEvent,
+                          section: section,
+                          pairing: pairing,
+                          onPair: pair,
+                          onPairSideGame: pairSideGame,
+                          onFinish: () => go(TaskView.reports),
                         ),
                       ),
-                      if (e.practice) _practiceBanner(context),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
+                      if (showSections)
+                        SectionTabs(
+                          event: e,
+                          sectionId: sectionId,
+                          scroll: sectionScroll,
+                          tabKey: (id) =>
+                              sectionKeys.putIfAbsent(id, GlobalKey.new),
+                          onPick: pickSection,
+                          onMenu: sectionMenu,
+                          onNewSection: newSection,
+                          onEditQuadPairings: editQuadPairings,
                         ),
-                        child: LayoutBuilder(
-                          builder: (context, layout) {
-                            final pages = Wrap(
-                              spacing: 4,
-                              runSpacing: 4,
-                              children: [
-                                for (final (task, label) in [
-                                  (TaskView.players, 'Players'),
-                                  (TaskView.results, 'Pairings'),
-                                  (TaskView.reports, 'Export'),
-                                ])
-                                  _tab(label, view == task, () => go(task)),
-                              ],
-                            );
-                            final action = view != TaskView.results
-                                ? const SizedBox.shrink()
-                                : _postControl(context, e, section);
-                            // One control tall whether or not Create pairings is
-                            // offered, so changing section never shifts the page.
-                            final reserved = BoxConstraints(
-                              minHeight: MediaQuery.textScalerOf(
-                                context,
-                              ).scale(controlHeight),
-                            );
-                            if (layout.maxWidth /
-                                    MediaQuery.textScalerOf(context).scale(1) <
-                                1050) {
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  pages,
-                                  ConstrainedBox(
-                                    constraints: view == TaskView.results
-                                        ? reserved
-                                        : const BoxConstraints(),
-                                    child: Align(
-                                      alignment: Alignment.centerRight,
-                                      child: action,
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }
-                            return ConstrainedBox(
-                              constraints: reserved,
-                              child: Row(
-                                children: [
-                                  pages,
-                                  const SizedBox(width: 24),
-                                  Expanded(
-                                    child: Align(
-                                      alignment: Alignment.centerRight,
-                                      child: action,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      // The rating report always covers every section.
-                      if (view != TaskView.reports) _sectionTabs(context),
                       Expanded(
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -768,14 +568,18 @@ class _WorkspaceState extends State<Workspace> {
                                         ),
                                       ],
                                     ),
-                                  if (postNotes.isNotEmpty) _postNotes(context),
+                                  if (postNotes.isNotEmpty)
+                                    PostNotes(
+                                      notes: postNotes,
+                                      onDismiss: () =>
+                                          setState(() => postNotes = const []),
+                                    ),
                                   Expanded(
                                     child: LayoutBuilder(
-                                      builder: (context, layout) => Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          content,
-                                          if (dock.panel != null)
+                                      builder: (context, layout) {
+                                        // Each tool docks in the same column
+                                        // at the right, over the page.
+                                        Widget docked(Widget panel) =>
                                             Positioned(
                                               top: 0,
                                               bottom: 0,
@@ -791,60 +595,35 @@ class _WorkspaceState extends State<Workspace> {
                                                           layout.maxWidth,
                                                         ),
                                                   ),
-                                                  child: dock.panel,
+                                                  child: panel,
                                                 ),
                                               ),
-                                            ),
-                                          if (eventOpen)
-                                            Positioned(
-                                              top: 0,
-                                              bottom: 0,
-                                              right: 0,
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(
-                                                  top: 16,
-                                                ),
-                                                child: ConstrainedBox(
-                                                  constraints: BoxConstraints(
-                                                    maxWidth:
-                                                        detailsColumnWidth(
-                                                          layout.maxWidth,
-                                                        ),
-                                                  ),
-                                                  child: EventPanel(
-                                                    key: eventPanel,
-                                                    controller: c,
-                                                    onClose: toggleEvent,
-                                                  ),
+                                            );
+                                        return Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            content,
+                                            if (dock.panel case final panel?)
+                                              docked(panel),
+                                            if (eventOpen)
+                                              docked(
+                                                EventPanel(
+                                                  key: eventPanel,
+                                                  controller: c,
+                                                  onClose: toggleEvent,
                                                 ),
                                               ),
-                                            ),
-                                          if (historyOpen)
-                                            Positioned(
-                                              top: 0,
-                                              bottom: 0,
-                                              right: 0,
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(
-                                                  top: 16,
-                                                ),
-                                                child: ConstrainedBox(
-                                                  constraints: BoxConstraints(
-                                                    maxWidth:
-                                                        detailsColumnWidth(
-                                                          layout.maxWidth,
-                                                        ),
-                                                  ),
-                                                  child: HistoryPanel(
-                                                    controller: c,
-                                                    review: historyReview,
-                                                    onClose: toggleHistory,
-                                                  ),
+                                            if (historyOpen)
+                                              docked(
+                                                HistoryPanel(
+                                                  controller: c,
+                                                  review: historyReview,
+                                                  onClose: toggleHistory,
                                                 ),
                                               ),
-                                            ),
-                                        ],
-                                      ),
+                                          ],
+                                        );
+                                      },
                                     ),
                                   ),
                                 ],
@@ -853,7 +632,7 @@ class _WorkspaceState extends State<Workspace> {
                           ],
                         ),
                       ),
-                      _statusBar(context, e),
+                      statusBar(e),
                     ],
                   ),
                 ),
@@ -865,112 +644,99 @@ class _WorkspaceState extends State<Workspace> {
     );
   }
 
-  Widget _toolbarDivider() => SizedBox(
-    height: 20,
-    child: VerticalDivider(
-      width: 17,
-      color: Theme.of(context).colorScheme.outlineVariant,
-    ),
-  );
-
-  /// A practice copy looks different at a glance, so nobody runs the real
-  /// event in it by mistake.
-  Widget _practiceBanner(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    // Amber paper, unlike any other surface in the app; text at 7:1+.
-    final background = dark ? const Color(0xff3d2e10) : const Color(0xfff8e4b8);
-    final ink = dark ? const Color(0xfff6dfa9) : const Color(0xff4a3000);
-    return Container(
-      key: const ValueKey('practice-banner'),
-      color: background,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Row(
-        children: [
-          Icon(Icons.science_outlined, size: 18, color: ink),
-          const SizedBox(width: 8),
-          Text(
-            'Practice copy',
-            style: TextStyle(fontWeight: FontWeight.w600, color: ink),
-          ),
-          Flexible(
-            child: Text(
-              '  ·  Changes here don’t touch a real event.',
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: ink),
-            ),
-          ),
-        ],
-      ),
+  /// Keeps the chosen section tab in view when the window or text size
+  /// changes.
+  void followSectionViewport(BuildContext context) {
+    final viewport = (
+      MediaQuery.sizeOf(context),
+      MediaQuery.textScalerOf(context).scale(1),
     );
+    if (sectionViewport != viewport) {
+      sectionViewport = viewport;
+      revealSection();
+    }
   }
+
+  /// A choice from a section tab's right-click menu; [context] is the tab's.
+  void sectionMenu(BuildContext context, SectionMenuAction action, String? id) {
+    if (!mounted) return;
+    final section = c.event!.sections.where((s) => s.id == id).firstOrNull;
+    switch (action) {
+      case SectionMenuAction.print:
+        printSheets(
+          context,
+          c.event!,
+          sectionId: id,
+          kind: ReportKind.sections,
+          dock: dock,
+        );
+      case SectionMenuAction.preview:
+        showPrint(
+          context,
+          c.event!,
+          sectionId: id,
+          kind: ReportKind.sections,
+          dock: dock,
+        );
+      case SectionMenuAction.settings:
+        pickSection(id);
+        sectionSettings();
+      case SectionMenuAction.sideGame:
+        pickSection(id);
+        pairSideGame(id!);
+      case SectionMenuAction.combine:
+        pickSection(id);
+        combine();
+      case SectionMenuAction.help:
+        // The section may have gone while its menu was open.
+        if (section == null) return;
+        dock.show(
+          'help',
+          HelpPanel(
+            controller: c,
+            onClose: dock.close,
+            articleId: switch (section.format) {
+              Format.quad => 'quads',
+              Format.swiss => 'swiss',
+              _ => 'round-robin',
+            },
+          ),
+        );
+      case SectionMenuAction.delete:
+        removeSection(id!);
+    }
+  }
+
+  void help() => dock.id == 'help'
+      ? dock.close()
+      : dock.show('help', HelpPanel(controller: c, onClose: dock.close));
+
+  void rulings() => dock.id == 'rulings'
+      ? dock.close()
+      : dock.show('rulings', RulingsPanel(controller: c, onClose: dock.close));
 
   /// What is safe: when the file was last saved, when it was last backed
   /// up, and the revision. Backups open from here.
-  Widget _statusBar(BuildContext context, Event e) {
-    final colors = Theme.of(context).colorScheme;
+  Widget statusBar(Event e) {
     final head = c.graph.nodes[c.graph.head];
     final backup = c.repository.readPreference('lastBackup')?.split('|');
     final backedUp = backup != null && backup.length > 2
         ? historyTime(backup[2])
         : null;
-    final style = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
-    return Container(
-      key: const ValueKey('status-bar'),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: colors.outlineVariant)),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            Icon(Icons.check, size: 14, color: colors.onSurfaceVariant),
-            const SizedBox(width: 4),
-            Text(
-              head == null
-                  ? 'Event saved'
-                  : 'Event saved ${historyTime(head.timestamp)}',
-              key: const ValueKey('status-saved'),
-              style: style,
-            ),
-            Text('  ·  ', style: style),
-            TextButton(
-              key: const ValueKey('status-backup'),
-              onPressed: showBackups,
-              style: TextButton.styleFrom(
-                minimumSize: const Size(0, 24),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                textStyle: const TextStyle(fontSize: 12),
-              ),
-              child: Text(
-                e.backupFolder.isEmpty
-                    ? 'No backup folder'
-                    : c.backupWarning != null
-                    ? 'Backup failed'
-                    : backedUp == null
-                    ? 'Backups on'
-                    : 'Backup $backedUp',
-              ),
-            ),
-            Text('  ·  ', style: style),
-            Text(
-              '${e.players.length} players · ${e.sections.length} sections · ${widget.path}',
-              overflow: TextOverflow.ellipsis,
-              style: style,
-            ),
-            if (c.workspaceState.failures.isNotEmpty) ...[
-              Text(
-                ' · Draft or workspace state not saved',
-                style: TextStyle(color: colors.error),
-              ),
-              TextButton(
-                onPressed: c.workspaceState.retry,
-                child: const Text('Retry'),
-              ),
-            ],
-          ],
-        ),
-      ),
+    return WorkspaceStatusBar(
+      savedAt: head == null ? null : historyTime(head.timestamp),
+      backup: e.backupFolder.isEmpty
+          ? 'No backup folder'
+          : c.backupWarning != null
+          ? 'Backup failed'
+          : backedUp == null
+          ? 'Backups on'
+          : 'Backup $backedUp',
+      summary:
+          '${e.players.length} players · ${e.sections.length} sections · ${widget.path}',
+      onBackups: showBackups,
+      workspaceStateFailed: c.workspaceState.failures.isNotEmpty,
+      onRetryWorkspaceState: c.workspaceState.retry,
     );
   }
 
@@ -985,446 +751,11 @@ class _WorkspaceState extends State<Workspace> {
           ),
         );
 
-  /// The post button, labelled with what it will post. When nothing can
-  /// be posted it says why beside it, and once every round is played it
-  /// gives way to the event-complete state.
-  Widget _postControl(BuildContext context, Event e, Section? section) {
-    final colors = Theme.of(context).colorScheme;
-    if (section?.sideGames == true) {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: FilledButton.icon(
-          key: const ValueKey('pair-side-game'),
-          onPressed: () => pairSideGame(section!.id),
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Pair a side game'),
-        ),
-      );
-    }
-    // Completion includes fixed quad schedules even though they need no post
-    // button. A finished Swiss must not hide an unfinished quad in this event.
-    final overall = postState(c.pairingEvent, null);
-    if (!overall.complete && section != null && hasFixedQuadSchedule(section)) {
-      return const SizedBox.shrink();
-    }
-    final needingPairings = e.sections
-        .where((s) => !hasFixedQuadSchedule(s))
-        .toList();
-    if (!overall.complete && needingPairings.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final state = overall.complete
-        ? overall
-        : postState(e.copy(sections: needingPairings), null);
-    if (state.complete && !overall.complete) return const SizedBox.shrink();
-    final muted = TextStyle(color: colors.onSurfaceVariant);
-    if (state.complete) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check_circle_outline, size: 18, color: colors.onSurface),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              key: const ValueKey('event-complete'),
-              'All rounds played',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 16),
-          OutlinedButton(
-            onPressed: () => go(TaskView.reports),
-            child: const Text('Finish & export'),
-          ),
-        ],
-      );
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (state.why != null &&
-            (state.label != null ||
-                e.sections.isEmpty ||
-                e.sections.every((s) => s.players.isEmpty)))
-          Flexible(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Text(
-                state.why!,
-                key: const ValueKey('post-blocked'),
-                style: muted,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-                textAlign: TextAlign.right,
-              ),
-            ),
-          ),
-        if (state.label != null)
-          Flexible(
-            child: FilledButton.icon(
-              key: const ValueKey('pair-next-round'),
-              onPressed: pairing || state.label == null ? null : pair,
-              icon: const Icon(Icons.arrow_forward, size: 18),
-              iconAlignment: IconAlignment.end,
-              label: Text(
-                pairing ? 'Creating pairings…' : state.label!,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _postNotes(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      key: const ValueKey('post-notes'),
-      margin: const EdgeInsets.fromLTRB(24, 12, 24, 0),
-      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Icon(
-              Icons.info_outline,
-              size: 18,
-              color: colors.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final note in postNotes)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(note),
-                  ),
-              ],
-            ),
-          ),
-          IconButton(
-            tooltip: 'Dismiss',
-            icon: const Icon(Icons.close, size: 18),
-            visualDensity: VisualDensity.compact,
-            onPressed: () => setState(() => postNotes = const []),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionTabs(BuildContext context) {
-    final viewport = (
-      MediaQuery.sizeOf(context),
-      MediaQuery.textScalerOf(context).scale(1),
-    );
-    if (sectionViewport != viewport) {
-      sectionViewport = viewport;
-      revealSection();
-    }
-    final e = c.event!, colors = Theme.of(context).colorScheme;
-    return Container(
-      key: const ValueKey('section-tabs'),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
-      ),
-      child: Row(
-        children: [
-          _sectionLink('All sections', null, '${e.players.length} players'),
-          Expanded(
-            child: Listener(
-              onPointerSignal: (event) {
-                if (event is PointerScrollEvent && sectionScroll.hasClients) {
-                  GestureBinding.instance.pointerSignalResolver.register(
-                    event,
-                    (_) {
-                      sectionScroll.jumpTo(
-                        (sectionScroll.offset +
-                                event.scrollDelta.dy +
-                                event.scrollDelta.dx)
-                            .clamp(0, sectionScroll.position.maxScrollExtent),
-                      );
-                    },
-                  );
-                }
-              },
-              child: Scrollbar(
-                controller: sectionScroll,
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  controller: sectionScroll,
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final s in e.sections)
-                        _sectionLink(
-                          s.name,
-                          s.id,
-                          s.sideGames
-                              ? '${s.players.length} players · Side games'
-                              : s.rounds.isEmpty
-                              ? '${s.players.length} players'
-                              : 'Round ${s.rounds.length} · ${s.rounds.last.complete ? 'Complete' : '${s.rounds.last.games.where((g) => !g.outcome.resolved).length} missing'}',
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          OutlinedButton.icon(
-            key: const ValueKey('new-section'),
-            onPressed: newSection,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('New section'),
-          ),
-          if (e.sections.any(hasFixedQuadSchedule)) ...[
-            const SizedBox(width: 8),
-            if (MediaQuery.sizeOf(context).width /
-                    MediaQuery.textScalerOf(context).scale(1) <
-                1100)
-              IconButton(
-                key: const ValueKey('edit-quad-pairings'),
-                tooltip: 'Edit quad pairings',
-                onPressed: editQuadPairings,
-                icon: const Icon(Icons.edit_outlined, size: 18),
-              )
-            else
-              OutlinedButton.icon(
-                key: const ValueKey('edit-quad-pairings'),
-                onPressed: editQuadPairings,
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Edit quad pairings'),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionLink(String label, String? id, String subtitle) {
-    final colors = Theme.of(context).colorScheme;
-    final active =
-        sectionId == id ||
-        (id == null && !c.event!.sections.any((s) => s.id == sectionId));
-    final section = c.event!.sections.where((s) => s.id == id).firstOrNull;
-    Widget tab() => Container(
-      key: sectionKeys.putIfAbsent(id ?? 'all', GlobalKey.new),
-      decoration: BoxDecoration(
-        color: active ? colors.surface : null,
-        border: Border(
-          bottom: BorderSide(
-            color: active ? colors.onSurface : Colors.transparent,
-            width: 2,
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Semantics(
-            selected: active,
-            child: TextButton(
-              key: ValueKey('section-chip-${id ?? 'all'}'),
-              onPressed: () => pickSection(id),
-              style: TextButton.styleFrom(
-                foregroundColor: colors.onSurface,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                shape: const RoundedRectangleBorder(),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    return Builder(
-      builder: (context) => GestureDetector(
-        onSecondaryTapDown: (details) async {
-          final action = await contextMenu<String>(
-            context,
-            details.globalPosition,
-            [
-              const PopupMenuItem(
-                value: 'print',
-                child: Text('Print player list'),
-              ),
-              const PopupMenuItem(
-                value: 'preview',
-                child: Text('Preview player list…'),
-              ),
-              if (section != null) ...[
-                const PopupMenuDivider(),
-                const PopupMenuItem(
-                  value: 'settings',
-                  child: Text('Rename / section settings…'),
-                ),
-                if (section.sideGames)
-                  const PopupMenuItem(
-                    value: 'side-game',
-                    child: Text('Pair a side game…'),
-                  ),
-                const PopupMenuItem(value: 'prizes', child: Text('Prizes…')),
-                const PopupMenuItem(
-                  value: 'combine',
-                  child: Text('Combine sections…'),
-                ),
-                const PopupMenuItem(
-                  value: 'help',
-                  child: Text('How these pairings work'),
-                ),
-                const PopupMenuDivider(),
-                PopupMenuItem(
-                  value: 'delete',
-                  enabled: section.rounds.isEmpty,
-                  child: Text(
-                    section.rounds.isEmpty
-                        ? 'Delete section'
-                        : 'Delete unavailable after pairings',
-                  ),
-                ),
-              ],
-            ],
-          );
-          if (!mounted || !context.mounted || action == null) return;
-          switch (action) {
-            case 'print':
-              printSheets(
-                context,
-                c.event!,
-                sectionId: id,
-                kind: ReportKind.sections,
-                dock: dock,
-              );
-            case 'preview':
-              showPrint(
-                context,
-                c.event!,
-                sectionId: id,
-                kind: ReportKind.sections,
-                dock: dock,
-              );
-            case 'settings':
-              pickSection(id);
-              sectionSettings();
-            case 'side-game':
-              pickSection(id);
-              pairSideGame(id!);
-            case 'prizes':
-              pickSection(id);
-              prizes();
-            case 'combine':
-              pickSection(id);
-              combine();
-            case 'help':
-              dock.show(
-                'help',
-                HelpPanel(
-                  controller: c,
-                  onClose: dock.close,
-                  articleId: section!.format == Format.quad
-                      ? 'quads'
-                      : section.format == Format.swiss
-                      ? 'swiss'
-                      : 'round-robin',
-                ),
-              );
-            case 'delete':
-              removeSection(id!);
-          }
-        },
-        child: tab(),
-      ),
-    );
-  }
-
-  Widget _tab(String text, bool selected, VoidCallback action) {
-    final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(right: 4),
-      child: TextButton(
-        onPressed: action,
-        style: TextButton.styleFrom(
-          backgroundColor: selected ? colors.onSurface : null,
-          foregroundColor: selected ? colors.surface : colors.onSurface,
-          minimumSize: const Size(0, 32),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-        ),
-        child: Text(text),
-      ),
-    );
-  }
-
-  /// Workspace shortcuts use Command on a Mac and Ctrl elsewhere.
-  bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
-
-  String shortcutLabel(String key, {bool shift = false}) =>
-      mac ? '⌘${shift ? '⇧' : ''}$key' : 'Ctrl+${shift ? 'Shift+' : ''}$key';
-
   /// Ctrl+Z inside a text field belongs to the field, not event history.
   bool get editingText =>
       FocusManager.instance.primaryFocus?.context
           ?.findAncestorWidgetOfExactType<EditableText>() !=
       null;
-
-  Widget _barIcon(
-    IconData icon,
-    String tooltip,
-    VoidCallback? action, {
-    bool selected = false,
-    Key? key,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-    return IconButton(
-      key: key,
-      icon: Icon(icon, size: 20),
-      tooltip: tooltip,
-      onPressed: action,
-      isSelected: selected,
-      style: selected
-          ? IconButton.styleFrom(
-              backgroundColor: colors.primary.withValues(alpha: 0.12),
-            )
-          : null,
-      color: selected ? colors.primary : colors.onSurfaceVariant,
-      disabledColor: colors.onSurface.withValues(alpha: 0.35),
-      visualDensity: VisualDensity.compact,
-    );
-  }
 }
 
 /// What Ctrl+P prints on [view]: the section shown, if it still exists,
@@ -1462,73 +793,4 @@ class _KeyAction extends Action<_KeyIntent> {
     intent.run();
     return null;
   }
-}
-
-/// What the post button would do for [section] (null for every section):
-/// its label, why it is held back, or that every round has been played.
-({String? label, String? why, bool complete}) postState(
-  Event e,
-  Section? section,
-) {
-  final scope = section == null
-      ? e.sections.where((s) => !s.sideGames).toList()
-      : [section];
-  if (scope.isEmpty) {
-    return (
-      label: null,
-      why: 'Choose New section to put players in a section first.',
-      complete: false,
-    );
-  }
-  final active = scope.where((s) => s.players.isNotEmpty).toList();
-  if (active.isEmpty) {
-    return (
-      label: null,
-      why: section == null
-          ? 'Move players into a section first.'
-          : 'Move players into ${section.name} first.',
-      complete: false,
-    );
-  }
-  final open = active.where((s) => s.rounds.length < s.plannedRounds).toList();
-  int waiting(Section s) => s.rounds
-      .expand((r) => r.games)
-      .where((g) => !g.outcome.resolved && g.pairingAssumption == null)
-      .length;
-  if (open.isEmpty) {
-    final missing = active
-        .expand((s) => s.rounds)
-        .expand((r) => r.games)
-        .where((g) => !g.outcome.resolved)
-        .length;
-    if (missing == 0) return (label: null, why: null, complete: true);
-    return (
-      label: null,
-      why:
-          'Final pairings created · $missing ${missing == 1 ? 'result' : 'results'} still to enter.',
-      complete: false,
-    );
-  }
-  final ready = open.where((s) => waiting(s) == 0).toList();
-  final held = open.where((s) => waiting(s) > 0).toList();
-  String results(int n) => '$n ${n == 1 ? 'result' : 'results'}';
-  String? why;
-  if (held.length == 1) {
-    final s = held.single;
-    why = section != null
-        ? 'Enter ${results(waiting(s))} first.'
-        : '${s.name} waits for ${results(waiting(s))}.';
-  } else if (held.isNotEmpty) {
-    final n = held.fold(0, (n, s) => n + waiting(s));
-    why = '${held.length} sections wait for ${results(n)}.';
-  }
-  if (ready.isEmpty) return (label: null, why: why, complete: false);
-  final numbers = ready.map((s) => s.rounds.length + 1).toSet();
-  final round = numbers.length == 1
-      ? 'Create pairings · Round ${numbers.single}'
-      : 'Create pairings';
-  final label = section == null && (ready.length > 1 || e.sections.length > 1)
-      ? '$round · ${ready.length} ${ready.length == 1 ? 'section' : 'sections'}'
-      : round;
-  return (label: label, why: why, complete: false);
 }

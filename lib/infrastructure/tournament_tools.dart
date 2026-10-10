@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import '../application/failures.dart';
 import '../application/tournament_controller_core.dart';
 import '../domain/bye_policy.dart';
+import '../domain/knockout.dart';
+import '../domain/ladder.dart';
 import '../domain/model.dart';
 import '../domain/prizes.dart';
 import '../domain/pairing.dart';
@@ -28,6 +30,24 @@ Json _object(Json properties, [List<String> required = const []]) => {
   'additionalProperties': false,
 };
 Json _array(Json items) => {'type': 'array', 'items': items};
+
+/// Bughouse partnerships: pairs of player IDs; replaces the whole list.
+final _partners = {
+  ..._array(_array(_string())),
+  'description':
+      'Bughouse partnerships as pairs of player IDs; replaces the list. Only before round 1.',
+};
+
+/// Knockout bracket settings; `rounds` (the bracket as played) is kept.
+final _bracket = {
+  ..._object({
+    'gamesPerMatch': _integer(1),
+    'tiebreak': _enum(knockoutTiebreakLabels.keys),
+    'seeds': _array(_string('Player ID')),
+  }),
+  'description':
+      'Knockout: gamesPerMatch (1 or 2), tiebreak (none = director decides, rapid, blitz, armageddon), seeds (player IDs in seeding order; frozen at round 1). Games per match and seeds are fixed once round 1 is posted.',
+};
 Json _enum(Iterable<String> values) => {
   'type': 'string',
   'enum': values.toList(),
@@ -101,6 +121,11 @@ final _swissFields = <String, dynamic>{
   'avoidTeammates': {
     ..._bool,
     'description': 'Rule 28N1: keep team-mates apart by the plus-two method.',
+  },
+  'unrated': {
+    ..._bool,
+    'description':
+        'Leave the section out of the US Chess rating report (ladders, unrated events). Bughouse is always unrated.',
   },
   'variations': {
     ..._array(_enum(swissVariations)),
@@ -257,7 +282,10 @@ class TournamentTools {
           'sideGames': _bool,
           'rrTable': _enum(['', crenshawTable]),
           'doubleCycle': _bool,
+          'homeTeam': _string('Scheveningen: the team label of side A.'),
           ..._swissFields,
+          'partners': _partners,
+          'bracket': _bracket,
         },
         required: ['name', 'players', 'format', 'plannedRounds', 'boardStart'],
         write: true,
@@ -273,8 +301,11 @@ class TournamentTools {
           'boardStart': _integer(1),
           'rrTable': _enum(['', crenshawTable]),
           'doubleCycle': _bool,
+          'homeTeam': _string('Scheveningen: the team label of side A.'),
           ..._swissFields,
           'byeRules': _byeRules,
+          'partners': _partners,
+          'bracket': _bracket,
           'prizes': {
             ..._prizeTable,
             'description':
@@ -282,6 +313,18 @@ class TournamentTools {
           },
         },
         required: ['sectionId'],
+        write: true,
+      ),
+      tool(
+        'advance_knockout',
+        'Knockout: record the director\'s decision on a drawn match when the section plays no tie-break games. The chosen player advances from the match on that board; the reason is kept in the bracket and the history.',
+        {
+          'sectionId': _string(),
+          'board': _integer(1),
+          'playerId': _string('Player ID'),
+          'reason': _string(),
+        },
+        required: ['sectionId', 'board', 'playerId'],
         write: true,
       ),
       tool(
@@ -306,9 +349,41 @@ class TournamentTools {
         write: true,
       ),
       tool(
+        'set_partners',
+        'Set a bughouse section\'s partnerships (pairs of player IDs; replaces the list). Players left out sit out with a zero-point bye. Only before round 1.',
+        {'sectionId': _string(), 'partners': _partners},
+        required: ['sectionId', 'partners'],
+        write: true,
+      ),
+      tool(
         'make_quads',
         'Group the entire roster by rating into quads and a bottom Swiss. Only before play.',
         {},
+        write: true,
+      ),
+      tool(
+        'make_holland',
+        'Rule 30H/30I: split the unassigned roster (or the given players) by rating into Holland preliminary round robins (Prelim 1, …), balanced by snake seeding or, with unbalanced, the top-rated in Prelim 1. Only before play.',
+        {
+          'groups': _integer(2),
+          'qualifiers': {
+            ..._integer(1),
+            'description': 'How many advance from each prelim (30H).',
+          },
+          'unbalanced': _bool,
+          'players': _array(_string('Player ID')),
+        },
+        required: ['groups', 'qualifiers'],
+        write: true,
+      ),
+      tool(
+        'make_holland_final',
+        'Create the Final round robin of a Holland group once every prelim has finished: the qualifiers by standings and tie-breaks enter it separately with a fresh score. A tie on every tie-break at the cut is broken by lot (seed).',
+        {
+          'group': _string('The holland.group of the prelims.'),
+          'seed': _integer(0),
+        },
+        required: ['group'],
         write: true,
       ),
       tool(
@@ -353,7 +428,7 @@ class TournamentTools {
         'Rules 29H3/29H4: for unreported games in the last posted round, score each as a double forfeit (doubleForfeit) or give both players half-point byes for the next round (halfPointByes), in one revision.',
         {
           'sectionId': _string(),
-          'treatment': _enum(['doubleForfeit', 'halfPointByes']),
+          'treatment': _enum(NonReporterTreatment.values.map((t) => t.name)),
         },
         required: ['sectionId', 'treatment'],
         write: true,
@@ -395,6 +470,31 @@ class TournamentTools {
           'byes': _array(_byeFields),
         },
         required: ['sectionId', 'reason', 'games', 'byes'],
+        write: true,
+      ),
+      tool(
+        'record_ladder_game',
+        'Ladder: record one challenge game and reorder the ladder in the same change. Positions are the order of the section\'s players (first = #1). A player may challenge up to $ladderChallengeRange places above; a win (also by forfeit) takes the loser\'s place and everyone between moves down one; a draw or loss changes nothing. The result is from the challenger\'s side; the challenger has Black unless challengerWhite.',
+        {
+          'sectionId': _string(),
+          'challenger': _string('Player ID'),
+          'defender': _string('Player ID'),
+          'result': _enum(ChallengeResult.values.map((r) => r.name)),
+          'challengerWhite': _bool,
+          'reason': _string('Optional note on the game.'),
+        },
+        required: ['sectionId', 'challenger', 'defender', 'result'],
+        write: true,
+      ),
+      tool(
+        'set_ladder_order',
+        'Ladder: the director\'s reordering. List every player of the section exactly once, top first, with the reason.',
+        {
+          'sectionId': _string(),
+          'players': _array(_string('Player ID')),
+          'reason': _string(),
+        },
+        required: ['sectionId', 'players', 'reason'],
         write: true,
       ),
       tool(
@@ -699,10 +799,25 @@ class TournamentTools {
           sideGames: args['sideGames'] ?? false,
           rrTable: args['rrTable'] ?? '',
           doubleCycle: args['doubleCycle'] ?? false,
+          homeTeam: args['homeTeam'] ?? '',
           accelerated: args['accelerated'] ?? '',
           avoidTeammates: args['avoidTeammates'] ?? false,
+          // Bughouse is never US Chess rated.
+          unrated:
+              args['format'] == Format.bughouse.name ||
+              (args['unrated'] ?? false),
           variations: Set<String>.from(args['variations'] ?? const []),
+          partners: [
+            for (final p in args['partners'] as List? ?? const [])
+              List<String>.from(p),
+          ],
+          bracket: _bracketArg(args['bracket'], const {}),
         );
+        if (section.format == Format.knockout) {
+          if (knockoutSettingsProblem(section.bracket) case final problem?) {
+            throw TournamentException(problem);
+          }
+        }
         if (doubleCycleProblem(section) case final problem?) {
           throw TournamentException(problem);
         }
@@ -725,13 +840,30 @@ class TournamentTools {
         final name = (args['name'] ?? current.name).trim();
         if (name.isEmpty) throw const TournamentException('Name the section.');
         final rrTable = args['rrTable'] ?? current.rrTable,
-            doubleCycle = args['doubleCycle'] ?? current.doubleCycle;
+            doubleCycle = args['doubleCycle'] ?? current.doubleCycle,
+            homeTeam = (args['homeTeam'] ?? current.homeTeam).trim();
         if (current.rounds.isNotEmpty &&
             (rrTable != current.rrTable ||
-                doubleCycle != current.doubleCycle)) {
+                doubleCycle != current.doubleCycle ||
+                homeTeam != current.homeTeam ||
+                args['partners'] != null)) {
           throw const TournamentException(
             'Pairing format cannot change after rounds are posted.',
           );
+        }
+        final bracket = _bracketArg(args['bracket'], current.bracket);
+        if (args['bracket'] != null) {
+          if (knockoutSettingsProblem(bracket) case final problem?) {
+            throw TournamentException(problem);
+          }
+          if (current.rounds.isNotEmpty &&
+              (bracket['gamesPerMatch'] != current.bracket['gamesPerMatch'] ||
+                  jsonEncode(bracket['seeds']) !=
+                      jsonEncode(current.bracket['seeds']))) {
+            throw const TournamentException(
+              'Games per match and seeding are fixed once round 1 is posted.',
+            );
+          }
         }
         if (doubleCycleProblem(
               current.copy(
@@ -774,20 +906,47 @@ class TournamentTools {
                         boardStart: args['boardStart'] ?? x.boardStart,
                         rrTable: rrTable,
                         doubleCycle: doubleCycle,
+                        homeTeam: homeTeam,
                         accelerated: args['accelerated'] ?? x.accelerated,
+                        unrated: x.format == Format.bughouse
+                            ? true
+                            : args['unrated'] ?? x.unrated,
                         avoidTeammates:
                             args['avoidTeammates'] ?? x.avoidTeammates,
                         variations: args['variations'] == null
                             ? x.variations
                             : Set<String>.from(args['variations']),
                         prizes: prizes,
+                        bracket: bracket,
+                        doubleGames: x.format == Format.knockout
+                            ? knockoutGamesPerMatch(x.copy(bracket: bracket)) ==
+                                  2
+                            : null,
                         byeRules: byeRules?.toJson() ?? x.byeRules,
+                        partners: args['partners'] == null
+                            ? x.partners
+                            : [
+                                for (final p in args['partners'] as List)
+                                  List<String>.from(p),
+                              ],
                       )
                     : x,
             ],
           ),
         );
         return {..._summary(), 'section': _section(current.id).toJson()};
+      case 'advance_knockout':
+        _section(args['sectionId']);
+        controller.advanceKnockout(
+          args['sectionId'],
+          args['board'],
+          args['playerId'],
+          reason: args['reason'] ?? '',
+        );
+        return {
+          ..._summary(),
+          'bracket': knockoutBracketLines(event, _section(args['sectionId'])),
+        };
       case 'pair_side_game':
         final section = controller.addSideGame(
           args['white'],
@@ -804,12 +963,36 @@ class TournamentTools {
       case 'draw_lots':
         controller.drawLots(args['sectionId'], seed: args['seed']);
         return {..._summary(), 'section': _section(args['sectionId']).toJson()};
+      case 'set_partners':
+        controller.setPartners(args['sectionId'], [
+          for (final p in args['partners'] as List) List<String>.from(p),
+        ]);
+        return {..._summary(), 'section': _section(args['sectionId']).toJson()};
       case 'make_quads':
         controller.applyQuads(controller.quadPreview(), event.revision);
         return {
           ..._summary(),
           'sections': event.sections.map((s) => s.toJson()).toList(),
         };
+      case 'make_holland':
+        final ids = controller.makeHolland(
+          groups: args['groups'],
+          qualifiers: args['qualifiers'],
+          unbalanced: args['unbalanced'] ?? false,
+          players: args['players'] == null
+              ? null
+              : List<String>.from(args['players']),
+        );
+        return {
+          ..._summary(),
+          'sections': [for (final id in ids) _section(id).toJson()],
+        };
+      case 'make_holland_final':
+        final id = controller.makeHollandFinal(
+          args['group'],
+          seed: args['seed'],
+        );
+        return {..._summary(), 'section': _section(id).toJson()};
       case 'move_players':
         controller.movePlayers(
           List<String>.from(args['players']),
@@ -835,7 +1018,7 @@ class TournamentTools {
       case 'hold_out_non_reporters':
         final boards = controller.holdOutNonReporters(
           args['sectionId'],
-          treatment: args['treatment'],
+          treatment: NonReporterTreatment.parse(args['treatment']),
         );
         return {..._summary(), 'boards': boards};
       case 'log_ruling':
@@ -872,6 +1055,30 @@ class TournamentTools {
         _proposals.clear();
       case 'post_manual_round':
         _postManual(args);
+      case 'record_ladder_game':
+        final challengerWhite = args['challengerWhite'] ?? false;
+        final gameId = controller.recordLadderGame(
+          args['sectionId'],
+          args['challenger'],
+          args['defender'],
+          ChallengeResult.parse(
+            args['result'],
+          ).outcome(challengerWhite: challengerWhite),
+          challengerWhite: challengerWhite,
+          reason: args['reason'] ?? '',
+        );
+        return {
+          ..._summary(),
+          'gameId': gameId,
+          'ladder': _section(args['sectionId']).players,
+        };
+      case 'set_ladder_order':
+        controller.setLadderOrder(
+          args['sectionId'],
+          List<String>.from(args['players']),
+          args['reason'],
+        );
+        return {..._summary(), 'ladder': _section(args['sectionId']).players};
       case 'start_round':
         controller.startRound(args['sectionId']);
       case 'record_result':
@@ -927,6 +1134,13 @@ class TournamentTools {
                       'played': row.played,
                     },
                 ],
+                if (s.format == Format.knockout) ...{
+                  'placings': [
+                    for (final (id, placing) in knockoutPlacings(event, s))
+                      {'playerId': id, 'placing': placing},
+                  ],
+                  'bracket': knockoutBracketLines(event, s),
+                },
               },
           ],
         };
@@ -1033,6 +1247,15 @@ class TournamentTools {
     }
     return _summary();
   }
+
+  /// The stored bracket with [arg]'s settings applied; `rounds` is kept.
+  static Json _bracketArg(Object? arg, Json current) => arg == null
+      ? current
+      : {
+          ...current,
+          ...Map<String, dynamic>.from(arg as Map),
+          if (current['rounds'] != null) 'rounds': current['rounds'],
+        };
 
   Section _section(String id) =>
       event.sections.where((s) => s.id == id).firstOrNull ??

@@ -1,12 +1,29 @@
+import 'diagnostics.dart';
+
 /// Minimal notification support for the standalone Dart command adapter.
 /// Flutter adapters mix in Flutter's ChangeNotifier over the same core commands.
 class ChangeNotifier {
   final _listeners = <void Function()>[];
   void addListener(void Function() listener) => _listeners.add(listener);
   void removeListener(void Function() listener) => _listeners.remove(listener);
+
+  /// Calls every listener. Like Flutter's ChangeNotifier, a listener that
+  /// throws is logged and the rest still run: notification follows a
+  /// committed save, so it must not turn that success into a failure.
   void notifyListeners() {
     for (final listener in List.of(_listeners)) {
-      if (_listeners.contains(listener)) listener();
+      if (!_listeners.contains(listener)) continue;
+      try {
+        listener();
+      } catch (error, stack) {
+        Diagnostics.record(
+          'notify listeners',
+          'failed',
+          context: {'notifier': '$runtimeType'},
+          error: error,
+          stack: stack,
+        );
+      }
     }
   }
 

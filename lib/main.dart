@@ -11,8 +11,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'application/event_template.dart';
 import 'application/failures.dart';
 import 'application/tournament_controller.dart';
+import 'domain/model.dart';
 import 'domain/us_chess.dart';
 import 'infrastructure/native_file_requests.dart';
 import 'infrastructure/sqlite_event_repository.dart';
@@ -20,6 +22,7 @@ import 'infrastructure/save_location.dart';
 import 'ui/brand.dart';
 import 'ui/desktop_window.dart';
 import 'ui/dialogs.dart';
+import 'ui/select.dart';
 import 'ui/theme.dart';
 import 'ui/workspace.dart';
 
@@ -236,11 +239,51 @@ class _MeowAppState extends State<MeowApp> {
   bool naming = false;
   final newName = TextEditingController();
 
+  /// New event like…: the recent event whose set-up the new one copies, or
+  /// null for a plain new event. [templating] shows the chooser.
+  bool templating = false;
+  String? templatePath;
+
+  /// What a template would copy, read from its file; null when unreadable.
+  Event? templateSource(String path) {
+    try {
+      final repository = SqliteEventRepository(path);
+      try {
+        return repository.load();
+      } finally {
+        repository.close();
+      }
+    } catch (e, stack) {
+      Diagnostics.record(
+        'read event template',
+        'failed',
+        error: e,
+        stack: stack,
+        context: {'path': path},
+      );
+      return null;
+    }
+  }
+
   Future<void> create(BuildContext context) async {
     final name = newName.text.trim();
     if (name.isEmpty) {
       setState(() => error = 'Enter the event name.');
       return;
+    }
+    Event? source;
+    if (templating) {
+      if (templatePath == null) {
+        setState(() => error = 'Choose the event to copy the set-up from.');
+        return;
+      }
+      source = templateSource(templatePath!);
+      if (source == null) {
+        setState(
+          () => error = 'That event could not be read, so nothing was copied.',
+        );
+        return;
+      }
     }
     String? destination;
     try {
@@ -253,7 +296,18 @@ class _MeowAppState extends State<MeowApp> {
       // load its previous tournament instead of honoring Replace.
       final fresh = TournamentController(SqliteEventRepository(':memory:'));
       try {
-        fresh.create(name);
+        if (source == null) {
+          fresh.create(name);
+        } else {
+          fresh.change(
+            'Create event like ${source.name}',
+            templateFrom(
+              source,
+              name: name,
+              date: DateTime.now().toIso8601String().substring(0, 10),
+            ),
+          );
+        }
         await saveSelectedEvent(fresh.repository, location.path);
         Diagnostics.record(
           'create event file',
@@ -267,6 +321,8 @@ class _MeowAppState extends State<MeowApp> {
       if (!mounted) return;
       newName.clear();
       naming = false;
+      templating = false;
+      templatePath = null;
       open(location.path);
       if (!remembered && context.mounted) {
         showFailure(
@@ -412,11 +468,25 @@ class _MeowAppState extends State<MeowApp> {
                               FilledButton.icon(
                                 onPressed: () => setState(() {
                                   naming = true;
+                                  templating = false;
+                                  templatePath = null;
                                   error = null;
                                 }),
                                 icon: const Icon(Icons.add),
                                 label: const Text('New tournament'),
                               ),
+                              if (recent.isNotEmpty)
+                                OutlinedButton.icon(
+                                  key: const ValueKey('new-event-like'),
+                                  onPressed: () => setState(() {
+                                    naming = true;
+                                    templating = true;
+                                    templatePath ??= recent.first;
+                                    error = null;
+                                  }),
+                                  icon: const Icon(Icons.copy_outlined),
+                                  label: const Text('New event like…'),
+                                ),
                               OutlinedButton.icon(
                                 onPressed: choose,
                                 icon: const Icon(Icons.folder_open),
@@ -432,6 +502,30 @@ class _MeowAppState extends State<MeowApp> {
                                 runSpacing: 12,
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
+                                  if (templating)
+                                    SizedBox(
+                                      width: 320,
+                                      child: PlainSelect<String>(
+                                        key: const ValueKey(
+                                          'new-event-template',
+                                        ),
+                                        label: 'Set up like',
+                                        value: templatePath ?? '',
+                                        options: [
+                                          for (final filename in recent)
+                                            SelectOption(
+                                              filename,
+                                              p.basenameWithoutExtension(
+                                                filename,
+                                              ),
+                                            ),
+                                        ],
+                                        onChanged: (v) => setState(() {
+                                          templatePath = v;
+                                          error = null;
+                                        }),
+                                      ),
+                                    ),
                                   SizedBox(
                                     width: 320,
                                     child: TextField(
@@ -451,11 +545,35 @@ class _MeowAppState extends State<MeowApp> {
                                   TextButton(
                                     onPressed: () => setState(() {
                                       naming = false;
+                                      templating = false;
                                       newName.clear();
                                     }),
                                     child: const Text('Cancel'),
                                   ),
                                 ],
+                              ),
+                            ),
+                          if (naming && templating && templatePath != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Builder(
+                                builder: (context) {
+                                  final source = templateSource(templatePath!);
+                                  return Text(
+                                    source == null
+                                        ? 'That event could not be read.'
+                                        : templateNote(source),
+                                    key: const ValueKey(
+                                      'new-event-template-note',
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           if (error != null)

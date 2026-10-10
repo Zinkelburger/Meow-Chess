@@ -161,6 +161,8 @@ class DisclosureGroup extends StatefulWidget {
     this.summary,
     this.summaryColor,
     this.focusNode,
+    this.locked = false,
+    this.headerKey,
     super.key,
   });
   final String title;
@@ -170,6 +172,14 @@ class DisclosureGroup extends StatefulWidget {
   final String? summary;
   final Color? summaryColor;
   final FocusNode? focusNode;
+
+  /// A lock glyph before the summary: the values inside are fixed now
+  /// (set before round 1) and read rather than edit.
+  final bool locked;
+
+  /// Identifies the header button: tests tap it and read its semantics
+  /// (title as label, the closed summary as value).
+  final Key? headerKey;
 
   @override
   State<DisclosureGroup> createState() => _DisclosureGroupState();
@@ -183,6 +193,8 @@ class _DisclosureGroupState extends State<DisclosureGroup> {
     final colors = Theme.of(context).colorScheme;
     final summary = widget.open ? null : widget.summary;
     final header = Semantics(
+      key: widget.headerKey,
+      container: true,
       button: true,
       expanded: widget.open,
       label: widget.title,
@@ -234,15 +246,33 @@ class _DisclosureGroupState extends State<DisclosureGroup> {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       if (summary != null)
-                        Text(
-                          summary,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color:
-                                widget.summaryColor ?? colors.onSurfaceVariant,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (widget.locked) ...[
+                              Icon(
+                                Icons.lock_outline,
+                                size: 16,
+                                color: colors.onSurfaceVariant,
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                            // Long summaries at large text take two lines,
+                            // then truncate; the full text is inside.
+                            Flexible(
+                              child: Text(
+                                summary,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color:
+                                      widget.summaryColor ??
+                                      colors.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                     ],
                   ),

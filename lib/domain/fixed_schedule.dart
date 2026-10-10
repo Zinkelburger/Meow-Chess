@@ -9,6 +9,11 @@ Format pairingFormat(Section section) =>
     ? Format.swiss
     : section.format;
 
+/// Quads and round robins play a schedule fixed before round 1; every other
+/// format pairs round by round.
+bool hasFixedSchedule(Section section) =>
+    const [Format.quad, Format.roundRobin].contains(pairingFormat(section));
+
 /// The same recorded color lot must be used on paper and when posting rounds.
 int quadColorLot(Section section) =>
     section.id.codeUnits.fold<int>(0, (sum, c) => (sum * 31 + c) & 0x7fffffff) &
@@ -43,7 +48,7 @@ List<List<(String?, String?)>> sectionSchedule(Section section) {
       table: section.rrTable,
     );
   }
-  if (!section.doubleCycle || section.format == Format.swiss) return cycle;
+  if (!section.doubleCycle || !hasFixedSchedule(section)) return cycle;
   return [
     ...cycle,
     for (final round in cycle) [for (final (w, b) in round) (b, w)],
@@ -55,7 +60,7 @@ List<List<(String?, String?)>> sectionSchedule(Section section) {
 /// round count; a shorter plan would never reverse every color.
 String? doubleCycleProblem(Section section) {
   if (!section.doubleCycle ||
-      section.format == Format.swiss ||
+      !hasFixedSchedule(section) ||
       section.sideGames ||
       section.players.length < 2) {
     return null;

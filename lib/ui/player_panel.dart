@@ -22,6 +22,7 @@ import 'player_format.dart';
 import 'rating_refresh.dart';
 import 'rating_review_panel.dart';
 import 'select.dart';
+import '../domain/pairing.dart';
 
 class PlayerPanel extends StatefulWidget {
   const PlayerPanel({
@@ -1258,7 +1259,7 @@ class PlayerPanelState extends State<PlayerPanel> {
                 ),
               ),
             ),
-            if (avoided.isNotEmpty && s != null && s.format != Format.swiss)
+            if (avoided.isNotEmpty && s != null && hasFixedSchedule(s))
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(

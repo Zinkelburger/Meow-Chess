@@ -25,4 +25,15 @@ void main() {
     expect(store.failures, isEmpty);
     expect(repository.writes, 1);
   });
+
+  test('a draft saved after the event closes is the one read back', () {
+    final repository = CountingPreferences();
+    final store = WorkspaceState(repository);
+    store.write('view', 'players');
+    store.dispose();
+    repository.close();
+    store.write('view', 'results');
+    expect(store.read('view'), 'results');
+    expect(repository.writes, 1);
+  });
 }
