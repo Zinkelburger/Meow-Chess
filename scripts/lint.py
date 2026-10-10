@@ -63,6 +63,8 @@ def release_issues(root, ref=''):
 WHITESPACE_EXEMPT = [
     ':(exclude,glob)assets/fonts/LICENSE-*',
     ':(exclude,glob)test/fixtures/**/*.html',
+    # FIDE rating lists are fixed-width; trailing spaces are part of the columns.
+    ':(exclude,glob)test/fixtures/fide/*.txt',
     ':(exclude,glob).impeccable/**',
 ]
 

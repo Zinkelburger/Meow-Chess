@@ -76,9 +76,9 @@ Header (exact): `ID Number      Name                                            
 
 Sample lines (`fide-players-list-excerpt.txt` holds a ruler, the header and 6 lines):
 ```
-1503014        Carlsen, Magnus                                              NOR M   GM                           2823  0   10 2801  12  10 2860  0   10 1990      
-8603677        Ding, Liren                                                  CHN M   GM                           2723  11  10 2693  0   10 2736  0   10 1992      
-2016192        Nakamura, Hikaru                                             USA M   GM                           2792  0   10 2738  0   10 2800  0   10 1987      
+1503014        Carlsen, Magnus                                              NOR M   GM                           2823  0   10 2801  12  10 2860  0   10 1990
+8603677        Ding, Liren                                                  CHN M   GM                           2723  11  10 2693  0   10 2736  0   10 1992
+2016192        Nakamura, Hikaru                                             USA M   GM                           2792  0   10 2738  0   10 2800  0   10 1987
 ```
 
 ### 1.3 XML layout
