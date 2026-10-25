@@ -1260,6 +1260,44 @@ int nextBoard(Iterable<Section> sections) => sections.fold(1, (max, s) {
   return end > max ? end : max;
 });
 
+/// Board ranges stay where the TD put them. A section in [changed] whose
+/// roster grew into another's range moves after every range and every live
+/// board. [before] is every section as it was before the change.
+List<Section> keepBoardRanges(
+  Iterable<Section> before,
+  List<Section> sections,
+  Set<String> changed,
+) {
+  (int, int) range(Section s) =>
+      (s.boardStart, s.boardStart + (s.players.length + 1) ~/ 2);
+  bool overlaps((int, int) a, (int, int) b) =>
+      a.$1 < a.$2 && b.$1 < b.$2 && a.$1 < b.$2 && b.$1 < a.$2;
+  final was = {for (final s in before) s.id: range(s)};
+  final allocated = [...sections];
+  for (final (i, s) in allocated.indexed) {
+    if (!changed.contains(s.id)) continue;
+    final others = [
+      for (final o in allocated)
+        if (o.id != s.id) o,
+    ];
+    final collides = others.any(
+      (o) =>
+          overlaps(range(s), range(o)) &&
+          (was[s.id] == null ||
+              was[o.id] == null ||
+              !overlaps(was[s.id]!, was[o.id]!)),
+    );
+    if (!collides) continue;
+    final live = others
+        .expand((o) => o.unresolvedRounds)
+        .expand((r) => r.games)
+        .fold(0, (int max, g) => g.board > max ? g.board : max);
+    final free = nextBoard(others);
+    allocated[i] = s.copy(boardStart: free > live ? free : live + 1);
+  }
+  return allocated;
+}
+
 /// Ids of the sections that moving all of [players] out would leave empty.
 Set<String> sectionsEmptiedBy(Event e, Set<String> players) => {
   for (final s in e.sections)

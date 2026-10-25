@@ -414,4 +414,42 @@ void main() {
       expect(c.event!.players.first.ratingEvidence['kind'], 'TD-assigned');
     },
   );
+
+  test('the entry list Section column places new and unsectioned players', () {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    // p0–p3 are a quad; one more player is registered but not placed.
+    c.savePlayer(Player(id: 'loose', name: 'Loose End', memberId: '30000001'));
+    c.createSections(const [], format: Format.swiss, name: 'Under 1000');
+    String entry(String id, String name, String section) =>
+        '<tr><td>1</td><td>$name</td><td>900</td><td>$id</td><td>$section</td><td></td></tr>';
+    final rows = parseWebRoster(
+      table(
+        entry('30000001', 'Loose End', 'U1000') +
+            entry('30000002', 'New Kid', 'Under 1000') +
+            entry('30000003', 'Another Kid', 'Under 500') +
+            entry('12000000', 'Player 00', 'Under 1000'),
+      ),
+    );
+    final review = RosterReview(c.event!, url, rows);
+    final all = review.changes.map((r) => r.key).toSet();
+    final plan = review.sectionPlan(c.event!, all);
+    expect(plan.creates.keys, ['Under 500']);
+    final next = review.apply(c.event!, all, newSectionRounds: 4);
+    String? sectionOf(String name) =>
+        next.sectionOf(next.players.firstWhere((p) => p.name == name).id)?.name;
+    expect(sectionOf('Loose End'), 'Under 1000');
+    expect(sectionOf('New Kid'), 'Under 1000');
+    expect(sectionOf('Another Kid'), 'Under 500');
+    // Already in a quad: a registration list never moves anyone.
+    expect(sectionOf('Player 00'), 'Quad 1');
+    // Without rounds, the new section waits and its player stays unplaced.
+    final waiting = review.apply(c.event!, all);
+    expect(
+      waiting.sectionOf(
+        waiting.players.firstWhere((p) => p.name == 'Another Kid').id,
+      ),
+      isNull,
+    );
+  });
 }

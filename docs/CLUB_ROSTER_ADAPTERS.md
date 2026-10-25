@@ -82,7 +82,13 @@ and Boylston’s free-form Byes column populate the Players tab’s Note column.
 These registration notes are separate from private player notes and never assign
 byes automatically. Note changes appear in the refresh review, including cleared
 notes; posted sections can update notes while keeping their names and ratings.
-Section columns remain in the raw rows for manual review.
+A Section column (also Section name or Division) places each confirmed new
+entry, and any existing entry that is in no section yet, in the section it
+names. Names match ignoring case, spacing and punctuation, with "U1000" the
+same as "Under 1000". A name the event does not have starts a Swiss section
+once the director enters its number of rounds. Players already in a section
+never move, a paired section takes no entries from the list (late entries go
+through the player card), and two sections matching one name place nobody.
 
 Fetching only creates a proposal. The director still reviews and confirms it;
 existing identity checks, rating protections and Undo apply to every adapter.

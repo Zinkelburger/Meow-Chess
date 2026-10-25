@@ -121,7 +121,16 @@ mixin _RosterCommands on _CommandContext {
   /// Adds new entries and returns how many rows were skipped as existing.
   /// A member ID is identity; a name only identifies someone when either side
   /// lacks an ID, so two members who share a name are both admitted.
-  int importPlayers(List<Player> players) {
+  ///
+  /// [sections] (player ID → section label, from the registration list)
+  /// places the new entries as [planSections] describes, in the same undo
+  /// step; a label no section matches starts a Swiss section of
+  /// [newSectionRounds] rounds.
+  int importPlayers(
+    List<Player> players, {
+    Map<String, String> sections = const {},
+    int newSectionRounds = 0,
+  }) {
     final e = event!;
     final additions = newEntries(e.players, players);
     if (additions.isEmpty) {
@@ -129,9 +138,13 @@ mixin _RosterCommands on _CommandContext {
         'No new entries. Existing names and IDs are preserved.',
       );
     }
+    final added = e.copy(players: [...e.players, ...additions]);
+    final plan = planSections(e, {
+      for (final p in additions) p.id: ?sections[p.id],
+    });
     change(
       'Import ${additions.length} players',
-      e.copy(players: [...e.players, ...additions]),
+      applySectionPlan(added, plan, rounds: newSectionRounds, newId: newId),
     );
     return players.length - additions.length;
   }

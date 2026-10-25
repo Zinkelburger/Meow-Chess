@@ -14,6 +14,7 @@ import '../domain/holland.dart';
 import '../domain/knockout.dart';
 import '../domain/result_correction.dart';
 import '../domain/rulings.dart';
+import '../domain/section_placement.dart';
 import '../domain/model.dart';
 import '../domain/member_observation.dart';
 import '../domain/rating_update.dart';

@@ -5,11 +5,20 @@ import 'package:uuid/uuid.dart';
 import '../domain/model.dart';
 
 class ImportRow {
-  const ImportRow(this.line, this.raw, this.player, this.error);
+  const ImportRow(
+    this.line,
+    this.raw,
+    this.player,
+    this.error, {
+    this.section = '',
+  });
   final int line;
   final String raw;
   final Player? player;
   final String? error;
+
+  /// The section the registration names, as written; empty for none.
+  final String section;
 }
 
 enum RosterField {
@@ -21,6 +30,7 @@ enum RosterField {
   club,
   team,
   state,
+  section,
   registrationNote,
 }
 
@@ -93,6 +103,7 @@ class RosterTable {
     RosterField.club: ['club'],
     RosterField.team: ['team', 'teamname', 'mixeddoubles'],
     RosterField.state: ['state', 'st'],
+    RosterField.section: ['section', 'sectionname', 'division'],
     // Boylston labels its free-form registration note column "Byes".
     // Keep it as text; it must never automatically assign requested byes.
     RosterField.registrationNote: [
@@ -187,6 +198,7 @@ class RosterTable {
                   source: raw,
                 ),
           error,
+          section: value(RosterField.section),
         ),
       );
     }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
+import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/ui/roster_import_panel.dart';
 import 'package:meow_chess/ui/theme.dart';
 import '../support.dart';
@@ -293,5 +295,57 @@ void main() {
     expect(find.text('Smith, John'), findsOneWidget);
     expect(find.text('Smith'), findsNothing);
     expect(find.text('Detected ,'), findsNothing);
+  });
+
+  testWidgets('the Section column places entries and can start sections, '
+      'undone in one step', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = TournamentController(SqliteEventRepository(':memory:'))
+      ..create('November Scholastics');
+    addTearDown(c.dispose);
+    c.createSections(const [], format: Format.swiss, name: 'Under 1000');
+    final result = await open(
+      tester,
+      c,
+      // Boylston's entry list: Byes stays a registration note.
+      '#,Name,Rating,USCF ID,Section,Byes\n'
+      '1,Ada Park,1427,32536779,Championship,\n'
+      '2,Ben Cho,742,31625407,U1000,round 1\n'
+      '3,Cy Diaz,unr,,Under 500,\n'
+      '4,Di Eng,unr,,under 500,none\n',
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('New player · Under 1000'), findsOneWidget);
+    expect(find.text('New player · Under 500 (new)'), findsNWidgets(2));
+    expect(find.text('Championship 1 · Under 500 2'), findsOneWidget);
+    expect(enabled(tester), isFalse);
+    expect(summary(tester), contains('rounds for the new sections'));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('import-new-section-rounds')),
+      '4',
+    );
+    await tester.pump();
+    expect(enabled(tester), isTrue);
+    await tester.tap(importButton);
+    await tester.pumpAndSettle();
+    expect(result.single, 'Imported 4 players');
+    final e = c.event!;
+    String sectionOf(String name) =>
+        e.sectionOf(e.players.firstWhere((p) => p.name == name).id)!.name;
+    expect(sectionOf('Ada Park'), 'Championship');
+    expect(sectionOf('Ben Cho'), 'Under 1000');
+    expect(sectionOf('Di Eng'), 'Under 500');
+    final created = e.sections.firstWhere((s) => s.name == 'Under 500');
+    expect(created.plannedRounds, 4);
+    expect(created.format, Format.swiss);
+    expect(e.players.firstWhere((p) => p.name == 'Ben Cho').byes, isEmpty);
+
+    c.undo();
+    expect(c.event!.players, isEmpty);
+    expect(c.event!.sections.map((s) => s.name), ['Under 1000']);
   });
 }

@@ -4,6 +4,7 @@ import '../application/tournament_controller.dart';
 import '../application/failures.dart';
 import '../application/diagnostics.dart';
 import '../domain/model.dart';
+import '../domain/section_placement.dart';
 import '../infrastructure/roster_import.dart';
 import '../infrastructure/web_roster.dart';
 import 'side_panel.dart';
@@ -33,6 +34,9 @@ class WebRosterPanel extends StatefulWidget {
 
 class _WebRosterPanelState extends State<WebRosterPanel> {
   final url = TextEditingController();
+
+  /// Planned rounds for sections the entry list's Section column starts.
+  final newRounds = TextEditingController();
   final selected = <String>{};
   RosterReview? review;
   String? error, notice;
@@ -53,6 +57,7 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
   @override
   void dispose() {
     url.dispose();
+    newRounds.dispose();
     super.dispose();
   }
 
@@ -119,7 +124,11 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
       context: {'selected': selected.length, 'revision': c.event!.revision},
     );
     try {
-      final next = review!.apply(c.event!, selected);
+      final next = review!.apply(
+        c.event!,
+        selected,
+        newSectionRounds: int.tryParse(newRounds.text.trim()) ?? 0,
+      );
       c.change('Review website roster: ${selected.length} changes', next);
       Diagnostics.record(
         'import website roster',
@@ -148,9 +157,27 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
     }
   }
 
+  /// The section line of a change's subtitle, with its line break, or null
+  /// when it places no one. Unselected changes place nobody.
+  String? sectionLine(SectionPlan plan, RosterChange item) {
+    final id = item.existing?.id ?? item.incoming.id;
+    if (plan.skipped[id] case final why?) return '$why\n';
+    if (plan.joins[id] case final sectionId?) {
+      return 'Section: ${c.event!.sections.firstWhere((s) => s.id == sectionId).name}\n';
+    }
+    if (plan.createdFor(id) case final name?) return 'Section: $name (new)\n';
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final r = review;
+    final plan = r?.sectionPlan(c.event!, selected);
+    final rounds = int.tryParse(newRounds.text.trim());
+    final needsRounds =
+        plan != null &&
+        plan.creates.isNotEmpty &&
+        (rounds == null || rounds < 1 || rounds > 32);
     // A first fetch adds the roster; later fetches update it.
     final first = c.event!.players.isEmpty;
     return SidePanel(
@@ -159,7 +186,9 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
       footer: [
         if (r != null)
           FilledButton(
-            onPressed: r.rows.every((row) => row.player == null) ? null : apply,
+            onPressed: r.rows.every((row) => row.player == null) || needsRounds
+                ? null
+                : apply,
             child: Text('Confirm ${selected.length} changes & save source'),
           ),
       ],
@@ -221,6 +250,27 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
           Text(
             '${r.changes.where((x) => x.existing == null && x.problem == null).length} new · ${r.changes.where((x) => x.existing != null && x.changed).length} changed · ${r.missing.length} missing',
           ),
+          if (plan != null && plan.creates.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Creates ${plan.creates.length} Swiss ${plan.creates.length == 1 ? 'section' : 'sections'}: '
+              '${[for (final MapEntry(key: name, value: ids) in plan.creates.entries) '$name ${ids.length}'].join(' · ')}',
+              key: const ValueKey('web-new-sections'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              key: const ValueKey('web-new-section-rounds'),
+              controller: newRounds,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: 'Rounds for the new sections',
+                errorText: needsRounds && newRounds.text.trim().isNotEmpty
+                    ? 'From 1 to 32'
+                    : null,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ],
           const SizedBox(height: 8),
           for (final row in r.rows.where((row) => row.error != null))
             Text('Row ${row.line}: ${row.error}. Skipped.'),
@@ -264,7 +314,8 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
               ),
               subtitle: Text(
                 item.problem ??
-                    '${item.incoming.memberId.isEmpty ? 'No USCF ID' : item.incoming.memberId}\n${item.existing == null ? '' : 'Local: ${item.existing!.name}, ${item.existing!.rating}\n'}Website rating: ${item.incoming.rating == 0 ? 'UNR' : item.incoming.rating}\nWebsite note: ${item.incoming.registrationNote.isEmpty ? '—' : item.incoming.registrationNote}${item.existing != null && item.existing!.registrationNote != item.incoming.registrationNote ? '\nLocal note: ${item.existing!.registrationNote.isEmpty ? '—' : item.existing!.registrationNote}' : ''}${item.existing?.ratingEvidence['supplementDate'] != null ? '\nVerified supplement rating will be kept.' : ''}${item.existing != null && (c.event!.sectionOf(item.existing!.id)?.rounds.isNotEmpty ?? false) ? '\nPosted section: only the website note can be updated.' : ''}',
+                    '${selected.contains(item.key) ? sectionLine(plan!, item) ?? '' : ''}'
+                        '${item.incoming.memberId.isEmpty ? 'No USCF ID' : item.incoming.memberId}\n${item.existing == null ? '' : 'Local: ${item.existing!.name}, ${item.existing!.rating}\n'}Website rating: ${item.incoming.rating == 0 ? 'UNR' : item.incoming.rating}\nWebsite note: ${item.incoming.registrationNote.isEmpty ? '—' : item.incoming.registrationNote}${item.existing != null && item.existing!.registrationNote != item.incoming.registrationNote ? '\nLocal note: ${item.existing!.registrationNote.isEmpty ? '—' : item.existing!.registrationNote}' : ''}${item.existing?.ratingEvidence['supplementDate'] != null ? '\nVerified supplement rating will be kept.' : ''}${item.existing != null && (c.event!.sectionOf(item.existing!.id)?.rounds.isNotEmpty ?? false) ? '\nPosted section: only the website note can be updated.' : ''}',
               ),
             ),
         ],

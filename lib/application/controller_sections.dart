@@ -281,33 +281,7 @@ mixin _SectionCommands on _CommandContext {
         quadPairings: const [],
       );
     }).toList();
-    // Board ranges stay where the TD put them. A section whose roster grew
-    // into another's range moves after every range and every live board.
-    (int, int) range(Section s) =>
-        (s.boardStart, s.boardStart + (s.players.length + 1) ~/ 2);
-    bool overlaps((int, int) a, (int, int) b) =>
-        a.$1 < a.$2 && b.$1 < b.$2 && a.$1 < b.$2 && b.$1 < a.$2;
-    final before = {for (final s in e.sections) s.id: range(s)};
-    final allocated = [...sections];
-    for (final (i, s) in allocated.indexed) {
-      if (!changed.contains(s.id)) continue;
-      final others = [
-        for (final o in allocated)
-          if (o.id != s.id) o,
-      ];
-      final collides = others.any(
-        (o) =>
-            overlaps(range(s), range(o)) &&
-            !overlaps(before[s.id]!, before[o.id]!),
-      );
-      if (!collides) continue;
-      final live = others
-          .expand((o) => o.unresolvedRounds)
-          .expand((r) => r.games)
-          .fold(0, (int max, g) => g.board > max ? g.board : max);
-      final free = nextBoard(others);
-      allocated[i] = s.copy(boardStart: free > live ? free : live + 1);
-    }
+    final allocated = keepBoardRanges(e.sections, sections, changed);
     change(
       'Move ${ids.length} players to ${target.name}',
       e.copy(

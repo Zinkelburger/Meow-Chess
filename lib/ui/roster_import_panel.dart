@@ -4,6 +4,8 @@ import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../infrastructure/roster_import.dart';
 import '../domain/model.dart';
+import '../domain/section_placement.dart';
+import 'membership_style.dart';
 import 'select.dart';
 import 'theme.dart';
 
@@ -24,14 +26,35 @@ import 'theme.dart';
   return (inEvent: inEvent, repeated: repeated);
 }
 
+/// Where the Section column puts the rows that would be imported.
+SectionPlan importSectionPlan(Event event, List<ImportRow> rows) {
+  final (:inEvent, :repeated) = skippedLines(event.players, rows);
+  return planSections(event, {
+    for (final r in rows)
+      if (r.player case final p?
+          when !inEvent.contains(r.line) && !repeated.contains(r.line))
+        p.id: r.section,
+  });
+}
+
 /// Commits the same interpreted rows that were reviewed in the preview.
-String importRosterRows(TournamentController c, List<ImportRow> rows) {
+/// [newSectionRounds] is the planned rounds of any section the Section
+/// column starts.
+String importRosterRows(
+  TournamentController c,
+  List<ImportRow> rows, {
+  int newSectionRounds = 0,
+}) {
   final valid = rows.where((r) => r.player != null).toList();
   if (valid.isEmpty) {
     throw const TournamentException('No players found.');
   }
   final (:inEvent, :repeated) = skippedLines(c.event!.players, rows);
-  final skipped = c.importPlayers(valid.map((r) => r.player!).toList());
+  final skipped = c.importPlayers(
+    valid.map((r) => r.player!).toList(),
+    sections: {for (final r in valid) r.player!.id: r.section},
+    newSectionRounds: newSectionRounds,
+  );
   final bad = rows.where((r) => r.error != null).map((r) => r.line).toList();
   return [
     'Imported ${valid.length - skipped} players',
@@ -66,6 +89,7 @@ const _fieldLabels = {
   RosterField.lastName: 'Last name',
   RosterField.rating: 'Rating',
   RosterField.memberId: 'US Chess ID',
+  RosterField.section: 'Section',
   RosterField.state: 'State',
   RosterField.team: 'Team',
   RosterField.club: 'Club',
@@ -94,6 +118,9 @@ class RosterImportDialog extends StatefulWidget {
 class _RosterImportDialogState extends State<RosterImportDialog> {
   final separators = <String>{};
   final other = TextEditingController();
+
+  /// Planned rounds for sections the Section column starts.
+  final newRounds = TextEditingController();
   final across = ScrollController(), down = ScrollController();
   String? quote = '"';
   bool merge = false;
@@ -108,6 +135,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   bool headerChosen = false, columnsChosen = false;
   List<ImportRow> rows = [];
   Set<int> existingLines = {}, repeatedLines = {};
+  late SectionPlan plan;
   String? importError;
   bool skipInvalid = false, onlyProblems = false;
 
@@ -127,6 +155,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   @override
   void dispose() {
     other.dispose();
+    newRounds.dispose();
     across.dispose();
     down.dispose();
     super.dispose();
@@ -170,6 +199,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
     final skipped = skippedLines(widget.controller.event!.players, rows);
     existingLines = skipped.inEvent;
     repeatedLines = skipped.repeated;
+    plan = importSectionPlan(widget.controller.event!, rows);
     if (!rows.any((r) => r.error != null)) onlyProblems = false;
   }
 
@@ -201,16 +231,30 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   RosterField? fieldOf(int index) =>
       columns.entries.where((e) => e.value == index).firstOrNull?.key;
 
+  /// The rounds entered for new sections; null until a valid number is.
+  int? get roundsForNew {
+    final n = int.tryParse(newRounds.text.trim());
+    return n != null && n >= 1 && n <= 32 ? n : null;
+  }
+
   String? get mappingError =>
       !columns.containsKey(RosterField.name) &&
           !columns.containsKey(RosterField.firstName) &&
           !columns.containsKey(RosterField.lastName)
       ? 'Choose the column that holds player names'
+      : plan.creates.isNotEmpty && roundsForNew == null
+      ? 'Enter the number of rounds for the new sections, from 1 to 32'
       : null;
 
   void commit() {
     try {
-      Navigator.of(context).pop(importRosterRows(widget.controller, rows));
+      Navigator.of(context).pop(
+        importRosterRows(
+          widget.controller,
+          rows,
+          newSectionRounds: roundsForNew ?? 0,
+        ),
+      );
     } catch (e) {
       setState(() => importError = plainMessage(e));
     }
@@ -310,6 +354,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
                   ],
                 ),
               ),
+              if (plan.creates.isNotEmpty) _newSections(context),
             ],
             grid: Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
@@ -489,6 +534,74 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
     );
   }
 
+  /// Sections the Section column names that the event does not have yet:
+  /// importing starts them as Swiss sections of the rounds entered here.
+  Widget _newSections(BuildContext context) {
+    final muted = TextStyle(
+      fontSize: 13,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+    final n = plan.creates.length;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: Wrap(
+        key: const ValueKey('import-new-sections'),
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            'Creates $n Swiss ${n == 1 ? 'section' : 'sections'}',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          Text(
+            [
+              for (final MapEntry(key: name, value: ids)
+                  in plan.creates.entries)
+                '$name ${ids.length}',
+            ].join(' · '),
+            style: const TextStyle(
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+          SizedBox(
+            width: 96,
+            height: controlHeight,
+            child: TextField(
+              key: const ValueKey('import-new-section-rounds'),
+              controller: newRounds,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Rounds',
+                isDense: true,
+              ),
+              onChanged: (_) => setState(() => importError = null),
+            ),
+          ),
+          Text(
+            'Change the format later in each section’s settings',
+            style: muted,
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The section a new player's row lands in, or why it lands in none.
+  ({String text, bool attention})? placement(ImportRow r) {
+    final p = r.player;
+    if (p == null) return null;
+    if (plan.skipped[p.id] case final why?) return (text: why, attention: true);
+    if (plan.joins[p.id] case final id?) {
+      final s = widget.controller.event!.sections.firstWhere((s) => s.id == id);
+      return (text: s.name, attention: false);
+    }
+    if (plan.createdFor(p.id) case final name?) {
+      return (text: '$name (new)', attention: false);
+    }
+    return null;
+  }
+
   Widget _grid(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
@@ -542,11 +655,25 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
           : repeatedLines.contains(line)
           ? 'Repeats an earlier row'
           : null;
-      return Text(
-        skipped ?? 'New player',
+      final placed = skipped == null ? placement(r) : null;
+      final text = Text(
+        [skipped ?? 'New player', ?placed?.text].join(' · '),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: 13,
           color: skipped != null ? colors.onSurfaceVariant : colors.onSurface,
+        ),
+      );
+      if (placed == null || !placed.attention) return text;
+      return Tooltip(
+        message: placed.text,
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, size: 16, color: attentionColor(colors)),
+            const SizedBox(width: 6),
+            Expanded(child: text),
+          ],
         ),
       );
     }

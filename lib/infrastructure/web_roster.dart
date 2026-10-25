@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 import '../domain/model.dart';
+import '../domain/section_placement.dart';
 import '../domain/us_chess.dart';
 import 'roster_import.dart';
 import 'roster_sources/html_table.dart';
@@ -189,7 +191,49 @@ class RosterReview {
   final List<ImportRow> rows;
   final changes = <RosterChange>[];
   late final List<Player> missing;
-  Event apply(Event event, Set<String> selected) {
+
+  /// The section labels of the selected rows, by the ID of the player they
+  /// place: the incoming entry when new, else the local one, which only
+  /// moves if it is in no section yet.
+  Map<String, String> _labels(Set<String> selected) => {
+    for (final r in rows)
+      if (r.player case final p? when r.section.trim().isNotEmpty)
+        for (final change in changes)
+          if (change.incoming.id == p.id && selected.contains(change.key))
+            (change.existing?.id ?? p.id): r.section,
+  };
+
+  /// Where the Section column puts the [selected] changes once applied.
+  SectionPlan sectionPlan(Event event, Set<String> selected) => planSections(
+    event.copy(
+      players: [
+        ...event.players,
+        for (final change in changes)
+          if (change.existing == null && selected.contains(change.key))
+            change.incoming,
+      ],
+    ),
+    _labels(selected),
+  );
+
+  /// Applies the [selected] changes. Sections named by the list that the
+  /// event does not have start as Swiss sections of [newSectionRounds].
+  Event apply(
+    Event event,
+    Set<String> selected, {
+    int newSectionRounds = 0,
+    String Function()? newId,
+  }) {
+    final placed = _apply(event, selected);
+    return applySectionPlan(
+      placed,
+      planSections(placed, _labels(selected)),
+      rounds: newSectionRounds,
+      newId: newId ?? const Uuid().v4,
+    );
+  }
+
+  Event _apply(Event event, Set<String> selected) {
     if (event.id != eventId || event.revision != revision) {
       throw const TournamentException(
         'The event changed. Fetch and review the entry list again.',
