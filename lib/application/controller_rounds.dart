@@ -363,12 +363,17 @@ mixin _RoundCommands on _CommandContext {
 
 /// Runs [_proposeRounds] on a background isolate. Top-level, so the isolate's
 /// closure can only capture the plain data passed here, never the controller
-/// and its open event file.
+/// and its open event file. Browsers have no isolates, so the browser version
+/// pairs on the UI thread.
 Future<PairingBatch> _proposeInBackground(
   Event snapshot,
   String? sectionId,
   bool onlyReady,
-) => Isolate.run(() => _proposeRounds(snapshot, sectionId, onlyReady));
+) => _hasIsolates
+    ? Isolate.run(() => _proposeRounds(snapshot, sectionId, onlyReady))
+    : Future(() => _proposeRounds(snapshot, sectionId, onlyReady));
+
+const _hasIsolates = !bool.fromEnvironment('dart.library.js_interop');
 
 PairingBatch _proposeRounds(Event snapshot, String? sectionId, bool onlyReady) {
   final rounds = <String, Round>{}, issues = <String, String>{};

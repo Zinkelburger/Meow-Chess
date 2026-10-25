@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
 import '../domain/model.dart';
@@ -714,4 +715,21 @@ Future<String> writeRatingPackage(
     if (await staging.exists()) await staging.delete(recursive: true);
     rethrow;
   }
+}
+
+/// The package as one .zip with its manifest, for the browser version, which
+/// downloads files instead of writing folders.
+List<int> ratingPackageZip(Event e, {DateTime Function() now = DateTime.now}) {
+  final files = ratingPackage(e, today: now());
+  final archive = Archive();
+  for (final entry in files.entries) {
+    archive.add(ArchiveFile.bytes(entry.key, entry.value));
+  }
+  archive.add(
+    ArchiveFile.string(
+      'manifest.json',
+      const JsonEncoder.withIndent('  ').convert(ratingManifest(e, files)),
+    ),
+  );
+  return ZipEncoder().encodeBytes(archive);
 }

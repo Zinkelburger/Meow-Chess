@@ -1,19 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:sqlite3/sqlite3.dart';
+import 'package:sqlite3/common.dart';
 import 'package:path/path.dart' as p;
 import '../application/diagnostics.dart';
 import '../application/event_repository.dart';
 import '../domain/history.dart';
 import '../domain/model.dart';
 import 'publish_file.dart';
+import 'sqlite_platform.dart';
 
 /// One owned connection per event. Foreign keys and FULL synchronous commits
 /// protect acknowledged results; snapshots are produced by SQLite, never raw WAL copies.
 class SqliteEventRepository implements EventRepository {
   SqliteEventRepository(String path)
     : _path = path,
-      _created = path == ':memory:' || !File(path).existsSync(),
+      _created = path == ':memory:' || !eventFileExists(path),
       _db = _open(path) {
     try {
       _db.execute('PRAGMA foreign_keys = ON');
@@ -92,7 +93,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
       _db.execute('COMMIT');
       _checkpoint();
       if (_path != ':memory:') {
-        _ownershipPath = File(_path).resolveSymbolicLinksSync();
+        _ownershipPath = resolveEventPath(_path);
         _owners.add(this);
       }
     } catch (error) {
@@ -105,8 +106,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
       if (_created && path != ':memory:' && !busy) {
         for (final suffix in ['', '-wal', '-shm', '-journal']) {
           try {
-            final leftover = File('$path$suffix');
-            if (leftover.existsSync()) leftover.deleteSync();
+            deleteEventFile('$path$suffix');
           } on FileSystemException {
             // The original failure is the one worth reporting.
           }
@@ -120,11 +120,11 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
   }
   static final _owners = <SqliteEventRepository>{};
 
-  static Database _open(String path) {
+  static CommonDatabase _open(String path) {
     try {
       return sqlite3.open(path);
     } on SqliteException catch (error) {
-      throw _openFailure(error, created: !File(path).existsSync()) ?? error;
+      throw _openFailure(error, created: !eventFileExists(path)) ?? error;
     }
   }
 
@@ -193,14 +193,8 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
   /// and then closing a raw file descriptor could release this process's
   /// POSIX SQLite locks, even if the descriptor was opened just for inspection.
   static bool ownsPath(String path) {
-    String? resolved(String filename) {
-      try {
-        return File(filename).resolveSymbolicLinksSync();
-      } on FileSystemException {
-        // An external move/delete must not prevent inspecting other owners.
-        return null;
-      }
-    }
+    // An external move/delete must not prevent inspecting other owners.
+    String? resolved(String filename) => resolveEventPath(filename);
 
     final absolute = p.normalize(p.absolute(path));
     final target = resolved(path);
@@ -217,12 +211,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
               (target != null && p.equals(target, candidate))) {
             return true;
           }
-          if (target == null) continue;
-          try {
-            if (FileSystemEntity.identicalSync(target, candidate)) return true;
-          } on FileSystemException {
-            // Journal creation/removal and external renames can race a stat.
-          }
+          if (target != null && sameEventFile(target, candidate)) return true;
         }
       }
     }
@@ -295,7 +284,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     if (!_db.autocommit) _db.execute('ROLLBACK');
   }
 
-  final Database _db;
+  final CommonDatabase _db;
   @override
   Event? load() {
     final row = _db.select('SELECT data FROM event').firstOrNull;
@@ -433,7 +422,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
   int _addNode(int? parent, String action, Event state) {
     _db.execute(
       'INSERT INTO node(parent,action,timestamp,state) VALUES(?,?,?,?)',
-      [parent, action, _now(), zlib.encode(utf8.encode(state.encode()))],
+      [parent, action, _now(), zlibEncode(utf8.encode(state.encode()))],
     );
     return _db.lastInsertRowId;
   }
@@ -448,7 +437,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     if (row == null) {
       throw const TournamentException('That point in history is missing.');
     }
-    return Event.decode(utf8.decode(zlib.decode(row['state'] as List<int>)));
+    return Event.decode(utf8.decode(zlibDecode(row['state'] as List<int>)));
   }
 
   @override
@@ -633,6 +622,25 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
     }
   }
 
+  @override
+  List<int> snapshotBytes() {
+    final staging = scratchEventPath();
+    try {
+      _db.execute('VACUUM INTO ?', [staging]);
+      final check = sqlite3.open(staging, mode: OpenMode.readOnly);
+      try {
+        if (check.select('PRAGMA integrity_check').first.values.first != 'ok') {
+          throw const TournamentException('Copy verification failed.');
+        }
+      } finally {
+        check.close();
+      }
+      return readEventFile(staging)!;
+    } finally {
+      deleteEventFile(staging);
+    }
+  }
+
   /// Reject active databases and recovery files before staging and publication.
   static void validateBackupDestination(String destination) {
     final name = p.basename(destination).toLowerCase();
@@ -677,7 +685,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
   /// Keep SQLite ownership until POSIX publication; a preflight check alone
   /// leaves a window in which another process can acquire the old database.
   /// Closing the handle rolls back its read-only exclusive transaction.
-  static Database? _lockReplacement(String destination) {
+  static CommonDatabase? _lockReplacement(String destination) {
     final resolved = File(destination).existsSync()
         ? File(destination).resolveSymbolicLinksSync()
         : destination;
@@ -696,7 +704,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
       if (present('-wal') || present('-shm')) throw unavailable;
       return null;
     }
-    Database? check;
+    CommonDatabase? check;
     try {
       try {
         check = sqlite3.open(resolved, mode: OpenMode.readWrite);

@@ -20,6 +20,7 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   window_manager: ^0.5.2
   html: ^0.15.7
+  web: ^1.1.1
   archive: ^4.3.0
   hooks: ^2.2.0
   code_assets: ^2.1.0

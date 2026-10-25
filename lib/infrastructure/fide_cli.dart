@@ -106,8 +106,11 @@ class _Usage implements Exception {
 
 /// Reads a TRF as UTF-8, or as Latin-1 when it is not valid UTF-8 (older
 /// programs write 8-bit files).
-Future<String> readTrfFile(String path) async {
-  final bytes = await File(path).readAsBytes();
+Future<String> readTrfFile(String path) async =>
+    decodeTrf(await File(path).readAsBytes());
+
+/// A TRF's text: UTF-8 when it decodes, otherwise Latin-1.
+String decodeTrf(List<int> bytes) {
   try {
     return utf8.decode(bytes);
   } on FormatException {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
+import 'package:meow_chess/infrastructure/save_location.dart' show fileStem;
 import 'package:meow_chess/main.dart';
 import 'package:path/path.dart' as p;
 import '../support.dart';

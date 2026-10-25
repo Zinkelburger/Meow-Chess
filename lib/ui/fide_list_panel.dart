@@ -1,4 +1,5 @@
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -101,6 +102,7 @@ class _FideListPanelState extends State<FideListPanel> {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb) return;
     list.info().then((value) {
       if (mounted) {
         setState(() {
@@ -296,6 +298,21 @@ class _FideListPanelState extends State<FideListPanel> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
+    // The list is a 45 MB download indexed on disk; the browser version has
+    // neither the room nor the background work for it.
+    if (kIsWeb) {
+      return SidePanel(
+        key: const ValueKey('fide-list-panel'),
+        title: 'FIDE ratings',
+        onClose: widget.onClose,
+        children: [
+          Text(
+            'Checking ratings against the FIDE rating list needs the Meow-Chess desktop app. Enter FIDE ratings in each player\'s panel instead.',
+            style: muted,
+          ),
+        ],
+      );
+    }
     final e = c.event!;
     final installed = info;
     final records = found;
@@ -646,6 +663,7 @@ class _FideListFinderState extends State<FideListFinder> {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb) return;
     list.info().then((value) {
       if (mounted) setState(() => info = value);
     });
@@ -717,6 +735,8 @@ class _FideListFinderState extends State<FideListFinder> {
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
     final installed = info;
     final byId = isFideId(typedId);
+    // No FIDE list in the browser version (see FideListPanel).
+    if (kIsWeb) return const SizedBox.shrink();
     if (installed == null) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),

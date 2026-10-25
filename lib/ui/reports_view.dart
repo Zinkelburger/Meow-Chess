@@ -1,6 +1,7 @@
 import '../application/member_lookup.dart';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../application/failures.dart';
@@ -11,6 +12,7 @@ import '../domain/prizes.dart' show PrizeTable;
 import '../domain/us_chess.dart';
 import '../domain/fide.dart';
 import '../domain/fixed_schedule.dart';
+import '../infrastructure/browser_download.dart';
 import '../infrastructure/dbf_export.dart';
 import '../infrastructure/fide_export.dart';
 import 'dialogs.dart';
@@ -135,9 +137,15 @@ class _ReportsViewState extends State<ReportsView> {
   Future<void> exportRating(BuildContext context) async {
     final event = controller.event!;
     try {
-      final folder = await getDirectoryPath(confirmButtonText: 'Save here');
-      if (folder == null) return;
-      final path = await writeRatingPackage(event, folder);
+      final String path;
+      if (kIsWeb) {
+        path = 'meow-r${event.revision}.zip';
+        downloadFile(path, ratingPackageZip(event));
+      } else {
+        final folder = await getDirectoryPath(confirmButtonText: 'Save here');
+        if (folder == null) return;
+        path = await writeRatingPackage(event, folder);
+      }
       if (controller.event?.id == event.id) {
         controller.secondaryBackup();
         controller.repository.writePreference(
@@ -154,9 +162,15 @@ class _ReportsViewState extends State<ReportsView> {
   Future<void> exportFide(BuildContext context) async {
     final event = controller.event!;
     try {
-      final folder = await getDirectoryPath(confirmButtonText: 'Save here');
-      if (folder == null) return;
-      final path = await writeFideReport(event, folder);
+      final String path;
+      if (kIsWeb) {
+        path = 'meow-fide-r${event.revision}.zip';
+        downloadFile(path, fideReportZip(event));
+      } else {
+        final folder = await getDirectoryPath(confirmButtonText: 'Save here');
+        if (folder == null) return;
+        path = await writeFideReport(event, folder);
+      }
       if (controller.event?.id == event.id) {
         controller.secondaryBackup();
         controller.repository.writePreference(
@@ -365,7 +379,10 @@ class _ReportsViewState extends State<ReportsView> {
             FilledButton.icon(
               key: const ValueKey('generate-dbf'),
               onPressed: issues.isEmpty ? () => exportRating(context) : null,
-              icon: const Icon(Icons.folder_outlined, size: 18),
+              icon: Icon(
+                kIsWeb ? Icons.download_outlined : Icons.folder_outlined,
+                size: 18,
+              ),
               label: const Text('Generate DBF files'),
             ),
           ],
@@ -725,7 +742,10 @@ class _ReportsViewState extends State<ReportsView> {
             FilledButton.icon(
               key: const ValueKey('generate-trf'),
               onPressed: issues.isEmpty ? () => exportFide(context) : null,
-              icon: const Icon(Icons.folder_outlined, size: 18),
+              icon: Icon(
+                kIsWeb ? Icons.download_outlined : Icons.folder_outlined,
+                size: 18,
+              ),
               label: const Text('Generate TRF files'),
             ),
           ],

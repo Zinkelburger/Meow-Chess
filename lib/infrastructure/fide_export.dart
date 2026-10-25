@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
 import '../domain/fide.dart';
@@ -280,4 +281,14 @@ Future<String> writeFideReport(Event e, String parent) async {
     if (await staging.exists()) await staging.delete(recursive: true);
     rethrow;
   }
+}
+
+/// The report as one .zip, for the browser version, which downloads files
+/// instead of writing folders.
+List<int> fideReportZip(Event e) {
+  final archive = Archive();
+  for (final entry in fideReport(e).entries) {
+    archive.add(ArchiveFile.bytes(entry.key, utf8.encode(entry.value)));
+  }
+  return ZipEncoder().encodeBytes(archive);
 }

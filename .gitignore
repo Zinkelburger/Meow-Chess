@@ -22,3 +22,6 @@ flatpak-repo/
 .claude/
 .agents/
 skills-lock.json
+
+# Fetched and checksum-checked by scripts/build_web.py.
+web/sqlite3.wasm

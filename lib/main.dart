@@ -17,7 +17,6 @@ import 'application/failures.dart';
 import 'application/tournament_controller.dart';
 import 'domain/model.dart';
 import 'domain/trf_read.dart';
-import 'domain/us_chess.dart';
 import 'infrastructure/fide_cli.dart';
 import 'infrastructure/native_file_requests.dart';
 import 'infrastructure/sqlite_event_repository.dart';
@@ -742,14 +741,4 @@ bool _samePath(String a, String b) {
   }
 
   return p.equals(a, b) || p.equals(canonical(a), canonical(b));
-}
-
-/// Turns an event name like "Saturday Quads" into "saturday-quads", and
-/// "Torneo Año" into "torneo-ano".
-@visibleForTesting
-String fileStem(String name) {
-  final stem = nameKey(
-    name,
-  ).replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
-  return stem.isEmpty ? 'tournament' : stem;
 }

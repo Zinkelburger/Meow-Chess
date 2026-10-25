@@ -59,6 +59,7 @@ SwissProposal pairFideDutch(
         'The FIDE Dutch system finds no legal pairing for round $n: every arrangement repeats a game or breaks an absolute colour rule. Pair this round by hand.',
       BbpFailureKind.tooLarge =>
         'The section is too large for the FIDE pairing engine.',
+      BbpFailureKind.unavailable => e.message,
       _ => 'The FIDE pairing engine could not read this section: ${e.message}',
     });
   }

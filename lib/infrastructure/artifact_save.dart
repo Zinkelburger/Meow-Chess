@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import 'artifact_file.dart';
+import 'browser_download.dart';
 import 'native_file_replacement.dart';
 import 'save_location.dart';
 
@@ -15,6 +17,10 @@ Future<String?> saveArtifact(String name, List<int> bytes) async {
 
 /// Writes a file selected by the native save dialog, preserving its access grant.
 Future<void> writeSelectedArtifact(String destination, List<int> bytes) async {
+  if (kIsWeb) {
+    downloadFile(p.basename(destination), bytes);
+    return;
+  }
   if (defaultTargetPlatform != TargetPlatform.macOS) {
     writeArtifact(destination, bytes);
     return;

@@ -24,5 +24,9 @@ abstract interface class EventRepository {
 
   /// [replaceExisting] is reserved for user-confirmed native Save dialogs.
   void backup(String destination, {bool replaceExisting = false});
+
+  /// A verified, independently openable copy of the event as bytes, for the
+  /// browser version's downloads.
+  List<int> snapshotBytes();
   void close();
 }

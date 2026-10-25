@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -726,7 +727,10 @@ class _WorkspaceState extends State<Workspace> {
         : null;
     return WorkspaceStatusBar(
       savedAt: head == null ? null : historyTime(head.timestamp),
-      backup: e.backupFolder.isEmpty
+      // The browser version has no folders; copies are downloads.
+      backup: kIsWeb
+          ? 'Download a copy'
+          : e.backupFolder.isEmpty
           ? 'No backup folder'
           : c.backupWarning != null
           ? 'Backup failed'

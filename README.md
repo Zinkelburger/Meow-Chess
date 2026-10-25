@@ -171,6 +171,16 @@ to transfer an open event safely. `MEOW_DATA_DIR` overrides the recent-event lib
 location for isolated testing. A filename argument opens that event; in release
 builds a second launch hands its file to the window already open.
 
+## Browser version
+
+Meow-Chess also runs in a browser at https://chessautoprep.com/meow-chess/, built
+from this repository by `python3 scripts/build_web.py` and copied into the Chess
+Auto Prep website. Events stay in the browser; FIDE-rated pairing and the FIDE
+rating list still need the desktop app. **The website is a static copy: after a
+release or any change a TD would notice, sync it** with
+`python3 scripts/build_web.py --site ../Chess-Auto-Prep` and commit there. See
+[the browser version](docs/WEB.md).
+
 ## Install and release
 
 Pushing a `v*` tag (`git tag v0.2.0 && git push origin v0.2.0`) runs

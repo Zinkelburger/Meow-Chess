@@ -4,7 +4,7 @@ import '../domain/fixed_schedule.dart';
 import '../domain/tiebreaks.dart';
 import 'rating_settings.dart';
 import 'select.dart';
-import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:flutter/foundation.dart' show kIsWeb, mapEquals;
 import 'package:flutter/material.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
@@ -605,7 +605,9 @@ class _BackupsPanelState extends State<BackupsPanel> {
       onClose: widget.onClose,
       children: [
         Text(
-          'Changes save as you work. A backup folder gets a full copy after each posted round; a USB stick is ideal.',
+          kIsWeb
+              ? 'Changes save in this browser as you work. Clearing the browser\'s site data deletes them, so download a copy after each round. A copy opens in the desktop app too.'
+              : 'Changes save as you work. A backup folder gets a full copy after each posted round; a USB stick is ideal.',
           style: muted,
         ),
         if (c.backupWarning != null)
@@ -616,49 +618,55 @@ class _BackupsPanelState extends State<BackupsPanel> {
               style: TextStyle(color: colors.error),
             ),
           ),
-        heading('Backup folder'),
-        Text(
-          e.backupFolder.isEmpty
-              ? 'None chosen.'
-              : [
-                  e.backupFolder,
-                  if (last != null && last.length > 2)
-                    'Last copy ${historyTime(last[2])}, revision ${last.first} (now ${e.revision})'
-                  else if (last != null)
-                    'Last copy at revision ${last.first} (now ${e.revision})',
-                ].join('\n'),
-          style: muted,
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            OutlinedButton(
-              onPressed: actions.chooseBackupFolder,
-              child: Text(
-                e.backupFolder.isEmpty ? 'Choose folder…' : 'Change folder…',
-              ),
-            ),
-            if (e.backupFolder.isNotEmpty) ...[
+        // A browser cannot write to a folder; copies are downloads instead.
+        if (!kIsWeb) ...[
+          heading('Backup folder'),
+          Text(
+            e.backupFolder.isEmpty
+                ? 'None chosen.'
+                : [
+                    e.backupFolder,
+                    if (last != null && last.length > 2)
+                      'Last copy ${historyTime(last[2])}, revision ${last.first} (now ${e.revision})'
+                    else if (last != null)
+                      'Last copy at revision ${last.first} (now ${e.revision})',
+                  ].join('\n'),
+            style: muted,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
               OutlinedButton(
-                onPressed: c.secondaryBackup,
-                child: const Text('Back up now'),
+                onPressed: actions.chooseBackupFolder,
+                child: Text(
+                  e.backupFolder.isEmpty ? 'Choose folder…' : 'Change folder…',
+                ),
               ),
-              TextButton(
-                onPressed: actions.clearBackupFolder,
-                child: const Text('Stop backups'),
-              ),
+              if (e.backupFolder.isNotEmpty) ...[
+                OutlinedButton(
+                  onPressed: c.secondaryBackup,
+                  child: const Text('Back up now'),
+                ),
+                TextButton(
+                  onPressed: actions.clearBackupFolder,
+                  child: const Text('Stop backups'),
+                ),
+              ],
             ],
-          ],
-        ),
+          ),
+        ],
         heading('Copies'),
         if (savedCopy != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Semantics(
               liveRegion: true,
-              child: SelectableText('Copy saved to $savedCopy', style: muted),
+              child: SelectableText(
+                kIsWeb ? 'Downloaded $savedCopy' : 'Copy saved to $savedCopy',
+                style: muted,
+              ),
             ),
           ),
         Wrap(
@@ -677,7 +685,13 @@ class _BackupsPanelState extends State<BackupsPanel> {
                         if (path != null) savedCopy = path;
                       });
                     },
-              child: Text(savingCopy ? 'Saving copy…' : 'Save copy…'),
+              child: Text(
+                savingCopy
+                    ? 'Saving copy…'
+                    : kIsWeb
+                    ? 'Download copy'
+                    : 'Save copy…',
+              ),
             ),
           ],
         ),

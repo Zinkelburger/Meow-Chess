@@ -1,8 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../application/event_repository.dart';
+import 'browser_download.dart';
 import 'native_file_replacement.dart';
 import 'sqlite_event_repository.dart';
 
@@ -12,6 +14,10 @@ Future<void> saveSelectedEvent(
   EventRepository repository,
   String destination,
 ) async {
+  if (kIsWeb) {
+    downloadFile(p.basename(destination), repository.snapshotBytes());
+    return;
+  }
   if (defaultTargetPlatform != TargetPlatform.macOS) {
     repository.backup(destination, replaceExisting: true);
     return;

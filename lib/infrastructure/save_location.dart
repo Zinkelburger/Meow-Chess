@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 
 import '../application/diagnostics.dart';
 import '../domain/model.dart';
+import '../domain/us_chess.dart' show nameKey;
 
 /// Returns only a destination accepted by the native save dialog, including
 /// its replacement confirmation. Cancellation leaves the destination alone.
@@ -15,6 +16,9 @@ import '../domain/model.dart';
 Future<FileSaveLocation?> chooseSaveLocation({
   required String suggestedName,
 }) async {
+  // The browser version downloads under the suggested name; the browser
+  // decides where, and asks when it is set to.
+  if (kIsWeb) return FileSaveLocation(suggestedName);
   final extension = p.extension(suggestedName);
   FileSaveLocation? location;
   if (defaultTargetPlatform == TargetPlatform.linux) {
@@ -90,4 +94,13 @@ String withSuggestedExtension(String path, String extension) {
     return path;
   }
   return '$path$extension';
+}
+
+/// Turns an event name like "Saturday Quads" into "saturday-quads", and
+/// "Torneo Año" into "torneo-ano".
+String fileStem(String name) {
+  final stem = nameKey(
+    name,
+  ).replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
+  return stem.isEmpty ? 'tournament' : stem;
 }
