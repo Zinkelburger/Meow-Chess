@@ -8,11 +8,14 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../application/tournament_controller.dart';
+import '../application/pairing_tools.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
 import '../infrastructure/reports.dart';
 import '../infrastructure/dbf_export.dart';
+import '../infrastructure/dbf_validation.dart';
 import 'dialogs.dart';
+import 'team_report_dialog.dart';
 
 Future<void> saveArtifact(String name, Uint8List bytes) async {
   final location = await getSaveLocation(suggestedName: name);
@@ -88,6 +91,7 @@ class ReportsView extends StatefulWidget {
 
 class _ReportsViewState extends State<ReportsView> {
   String? scope;
+  bool checkingPairings = false;
   TournamentController get controller => widget.controller;
   @override
   void initState() {
@@ -211,6 +215,93 @@ class _ReportsViewState extends State<ReportsView> {
               ),
           ],
         ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('team-standings'),
+            icon: const Icon(Icons.groups_outlined),
+            label: const Text('Team standings'),
+            onPressed: e.sections.isEmpty
+                ? null
+                : () => openDialog<void>(
+                    context: context,
+                    builder: (_) => TeamReportDialog(
+                      event: e,
+                      sectionId: scope,
+                      save: saveArtifact,
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 28),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('pairing-checklist'),
+            icon: const Icon(Icons.fact_check_outlined),
+            label: Text(
+              checkingPairings
+                  ? 'Checking pairings…'
+                  : 'Pairing checklist and replay check',
+            ),
+            onPressed: checkingPairings
+                ? null
+                : () async {
+                    setState(() => checkingPairings = true);
+                    try {
+                      final report = await buildPairingChecklist(e, scope);
+                      if (!context.mounted) return;
+                      openDialog<void>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text(
+                            'Pairing checklist and replay check',
+                          ),
+                          content: SizedBox(
+                            width: 900,
+                            height: 500,
+                            child: SingleChildScrollView(
+                              child: SelectableText(
+                                report,
+                                style: const TextStyle(
+                                  fontFamily: 'SourceCodePro',
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () async {
+                                try {
+                                  await saveArtifact(
+                                    'pairing-checklist-r${e.revision}.txt',
+                                    Uint8List.fromList(utf8.encode(report)),
+                                  );
+                                } catch (error) {
+                                  if (context.mounted) {
+                                    showFailure(context, error);
+                                  }
+                                }
+                              },
+                              child: const Text('Save text'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Close'),
+                            ),
+                          ],
+                        ),
+                      );
+                    } catch (error) {
+                      if (context.mounted) showFailure(context, error);
+                    } finally {
+                      if (mounted) setState(() => checkingPairings = false);
+                    }
+                  },
+          ),
+        ),
         const SizedBox(height: 28),
 
         Wrap(
@@ -264,7 +355,7 @@ class _ReportsViewState extends State<ReportsView> {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Not yet tested with the US Chess upload site. Check the files before uploading.',
+          'Every saved package is decoded and checked against this event. US Chess upload acceptance, membership and TD authorization still require the upload site.',
         ),
         const SizedBox(height: 16),
         ReportDetails(controller: controller),
@@ -298,6 +389,40 @@ class _ReportsViewState extends State<ReportsView> {
             onPressed: issues.isEmpty ? () => exportRating(context) : null,
             icon: const Icon(Icons.folder_outlined),
             label: const Text('Create rating report files'),
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const ValueKey('check-rating-files'),
+            icon: const Icon(Icons.verified_outlined),
+            label: const Text('Check rating file contents'),
+            onPressed: issues.isEmpty
+                ? () {
+                    try {
+                      final report = validateRatingFiles(e, ratingPackage(e));
+                      openDialog<void>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Local rating file checks passed'),
+                          content: Text(
+                            '${report['sections']} sections, ${report['entries']} player entries, ${report['playedGames']} played games.\n\n'
+                            'Field layouts, record counts, IDs, results and colors match this event.\n\n'
+                            'US Chess upload acceptance has not been tested. These checks do not verify memberships or TD/affiliate authorization.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Close'),
+                            ),
+                          ],
+                        ),
+                      );
+                    } catch (error) {
+                      showFailure(context, error);
+                    }
+                  }
+                : null,
           ),
         ),
         const SizedBox(height: 24),

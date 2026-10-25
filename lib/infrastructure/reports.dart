@@ -23,6 +23,10 @@ String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
     );
     lines.add('${s.name} — ${s.rounds.length}/${s.plannedRounds} rounds');
     lines.add(
+      'Tiebreaks: ${s.tiebreakOrder.label}. Scoring: '
+      '${scoreText(s.scoring.win)}/${scoreText(s.scoring.draw)}/${scoreText(s.scoring.loss)} for win/draw/loss.',
+    );
+    lines.add(
       '${'#'.padLeft(3)}  ${'Name'.padRight(nameWidth)}  ${'Rtg'.padLeft(4)}  ${'Pts'.padLeft(4)}  ${[for (final r in s.rounds) 'R${r.number}'.padRight(s.doubleGames ? 18 : 8)].join(' ')}',
     );
     for (final row in rows) {
@@ -206,7 +210,8 @@ Future<Uint8List> reportPdf(
       );
       widgets.add(
         pw.Text(
-          'Tie breaks: played-opponent Buchholz, then Sonneborn–Berger. Equal values remain tied.',
+          'Tiebreaks: ${s.tiebreakOrder.label}. Equal values remain tied. BH/SB include played opponents only. '
+          'Win/draw/loss: ${scoreText(s.scoring.win)}/${scoreText(s.scoring.draw)}/${scoreText(s.scoring.loss)}.',
           style: const pw.TextStyle(fontSize: 9),
         ),
       );

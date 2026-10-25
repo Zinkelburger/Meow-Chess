@@ -131,8 +131,25 @@ re-checked by `scripts/verify_dbf.py`.
 | `H_END_DATE`, `S_*_DATE` | Event has an optional last day; dates must be ordered and not after today. | 2C date fields |
 | `H_CITY`/`H_STATE`/`H_ZIPCODE` | Saved with the event; state must be a USPS code; `H_COUNTRY` is `USA`. | 2C `H_COUNTRY` note |
 | `S_SCH_LVL` | Event-level N/S/P/J. | 2C `S_SCH_LVL` |
-| `H_OTHER_TD` | Width **254**, not 2C's 255: dBase III character fields hold at most 254 bytes, so some readers refuse 255. The field is optional and always empty. Revisit if MUIR rejects it. | TD decision |
+| `H_OTHER_TD` | Width **255**, matching the published 2C contract. The earlier 254-byte deviation was removed after independent dbfread testing accepted 255. The field remains empty. | Official 2C specification, retrieved again for this implementation |
 | Text fields | ASCII after folding; `" \ | ` ~ ^ < > { } [ ] *` refused; widths checked before encoding. | Defensive |
 
 Still open: current accepted SwissSys/WinTD files for comparison, MUIR draft
 validation, Grand Prix, FIDE, Blitz, double games and mixed round counts.
+
+## BBP comparison and local validation
+
+BBP's [documented output](https://github.com/BieremaBoyzProgramming/bbpPairings/blob/master/README.txt)
+is TRF/pairing/checklist data, not THEXPORT/TSEXPORT/TDEXPORT DBF files. There is
+no BBP US Chess export to use as an acceptance oracle. No BBP source or engine
+was incorporated into Meow-Chess. The user has no previously accepted fixture
+or test/draft portal access, so no external acceptance check was possible.
+
+The official format was fetched directly from US Chess again. Its 255-character
+H_OTHER_TD width now matches our encoder and both readers. New runtime checks
+read the written package and compare each field/result against the source event;
+the saved manifest records hashes, revision and the explicit distinction between
+passed offline checks and untested portal acceptance. Synthetic 2-section,
+30-player, 12-round data passes the independent dbfread reader. Negative controls
+reject corrupt schemas and even reciprocal-but-wrong results. No files were
+uploaded and no claim of acceptance is made.

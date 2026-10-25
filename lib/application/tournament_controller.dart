@@ -39,6 +39,19 @@ class TournamentController extends ChangeNotifier {
   void change(String action, Event next) {
     if (_closed) throw const TournamentException('This event has closed.');
     if (event != null && next.encode() == event!.encode()) return;
+    for (final old in event?.sections ?? <Section>[]) {
+      final changed = next.sections.where((s) => s.id == old.id).firstOrNull;
+      if (old.rounds.isNotEmpty &&
+          changed != null &&
+          (old.scoring.toJson().toString() !=
+                  changed.scoring.toJson().toString() ||
+              old.firstColorWhite != changed.firstColorWhite ||
+              old.acceleration.toString() != changed.acceleration.toString())) {
+        throw const TournamentException(
+          'Scoring, first-round colors and acceleration are fixed once rounds are posted. Use history to return before round one first.',
+        );
+      }
+    }
     event = repository.commit(
       next,
       expectedRevision: event?.revision ?? 0,
@@ -448,6 +461,17 @@ class TournamentController extends ChangeNotifier {
       }
     }
     final affected = {...sources, target};
+    if (affected.any((s) => s.rounds.isNotEmpty) &&
+        affected.any(
+          (s) =>
+              s.scoring.toJson().toString() !=
+                  target.scoring.toJson().toString() ||
+              s.acceleration.isNotEmpty,
+        )) {
+      throw const TournamentException(
+        'Combining played sections needs matching scoring and no acceleration schedule.',
+      );
+    }
     if (affected.any((s) => s.rounds.any((r) => !r.complete))) {
       throw const TournamentException(
         'Complete the current games before a section transition.',

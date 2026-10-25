@@ -77,6 +77,35 @@ handles before cleanup, which is required on Windows.
 
 ## Verification record — September 30, 2026
 
+The registration/team/acceleration follow-up passes **185 unit/widget tests**.
+All three new native Linux scenarios in
+`integration_test/tournament_features_test.dart` pass: acceleration preview and
+clearing, optional player-field validation/save, and scoped team report export.
+The existing native player-details scenario also passes; its roster screenshot
+was inspected. Domain checks cover team ties, withdrawn/house players,
+re-entry deduplication, separate section totals, CSV import, saved history and
+reopening. Metadata additions produce byte-for-byte identical US Chess DBF
+files, and public reports exclude birth dates. Files now use schema 4 to prevent
+older builds from discarding the new registration fields.
+
+The following record describes the preceding Swiss-tools tranche:
+
+The independent Swiss-tools implementation passes 175 local unit/widget tests,
+the new native simulation/checklist/reopen scenario, and the three native
+scenarios in `integration_test/app_test.dart`. The new tests cover first-round
+colors, color transposition limits, forfeit/half-bye eligibility, float preference,
+saved replay inputs (including second game legs), configurable scoring and
+tiebreaks, acceleration, old-record defaults, policy locking, simulation
+reproducibility, and corrupt rating-file rejection. Abrupt-termination recovery
+also passes with schema 3. These new changes have been run on Linux; the Windows
+qualification below applies to its recorded earlier commit.
+
+The synthetic two-section, 30-player, 12-round export passes dbfread 2.0.7,
+including the published 255-character H_OTHER_TD field. The independent negative
+controls pass. Written exports now carry their own runtime validation summary
+and SHA-256 hashes. None of this establishes US Chess upload acceptance; no
+accepted external fixture or portal test access was available.
+
 [GitHub qualification run 36740268856](https://github.com/Zinkelburger/Meow-Chess/actions/runs/36740268856)
 passed on Ubuntu 22.04, Windows Server 2022 and Windows Server 2025. It includes
 analysis, lint, unit/widget tests, independent DBF validation and negative controls,

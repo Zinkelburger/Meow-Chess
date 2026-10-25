@@ -23,7 +23,7 @@ sections, rounds, games and byes have separate tables. One writer holds the file
 foreign keys, FULL synchronous WAL transactions and revision checks protect saves.
 The audit remains in the file and also logs every move through history. Each
 command also saves a compressed full snapshot as a node in a history tree
-(`node` table, schema version 2): Back/Forward (Ctrl+Z, Ctrl+Shift+Z/Ctrl+Y)
+(`node` table, schema version 4): Back/Forward (Ctrl+Z, Ctrl+Shift+Z/Ctrl+Y)
 walk the current line, and the History panel (Ctrl+H) draws the tree, describes
 each step and restores any node. Going back and then changing something starts a
 branch; the old line stays restorable. Moving still advances the revision, so
@@ -78,8 +78,11 @@ both boxes to blank. Keyboard 1/0/5 entry and Delete continue to work. The playe
 details header and close button stay visible while its contents scroll.
 
 Select partners and choose **Assign team** to record a shared mixed-doubles team
-name, or edit a player's team in their details. This records membership only;
-it does not implement team-match pairings, prize eligibility, or team scoring.
+name, or edit a player's team in their details. Reports → Team standings totals
+individual competition scores per section, with
+a selectable number of scorers (default best four, or all). Equal totals share
+places. The report lists counted and uncounted entries and its full policy.
+It does not implement team-match pairings or establish prize eligibility.
 Select two players and choose **Do not pair together** for sibling/other requests;
 player details also add and remove these requests. Swiss proposals respect them,
 and impossible requests report a conflict. Quads/round robins check the remaining schedule before posting and report a conflict
@@ -89,10 +92,34 @@ when posting new or replacing unstarted pairings. Teams and requests persist in
 player JSON and participate in undo, redo and backups; older records default to
 no team and no requests.
 
-A Swiss proposal is labelled `score-swiss-pilot-v1`. Its priorities are score
-proximity, upper/lower-half preference, non-repeat opponents, color balance and
-lowest eligible non-repeat bye. It is **not a qualified US Chess Swiss engine**.
+A Swiss proposal is labelled `score-swiss-pilot-v2`. Its priorities include score
+proximity, upper/lower-half preference, non-repeat opponents, float history,
+color allocation and eligible byes. Same-score color improvements use disjoint
+transpositions within 80/200 rating-point limits. Repeated colors or exceptional
+byes produce explicit warnings before posting. It is **not a qualified US Chess Swiss engine**.
 Never promote the pilot to that claim without the rule-linked fixtures in DELIVERY.
+
+Section settings include exact half-point win/draw/played-loss/allocated-bye
+scoring, four standings tiebreak orders, a recorded first-board top-seed color,
+and explicit per-player/per-round pairing-only acceleration. Scoring and pairing
+setup are fixed after posting; history can return to before round one. Reports
+identify the selected scoring and tiebreak order. Actual game outcomes remain
+independent of competition points. Files use schema 4 so older builds cannot
+silently drop these policies; versions 1/2 load with standard defaults.
+
+Reports → Pairing checklist and replay check shows saved Swiss inputs, color
+history, due colors, floats, bye eligibility, exclusions and assignments. Replay
+checks compare with the original inputs, including double-game legs, and identify
+manual deviations. They do not certify rules or rewrite earlier inputs after a
+correction. Older rounds explicitly have no replay evidence. Current next-round
+inputs and pairing failures can also be inspected. The welcome screen's Generate
+a practice tournament accepts a seed, field size, rounds, draw/forfeit rates and
+withdrawal rate; generation runs outside the UI thread, retains a partial event
+with a reason if pairing becomes impossible, and always marks it as practice.
+
+These features were implemented independently in Dart. BBP is neither a dependency
+nor an embedded/copied engine. FIDE Dutch/Burstein and TRF interchange remain outside
+this US Chess-focused implementation.
 
 The DBF writer follows the archived 2C field layout and 2025 character-field
 correction. Packages are explicitly **unverified validation packages**, not accepted
@@ -109,10 +136,20 @@ Names go out as `LAST, FIRST` in capitals with accents folded to ASCII; a
 per-player "Name on rating report" overrides the derivation, and a US Chess
 lookup can fill it and the player's state. City, state, ZIP and event type
 (`S_SCH_LVL`) are saved with the event on the Reports page; multi-day events
-have a last day. Affiliate IDs must be `A` + seven digits. `H_OTHER_TD` is 254
-wide rather than 2C's 255, the dBase III character-field limit; it is always
-empty. The preflight in `dbf_export.dart` lists every problem before any file
+have a last day. Affiliate IDs must be `A` + seven digits. `H_OTHER_TD` uses the
+published 255-character width and is always empty. The preflight in
+`dbf_export.dart` lists every problem before any file
 is written; see `research/notes/US_CHESS_REPORTING.md` for sources.
+
+Export publication now decodes the actual written bytes with a separate reader,
+checking the 2C schema, padding, record counts, references and each source result
+before renaming the staging directory. The package includes `validation.json`
+and SHA-256 hashes in its manifest. The Reports page can run the same local
+inspection without saving files. Missing player-round assignments, stray game
+legs and byes over one point are refused instead of becoming misleading results.
+The independent Python/dbfread verifier remains a separate test implementation.
+BBP outputs TRF, not US Chess DBF; it provides no US Chess acceptance reference.
+Passing either local reader is not evidence of MUIR acceptance.
 
 ## Still required before the planned first release
 
@@ -122,8 +159,8 @@ is written; see `research/notes/US_CHESS_REPORTING.md` for sources.
 - Authenticated provider success/expiry/latest-rating evidence; batch rating review,
   name search and explicit per-category frozen rating observations.
 - Broader rule-specific withdrawal and transfer prize policies, comprehensive
-  eligibility rules and automated prize allocation. Configurable tie-break orders,
-  eligibility overrides, templates, structured ruling/appeal records, explicit
+  eligibility rules and automated prize allocation. Eligibility overrides,
+  templates, structured ruling/appeal records, explicit
   effective-round withdrawal and late-entry scoring also remain release work.
 - Full per-section workspace/draft restoration, all-round reciprocal player matrix,
   advanced accessibility and large-field performance qualification. Import has
@@ -217,3 +254,40 @@ crash-test fixture compilation error. No failing check was treated as a pass.
 Windows/macOS, authenticated production API behavior, portal acceptance, physical
 printing, actual power loss/disk failure and large-field performance were **not**
 qualified by these Linux checks.
+
+
+## Tournament setup and registration additions
+
+Section settings → Swiss acceleration offers top-half presets: +1 virtual
+pairing point for round one, or rounds one and two, then zero. These require
+standard scoring, single games, at least four active players, and a later
+unaccelerated round. A preview lists the selected players before the schedule is
+saved. Rating, name, and entry ID determine order; the top half is rounded down.
+Withdrawn entries are excluded; requested byes do not change initial ranking.
+The stored player-specific schedule is frozen, not automatically regenerated
+when ratings or the roster change. Review it before round one after late entries.
+Custom schedules remain available. Neither preset claims FIDE Baku or complete
+US Chess accelerated-pairing conformance.
+
+Player details → More player details edits club, school, grade, chess title,
+FIDE ID, reference FIDE rating, federation, and private birth date. These optional
+values survive save/reopen and history; old files default them to blank/unrated.
+The main Rating field still controls pairings and US Chess reports. Federation
+validation checks three-letter syntax only, not federation membership. Titles
+are recorded text, not verified credentials. Birth dates are not printed or
+included in public standings/team reports or US Chess DBF files.
+
+CSV/TSV registration accepts Club and Team as separate columns, plus School,
+Grade, Title, FIDE ID, FIDE Rating, Federation, and Birth Date (YYYY-MM-DD).
+Malformed optional IDs, ratings, federations, and dates are rejected in the import
+preview. Team is now imported as membership, instead of being mistaken for Club.
+
+Team standings uses the current team labels, matched case-insensitively after
+trimming spaces. It includes earned points of withdrawn members, awarded byes,
+and forfeits; excludes house players; counts a re-entered person only once at
+their best score; and gives missing scorers zero. It operates separately for each
+section and exports text/CSV with the chosen policy and event revision. Changing
+the report's scorer limit does not alter the tournament. It is a report option,
+not a saved prize rule. Editing membership can change historical totals.
+
+See [the BBP feature comparison](BBP_COMPARISON.md) for remaining gaps.

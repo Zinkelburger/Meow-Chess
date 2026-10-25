@@ -158,9 +158,35 @@ class _WorkspaceState extends State<Workspace> {
           (e) =>
               '${c.event!.sections.firstWhere((s) => s.id == e.key).name}: ${e.value}',
         ),
-        if (batch.rounds.values.any((r) => r.policy == 'score-swiss-pilot-v1'))
+        if (batch.rounds.values.any(
+          (r) => r.policy.startsWith('score-swiss-pilot-'),
+        ))
           'Swiss pairings come from a test algorithm that is not yet certified. Look them over; open a section to use Edit pairings.',
       ];
+      final review = [for (final r in batch.rounds.values) ...r.warnings];
+      if (review.isNotEmpty) {
+        final accepted = await openDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Review pairing exceptions'),
+            content: SizedBox(
+              width: 560,
+              child: SingleChildScrollView(child: Text(review.join('\n\n'))),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Post after review'),
+              ),
+            ],
+          ),
+        );
+        if (accepted != true || !mounted) return;
+      }
       // Pair straight away; anything worth checking is fixed afterwards
       // with Edit pairings or undone.
       c.post(batch);

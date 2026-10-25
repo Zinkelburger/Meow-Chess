@@ -3,10 +3,57 @@ import 'dart:convert';
 /// Scores are stored as integer half-points. IDs never depend on list order.
 String scoreText(int halves) =>
     halves.isEven ? '${halves ~/ 2}' : '${halves ~/ 2}.5';
+
+int parsePoints(String text) {
+  if (!RegExp(r'^\d+(\.0|\.5)?$').hasMatch(text.trim())) {
+    throw const TournamentException(
+      'Use whole or half points, such as 1 or 0.5.',
+    );
+  }
+  final parts = text.trim().split('.');
+  final whole = int.tryParse(parts.first);
+  if (whole == null || whole > 10) {
+    throw const TournamentException('Points must be between 0 and 10.');
+  }
+  final value = whole * 2 + (parts.length == 2 && parts[1] == '5' ? 1 : 0);
+  if (value > 20) {
+    throw const TournamentException('Points must be between 0 and 10.');
+  }
+  return value;
+}
+
 typedef Json = Map<String, dynamic>;
 const _unset = Object();
 
 enum Format { quad, swiss, roundRobin }
+
+enum TiebreakOrder {
+  buchholzSonneborn('Buchholz, then Sonneborn-Berger'),
+  sonnebornBuchholz('Sonneborn-Berger, then Buchholz'),
+  buchholz('Buchholz only'),
+  scoreOnly('Score only (share places)');
+
+  const TiebreakOrder(this.label);
+  final String label;
+}
+
+/// Competition points are separate from the actual result sent for rating.
+/// All values are exact half-points, including in nonstandard scoring events.
+class Scoring {
+  const Scoring({this.win = 2, this.draw = 1, this.loss = 0, this.bye = 2});
+  final int win, draw, loss, bye;
+  int points(Outcome outcome, bool white) => switch (outcome) {
+    Outcome.whiteWin => white ? win : loss,
+    Outcome.blackWin => white ? loss : win,
+    Outcome.whiteForfeit => white ? win : 0,
+    Outcome.blackForfeit => white ? 0 : win,
+    Outcome.draw => draw,
+    _ => 0,
+  };
+  Json toJson() => {'win': win, 'draw': draw, 'loss': loss, 'bye': bye};
+  factory Scoring.fromJson(Json j) =>
+      Scoring(win: j['win'], draw: j['draw'], loss: j['loss'], bye: j['bye']);
+}
 
 enum Outcome {
   unreported,
@@ -62,6 +109,13 @@ class Player {
     this.house = false,
     this.state = '',
     this.reportName = '',
+    this.title = '',
+    this.fideId = '',
+    this.federation = '',
+    this.birthDate = '',
+    this.school = '',
+    this.grade = '',
+    this.fideRating = 0,
   }) : byes = Map.unmodifiable(byes),
        avoid = Set.unmodifiable(avoid);
   final String id, name, memberId, club, team, notes, source;
@@ -72,6 +126,10 @@ class Player {
   /// The name as US Chess should receive it (`LAST, FIRST`); empty to derive
   /// it from [name].
   final String reportName;
+
+  /// Optional registration details; they do not change US Chess pairing ratings.
+  final String title, fideId, federation, birthDate, school, grade;
+  final int fideRating;
   final Set<String> avoid;
   final String? personId;
   final int rating;
@@ -91,6 +149,13 @@ class Player {
     bool? house,
     String? state,
     String? reportName,
+    String? title,
+    String? fideId,
+    String? federation,
+    String? birthDate,
+    String? school,
+    String? grade,
+    int? fideRating,
   }) => Player(
     id: id,
     personId: personId,
@@ -108,6 +173,13 @@ class Player {
     house: house ?? this.house,
     state: state ?? this.state,
     reportName: reportName ?? this.reportName,
+    title: title ?? this.title,
+    fideId: fideId ?? this.fideId,
+    federation: federation ?? this.federation,
+    birthDate: birthDate ?? this.birthDate,
+    school: school ?? this.school,
+    grade: grade ?? this.grade,
+    fideRating: fideRating ?? this.fideRating,
   );
   Json toJson() => {
     'id': id,
@@ -126,6 +198,13 @@ class Player {
     'byes': byes.map((k, v) => MapEntry('$k', v)),
     'state': state,
     'reportName': reportName,
+    'title': title,
+    'fideId': fideId,
+    'federation': federation,
+    'birthDate': birthDate,
+    'school': school,
+    'grade': grade,
+    'fideRating': fideRating,
   };
   factory Player.fromJson(Json j) => Player(
     id: j['id'],
@@ -144,6 +223,13 @@ class Player {
     byes: (j['byes'] as Map).map((k, v) => MapEntry(int.parse(k), v as int)),
     state: j['state'] ?? '',
     reportName: j['reportName'] ?? '',
+    title: j['title'] ?? '',
+    fideId: j['fideId'] ?? '',
+    federation: j['federation'] ?? '',
+    birthDate: j['birthDate'] ?? '',
+    school: j['school'] ?? '',
+    grade: j['grade'] ?? '',
+    fideRating: j['fideRating'] ?? 0,
   );
 }
 
@@ -245,13 +331,20 @@ class Round {
     this.revision = 1,
     this.policy = 'quad-30G-v1',
     this.note = '',
+    this.pairingInput = '',
+    List<String> warnings = const [],
   }) : games = List.unmodifiable(games),
-       byes = List.unmodifiable(byes);
+       byes = List.unmodifiable(byes),
+       warnings = List.unmodifiable(warnings);
   final int number, revision;
   final List<Game> games;
   final List<ByeAward> byes;
   final String? postedAt, startedAt;
   final String policy, note;
+
+  /// Versioned, immutable Swiss inputs for reproducible checks after edits.
+  final String pairingInput;
+  final List<String> warnings;
   bool get complete => games.every((g) => g.outcome.resolved);
   bool get hasPlay =>
       startedAt != null || games.any((g) => g.outcome != Outcome.unreported);
@@ -271,6 +364,8 @@ class Round {
     revision: revision ?? this.revision,
     policy: policy,
     note: note ?? this.note,
+    pairingInput: pairingInput,
+    warnings: warnings,
   );
   Json toJson() => {
     'number': number,
@@ -281,6 +376,8 @@ class Round {
     'revision': revision,
     'policy': policy,
     'note': note,
+    'pairingInput': pairingInput,
+    'warnings': warnings,
   };
   factory Round.fromJson(Json j) => Round(
     number: j['number'],
@@ -291,6 +388,8 @@ class Round {
     revision: j['revision'],
     policy: j['policy'],
     note: j['note'],
+    pairingInput: j['pairingInput'] ?? '',
+    warnings: List<String>.from(j['warnings'] ?? const []),
   );
 }
 
@@ -305,14 +404,36 @@ class Section {
     this.doubleGames = false,
     List<Round> rounds = const [],
     this.ratingCeiling = 0,
+    this.scoring = const Scoring(),
+    this.tiebreakOrder = TiebreakOrder.buchholzSonneborn,
+    this.firstColorWhite = true,
+    Map<String, List<int>> acceleration = const {},
   }) : players = List.unmodifiable(players),
-       rounds = List.unmodifiable(rounds);
+       rounds = List.unmodifiable(rounds),
+       acceleration = Map.unmodifiable(
+         acceleration.map(
+           (id, points) => MapEntry(id, List<int>.unmodifiable(points)),
+         ),
+       );
   final String id, name;
   final List<String> players;
   final Format format;
   final int plannedRounds, boardStart, ratingCeiling;
   final bool doubleGames;
   final List<Round> rounds;
+  final Scoring scoring;
+  final TiebreakOrder tiebreakOrder;
+  final bool firstColorWhite;
+
+  /// Per-player, per-round pairing-only half-points; never competition points.
+  final Map<String, List<int>> acceleration;
+  int accelerationFor(String id, int round) {
+    final points = acceleration[id];
+    return points != null && round > 0 && round <= points.length
+        ? points[round - 1]
+        : 0;
+  }
+
   bool get finished =>
       rounds.length >= plannedRounds && rounds.every((r) => r.complete);
   Section copy({
@@ -324,6 +445,10 @@ class Section {
     bool? doubleGames,
     List<Round>? rounds,
     int? ratingCeiling,
+    Scoring? scoring,
+    TiebreakOrder? tiebreakOrder,
+    bool? firstColorWhite,
+    Map<String, List<int>>? acceleration,
   }) => Section(
     id: id,
     name: name ?? this.name,
@@ -334,6 +459,10 @@ class Section {
     doubleGames: doubleGames ?? this.doubleGames,
     rounds: rounds ?? this.rounds,
     ratingCeiling: ratingCeiling ?? this.ratingCeiling,
+    scoring: scoring ?? this.scoring,
+    tiebreakOrder: tiebreakOrder ?? this.tiebreakOrder,
+    firstColorWhite: firstColorWhite ?? this.firstColorWhite,
+    acceleration: acceleration ?? this.acceleration,
   );
   Json toJson() => {
     'id': id,
@@ -345,6 +474,10 @@ class Section {
     'doubleGames': doubleGames,
     'rounds': rounds.map((r) => r.toJson()).toList(),
     'ratingCeiling': ratingCeiling,
+    'scoring': scoring.toJson(),
+    'tiebreakOrder': tiebreakOrder.name,
+    'firstColorWhite': firstColorWhite,
+    'acceleration': acceleration,
   };
   factory Section.fromJson(Json j) => Section(
     id: j['id'],
@@ -356,6 +489,16 @@ class Section {
     doubleGames: j['doubleGames'],
     rounds: (j['rounds'] as List).map((r) => Round.fromJson(r)).toList(),
     ratingCeiling: j['ratingCeiling'] ?? 0,
+    scoring: j['scoring'] == null
+        ? const Scoring()
+        : Scoring.fromJson(j['scoring']),
+    tiebreakOrder: TiebreakOrder.values.byName(
+      j['tiebreakOrder'] ?? 'buchholzSonneborn',
+    ),
+    firstColorWhite: j['firstColorWhite'] ?? true,
+    acceleration: (j['acceleration'] as Map? ?? const {}).map(
+      (id, points) => MapEntry(id as String, List<int>.from(points)),
+    ),
   );
 }
 
@@ -558,6 +701,8 @@ void validateEvent(Event e) {
   final ids = e.players.map((p) => p.id).toSet();
   for (final p in e.players) {
     require(p.name.trim().isNotEmpty, 'Player names cannot be empty.');
+    final detailError = playerDetailsError(p);
+    require(detailError == null, detailError ?? 'Invalid player details.');
     require(
       p.rating >= 0 && p.rating <= 4000,
       'Rating must be between 0 and 4000.',
@@ -578,6 +723,26 @@ void validateEvent(Event e) {
   final liveBoards = <int>{};
   final livePeople = <String>{};
   for (final s in e.sections) {
+    require(
+      [
+            s.scoring.win,
+            s.scoring.draw,
+            s.scoring.loss,
+            s.scoring.bye,
+          ].every((p) => p >= 0 && p <= 20) &&
+          s.scoring.win > s.scoring.draw &&
+          s.scoring.draw >= s.scoring.loss,
+      'Scoring needs win > draw >= loss, with values between 0 and 10 points.',
+    );
+    require(
+      s.acceleration.entries.every(
+        (a) =>
+            ids.contains(a.key) &&
+            a.value.length <= s.plannedRounds &&
+            a.value.every((p) => p >= 0 && p <= 20),
+      ),
+      'Acceleration needs known players and 0–10 pairing-only points per scheduled round.',
+    );
     require(
       s.name.trim().isNotEmpty && s.plannedRounds > 0 && s.boardStart > 0,
       'Invalid section settings.',
@@ -639,10 +804,28 @@ void validateEvent(Event e) {
           ids.contains(b.player) &&
               participants.add('${b.player}/1') &&
               b.points >= 0 &&
-              b.points <= 2,
+              b.points <= 20,
           'A bye conflicts with a game or another bye.',
         );
       }
     }
   }
+}
+
+/// Shared by typed registration and roster import, before any data is saved.
+String? playerDetailsError(Player p) {
+  if (p.fideId.isNotEmpty && !RegExp(r'^[1-9]\d{0,10}$').hasMatch(p.fideId)) {
+    return 'FIDE ID must be 1–11 digits and start with a nonzero digit.';
+  }
+  if (p.fideRating < 0 || p.fideRating > 4000) {
+    return 'FIDE rating must be 0–4000, or UNR.';
+  }
+  if (p.federation.isNotEmpty &&
+      !RegExp(r'^[A-Z]{3}$').hasMatch(p.federation)) {
+    return 'Federation must be three capital letters, such as USA.';
+  }
+  if (p.birthDate.isNotEmpty && !isEventDate(p.birthDate)) {
+    return 'Birth date must be a valid YYYY-MM-DD date.';
+  }
+  return null;
 }

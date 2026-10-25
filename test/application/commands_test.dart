@@ -395,8 +395,8 @@ void main() {
       c.movePlayers([quad1.players.last], quad2.id);
       final batch = await c.propose();
       expect(batch.issues, isEmpty);
-      expect(batch.rounds[quad1.id]!.policy, 'score-swiss-pilot-v1');
-      expect(batch.rounds[quad2.id]!.policy, 'score-swiss-pilot-v1');
+      expect(batch.rounds[quad1.id]!.policy, 'score-swiss-pilot-v2');
+      expect(batch.rounds[quad2.id]!.policy, 'score-swiss-pilot-v2');
       // Three players: one game and a bye; five players: two games and a bye.
       expect(batch.rounds[quad1.id]!.games, hasLength(1));
       expect(batch.rounds[quad2.id]!.games, hasLength(2));

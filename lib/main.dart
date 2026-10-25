@@ -8,6 +8,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'application/tournament_controller.dart';
 import 'application/demo.dart';
+import 'application/pairing_tools.dart';
+import 'domain/model.dart';
+import 'domain/simulation.dart';
 import 'infrastructure/native_file_requests.dart';
 import 'infrastructure/sqlite_event_repository.dart';
 import 'ui/brand.dart';
@@ -84,14 +87,27 @@ class _MeowAppState extends State<MeowApp> {
     super.dispose();
   }
 
-  void open(String filename, {String? name, bool demo = false}) {
+  void open(
+    String filename, {
+    String? name,
+    bool demo = false,
+    Event? generated,
+  }) {
     TournamentController? next;
     try {
-      if (name == null && !demo && !File(filename).existsSync()) {
+      if (name == null &&
+          !demo &&
+          generated == null &&
+          !File(filename).existsSync()) {
         throw const FileSystemException('Event file not found');
       }
       next = TournamentController(SqliteEventRepository(filename));
-      if (demo) {
+      if (generated != null) {
+        if (next.event != null) {
+          throw const TournamentException('Choose a new practice file.');
+        }
+        next.change('Generate synthetic tournament', generated);
+      } else if (demo) {
         populatePractice(next);
       } else if (next.event == null) {
         if (name == null) {
@@ -155,6 +171,62 @@ class _MeowAppState extends State<MeowApp> {
     ),
     demo: true,
   );
+
+  Future<void> simulation(BuildContext context) async {
+    SimulationResult? result;
+    final values = await editFields(
+      context,
+      title: 'Generate a practice tournament',
+      description:
+          'Synthetic players and results only. The same seed and settings reproduce the same tournament. If no pairing exists, the event stops and records why.',
+      fields: const [
+        FieldSpec('players', 'Players'),
+        FieldSpec('rounds', 'Rounds'),
+        FieldSpec('seed', 'Random seed'),
+        FieldSpec('draw', 'Draws (%)'),
+        FieldSpec('forfeit', 'Forfeits (%)'),
+        FieldSpec('withdraw', 'Withdrawals per round (%)'),
+      ],
+      values: const {
+        'players': '32',
+        'rounds': '5',
+        'seed': '1',
+        'draw': '25',
+        'forfeit': '2',
+        'withdraw': '0',
+      },
+      saveLabel: 'Generate',
+      onSave: (v) async {
+        int number(String key) {
+          final n = int.tryParse(v[key]!);
+          if (n == null) {
+            throw const TournamentException('Use whole numbers in each field.');
+          }
+          return n;
+        }
+
+        final config = SimulationConfig(
+          players: number('players'),
+          rounds: number('rounds'),
+          seed: number('seed'),
+          drawPercent: number('draw'),
+          forfeitPercent: number('forfeit'),
+          withdrawPercent: number('withdraw'),
+        );
+        config.validate();
+        result = await generateSimulation(config);
+      },
+    );
+    if (values == null || result == null || !mounted) return;
+    open(
+      p.join(
+        widget.dataDirectory.path,
+        'simulation-${DateTime.now().microsecondsSinceEpoch}.meow',
+      ),
+      generated: result!.event,
+    );
+  }
+
   void close() {
     controller?.dispose();
     setState(() {
@@ -234,6 +306,13 @@ class _MeowAppState extends State<MeowApp> {
                               onPressed: practice,
                               icon: const Icon(Icons.science_outlined),
                               label: const Text('Try a practice event'),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => simulation(context),
+                              icon: const Icon(Icons.shuffle),
+                              label: const Text(
+                                'Generate a practice tournament',
+                              ),
                             ),
                           ],
                         ),

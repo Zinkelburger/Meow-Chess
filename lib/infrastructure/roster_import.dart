@@ -30,7 +30,8 @@ List<ImportRow> parseRoster(String source) {
   if (!hasHeader) nameIndex = 0;
   final idIndex = column(['id', 'uscf', 'uscfid', 'uschessid', 'memberid']);
   final ratingIndex = column(['rating', 'rtg', 'uscf rating', 'pairingrating']);
-  final clubIndex = column(['club', 'team']);
+  final clubIndex = column(['club']);
+  final teamIndex = column(['team', 'teamname']);
   final stateIndex = hasHeader ? column(['state', 'st']) : -1;
   final result = <ImportRow>[];
   for (final (offset, row) in rows.skip(hasHeader ? 1 : 0).indexed) {
@@ -61,7 +62,7 @@ List<ImportRow> parseRoster(String source) {
         ? 0
         : int.tryParse(rawRating);
     final state = value(stateIndex).toUpperCase();
-    final error = name.isEmpty
+    var error = name.isEmpty
         ? 'Missing name'
         : member.isNotEmpty && !RegExp(r'^\d{8}$').hasMatch(member)
         ? 'US Chess ID must be eight digits'
@@ -71,21 +72,36 @@ List<ImportRow> parseRoster(String source) {
         ? 'State must be two letters'
         : null;
     final raw = Csv().encode([row]);
+    String detail(List<String> names) => hasHeader ? value(column(names)) : '';
+    final rawFideRating = detail(['fiderating', 'fideelo']);
+    final fideRating =
+        rawFideRating.isEmpty ||
+            ['unr', 'unrated'].contains(rawFideRating.toLowerCase())
+        ? 0
+        : int.tryParse(rawFideRating) ?? -1;
+    final player = Player(
+      id: const Uuid().v4(),
+      name: name,
+      memberId: member,
+      rating: rating ?? 0,
+      club: value(clubIndex),
+      team: value(teamIndex),
+      state: state,
+      title: detail(['title', 'chesstitle']).toUpperCase(),
+      fideId: detail(['fideid', 'fidenumber']),
+      fideRating: fideRating,
+      federation: detail(['federation', 'fed']).toUpperCase(),
+      birthDate: detail(['birthdate', 'dateofbirth', 'dob']),
+      school: detail(['school']),
+      grade: detail(['grade']),
+      source: raw,
+    );
+    error ??= playerDetailsError(player);
     result.add(
       ImportRow(
         offset + (hasHeader ? 2 : 1),
         raw,
-        error != null
-            ? null
-            : Player(
-                id: const Uuid().v4(),
-                name: name,
-                memberId: member,
-                rating: rating!,
-                club: value(clubIndex),
-                state: state,
-                source: raw,
-              ),
+        error == null ? player : null,
         error,
       ),
     );

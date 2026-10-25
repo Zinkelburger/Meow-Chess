@@ -3,7 +3,7 @@
 
 Field contracts transcribed from the US Chess 2C specification (September 2025
 character-field correction), https://secure2.uschess.org/TD_Affil/fileformat.php.
-H_OTHER_TD is 254 wide, not 2C's 255: the dBase III character-field maximum.
+H_OTHER_TD follows the federation's specified 255-byte field width.
 Rating systems are re-derived from S_TIMECTL with rule 5C (Official Rules of
 Chess, 7th edition): total = all control minutes + delay/increment seconds.
 The optional expected-event.json compares every result with the source event,
@@ -21,7 +21,7 @@ from dbfread import DBF
 HEADER = [('H_FORMAT', 5), ('H_PROGRAM', 10), ('H_EVENT_ID', 12), ('H_NAME', 35),
           ('H_TOT_SECT', 2), ('H_BEG_DATE', 8), ('H_END_DATE', 8), ('H_AFF_ID', 8),
           ('H_CITY', 21), ('H_STATE', 2), ('H_ZIPCODE', 10), ('H_COUNTRY', 21),
-          ('H_SENDCROS', 1), ('H_CTD_ID', 8), ('H_ATD_ID', 8), ('H_OTHER_TD', 254)]
+          ('H_SENDCROS', 1), ('H_CTD_ID', 8), ('H_ATD_ID', 8), ('H_OTHER_TD', 255)]
 SECTION = [('S_EVENT_ID', 12), ('S_SEC_NUM', 2), ('S_SEC_NAME', 30), ('S_R_SYSTEM', 1),
            ('S_TIMECTL', 40), ('S_CTD_ID', 8), ('S_ATD_ID', 8), ('S_TRN_TYPE', 1),
            ('S_TOT_RNDS', 2), ('S_LST_PAIR', 4), ('S_BEG_DATE', 8), ('S_END_DATE', 8),

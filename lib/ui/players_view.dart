@@ -597,7 +597,7 @@ class _PlayersViewState extends State<PlayersView> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Import a CSV or tab-separated file with columns Name, US Chess ID and Rating. A header row is optional.',
+              'Import a CSV or tab-separated file with Name, US Chess ID and Rating. Add headers for optional Club, Team, School, Grade, Title, FIDE ID, FIDE Rating, Federation and Birth Date columns.',
             ),
             const SizedBox(height: 20),
             Wrap(
@@ -720,7 +720,7 @@ class _PlayersViewState extends State<PlayersView> {
                         context,
                         title: 'Team for ${ids.length} players',
                         description:
-                            'Use the same name for mixed-doubles partners. Leave blank to remove the team. Team membership does not change individual pairings.',
+                            'Use the same name for team members or mixed-doubles partners. Reports → Team standings can total their individual scores. Leave blank to remove the team. Membership does not change pairings.',
                         fields: const [FieldSpec('team', 'Team name')],
                         values: {'team': teams.length == 1 ? teams.single : ''},
                         onSave: (v) => c.assignTeam(ids, v['team'] ?? ''),
@@ -1103,6 +1103,14 @@ class PlayerPanelState extends State<PlayerPanel> {
     ('reportName', 'Name on rating report', 1),
     ('team', 'Team / mixed-doubles name', 1),
     ('notes', 'Private notes', 3),
+    ('club', 'Club', 1),
+    ('school', 'School', 1),
+    ('grade', 'Grade', 1),
+    ('title', 'Chess title', 1),
+    ('fideId', 'FIDE ID', 1),
+    ('fideRating', 'FIDE rating (reference only)', 1),
+    ('federation', 'Federation (3 letters)', 1),
+    ('birthDate', 'Birth date (YYYY-MM-DD, private)', 1),
   ];
   final text = {for (final f in _fields) f.$1: TextEditingController()};
   final reason = TextEditingController();
@@ -1157,6 +1165,14 @@ class PlayerPanelState extends State<PlayerPanel> {
     'reportName': p?.reportName ?? '',
     'team': p?.team ?? '',
     'notes': p?.notes ?? '',
+    'club': p?.club ?? '',
+    'title': p?.title ?? '',
+    'fideId': p?.fideId ?? '',
+    'federation': p?.federation ?? '',
+    'birthDate': p?.birthDate ?? '',
+    'school': p?.school ?? '',
+    'grade': p?.grade ?? '',
+    'fideRating': p == null ? '' : ratingText(p.fideRating),
   };
 
   void load() {
@@ -1247,10 +1263,22 @@ class PlayerPanelState extends State<PlayerPanel> {
           reportName: v['reportName']!.trim(),
           team: v['team']!.trim(),
           notes: v['notes']!,
+          club: v['club']!.trim(),
+          title: v['title']!.trim().toUpperCase(),
+          fideId: v['fideId']!.trim(),
+          federation: v['federation']!.trim().toUpperCase(),
+          birthDate: v['birthDate']!.trim(),
+          school: v['school']!.trim(),
+          grade: v['grade']!.trim(),
+          fideRating: parseRating(v['fideRating']!) ?? -1,
         ),
       );
       // Show the saved capitals rather than leaving the panel looking unsaved.
-      if (!adding) text['state']!.text = state;
+      if (!adding) {
+        text['state']!.text = state;
+        text['federation']!.text = v['federation']!.trim().toUpperCase();
+        text['title']!.text = v['title']!.trim().toUpperCase();
+      }
     });
     // The add form clears for the next player.
     if (ok && adding) {
@@ -1364,6 +1392,19 @@ class PlayerPanelState extends State<PlayerPanel> {
           child: Text(error!, style: TextStyle(color: colors.error)),
         ),
     ];
+    final extraDetails = Material(
+      color: colors.surface,
+      child: ExpansionTile(
+        title: const Text('More player details'),
+        subtitle: const Text('Club, school, title and FIDE information'),
+        children: [
+          const Text(
+            'Optional registration details. The main Rating field is used for US Chess pairings. Birth dates stay out of public reports.',
+          ),
+          ...fields.skip(7).take(_fields.length - 7),
+        ],
+      ),
+    );
     void close() {
       if (commit()) widget.onClose();
     }
@@ -1374,7 +1415,9 @@ class PlayerPanelState extends State<PlayerPanel> {
         title: 'Add player',
         onClose: close,
         children: [
-          ...fields,
+          ...fields.take(7),
+          extraDetails,
+          if (error != null) fields.last,
           Align(
             alignment: Alignment.centerLeft,
             child: FilledButton(onPressed: commit, child: const Text('Add')),
@@ -1415,7 +1458,9 @@ class PlayerPanelState extends State<PlayerPanel> {
             padding: const EdgeInsets.only(bottom: 12),
             child: Text('Withdrawn', style: muted),
           ),
-        ...fields,
+        ...fields.take(7),
+        extraDetails,
+        if (error != null) fields.last,
         if (dirty)
           Row(
             children: [
@@ -1809,7 +1854,7 @@ class _PastePanelState extends State<_PastePanel> {
       onClose: widget.onClose,
       children: [
         Text(
-          'Paste rows from a spreadsheet: Name, US Chess ID, Rating. Players already in the event are not duplicated.',
+          'Paste Name, US Chess ID and Rating columns. Include a header row for optional team, school and FIDE details. Players already in the event are not duplicated.',
           style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
         ),
         const SizedBox(height: 12),

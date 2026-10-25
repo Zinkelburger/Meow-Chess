@@ -243,6 +243,13 @@ List<String> describeChanges(
       if (o.withdrawn != p.withdrawn) p.withdrawn ? 'withdrawn' : 'reinstated',
       if (o.club != p.club) 'club ${value(_short(o.club), _short(p.club))}',
       if (o.team != p.team) 'team ${value(_short(o.team), _short(p.team))}',
+      if (o.title != p.title) 'title changed',
+      if (o.fideId != p.fideId) 'FIDE ID changed',
+      if (o.fideRating != p.fideRating) 'FIDE rating changed',
+      if (o.federation != p.federation) 'federation changed',
+      if (o.birthDate != p.birthDate) 'private birth date changed',
+      if (o.school != p.school) 'school changed',
+      if (o.grade != p.grade) 'grade changed',
       for (final id in p.avoid.difference(o.avoid))
         'do not pair with ${_name(before, after, id)}',
       for (final id in o.avoid.difference(p.avoid))
@@ -282,6 +289,14 @@ List<String> describeChanges(
         'rating ceiling ${value(o.ratingCeiling, s.ratingCeiling)}',
       if (o.doubleGames != s.doubleGames)
         s.doubleGames ? 'double games' : 'single games',
+      if (o.tiebreakOrder != s.tiebreakOrder)
+        'tiebreaks ${value(o.tiebreakOrder.label, s.tiebreakOrder.label)}',
+      if (o.scoring.toJson().toString() != s.scoring.toJson().toString())
+        'scoring changed: win ${scoreText(s.scoring.win)}, draw ${scoreText(s.scoring.draw)}, loss ${scoreText(s.scoring.loss)}, allocated bye ${scoreText(s.scoring.bye)}',
+      if (o.firstColorWhite != s.firstColorWhite)
+        'top seed first-round color ${s.firstColorWhite ? 'White' : 'Black'}',
+      if (o.acceleration.toString() != s.acceleration.toString())
+        'pairing-only acceleration changed for ${s.acceleration.length} players',
     ];
     if (settings.isNotEmpty) out.add('$label: ${settings.join(', ')}');
     final joined = s.players.where((id) => !o.players.contains(id));

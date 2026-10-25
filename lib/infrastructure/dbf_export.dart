@@ -3,9 +3,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
+import 'package:crypto/crypto.dart';
 
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
+import 'dbf_validation.dart';
 
 class DbfField {
   const DbfField(this.name, this.width, {this.type = 'C'});
@@ -106,6 +108,15 @@ String _day(DateTime d) =>
 /// and rating categories follow rule 5C (research/local/uscf-rules-2026.txt).
 List<String> ratingPreflight(Event e, {DateTime? today}) {
   final issues = <String>[];
+  try {
+    validateEvent(e);
+  } on TournamentException catch (error) {
+    issues.add('Repair event data before exporting: ${error.message}');
+    final ids = e.players.map((p) => p.id).toSet();
+    if (e.sections.any((s) => s.players.any((id) => !ids.contains(id)))) {
+      return issues;
+    }
+  }
   void check(String? problem, String message) {
     if (problem != null) issues.add(message.replaceFirst('{}', problem));
   }
@@ -213,6 +224,22 @@ List<String> ratingPreflight(Event e, {DateTime? today}) {
       issues.add('Section ${s.name} has no played games to rate.');
     }
     for (final r in s.rounds) {
+      final assigned = [
+        for (final g in r.games) ...[g.white, g.black],
+        for (final b in r.byes) b.player,
+      ];
+      if (r.games.any((g) => g.leg != 1) ||
+          assigned.length != members.length ||
+          !assigned.toSet().containsAll(members)) {
+        issues.add(
+          'Section ${s.name}, round ${r.number} needs exactly one game or explicit bye per player.',
+        );
+      }
+      if (r.byes.any((b) => b.points > 2)) {
+        issues.add(
+          'Section ${s.name}, round ${r.number} has a bye worth more than one point; this rating format has no matching bye code.',
+        );
+      }
       if (r.games.any(
             (g) => !members.contains(g.white) || !members.contains(g.black),
           ) ||
@@ -295,9 +322,8 @@ Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
     DbfField('H_SENDCROS', 1),
     DbfField('H_CTD_ID', 8),
     DbfField('H_ATD_ID', 8),
-    // 2C lists 255; dBase III character fields hold at most 254 bytes, and
-    // this optional field is always empty here.
-    DbfField('H_OTHER_TD', 254),
+    // Use the federation's specified width, independently decoded in tests.
+    DbfField('H_OTHER_TD', 255),
   ];
   const sectionFields = [
     DbfField('S_EVENT_ID', 12),
@@ -434,6 +460,15 @@ Future<String> writeRatingPackage(Event e, String parent) async {
         p.join(staging.path, entry.key),
       ).writeAsBytes(entry.value, flush: true);
     }
+    final written = <String, Uint8List>{};
+    for (final name in files.keys) {
+      written[name] = await File(p.join(staging.path, name)).readAsBytes();
+    }
+    final validation = validateRatingFiles(e, written);
+    await File(p.join(staging.path, 'validation.json')).writeAsString(
+      const JsonEncoder.withIndent('  ').convert(validation),
+      flush: true,
+    );
     await File(p.join(staging.path, 'manifest.json')).writeAsString(
       const JsonEncoder.withIndent('  ').convert({
         'eventId': e.id,
@@ -444,6 +479,10 @@ Future<String> writeRatingPackage(Event e, String parent) async {
         'status':
             'UNVERIFIED — TD/provider validation required before submission',
         'files': files.map((k, v) => MapEntry(k, v.length)),
+        'sha256': written.map(
+          (k, v) => MapEntry(k, sha256.convert(v).toString()),
+        ),
+        'validation': validation,
       }),
       flush: true,
     );

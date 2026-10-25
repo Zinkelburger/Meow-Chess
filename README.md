@@ -61,6 +61,15 @@ use `scripts/ci.sh build` for a bounded Linux release build; the executable is
 `build/linux/x64/release/bundle/meow_chess`. Start with **Try a practice event**
 for 22 synthetic entrants in four quads and a six-player Swiss.
 
+**Generate a practice tournament** creates reproducible Swiss simulations with
+configurable field size, rounds, seed and result/withdrawal rates. **Section
+settings** includes scoring, tiebreak order, first-round color and custom
+pairing-only acceleration. **Reports** offers a pairing checklist/replay check
+and a local US Chess file inspector. Rating packages are decoded against the
+source event before publication and include validation evidence and hashes;
+US Chess upload acceptance remains unverified. Event files now use schema 4:
+older files upgrade on opening, and older app builds cannot open upgraded files.
+
 Linux build prerequisites include GTK 3, CMake, Ninja, C++ tooling and libsecret
 development headers (`libsecret-1-dev` on Debian/Ubuntu, `libsecret-devel` on Fedora).
 The workstation wrapper discovers the local dependency prefix if present.
@@ -106,3 +115,17 @@ commands, tested guarantees and remaining acceptance checks.
 
 No real tournament submissions, account changes or player communications are made
 by the app. US Chess validation packages remain explicitly unverified.
+
+
+### Accelerated Swiss, player details, and teams
+
+- **Section settings → Swiss acceleration:** preview and apply one- or two-round
+  top-half virtual-point presets, or keep an explicit custom schedule.
+- **Player details → More player details:** club, school, grade, title, FIDE ID,
+  reference FIDE rating, federation, and private birth date. Registration CSV/TSV
+  supports these columns; Club and Team remain separate.
+- **Reports → Team standings:** count the best two, four, another number (1–16),
+  or all members per team, separately in each section; inspect and export text/CSV.
+
+These are individual-event team totals, not team-versus-team matches. See the
+[BBP comparison](docs/BBP_COMPARISON.md) for implemented features and remaining gaps.

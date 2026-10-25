@@ -18,7 +18,7 @@ class SqliteEventRepository implements EventRepository {
       _db.execute('PRAGMA busy_timeout = 1000');
       final version =
           _db.select('PRAGMA user_version').first.values.first as int;
-      if (version > 2) {
+      if (version > 4) {
         throw const TournamentException(
           'This event was created by a newer Meow-Chess version.',
         );
@@ -68,7 +68,9 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
         _db.execute('UPDATE audit SET before_state=NULL');
       }
       _db.execute('CREATE INDEX IF NOT EXISTS audit_node ON audit(node)');
-      _db.execute('PRAGMA user_version = 2');
+      // Version 4 adds registration details. Older apps must refuse these files
+      // rather than silently discard details or mis-score version 3 policies.
+      _db.execute('PRAGMA user_version = 4');
       _db.execute('COMMIT');
     } catch (error) {
       _db.close();

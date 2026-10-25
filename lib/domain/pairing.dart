@@ -1,5 +1,5 @@
 import 'model.dart';
-import 'standings.dart';
+import 'swiss.dart';
 
 List<int> quadGroupSizes(int n) {
   if (n < 4) {
@@ -103,6 +103,8 @@ Round proposeRound(Event event, Section section, String Function() id) {
     return true;
   }).toList();
   final pairs = <(String, String)>[];
+  String savedInput = '';
+  final warnings = <String>[];
   final format = pairingFormat(section);
   if (format != Format.swiss) {
     final schedule = roundRobinSchedule(
@@ -145,110 +147,23 @@ Round proposeRound(Event event, Section section, String Function() id) {
       }
     }
   } else {
-    final table = standings(event, section, forPairing: true);
-    final scores = {for (final r in table) r.player.id: r.points};
-    available.sort((a, b) {
-      final score = scores[b]!.compareTo(scores[a]!);
-      if (score != 0) return score;
-      final rating = event.player(b).rating.compareTo(event.player(a).rating);
-      return rating != 0 ? rating : a.compareTo(b);
-    });
-    final hadBye = event.sections
-        .expand((s) => s.rounds)
-        .expand((r) => r.byes)
-        .where((b) => b.allocated)
-        .map((b) => b.player)
-        .toSet();
-    final opponents = <String, Set<String>>{};
-    // Balance is white minus black games; last is +1/-1 for the most recent color.
-    final colors = <String, int>{}, last = <String, (int, int)>{};
-    for (final s in event.sections) {
-      for (final r in s.rounds) {
-        for (final g in r.games) {
-          if (!g.outcome.played && g.pairingAssumption == null) continue;
-          opponents.putIfAbsent(g.white, () => {}).add(g.black);
-          opponents.putIfAbsent(g.black, () => {}).add(g.white);
-          colors[g.white] = (colors[g.white] ?? 0) + 1;
-          colors[g.black] = (colors[g.black] ?? 0) - 1;
-          for (final (pid, color) in [(g.white, 1), (g.black, -1)]) {
-            if ((last[pid]?.$1 ?? 0) <= r.number) last[pid] = (r.number, color);
-          }
-        }
-      }
-    }
-    // Equalize first, then alternate; round parity only breaks a complete tie.
-    bool firstTakesWhite(String a, String b) {
-      final balance = (colors[a] ?? 0).compareTo(colors[b] ?? 0);
-      if (balance != 0) return balance < 0;
-      final alternation = (last[a]?.$2 ?? 0).compareTo(last[b]?.$2 ?? 0);
-      if (alternation != 0) return alternation < 0;
-      return n.isOdd;
-    }
-
-    var nodes = 0;
-    List<(String, String)>? match(List<String> left) {
-      if (left.isEmpty) return [];
-      if (++nodes > 100000) {
-        throw const TournamentException(
-          'Pairing search limit reached. Use a reviewed manual pairing or adjust the field.',
-        );
-      }
-      final a = left.first;
-      final choices = left
-          .skip(1)
-          .where(
-            (b) =>
-                !(opponents[a]?.contains(b) ?? false) &&
-                !pairingRestricted(event, a, b),
-          )
-          .toList();
-      choices.sort((b, c) {
-        final distanceB = (scores[a]! - scores[b]!).abs(),
-            distanceC = (scores[a]! - scores[c]!).abs();
-        if (distanceB != distanceC) return distanceB.compareTo(distanceC);
-        final target = left.length ~/ 2;
-        return (left.indexOf(b) - target).abs().compareTo(
-          (left.indexOf(c) - target).abs(),
-        );
-      });
-      for (final b in choices) {
-        final rest = match(left.where((x) => x != a && x != b).toList());
-        if (rest != null) {
-          final aWhite = firstTakesWhite(a, b);
-          return [(aWhite ? a : b, aWhite ? b : a), ...rest];
-        }
-      }
-      return null;
-    }
-
-    List<(String, String)>? result;
-    if (available.length.isOdd) {
-      for (final candidate in available.reversed.where(
-        (p) => !hadBye.contains(p),
-      )) {
-        result = match(available.where((p) => p != candidate).toList());
-        if (result != null) {
-          byes.add(
-            ByeAward(
-              candidate,
-              2,
-              'Lowest eligible score with no prior allocated bye; feasible non-repeat pairing',
-              allocated: true,
-            ),
-          );
-          break;
-        }
-      }
-    } else {
-      result = match(available);
-    }
-    if (result == null) {
-      throw const TournamentException(
-        'No non-repeat pairing satisfies the opponent requests and bye limits. Review player requests or adjust the sections.',
+    final input = swissInput(event, section);
+    final result = pairSwiss(input);
+    savedInput = input.encode();
+    warnings.addAll(result.warnings);
+    pairs.addAll(result.pairs);
+    if (result.bye != null) {
+      byes.add(
+        ByeAward(
+          result.bye!,
+          section.scoring.bye,
+          'Lowest eligible score; prior byes, forfeits and half-bye requests checked',
+          allocated: true,
+        ),
       );
     }
-    pairs.addAll(result);
   }
+
   final games = <Game>[];
   for (final (index, pair) in pairs.indexed) {
     games.add(
@@ -275,13 +190,15 @@ Round proposeRound(Event event, Section section, String Function() id) {
     number: n,
     games: games,
     byes: byes,
+    pairingInput: savedInput,
+    warnings: warnings,
     note: format == Format.quad
         ? 'Recorded final-round color lot: $colorLot (derived from the randomly assigned section ID).'
         : '',
     policy: format == Format.quad
         ? 'quad-30G-seeded-v1'
         : format == Format.swiss
-        ? 'score-swiss-pilot-v1'
+        ? swissPolicy
         : 'circle-rr-v1',
   );
 }

@@ -7,6 +7,8 @@ import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/domain/pairing.dart';
 import 'package:meow_chess/domain/us_chess.dart';
 import 'package:meow_chess/infrastructure/dbf_export.dart';
+import 'package:meow_chess/infrastructure/dbf_validation.dart';
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
 /// Export checks compare dates against this day, not the machine clock.
@@ -130,6 +132,103 @@ Event withPlayer(Event e, int index, Player Function(Player) change) => e.copy(
 );
 
 void main() {
+  test(
+    'runtime decoder compares every field and result with the source event',
+    () {
+      final event = exportFixture();
+      final files = ratingPackage(event, today: today);
+      final report = validateRatingFiles(event, files);
+      expect(report['status'], 'passed');
+      expect(report['portalAcceptance'], 'not tested');
+      expect(report['entries'], 30);
+      final wrongName = event.copy(name: 'Another event');
+      expect(
+        () => validateRatingFiles(wrongName, files),
+        throwsA(isA<TournamentException>()),
+      );
+      final r = event.sections.first.rounds.first;
+      final wrongResult = event.copy(
+        sections: [
+          event.sections.first.copy(
+            rounds: [
+              r.copy(
+                games: [
+                  r.games.first.copy(outcome: Outcome.blackWin),
+                  ...r.games.skip(1),
+                ],
+              ),
+              ...event.sections.first.rounds.skip(1),
+            ],
+          ),
+          event.sections.last,
+        ],
+      );
+      expect(
+        () => validateRatingFiles(wrongResult, files),
+        throwsA(isA<TournamentException>()),
+      );
+    },
+  );
+
+  test('runtime decoder rejects corrupt descriptors, lengths and padding', () {
+    final event = exportFixture();
+    for (final mutate in <void Function(Uint8List)>[
+      (b) => b[32 + 16] = 4,
+      (b) => b[4] = 99,
+      (b) => b[b.length - 1] = 0,
+      (b) {
+        final start = ByteData.sublistView(b).getUint16(8, Endian.little) + 1;
+        b[start] = 32;
+        b[start + 1] = 50;
+      },
+    ]) {
+      final files = ratingPackage(event, today: today);
+      mutate(files['THEXPORT.DBF']!);
+      expect(
+        () => validateRatingFiles(event, files),
+        throwsA(isA<TournamentException>()),
+      );
+    }
+  });
+
+  test('missing player rounds and unrepresentable bye scores block export', () {
+    final e = exportFixture(), s = exportFixture().sections.first;
+    Event withRound(Round r) => e.copy(
+      sections: [
+        s.copy(rounds: [r, ...s.rounds.skip(1)]),
+        e.sections.last,
+      ],
+    );
+    final r = s.rounds.first;
+    expect(
+      ratingPreflight(withRound(r.copy(byes: [])), today: today).join(),
+      contains('exactly one game or explicit bye'),
+    );
+    expect(
+      ratingPreflight(
+        withRound(r.copy(byes: [ByeAward(r.byes.single.player, 6, 'Custom')])),
+        today: today,
+      ).join(),
+      contains('no matching bye code'),
+    );
+  });
+
+  test(
+    'nonstandard competition points do not change exported game results',
+    () {
+      final e = exportFixture();
+      final altered = e.copy(
+        sections: [
+          for (final s in e.sections)
+            s.copy(scoring: const Scoring(win: 6, draw: 2)),
+        ],
+      );
+      expect(
+        ratingPackage(altered, today: today)['TDEXPORT.DBF'],
+        ratingPackage(e, today: today)['TDEXPORT.DBF'],
+      );
+    },
+  );
   test('fixture passes every check', () {
     final event = exportFixture();
     validateEvent(event);
@@ -167,8 +266,8 @@ void main() {
       ('H_END_DATE', 'D', 8), ('H_AFF_ID', 'C', 8), ('H_CITY', 'C', 21),
       ('H_STATE', 'C', 2), ('H_ZIPCODE', 'C', 10), ('H_COUNTRY', 'C', 21),
       ('H_SENDCROS', 'C', 1), ('H_CTD_ID', 'C', 8), ('H_ATD_ID', 'C', 8),
-      // 254, not the 255 in 2C: the dBase III limit for character fields.
-      ('H_OTHER_TD', 'C', 254),
+      // Match the published federation width, including the optional field.
+      ('H_OTHER_TD', 'C', 255),
     ]);
     expect(sFields.map((f) => f.$1), [
       'S_EVENT_ID',
@@ -585,14 +684,21 @@ void main() {
     ]);
     expect(paths.toSet(), hasLength(8));
     for (final (i, path) in paths.indexed) {
-      expect(Directory(path).listSync(), hasLength(4));
+      expect(Directory(path).listSync(), hasLength(5));
       final manifest =
           jsonDecode(File(p.join(path, 'manifest.json')).readAsStringSync())
               as Map;
       expect(manifest['revision'], i);
       expect(manifest['ratingSystem'], 'D');
+      expect(manifest['validation']['status'], 'passed');
+      expect(manifest['validation']['portalAcceptance'], 'not tested');
+      expect(File(p.join(path, 'validation.json')).existsSync(), true);
       for (final entry in ratingPackage(event).entries) {
         expect(File(p.join(path, entry.key)).readAsBytesSync(), entry.value);
+        expect(
+          manifest['sha256'][entry.key],
+          sha256.convert(entry.value).toString(),
+        );
       }
     }
     expect(

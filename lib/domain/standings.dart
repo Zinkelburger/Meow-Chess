@@ -47,8 +47,8 @@ List<Standing> standings(
         final outcome = forPairing && !g.outcome.resolved
             ? g.pairingAssumption ?? g.outcome
             : g.outcome;
-        scores[g.white] = scores[g.white]! + outcome.whiteScore;
-        scores[g.black] = scores[g.black]! + outcome.blackScore;
+        scores[g.white] = scores[g.white]! + s.scoring.points(outcome, true);
+        scores[g.black] = scores[g.black]! + s.scoring.points(outcome, false);
       }
     }
   }
@@ -69,11 +69,23 @@ List<Standing> standings(
     }
     return Standing(event.player(id), scores[id]!, bh, sb, played);
   }).toList();
+  List<int> tieValues(Standing r) => switch (section.tiebreakOrder) {
+    TiebreakOrder.buchholzSonneborn => [r.buchholz, r.sonneborn],
+    TiebreakOrder.sonnebornBuchholz => [r.sonneborn, r.buchholz],
+    TiebreakOrder.buchholz => [r.buchholz],
+    TiebreakOrder.scoreOnly => [],
+  };
+  bool tied(Standing a, Standing b) {
+    final av = tieValues(a), bv = tieValues(b);
+    return a.points == b.points &&
+        List.generate(av.length, (i) => av[i] == bv[i]).every((v) => v);
+  }
+
   rows.sort((a, b) {
+    final av = tieValues(a), bv = tieValues(b);
     for (final c in [
       b.points.compareTo(a.points),
-      b.buchholz.compareTo(a.buchholz),
-      b.sonneborn.compareTo(a.sonneborn),
+      for (var i = 0; i < av.length; i++) bv[i].compareTo(av[i]),
       a.player.name.compareTo(b.player.name),
       a.player.id.compareTo(b.player.id),
     ]) {
@@ -85,10 +97,7 @@ List<Standing> standings(
   final ranked = <Standing>[];
   for (var i = 0; i < rows.length; i++) {
     final row = rows[i];
-    if (i > 0 &&
-        (row.points != rows[i - 1].points ||
-            row.buchholz != rows[i - 1].buchholz ||
-            row.sonneborn != rows[i - 1].sonneborn)) {
+    if (i > 0 && !tied(row, rows[i - 1])) {
       rank = i + 1;
     }
     ranked.add(

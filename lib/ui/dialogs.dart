@@ -139,6 +139,7 @@ class _FieldsDialogState extends State<_FieldsDialog> {
                   padding: const EdgeInsets.only(bottom: 14),
                   child: f.options != null
                       ? DropdownButtonFormField<String>(
+                          isExpanded: true,
                           key: ValueKey('field-${f.key}'),
                           initialValue:
                               f.options!.containsKey(controllers[f.key]!.text)
