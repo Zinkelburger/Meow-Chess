@@ -608,6 +608,8 @@ class Section {
     this.doubleGames = false,
     List<Round> rounds = const [],
     this.ratingCeiling = 0,
+    this.ratingFloor = 0,
+    Map<String, String> rangeExceptions = const {},
     this.timeControl = '',
     this.sideGames = false,
     List<List<int>> quadPairings = const [],
@@ -629,6 +631,7 @@ class Section {
     this.pabPoints = 2,
     this.bakuLast = '',
   }) : fideOrder = List.unmodifiable(fideOrder),
+       rangeExceptions = Map.unmodifiable(rangeExceptions),
        players = List.unmodifiable(players),
        holland = Map.unmodifiable(holland),
        bracket = Map.unmodifiable(bracket),
@@ -729,7 +732,16 @@ class Section {
       timeControl.isEmpty ? event.timeControl : timeControl;
   final List<String> players;
   final Format format;
-  final int plannedRounds, boardStart, ratingCeiling;
+  final int plannedRounds, boardStart;
+
+  /// Rule 28H: the announced rating range. Entrants rated at or above
+  /// [ratingCeiling] or below [ratingFloor] do not belong; zero is no
+  /// limit. Unrated players are below any floor and under any ceiling.
+  final int ratingCeiling, ratingFloor;
+
+  /// Players the director allowed in despite the rating range (K03), by ID,
+  /// with the reason they recorded.
+  final Map<String, String> rangeExceptions;
   final bool doubleGames;
   final List<Round> rounds;
 
@@ -755,6 +767,8 @@ class Section {
     bool? doubleGames,
     List<Round>? rounds,
     int? ratingCeiling,
+    int? ratingFloor,
+    Map<String, String>? rangeExceptions,
     String? timeControl,
     bool? sideGames,
     List<List<int>>? quadPairings,
@@ -785,6 +799,8 @@ class Section {
     doubleGames: doubleGames ?? this.doubleGames,
     rounds: rounds ?? this.rounds,
     ratingCeiling: ratingCeiling ?? this.ratingCeiling,
+    ratingFloor: ratingFloor ?? this.ratingFloor,
+    rangeExceptions: rangeExceptions ?? this.rangeExceptions,
     timeControl: timeControl ?? this.timeControl,
     sideGames: sideGames ?? this.sideGames,
     quadPairings: quadPairings ?? this.quadPairings,
@@ -816,6 +832,8 @@ class Section {
     'doubleGames': doubleGames,
     'rounds': rounds.map((r) => r.toJson()).toList(),
     'ratingCeiling': ratingCeiling,
+    if (ratingFloor > 0) 'ratingFloor': ratingFloor,
+    if (rangeExceptions.isNotEmpty) 'rangeExceptions': rangeExceptions,
     'timeControl': timeControl,
     'sideGames': sideGames,
     if (quadPairings.isNotEmpty) 'quadPairings': quadPairings,
@@ -847,6 +865,8 @@ class Section {
     doubleGames: j['doubleGames'],
     rounds: (j['rounds'] as List).map((r) => Round.fromJson(r)).toList(),
     ratingCeiling: j['ratingCeiling'] ?? 0,
+    ratingFloor: j['ratingFloor'] ?? 0,
+    rangeExceptions: Map<String, String>.from(j['rangeExceptions'] ?? const {}),
     timeControl: j['timeControl'] ?? '',
     sideGames: j['sideGames'] ?? false,
     quadPairings: [

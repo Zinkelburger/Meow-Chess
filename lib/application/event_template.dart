@@ -49,6 +49,7 @@ Section _sectionTemplate(Section s, String id) => Section(
   boardStart: s.boardStart,
   doubleGames: s.doubleGames,
   ratingCeiling: s.ratingCeiling,
+  ratingFloor: s.ratingFloor,
   timeControl: s.timeControl,
   sideGames: s.sideGames,
   accelerated: s.accelerated,

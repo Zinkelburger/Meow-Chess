@@ -432,6 +432,14 @@ List<String> describeChanges(
         'first board ${value(o.boardStart, s.boardStart)}',
       if (o.ratingCeiling != s.ratingCeiling)
         'rating ceiling ${value(o.ratingCeiling, s.ratingCeiling)}',
+      if (o.ratingFloor != s.ratingFloor)
+        'lowest rating ${value(o.ratingFloor, s.ratingFloor)}',
+      for (final id in s.rangeExceptions.keys)
+        if (!o.rangeExceptions.containsKey(id))
+          'allowed ${_name(before, after, id)} outside the rating range: ${s.rangeExceptions[id]}',
+      for (final id in o.rangeExceptions.keys)
+        if (!s.rangeExceptions.containsKey(id))
+          'rating-range exception for ${_name(before, after, id)} cleared',
       if (o.timeControl != s.timeControl)
         'time control ${value(_short(o.timeControl), _short(s.timeControl))}',
       if (o.sideGames != s.sideGames)

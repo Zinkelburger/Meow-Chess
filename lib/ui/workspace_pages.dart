@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../domain/eligibility.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import 'theme.dart' show controlHeight;
@@ -272,6 +273,17 @@ class PostControl extends StatelessWidget {
     why = '${held.length} sections wait for ${results(n)}.';
   }
   if (ready.isEmpty) return (label: null, why: why, complete: false);
+  // K03: flagged before round 1, never a reason to hold pairings back.
+  final outside = ready
+      .where((s) => s.rounds.isEmpty)
+      .fold(0, (n, s) => n + sectionRangeProblems(e, s).length);
+  if (outside > 0) {
+    why = [
+      ?why,
+      '$outside ${outside == 1 ? 'player is' : 'players are'} outside '
+          'their section’s rating range.',
+    ].join(' ');
+  }
   final numbers = ready.map((s) => s.rounds.length + 1).toSet();
   final round = numbers.length == 1
       ? 'Create pairings · Round ${numbers.single}'

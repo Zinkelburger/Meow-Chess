@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../application/tournament_controller.dart';
 import 'rating_refresh.dart';
 import 'rating_review_panel.dart';
+import '../domain/eligibility.dart';
 import '../domain/fide.dart';
 import '../domain/model.dart';
 import 'membership_style.dart';
@@ -1830,36 +1831,62 @@ class _PlayersViewState extends State<PlayersView> {
                       child: cell(_number, number, muted),
                     ),
                     Expanded(
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: p.name,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: p.withdrawn
-                                    ? colors.onSurfaceVariant
-                                    : null,
-                                decoration: p.withdrawn
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
-                            ),
-                            if (p.team.isNotEmpty)
+                      child: _rangeTooltip(
+                        context,
+                        p,
+                        s,
+                        Text.rich(
+                          TextSpan(
+                            children: [
                               TextSpan(
-                                text: '  · ${p.team}',
-                                style: muted.copyWith(fontSize: 12),
+                                text: p.name,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: p.withdrawn
+                                      ? colors.onSurfaceVariant
+                                      : null,
+                                  decoration: p.withdrawn
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
                               ),
-                            if (p.withdrawn)
-                              TextSpan(
-                                text: '  withdrawn',
-                                style: muted.copyWith(fontSize: 12),
-                              ),
-                          ],
+                              if (p.team.isNotEmpty)
+                                TextSpan(
+                                  text: '  · ${p.team}',
+                                  style: muted.copyWith(fontSize: 12),
+                                ),
+                              if (p.withdrawn)
+                                TextSpan(
+                                  text: '  withdrawn',
+                                  style: muted.copyWith(fontSize: 12),
+                                ),
+                              if (!widget.standingsOnly &&
+                                  s != null &&
+                                  ratingRangeProblem(p, s) != null) ...[
+                                const TextSpan(text: '  '),
+                                WidgetSpan(
+                                  alignment: PlaceholderAlignment.middle,
+                                  child: Icon(
+                                    Icons.error_outline,
+                                    size: 16,
+                                    color: attentionColor(colors),
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: ' outside the rating range',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: attentionColor(colors),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (showsIds)
@@ -2069,6 +2096,23 @@ class _PlayersViewState extends State<PlayersView> {
           ],
         ),
       ),
+    );
+  }
+
+  /// The name cell, explained when [p] is outside [s]'s rating range.
+  Widget _rangeTooltip(
+    BuildContext context,
+    Player p,
+    Section? s,
+    Widget child,
+  ) {
+    final problem = widget.standingsOnly || s == null
+        ? null
+        : ratingRangeProblem(p, s);
+    if (problem == null) return child;
+    return Tooltip(
+      message: '$problem Open the player to move them or allow them in.',
+      child: child,
     );
   }
 

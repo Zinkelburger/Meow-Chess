@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
+import '../domain/eligibility.dart';
 import '../domain/model.dart';
 import 'dialogs.dart';
+import 'membership_style.dart' show attentionColor;
 import 'panels.dart';
 import 'player_format.dart';
 import 'side_panel.dart';
@@ -440,6 +442,19 @@ class MoveFields extends StatelessWidget {
           options: [for (final s in destinations) SelectOption(s.id, s.name)],
           onChanged: onTarget,
         ),
+        if (to case final s?)
+          if (ratingRangeProblem(event.player(playerId), s) case final problem?)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                problem,
+                key: const ValueKey('move-range'),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: attentionColor(Theme.of(context).colorScheme),
+                ),
+              ),
+            ),
         if (swapping) ...[
           const SizedBox(height: 12),
           PlainSelect<String?>(

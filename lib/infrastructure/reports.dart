@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../domain/bye_policy.dart';
+import '../domain/eligibility.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import '../domain/prizes.dart';
@@ -1152,7 +1153,8 @@ Future<Uint8List> conditionsPdf(
               'Table: ${s.rrTable}',
             if (s.doubleCycle) 'Double round robin, second cycle (30F)',
             if (s.doubleGames) 'Both colors each round',
-            if (s.ratingCeiling > 0) 'Under ${s.ratingCeiling}',
+            if (ratingRangeText(s) case final range when range.isNotEmpty)
+              'Rated $range',
           ].join('; '),
         ],
     ],

@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../domain/bye_policy.dart';
+import '../domain/eligibility.dart';
 import '../domain/fide.dart';
 import '../domain/fide_pairing.dart' show fideDutchPolicy;
 import '../domain/history.dart';

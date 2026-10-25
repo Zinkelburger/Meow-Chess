@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../infrastructure/roster_import.dart';
+import '../domain/eligibility.dart';
 import '../domain/model.dart';
 import '../domain/section_placement.dart';
 import 'membership_style.dart';
@@ -587,17 +588,21 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
     );
   }
 
-  /// The section a new player's row lands in, or why it lands in none.
-  ({String text, bool attention})? placement(ImportRow r) {
+  /// The section a new player's row lands in, or why it lands in none;
+  /// [why] explains a placement that needs the TD's attention.
+  ({String text, String? why})? placement(ImportRow r) {
     final p = r.player;
     if (p == null) return null;
-    if (plan.skipped[p.id] case final why?) return (text: why, attention: true);
+    if (plan.skipped[p.id] case final why?) return (text: why, why: why);
     if (plan.joins[p.id] case final id?) {
       final s = widget.controller.event!.sections.firstWhere((s) => s.id == id);
-      return (text: s.name, attention: false);
+      final problem = ratingRangeProblem(p, s);
+      return problem == null
+          ? (text: s.name, why: null)
+          : (text: '${s.name} · outside its rating range', why: problem);
     }
     if (plan.createdFor(p.id) case final name?) {
-      return (text: '$name (new)', attention: false);
+      return (text: '$name (new)', why: null);
     }
     return null;
   }
@@ -665,9 +670,9 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
           color: skipped != null ? colors.onSurfaceVariant : colors.onSurface,
         ),
       );
-      if (placed == null || !placed.attention) return text;
+      if (placed?.why == null) return text;
       return Tooltip(
-        message: placed.text,
+        message: placed!.why,
         child: Row(
           children: [
             Icon(Icons.info_outline, size: 16, color: attentionColor(colors)),

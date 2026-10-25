@@ -67,13 +67,50 @@ mixin _RosterCommands on _CommandContext {
     final section = e.sectionOf(player.id);
     if (previous != null &&
         section != null &&
-        section.ratingCeiling > 0 &&
-        player.effectivePairingRating >= section.ratingCeiling &&
         previous.effectivePairingRating != player.effectivePairingRating) {
-      playerNotice =
-          'Rating ${player.effectivePairingRating} is at or above the ${section.name} ceiling of ${section.ratingCeiling} (rule 28H). '
-          'Move the player to an appropriate section, with half-point byes for rounds missed (28H2), or remove them (28H1).';
+      if (ratingRangeProblem(player, section) case final problem?) {
+        playerNotice =
+            '$problem (rule 28H) '
+            'Move the player to an appropriate section, with half-point byes for rounds missed (28H2), or remove them (28H1).';
+      }
     }
+  }
+
+  /// K03: lets [playerId] play in their section although their rating is
+  /// outside its range, recording [reason]. An empty [reason] takes the
+  /// exception back, so the player is flagged again.
+  void allowOutsideRange(String playerId, String reason) {
+    final e = event!, p = e.player(playerId), s = e.sectionOf(playerId);
+    if (s == null) {
+      throw const TournamentException('Put the player in a section first.');
+    }
+    final why = reason.trim();
+    if (why.isNotEmpty &&
+        ratingRangeProblem(p, s.copy(rangeExceptions: const {})) == null) {
+      throw TournamentException(
+        '${p.name} is within the ${s.name} rating range already.',
+      );
+    }
+    change(
+      why.isEmpty
+          ? 'Flag ${p.name} outside the ${s.name} rating range'
+          : 'Allow ${p.name} in ${s.name}',
+      e.copy(
+        sections: [
+          for (final x in e.sections)
+            x.id == s.id
+                ? x.copy(
+                    rangeExceptions: {
+                      for (final MapEntry(:key, :value)
+                          in x.rangeExceptions.entries)
+                        if (key != playerId) key: value,
+                      if (why.isNotEmpty) playerId: why,
+                    },
+                  )
+                : x,
+        ],
+      ),
+    );
   }
 
   /// Team membership is a roster label; it does not imply a pairing restriction.

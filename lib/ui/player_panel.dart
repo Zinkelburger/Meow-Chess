@@ -9,6 +9,7 @@ import '../domain/model.dart';
 import '../domain/membership.dart';
 import 'membership_style.dart';
 import '../domain/bye_policy.dart';
+import '../domain/eligibility.dart';
 import '../domain/fide.dart';
 import '../domain/us_chess.dart';
 import 'drafts.dart';
@@ -199,6 +200,10 @@ class PlayerPanelState extends State<PlayerPanel> {
   }
 
   final reason = TextEditingController();
+
+  /// Why the TD allows this player in although their rating is outside the
+  /// section's range.
+  final allowReason = TextEditingController();
   late FormDraft draft;
   final joinDraft = TextEditingController();
   final moveTarget = TextEditingController();
@@ -389,6 +394,7 @@ class PlayerPanelState extends State<PlayerPanel> {
       t.dispose();
     }
     reason.dispose();
+    allowReason.dispose();
     super.dispose();
   }
 
@@ -534,6 +540,105 @@ class PlayerPanelState extends State<PlayerPanel> {
       moveRevision = c.event!.revision;
       swapWith = null;
     });
+  }
+
+  /// Why the walk-up being typed would be outside [s]'s rating range, or
+  /// null; nothing until a rating is entered.
+  String? walkUpRangeProblem(Section s) {
+    final typed = text['rating']!.text.trim();
+    if (typed.isEmpty) return null;
+    final rating = parseRating(typed);
+    if (rating == null) return null;
+    return ratingRangeProblem(
+      Player(id: '', name: text['name']!.text.trim(), rating: rating),
+      s,
+    );
+  }
+
+  /// K03: why [p] is outside [s]'s rating range, with Allow and a reason;
+  /// or the exception already recorded, which Flag again takes back.
+  List<Widget> rangeNotice(BuildContext context, Player p, Section s) {
+    final colors = Theme.of(context).colorScheme;
+    final attention = attentionColor(colors);
+    if (s.rangeExceptions[p.id] case final why?) {
+      return [
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              'Allowed in ${s.name} outside its rating range: $why',
+              key: const ValueKey('panel-range-allowed'),
+              style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
+            ),
+            TextButton(
+              key: const ValueKey('panel-range-flag'),
+              onPressed: () => attempt(() => c.allowOutsideRange(p.id, '')),
+              child: const Text('Flag again'),
+            ),
+          ],
+        ),
+      ];
+    }
+    final problem = ratingRangeProblem(p, s);
+    if (problem == null) return const [];
+    void allow() {
+      if (allowReason.text.trim().isEmpty) {
+        setState(() => error = 'Record why ${p.name} may play in ${s.name}.');
+        return;
+      }
+      if (attempt(() => c.allowOutsideRange(p.id, allowReason.text))) {
+        allowReason.clear();
+      }
+    }
+
+    return [
+      const SizedBox(height: 8),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(Icons.error_outline, size: 16, color: attention),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              '$problem Move them, or allow them in with a reason.',
+              key: const ValueKey('panel-range-problem'),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: attention,
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: TextField(
+              key: const ValueKey('panel-range-reason'),
+              controller: allowReason,
+              decoration: InputDecoration(
+                labelText: 'Reason to allow in ${s.name}',
+                isDense: true,
+              ),
+              onSubmitted: (_) => allow(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            key: const ValueKey('panel-range-allow'),
+            onPressed: allow,
+            child: const Text('Allow'),
+          ),
+        ],
+      ),
+    ];
   }
 
   void confirmMove() {
@@ -841,7 +946,7 @@ class PlayerPanelState extends State<PlayerPanel> {
           field('name'),
           field('memberId'),
           field('rating'),
-          if (c.event!.sections.isNotEmpty)
+          if (c.event!.sections.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 12),
               child: PlainSelect<String?>(
@@ -850,7 +955,13 @@ class PlayerPanelState extends State<PlayerPanel> {
                 label: 'Section',
                 options: [
                   const SelectOption(null, 'Not in a section yet'),
-                  for (final s in c.event!.sections) SelectOption(s.id, s.name),
+                  for (final s in c.event!.sections)
+                    SelectOption(
+                      s.id,
+                      walkUpRangeProblem(s) == null
+                          ? s.name
+                          : '${s.name} · outside its rating range',
+                    ),
                 ],
                 onChanged: (v) => setState(() {
                   joinSection = v;
@@ -858,6 +969,18 @@ class PlayerPanelState extends State<PlayerPanel> {
                 }),
               ),
             ),
+            if (c.event!.sections.where((s) => s.id == joinSection).firstOrNull
+                case final s? when walkUpRangeProblem(s) != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  '${walkUpRangeProblem(s)} You can still add them and '
+                  'allow them in from their card.',
+                  key: const ValueKey('panel-join-range'),
+                  style: TextStyle(fontSize: 13, color: attentionColor(colors)),
+                ),
+              ),
+          ],
           group(
             'more',
             'More details',
@@ -988,6 +1111,7 @@ class PlayerPanelState extends State<PlayerPanel> {
             if (p.withdrawn) const StatusPill('Withdrawn'),
           ],
         ),
+        if (s != null) ...rangeNotice(context, p, s),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/bye_policy.dart';
+import '../domain/eligibility.dart';
 import '../domain/fide.dart';
 import '../domain/fixed_schedule.dart';
 import '../domain/model.dart';
@@ -73,6 +74,7 @@ Map<String, String> sectionValues(Section? section) {
     'ratingCeiling': s == null || s.ratingCeiling == 0
         ? ''
         : '${s.ratingCeiling}',
+    'ratingFloor': s == null || s.ratingFloor == 0 ? '' : '${s.ratingFloor}',
     'doubleGames': '${s?.doubleGames ?? false}',
     'sideGames': '${s?.sideGames ?? false}',
     'rrTable': s?.rrTable ?? '',
@@ -121,6 +123,7 @@ Map<String, String> sectionLabels() => {
   'board': 'First board',
   'timeControl': 'Time control',
   'ratingCeiling': 'Rating cap',
+  'ratingFloor': 'Lowest rating',
   'doubleGames': 'Games per round',
   'sideGames': 'Side games',
   'rrTable': 'Round-robin table',
@@ -161,6 +164,7 @@ Map<String, String> sectionLabels() => {
   int rounds,
   int? board,
   int ratingCeiling,
+  int ratingFloor,
   String timeControl,
   Json byeRules,
 })
@@ -194,6 +198,20 @@ readSection(
     throw const SectionFieldProblem(
       'ratingCeiling',
       'The rating cap is a rating, like 1600, or blank for none.',
+    );
+  }
+  final floorText = v['ratingFloor']?.trim() ?? '';
+  final floor = floorText.isEmpty ? 0 : int.tryParse(floorText);
+  if (floor == null || floor < 0) {
+    throw const SectionFieldProblem(
+      'ratingFloor',
+      'The lowest rating is a rating, like 800, or blank for none.',
+    );
+  }
+  if (cap > 0 && floor >= cap) {
+    throw SectionFieldProblem(
+      'ratingFloor',
+      'The lowest rating must be under the cap of $cap.',
     );
   }
   final control = v['timeControl']?.trim() ?? '';
@@ -266,6 +284,7 @@ readSection(
     rounds: rounds,
     board: board,
     ratingCeiling: cap,
+    ratingFloor: floor,
     timeControl: control,
     byeRules: policy.toJson(),
   );
@@ -309,6 +328,7 @@ Section applySectionValues(
     plannedRounds: n.rounds,
     boardStart: n.board ?? section.boardStart,
     ratingCeiling: n.ratingCeiling,
+    ratingFloor: n.ratingFloor,
     timeControl: n.timeControl,
     byeRules: n.byeRules,
   );
@@ -435,7 +455,12 @@ String? sectionGroupOf(String key) {
     return 'byes';
   }
   if (key == 'teamMethod' || key == 'teamCounting') return 'teams';
-  if (const ['board', 'ratingCeiling', 'sideGames'].contains(key)) {
+  if (const [
+    'board',
+    'ratingCeiling',
+    'ratingFloor',
+    'sideGames',
+  ].contains(key)) {
     return 'players';
   }
   if (const [
@@ -661,10 +686,20 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
 
   String get playersSummary {
     final board = value('board').trim(), cap = value('ratingCeiling').trim();
+    final floor = value('ratingFloor').trim();
+    final range = ratingRangeText(
+      Section(
+        id: '',
+        name: '',
+        players: const [],
+        ratingCeiling: int.tryParse(cap) ?? 0,
+        ratingFloor: int.tryParse(floor) ?? 0,
+      ),
+    );
     final parts = [
       if (flag('sideGames') && format != Format.quad) 'Side games',
       if (board.isNotEmpty) 'Boards from $board',
-      if (cap.isNotEmpty) 'Under $cap',
+      if (range.isNotEmpty) 'Rated $range',
     ];
     // With no first board set, the section takes the next free boards.
     return parts.isEmpty ? 'Next free boards' : parts.join(' · ');
@@ -1621,11 +1656,21 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
       ),
     ),
     Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: textField(
+        'ratingFloor',
+        'Lowest rating (blank = none)',
+        helper: 'Unrated players are below any lowest rating.',
+      ),
+    ),
+    Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: textField(
         'ratingCeiling',
         'Rating cap: Under (blank = open)',
-        helper: 'Entrants rated at or above this are refused.',
+        helper:
+            'Players outside the range are flagged on the Players page; '
+            'you can allow one in with a reason.',
       ),
     ),
   ];

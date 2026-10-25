@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../application/tournament_controller.dart';
 import '../application/failures.dart';
 import '../application/diagnostics.dart';
+import '../domain/eligibility.dart';
 import '../domain/model.dart';
 import '../domain/section_placement.dart';
 import '../infrastructure/roster_import.dart';
@@ -163,7 +164,9 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
     final id = item.existing?.id ?? item.incoming.id;
     if (plan.skipped[id] case final why?) return '$why\n';
     if (plan.joins[id] case final sectionId?) {
-      return 'Section: ${c.event!.sections.firstWhere((s) => s.id == sectionId).name}\n';
+      final s = c.event!.sections.firstWhere((s) => s.id == sectionId);
+      final problem = ratingRangeProblem(item.incoming, s);
+      return 'Section: ${s.name}\n${problem == null ? '' : '$problem\n'}';
     }
     if (plan.createdFor(id) case final name?) return 'Section: $name (new)\n';
     return null;
