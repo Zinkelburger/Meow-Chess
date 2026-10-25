@@ -214,6 +214,9 @@ final _prizeTable = _object({
         'points': _integer(0),
         'cents': _integer(0),
         'trophy': _bool,
+        'item': _string(
+          'The indivisible award, such as Trophy or Medal; naming one makes trophy true.',
+        ),
         'guaranteed': _bool,
         'eligible': _array(_string('Player ID')),
       },

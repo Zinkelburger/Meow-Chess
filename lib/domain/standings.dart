@@ -82,11 +82,15 @@ List<Standing> rankStandings(List<Standing> rows, {required bool tiebreaks}) {
 /// [tiebreaks] replaces the posted methods, for a caller that needs other
 /// values per player (team tie-breaks total the counting players' values,
 /// Scholastic Regulations 12.3.3); rows then rank by those methods.
+///
+/// [byTiebreaks] orders tied rows by the tie-breaks even when the event
+/// shares places, as an indivisible prize needs (rule 34A).
 List<Standing> standings(
   Event event,
   Section section, {
   bool forPairing = false,
   bool forPrizes = false,
+  bool byTiebreaks = false,
   List<TiebreakMethod>? tiebreaks,
 }) {
   final excluded = <String>{};
@@ -196,10 +200,11 @@ List<Standing> standings(
   }).toList();
   // C.07 2.1: FIDE ranks tied participants by the announced tie-breaks.
   final ranked = event.useTiebreaks || forPairing || section.fideRated;
+  final ordered = ranked || byTiebreaks;
   rows.sort((a, b) {
     for (final c in [
       b.points.compareTo(a.points),
-      if (ranked)
+      if (ordered)
         for (var i = 0; i < methods.length; i++)
           b.tiebreaks[i].value.compareTo(a.tiebreaks[i].value),
       a.player.name.compareTo(b.player.name),

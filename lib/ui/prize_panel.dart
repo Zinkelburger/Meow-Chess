@@ -94,6 +94,59 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
     (t) => t.copy(list: [for (final p in t.list) p.id == id ? edit(p) : p]),
   );
 
+  /// Sections other than this one that have no prizes yet.
+  List<Section> get unprized => [
+    for (final x in widget.controller.event!.sections)
+      if (x.id != widget.sectionId &&
+          !x.sideGames &&
+          PrizeTable.fromJson(x.prizes).list.isEmpty)
+        x,
+  ];
+
+  /// Gives every section without prizes this section's prize list and
+  /// terms, as one undoable change. Sections with prizes keep theirs.
+  void copyToUnprized() {
+    final c = widget.controller, s = section;
+    if (s == null) return;
+    final table = PrizeTable.fromJson(s.prizes);
+    final targets = {for (final x in unprized) x.id};
+    if (targets.isEmpty || table.isEmpty) return;
+    try {
+      c.change(
+        'Copy ${s.name} prizes to ${targets.length} '
+        '${targets.length == 1 ? 'section' : 'sections'}',
+        c.event!.copy(
+          sections: [
+            for (final x in c.event!.sections)
+              if (targets.contains(x.id))
+                x.copy(
+                  prizes: {
+                    ...x.prizes,
+                    ...table
+                        .copy(
+                          list: [
+                            for (final p in table.individual.list)
+                              Prize.fromJson({
+                                ...p.toJson(),
+                                'id': c.newId(),
+                              }).copy(eligible: const []),
+                          ],
+                        )
+                        .toJson()
+                      ..remove('teams'),
+                  },
+                )
+              else
+                x,
+          ],
+        ),
+      );
+      if (error != null && mounted) setState(() => error = null);
+    } catch (e) {
+      if (mounted) setState(() => error = plainMessage(e));
+    }
+  }
+
   void addPrize() {
     final s = section;
     if (s == null) return;
@@ -120,7 +173,8 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
       children: [
         Text(
           'The prizes as announced. Tied cash prizes pool and split; '
-          'trophies follow the standings order. Changes apply at once.',
+          'a trophy, medal or other award goes by tie-breaks. Changes apply '
+          'at once.',
           style: muted,
         ),
         const SizedBox(height: 16),
@@ -175,14 +229,27 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
           ),
         for (final p in table.list) _prizeRow(context, s, table, p),
         const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            key: const ValueKey('add-prize'),
-            onPressed: addPrize,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add prize'),
-          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              key: const ValueKey('add-prize'),
+              onPressed: addPrize,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add prize'),
+            ),
+            if (!table.isEmpty && unprized.isNotEmpty)
+              OutlinedButton(
+                key: const ValueKey('copy-prizes'),
+                onPressed: copyToUnprized,
+                child: Text(
+                  'Copy to ${unprized.length} '
+                  '${unprized.length == 1 ? 'section' : 'sections'} '
+                  'without prizes',
+                ),
+              ),
+          ],
         ),
         if (error != null)
           Padding(
@@ -363,17 +430,18 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
                       editPrize(p.id, (x) => x.copy(cents: _cents(v, 'Cash'))),
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               Expanded(
-                child: CheckboxListTile(
-                  key: ValueKey('prize-trophy-${p.id}'),
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: const Text('Trophy'),
-                  value: p.trophy,
-                  onChanged: (v) =>
-                      editPrize(p.id, (x) => x.copy(trophy: v ?? false)),
+                child: _CommitField(
+                  key: ValueKey('prize-award-${p.id}'),
+                  label: 'Award (blank = cash only)',
+                  value: p.award,
+                  onCommit: (v) => editPrize(
+                    p.id,
+                    (x) => v.trim().isEmpty
+                        ? x.copy(trophy: false)
+                        : x.copy(item: v.trim()),
+                  ),
                 ),
               ),
             ],

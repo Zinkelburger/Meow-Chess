@@ -7,14 +7,15 @@ import '../application/failures.dart';
 import '../application/member_lookup_batch.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
+import '../domain/prizes.dart' show PrizeTable;
 import '../domain/us_chess.dart';
 import '../domain/fide.dart';
 import '../domain/fixed_schedule.dart';
 import '../infrastructure/dbf_export.dart';
 import '../infrastructure/fide_export.dart';
 import 'dialogs.dart';
+import 'awards_view.dart';
 import 'panels.dart';
-import 'prize_panel.dart';
 import '../infrastructure/reports.dart' show ReportKind;
 import 'drafts.dart';
 import 'event_panel.dart';
@@ -246,6 +247,10 @@ class _ReportsViewState extends State<ReportsView> {
     final e = controller.event!, all = ratingIssues(e);
     final fide = hasFideSection(e);
     final usChess = !fide || reportedSections(e).isNotEmpty;
+    final awardsFirst = e.sections.any(
+      (s) =>
+          s.rounds.isNotEmpty && PrizeTable.fromJson(s.prizes).list.isNotEmpty,
+    );
     final issues = [
           for (final i in all)
             if (i.blocking) i,
@@ -264,6 +269,12 @@ class _ReportsViewState extends State<ReportsView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Once play starts, who wins what is the end of the day's
+              // first question; before then it is prize setup.
+              if (awardsFirst) ...[
+                AwardsBoard(controller: controller),
+                const SizedBox(height: 48),
+              ],
               // A FIDE-only event has no US Chess report to make.
               if (usChess) ...[
                 _header(context, e, issues),
@@ -295,8 +306,10 @@ class _ReportsViewState extends State<ReportsView> {
                 const SizedBox(height: 48),
                 _fideReport(context, e),
               ],
-              const SizedBox(height: 32),
-              _prizes(context, e),
+              if (!awardsFirst) ...[
+                const SizedBox(height: 32),
+                AwardsBoard(controller: controller),
+              ],
               const SizedBox(height: 32),
               _afterUpload(context, e),
             ],
@@ -865,52 +878,6 @@ class _ReportsViewState extends State<ReportsView> {
                     ),
                   ],
                 ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  /// Rules 32–33: each section's prize table and the printed allocation.
-  Widget _prizes(BuildContext context, Event e) {
-    final dock = Dock.maybeOf(context);
-    final sections = e.sections.where((s) => s.players.isNotEmpty).toList();
-    return Column(
-      key: const ValueKey('prizes-summary'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Prizes', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            for (final s in sections)
-              TextButton(
-                key: ValueKey('edit-prizes-${s.id}'),
-                onPressed: dock == null
-                    ? null
-                    : () => dock.show(
-                        'prizes-${s.id}',
-                        PrizeTablePanel(
-                          key: ValueKey('prizes-${s.id}'),
-                          controller: controller,
-                          sectionId: s.id,
-                          onClose: dock.close,
-                        ),
-                      ),
-                child: Text(
-                  '${s.name}: ${(s.prizes['list'] as List?)?.length ?? 0} prizes…',
-                ),
-              ),
-            if (sections.isNotEmpty)
-              OutlinedButton.icon(
-                key: const ValueKey('print-prizes'),
-                onPressed: () => showPrint(context, e, kind: ReportKind.prizes),
-                icon: const Icon(Icons.print_outlined, size: 18),
-                label: const Text('Prize report'),
               ),
           ],
         ),

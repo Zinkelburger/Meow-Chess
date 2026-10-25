@@ -227,13 +227,16 @@ String prizeReport(Event e, {String? sectionId}) {
       lines.add(
         '${line.prize.title.padRight(24)} ${_prizeAmount(line).padLeft(16)}  ${_prizeOutcome(e, line)}',
       );
+      if (line.trophyNote.isNotEmpty) {
+        lines.add('${''.padRight(42)}${line.trophyNote}');
+      }
     }
     lines.add('');
     for (final w in a.awards) {
       lines.add(
         '${reportName(w.player.name).padRight(28)} ${scoreText(w.points).padLeft(4)}  '
         '${w.cents > 0 ? dollars(w.cents).padLeft(9) : ''.padLeft(9)}'
-        '${w.trophies.isEmpty ? '' : '  ${w.trophies.map((t) => '${t.title} trophy').join(', ')}'}',
+        '${w.trophies.isEmpty ? '' : '  ${w.trophies.map((t) => '${t.title} ${t.award.toLowerCase()}').join(', ')}'}',
       );
     }
     lines.add('Total paid: ${dollars(a.paidCents)}');
@@ -278,7 +281,7 @@ String _prizeAmount(PrizeLine line) => [
     line.paidCents == line.prize.cents
         ? dollars(line.prize.cents)
         : '${dollars(line.paidCents)} of ${dollars(line.prize.cents)}',
-  if (line.prize.trophy) 'trophy',
+  if (line.prize.trophy) line.prize.award.toLowerCase(),
 ].join(' + ');
 
 String _prizeOutcome(Event e, PrizeLine line) {
@@ -291,7 +294,8 @@ String _prizeOutcome(Event e, PrizeLine line) {
     else if (cash.isNotEmpty)
       '${line.pooledWith.isEmpty ? 'shared' : 'pooled'}: '
           '${cash.map((c) => '${name(c.key)} ${dollars(c.value)}').join(', ')}',
-    if (line.trophyWinner != null) 'trophy: ${name(line.trophyWinner!)}',
+    if (line.trophyWinner != null)
+      '${line.prize.award.toLowerCase()}: ${name(line.trophyWinner!)}',
     if (line.note.isNotEmpty) line.note,
   ];
   return parts.join(' · ');
@@ -960,7 +964,14 @@ Future<Uint8List> reportPdf(
           ['Prize', 'Amount', 'Awarded to'],
           [
             for (final line in a.lines)
-              [line.prize.title, _prizeAmount(line), _prizeOutcome(e, line)],
+              [
+                line.prize.title,
+                _prizeAmount(line),
+                [
+                  _prizeOutcome(e, line),
+                  if (line.trophyNote.isNotEmpty) line.trophyNote,
+                ].join('\n'),
+              ],
           ],
         );
         widgets.add(
@@ -973,7 +984,7 @@ Future<Uint8List> reportPdf(
           ),
         );
         grid(
-          ['Player', 'Points', 'Cash', 'Trophy'],
+          ['Player', 'Points', 'Cash', 'Award'],
           [
             for (final w in a.awards)
               [
@@ -1004,7 +1015,8 @@ Future<Uint8List> reportPdf(
             padding: const pw.EdgeInsets.only(top: 8),
             child: pw.Text(
               'Tied cash prizes are pooled and split equally (32B, 34C); '
-              'trophies follow the standings order (32F1, 33D2).',
+              'trophies and other awards follow the standings order, ties '
+              'broken by tie-breaks (32F1, 33D2, 34A).',
               style: const pw.TextStyle(fontSize: 9),
             ),
           ),

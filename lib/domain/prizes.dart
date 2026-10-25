@@ -73,15 +73,32 @@ class Prize {
     this.max = 0,
     this.points = 0,
     this.cents = 0,
-    this.trophy = false,
+    bool trophy = false,
+    this.item = '',
     this.guaranteed = false,
     List<String> eligible = const [],
-  }) : eligible = List.unmodifiable(eligible);
+  }) : trophy = trophy || item.trim().isNotEmpty,
+       eligible = List.unmodifiable(eligible);
   final String id, label;
   final PrizeKind kind;
   final int place, min, max, points, cents;
-  final bool trophy, guaranteed;
+
+  /// 32F: an award that cannot be divided (a trophy, a medal), which goes
+  /// to one player by tie-breaks. True whenever [item] names one.
+  final bool trophy;
+
+  /// What the indivisible award is, as announced ("Trophy", "Medal");
+  /// empty for a plain trophy or none. See [award].
+  final String item;
+  final bool guaranteed;
   final List<String> eligible;
+
+  /// The indivisible award in words, or empty when the prize has none.
+  String get award => item.trim().isNotEmpty
+      ? item.trim()
+      : trophy
+      ? 'Trophy'
+      : '';
 
   factory Prize.fromJson(Json j) {
     int integer(String key) {
@@ -126,6 +143,7 @@ class Prize {
       points: integer('points'),
       cents: integer('cents'),
       trophy: j['trophy'] == true,
+      item: '${j['item'] ?? ''}'.trim(),
       guaranteed: j['guaranteed'] == true,
       eligible: [for (final e in (eligible as List?) ?? const []) '$e'],
     );
@@ -141,6 +159,7 @@ class Prize {
     'points': points,
     'cents': cents,
     'trophy': trophy,
+    if (item.isNotEmpty) 'item': item,
     if (guaranteed) 'guaranteed': true,
     if (eligible.isNotEmpty) 'eligible': eligible,
   };
@@ -154,6 +173,7 @@ class Prize {
     int? points,
     int? cents,
     bool? trophy,
+    String? item,
     bool? guaranteed,
     List<String>? eligible,
   }) => Prize(
@@ -165,7 +185,10 @@ class Prize {
     max: max ?? this.max,
     points: points ?? this.points,
     cents: cents ?? this.cents,
-    trophy: trophy ?? this.trophy,
+    // Naming no item keeps a plain trophy; turning the trophy off also
+    // drops the item that implied it.
+    trophy: trophy ?? (item != null ? false : this.trophy),
+    item: trophy == false ? '' : item ?? this.item,
     guaranteed: guaranteed ?? this.guaranteed,
     eligible: eligible ?? this.eligible,
   );
@@ -329,9 +352,10 @@ class PrizeLine {
     Map<String, int> cash,
     List<String> pooledWith,
     this.trophyWinner,
-    this.note,
-  ) : cash = Map.unmodifiable(cash),
-      pooledWith = List.unmodifiable(pooledWith);
+    this.note, {
+    this.trophyNote = '',
+  }) : cash = Map.unmodifiable(cash),
+       pooledWith = List.unmodifiable(pooledWith);
   final Prize prize;
 
   /// The amount after any based-on reduction (32C4).
@@ -346,6 +370,11 @@ class PrizeLine {
   final String? trophyWinner;
   final String note;
 
+  /// Rule 34A: how tie-breaks gave the award to [trophyWinner] over a
+  /// player tied with them on points, or that they did not decide it;
+  /// empty when no eligible player was tied.
+  final String trophyNote;
+
   Json toJson() => {
     'id': prize.id,
     'label': prize.title,
@@ -354,6 +383,7 @@ class PrizeLine {
     'cash': cash,
     if (pooledWith.isNotEmpty) 'pooledWith': pooledWith,
     if (trophyWinner != null) 'trophy': trophyWinner,
+    if (trophyNote.isNotEmpty) 'trophyNote': trophyNote,
     if (note.isNotEmpty) 'note': note,
   };
 }
@@ -434,7 +464,8 @@ class _Cash {
 PrizeAllocation allocatePrizes(Event event, Section section) {
   final table = PrizeTable.fromJson(section.prizes).individual;
   final notes = <String>[];
-  final rows = standings(event, section, forPrizes: true);
+  // Trophies go by tie-breaks even when equal scores share a place (34A).
+  final rows = standings(event, section, forPrizes: true, byTiebreaks: true);
   final entries = section.players
       .where((id) => !event.player(id).house)
       .toSet()
@@ -868,17 +899,43 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     for (final p in ordered)
       if (p.trophy) p,
   ];
-  final trophyWinner = <String, String>{};
-  for (final e in entrants) {
+  final trophyWinner = <String, String>{}, trophyNotes = <String, String>{};
+  for (final (i, e) in entrants.indexed) {
     final prize = trophies
         .where((p) => !trophyWinner.containsKey(p.id) && eligible(e.player, p))
         .firstOrNull;
     if (prize == null) continue;
     trophyWinner[prize.id] = e.id;
     e.trophies.add(prize);
+    // Players tied on points who could have taken it rank lower; the first
+    // of them is the one tie-breaks had to separate.
+    final rivals = [
+      for (final o in entrants.skip(i + 1))
+        if (o.points == e.points && eligible(o.player, prize)) o,
+    ];
+    final award = prize.award.toLowerCase();
+    if (rivals.isEmpty) {
+      notes.add('${e.player.name} takes the ${prize.title} $award.');
+      continue;
+    }
+    final next = rivals.first;
+    final decided = [
+      for (final (k, mine) in e.standing.tiebreaks.indexed)
+        if (k < next.standing.tiebreaks.length &&
+            mine.value != next.standing.tiebreaks[k].value)
+          (mine, next.standing.tiebreaks[k]),
+    ].firstOrNull;
+    final tied = 'Tied on ${scoreText(e.points)} with ${names(rivals)}';
+    trophyNotes[prize.id] = decided == null
+        ? rivals.length == 1
+              ? '$tied and equal on every tie-break: decide by lot.'
+              : '$tied; equal with ${next.player.name} on every tie-break: '
+                    'decide by lot.'
+        : '$tied; ahead of ${next.player.name} on ${decided.$1.method.label}, '
+              '${decided.$1.text} to ${decided.$2.text}.';
     notes.add(
-      '${e.player.name} takes the ${prize.title} trophy'
-      '${entrants.any((o) => o != e && o.points == e.points && eligible(o.player, prize)) ? ' on tie-breaks' : ''}.',
+      '${e.player.name} takes the ${prize.title} $award on tie-breaks. '
+      '${trophyNotes[prize.id]}',
     );
   }
 
@@ -908,6 +965,7 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
         pooledWith[p.id]!,
         trophyWinner[p.id],
         note,
+        trophyNote: trophyNotes[p.id] ?? '',
       ),
     );
   }

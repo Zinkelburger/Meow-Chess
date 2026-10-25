@@ -51,9 +51,11 @@ void main() {
     expect(table().list.single.cents, 15000);
     expect(find.text('1 prize · \$150 in cash'), findsOneWidget);
 
-    await tester.tap(find.byKey(ValueKey('prize-trophy-$id')));
+    await tester.enterText(find.byKey(ValueKey('prize-award-$id')), 'Medal');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(table().list.single.trophy, isTrue);
+    expect(table().list.single.award, 'Medal');
 
     await chooseOption(tester, find.byKey(ValueKey('prize-kind-$id')), 'Under');
     expect(table().list.single.kind, PrizeKind.under);
@@ -135,5 +137,68 @@ void main() {
       PrizeTable.fromJson(c.event!.sections.first.prizes).fundCents,
       25000,
     );
+  });
+
+  testWidgets('a section\'s prizes copy to the sections without any, as one '
+      'undoable change', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = fixture(count: 12);
+    addTearDown(c.dispose);
+    final [first, second, third] = c.event!.sections;
+    // The third section already has its own prizes and keeps them.
+    c.change(
+      'Third section prizes',
+      c.event!.copy(
+        sections: [
+          first,
+          second,
+          third.copy(
+            prizes: {
+              'list': [
+                {'id': 'own', 'kind': 'place', 'place': 1, 'cents': 500},
+              ],
+            },
+          ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: meowTheme(Brightness.light),
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            child: PrizeTablePanel(
+              controller: c,
+              sectionId: first.id,
+              onClose: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('copy-prizes')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('add-prize')));
+    await tester.pumpAndSettle();
+    final id = PrizeTable.fromJson(
+      c.event!.sections.first.prizes,
+    ).list.single.id;
+    await tester.enterText(find.byKey(ValueKey('prize-award-$id')), 'Trophy');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(find.text('Copy to 1 section without prizes'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('copy-prizes')));
+    await tester.pumpAndSettle();
+    PrizeTable of(int i) => PrizeTable.fromJson(c.event!.sections[i].prizes);
+    expect(of(1).list.single.award, 'Trophy');
+    expect(of(1).list.single.id, isNot(id));
+    expect(of(2).list.single.id, 'own');
+    expect(find.byKey(const ValueKey('copy-prizes')), findsNothing);
+    c.undo();
+    expect(of(1).list, isEmpty);
   });
 }

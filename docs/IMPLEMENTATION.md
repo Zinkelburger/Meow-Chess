@@ -50,6 +50,31 @@ public monthly-supplement lookup, confirmed moves and atomic quad swaps, horizon
 section tabs and searchable offline help. Registration ratings remain self-reported;
 latest/unofficial ratings are explicitly unavailable.
 
+## Scholastic events: sections from registration, rating ranges, awards (2026-10-25)
+
+Shaped around Boylston's monthly scholastics (Championship 800–1999, Under 1000,
+Under 500; trophies for 1st and 2nd, a medal for 3rd).
+
+- **Section column.** Roster files and club entry lists place each new entry in
+  the section its Section column names (`lib/domain/section_placement.dart`).
+  Names match ignoring case, spacing and punctuation, with U1000 the same as
+  Under 1000. Unknown names start Swiss sections once the TD enters their rounds;
+  paired sections take no entries and nobody already placed moves. Import and
+  placement undo as one step.
+- **Rating ranges.** Sections have a lowest rating beside the cap
+  (`lib/domain/eligibility.dart`, rule 28H). Players outside the range are
+  flagged in the import preview, URL refresh, Players table, player card, Move
+  and Add player, and counted beside Create pairings before round 1 without
+  blocking it. The player card allows one in with a recorded reason (K03).
+- **Awards.** Reports opens with Awards once play starts: each section's prizes
+  in announced order, the winner, the award (free text: Trophy, Medal, …), the
+  score, the tie-break that decided a tie (or "decide by lot"), provisional
+  status while results are missing, and a per-award Handed out tick kept in the
+  event file. Prize tables copy to sections without prizes.
+- **Fix.** Indivisible awards now go by tie-breaks even when the event shares
+  places (rule 34A); before, a tie for a trophy went to the name that sorted
+  first.
+
 ## Available workflows
 
 Create/open/reopen local events; synthetic practice events and independent practice
