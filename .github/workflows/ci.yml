@@ -156,8 +156,12 @@ jobs:
           python scripts/check_exports.py --validate-only
       - name: Compile the macOS application
         run: flutter build macos --debug
-      # Signed ad hoc, not unsigned: the App Sandbox entitlements only apply to
-      # a signed app, and the bookmark and publication paths differ inside it.
+      # Unsigned, so the App Sandbox is not applied: GitHub's macOS runners
+      # refuse to launch the ad hoc signed, sandboxed test host ("Launchd job
+      # spawn failed", every run from October 9 to October 25, 2026). The
+      # Foundation staging, publication and bookmark code still runs; the
+      # sandbox-only check in RunnerTests skips, and sandboxed saves are a
+      # manual check (docs/TESTING.md).
       - name: Test Foundation staging, publication and bookmarks
         env:
           MEOW_DATA_DIR: ${{ runner.temp }}/meow-native-tests
@@ -165,7 +169,7 @@ jobs:
           xcodebuild test -workspace macos/Runner.xcworkspace -scheme Runner
           -configuration Debug -destination 'platform=macOS'
           -resultBundlePath artifacts/macos-publication.xcresult
-          CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
+          CODE_SIGNING_ALLOWED=NO
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

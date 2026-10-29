@@ -49,9 +49,10 @@ void main() {
               as RenderRepaintBoundary;
       final image = await boundary.toImage();
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      await File(
+      final file = await File(
         'artifacts/pairing-rules/$name.png',
-      ).writeAsBytes(bytes!.buffer.asUint8List());
+      ).create(recursive: true);
+      await file.writeAsBytes(bytes!.buffer.asUint8List());
     }
 
     final section = c.event!.sections.firstWhere(

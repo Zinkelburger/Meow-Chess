@@ -8,7 +8,10 @@ The Linux and Windows jobs also compile and exercise the MCP server through its
 portable Dart launcher, using a different working directory and Unicode paths.
 A separate macOS job compiles the app and exercises Foundation staging,
 exclusive publication, replacement, bookmark restoration and the Dart event-save
-boundary. That job does not qualify the full macOS tournament workflow
+boundary. Its test host is built unsigned, so the App Sandbox is off there:
+GitHub's macOS runners cannot launch the ad hoc signed, sandboxed host. Running
+the Runner scheme's tests from Xcode covers the sandboxed paths. That job does
+not qualify the full macOS tournament workflow
 or replace a manual save-dialog sandbox test outside the app container.
 That manual test must create an event outside the container, save a copy, choose
 an external backup folder, restart the app, reopen from Recent events and verify
