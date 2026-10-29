@@ -2,6 +2,7 @@ import 'package:uuid/uuid.dart';
 
 import '../domain/model.dart';
 import '../domain/prizes.dart';
+import '../domain/tiebreaks.dart';
 
 /// A new event set up like [source]: its sections (names, formats,
 /// announcement lines, pairing rules, bye rules, prizes, team and home
@@ -83,16 +84,26 @@ Section _sectionTemplate(Section s, String id) => Section(
   pabPoints: s.pabPoints,
 );
 
-/// The one-line note shown when an event is created from a template.
+/// The one-line note shown when an event is created from a template,
+/// naming what comes across: section names, time control, tie-break order
+/// and the TD and affiliate IDs.
 String templateNote(Event source) {
-  final n = source.sections.length;
-  final parts = [
-    if (n > 0) '$n ${n == 1 ? 'section' : 'sections'}',
-    if (source.tiebreaks.isNotEmpty) 'tie-break order',
-    'time control',
-    if (source.tdId.isNotEmpty || source.affiliateId.isNotEmpty)
-      'TD and affiliate IDs',
+  final sections = [for (final s in source.sections) s.name];
+  final ownClocks = [
+    for (final s in source.sections)
+      if (s.timeControl.isNotEmpty && s.timeControl != source.timeControl)
+        '${s.name} ${s.timeControl}',
   ];
-  return 'Copied from ${source.name}: ${parts.join(', ')}. '
-      'No players, results or rulings.';
+  final parts = [
+    if (sections.isNotEmpty)
+      '${sections.length == 1 ? 'Section' : 'Sections'} ${sections.join(', ')}',
+    if (source.timeControl.isNotEmpty)
+      'time control ${source.timeControl}'
+          '${ownClocks.isEmpty ? '' : ' (${ownClocks.join(', ')})'}',
+    if (source.tiebreaks.isNotEmpty)
+      'tie-breaks ${source.tiebreaks.map(tiebreakLabel).join(', ')}',
+    if (source.tdId.isNotEmpty) 'TD ${source.tdId}',
+    if (source.affiliateId.isNotEmpty) 'affiliate ${source.affiliateId}',
+  ];
+  return 'Copies from ${source.name}: ${parts.join(' · ')}';
 }

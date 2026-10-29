@@ -74,8 +74,8 @@ void main() {
     expect(prizes.list.single.eligible, isEmpty);
     expect(
       templateNote(source),
-      'Copied from Saturday Quads: 2 sections, tie-break order, time control, '
-      'TD and affiliate IDs. No players, results or rulings.',
+      'Copies from Saturday Quads: Sections Quad 1, Quad 2 · time control G/25 d5 · '
+      'tie-breaks Solkoff, Cumulative · TD 12345678 · affiliate A6012345',
     );
   });
 }

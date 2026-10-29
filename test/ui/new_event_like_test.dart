@@ -63,8 +63,8 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
     expect(
       find.text(
-        'Copied from Friday Blitz: 2 sections, time control. '
-        'No players, results or rulings.',
+        'Copies from Friday Blitz: Sections Quad 1, Quad 2 · '
+        'time control G/5 d0',
       ),
       findsOneWidget,
     );
