@@ -1,222 +1,63 @@
 # Meow-Chess
 
-An offline-first Flutter desktop tournament director workspace.
-US Chess first; Swiss events, easy quads, reliable identity/rating checks, and
-usable printing. Inspired by SwissSys workflows and Chess Auto Prep V2's UI.
+A tournament director's workspace for chess events: pairings, results,
+standings, prizes, printing and the US Chess rating report. Offline first,
+US Chess first, with FIDE-rated sections too. Free software (AGPLv3).
 
-**Meow-Chess 1.3.0** provides an offline desktop workspace for Linux and Windows.
-Download the installers and portable bundles from [Releases](https://github.com/Zinkelburger/Meow-Chess/releases).
-This release adds complete quad schedules and pairing edits, improves US Chess
-identity and rating review, and preserves reliable history and recovery. Shared
-lookup and approval logic keeps late network responses from changing another
-event, while smaller UI components make the desktop workflows easier to maintain.
-The optional MCP launcher now works without Bash on Windows; report exports use
-the native replacement mechanism on sandboxed macOS.
-The 1.2.1 maintenance update protects database recovery files when saving copies,
-rejects stale roster and pairing edits, preserves rating lookups after save
-failures, and durably publishes complete report packages.
-The 1.2.2 update makes F a one-key no-show, prints US Chess result letters
-(X/F forfeits, B---/H---/U--- byes), redesigns the player card with a compact
-bye table and one Move action that keeps quads at four, shows the full US Chess
-record from Check ID, keeps the crosstable and round headings level, and lets
-any on-screen text be selected and copied.
-The 1.2.3 update replaces Create sections and New Section with one New section
-panel that previews every player in each section it will create, opens CSV/TSV
-imports in a spreadsheet-style window (separators, quotes, per-column fields,
-rows already in the event or repeated in the file), quiets the blue buttons to
-one commit action per region, makes every menu open instantly, and fixes
-saving and opening events under the macOS App Sandbox.
-The 1.3.0 update adds FIDE-rated sections (dual-rated or FIDE only) paired with
-the FIDE Dutch system through BBP Pairings, FIDE tie-breaks, TRF26 export and a
-FIDE rating list; Scheveningen, Holland, knockout, ladder and bughouse formats
-with one section panel for every format; scholastic team awards; the remaining
-US Chess Swiss rules; and Swiss pairings validated against the Boylston archive.
-Federation acceptance and full Swiss priority conformance remain unverified; see
-[implementation status](docs/IMPLEMENTATION.md) and [release qualification](docs/TESTING.md).
-The existing
-AGPLv3 [LICENSE](LICENSE) is retained. The planning documents retain the full target; implementation status records the
-subset actually built and tested.
+## Get it
 
-Start with [the TD usability review and realistic rehearsal scenarios](docs/TD_USABILITY_REVIEW.md),
-[the TD’s actual duties and supporting sources](research/notes/TD_DUTIES.md),
-[a tournament day, in order](docs/TD_DAY.md)
-and [the keyboard results-entry contract](docs/RESULT_ENTRY.md). Then read the expanded [full feature map](docs/FULL_FEATURE_MAP.md),
-[TD experience specification](docs/TD_EXPERIENCE.md),
-[first-class TD operations](docs/TD_OPERATIONS.md), and
-[build-agent handoff](docs/BUILD_HANDOFF.md). The original
-[product plan](docs/PRODUCT_PLAN.md) defines the first delivery tranche.
+- **In a browser:** https://chessautoprep.com/meow-chess/ (events stay in the
+  browser; download a `.meow` copy to keep or to open on the desktop).
+- **Desktop, Linux and Windows:** installers and portable bundles on
+  [Releases](https://github.com/Zinkelburger/Meow-Chess/releases). Every
+  package opens `.meow` files on double-click; the portable zips offer to set
+  that up on first launch.
 
-The [SwissSys archive coverage](research/SWISSSYS_ARCHIVE.md) and
-[page checklist](research/SWISSSYS_TOPIC_LEDGER.md) distinguish saved pages from
-reviewed requirements and tested parity.
+## What it does
 
-The [review of Fable’s tournament-day additions](docs/FABLE_REVIEW.md) records
-what to keep, corrections needed, and how the two proposals fit together.
+- Swiss, quads, round robin, Scheveningen, Holland, knockout, ladder and
+  bughouse sections, each with its own time control, rules and prizes.
+- US Chess Swiss pairings validated against a club's archive; FIDE Dutch
+  pairings through BBP Pairings for FIDE-rated sections (desktop only).
+- Results by keyboard: click a cell, type 1, 0 or D, and move on. One-key
+  forfeits, corrections that show their consequences, full Undo and
+  a History of every change.
+- Rosters from CSV or TSV files, pasted tables and club registration pages,
+  with a spreadsheet-style import window. US Chess ID checks and name search
+  against the official member records.
+- Printing: pairing sheets, player lists, standings and
+  crosstables, each section on its own page, on a saved printer.
+- Reports: standings with US Chess and FIDE tie-breaks, an Awards board that
+  settles trophy ties by the tie-breaks, prize reports, the three-file US Chess
+  DBF rating report, and TRF26 for FIDE.
+- Durable events: one SQLite file per event, backups after every round, and
+  recovery from an interrupted session.
 
-The [history and recovery contract](docs/HISTORY_AND_RECOVERY.md) specifies safe
-“back up to round X,” persistent Undo/Redo, version comparison and saved alternatives.
+## Status
 
-Supporting plans:
+Meow-Chess is a working pilot, not a finished product. Its rating reports pass
+independent format checks and match previously accepted reports, but no report
+has yet been accepted by the US Chess portal from this app, and an experienced
+TD should still review Swiss pairings. [Implementation status](docs/IMPLEMENTATION.md)
+and [release qualification](docs/TESTING.md) say exactly what is and is not
+verified. Please report problems in
+[Issues](https://github.com/Zinkelburger/Meow-Chess/issues).
 
-| Document | Purpose |
-|---|---|
-| [Requirements and acceptance criteria](docs/REQUIREMENTS.md) | What the app must do and how we will know it works |
-| [Boylston event survey](research/notes/BOYLSTON.md) | Actual event formats, import evidence, scope implications |
-| [SwissSys / ChessRoster](research/notes/SWISSSYS.md) | Feature map, interoperability, and a practical quad setup guide |
-| [US Chess reporting](research/notes/US_CHESS_REPORTING.md) | The three DBF files, authoritative specification, unresolved contradictions |
-| [DBF compatibility tests](docs/DBF_COMPATIBILITY.md) | Fragile mock importer, mixed-round export, setup and remaining limits |
-| [US Chess ratings API](research/notes/US_CHESS_API.md) | Public OpenAPI, live probes, identity review, latest-rating limitations |
-| [Pairing and bughouse](docs/PAIRING.md) | US Chess pairing, quads, team distinctions, experimental skill estimates |
-| [Architecture](docs/ARCHITECTURE.md) | Dart domain, SQLite transactions, commands, adapters, recovery |
-| [Design references and report layout](docs/UX.md) | V2 source provenance and print/ASCII details; current interaction contracts linked above |
-| [Delivery and validation](docs/DELIVERY.md) | Ordered milestones, release gates, research questions, POCs |
-| [Engineering reading / reuse](research/notes/ENGINEERING.md) | Books, patterns, library findings, licensing and future FIDE |
-| [Reference library](research/README.md) | Source catalog, local snapshots, provenance and research limits |
+## Documentation
 
-Sources were checked September 28–29, 2026 (Eastern / UTC boundary). Statements
-labelled **observed**, **documented**, **proposed**, and **unverified** intentionally
-have different strength. No US Chess upload, payment, registration, email, or
-tournament modification was performed.
+[docs/README.md](docs/README.md) indexes everything: how to run a tournament
+day, the workspace guide, the rules each format follows, the file formats, and
+the research behind them. Release notes are in [the changelog](docs/CHANGELOG.md).
 
-## Run and develop
+## Build it
 
-With Flutter installed, run `flutter pub get`, then `flutter run -d linux`
-(or `-d windows` / `-d macos` on the corresponding host). On this workstation,
-use `scripts/ci.sh build` for a bounded Linux release build; the executable is
-`build/linux/x64/release/bundle/meow_chess`. Start with **New tournament** to create an event, then add or import players.
+With Flutter installed:
 
-Choose a section tab, then switch between **Players** and
-**Pairings**. Both views keep the selected section. Click a score cell in either view, then type **1/W** for a win, **0/L** for
-a loss, or **D** for a draw. Results display as **1**, **0**, and **½**.
-Typing saves and advances; mouse clicks only focus cells. Historical corrections
-retain their review step.
-**Create pairings** pairs every ready section with one click; sections waiting
-for results are left alone. There is no separate start-round step.
+```
+flutter pub get
+flutter run -d linux        # or -d windows, -d macos
+flutter test
+```
 
-Right-click a player or section tab for **Move**, **Swap**, and **Withdraw**.
-Choose **Edit quad pairings** beside **New section** to change opponents or flip
-colors within a quad. Select players in each round, then **Save pairings**.
-Everyone must meet once across the three rounds; changing opponents may require
-adjusting another unplayed round. Rounds with results, start markers or pairing
-assumptions stay locked. Saved edits update future rounds and printed sheets;
-reprint any sheets already distributed. **Undo** restores the previous schedule.
-The quad setup preview only displays the rating groups. **Print player list**
-(Players view, or right-click a section tab) prints each section's players by
-pairing number with rating and US Chess ID; it never depends on pairings.
-Pairing sheets print from the Pairings view: a quad prints its plain result
-sheet with all round-robin pairings, including future rounds, and Swiss sections
-print only the selected posted round. Pairing sheets use
-**Board | Result | White | Black | Result**, with blank result boxes for handwriting
-and unused space left blank. Each section starts on a fresh page; large Swiss
-sections continue onto additional pages as needed. The first print asks for a printer; later prints use the saved device.
-Use **Choose printer…** beside **Print** to pick another printer.
-Systems without direct printing support use the operating system's print dialog.
-
-Use **Export** to wrap up the tournament. Review checks across all sections and
-follow the repair links to resolve missing results or report inconsistencies.
-**Generate DBF files** becomes available once blocking issues are resolved;
-optional checks remain available for review. Final standings, crosstables,
-printouts, backup status, and submission notes are also available here.
-Expand **Optional** and choose **Fetch missing states from US Chess** to
-fill missing player states from their USCF IDs. Rating and membership lookups
-also fill missing states automatically; existing states are preserved.
-
-On **Pairings**, choose a round number or **All rounds** to find an earlier
-game. Choose **Correct a result**, or click a result cell in **Players**, and the
-correction opens beside the table. Pick who won, see each player's score change, and decide
-what happens to later rounds: keep their pairings, or unpair an unstarted round and all
-rounds after it. Recorded play and section transfers prevent unpairing. A note is optional.
-Unpaired rounds are paired again through the normal pairing review. The previous version
-remains in **History**, where a single-result change also offers **Fix this result**
-without reversing unrelated edits. Selecting any change lists what going back to it would
-undo, and any recorded play it would remove, above the button that does it.
-
-**Import file…** opens the file in an import window before adding players. The
-separator is detected; as in a spreadsheet's text import you can tick Comma, Tab,
-Semicolon or Space, type any other separator characters, choose the quote
-character, merge repeated separators and say whether the first row holds column
-names. Every row is shown in a grid with a field picker above each column (Name,
-First/Last name, Rating, US Chess ID, State, Team, Club, Registration note, or
-Don't import), and a status for each row: new, already in the event, or the
-problem to fix. Invalid rows must be fixed or explicitly left out; **Paste** uses
-the same window. Imports can be undone.
-
-**Refresh from URL** accepts Boylston event or entry-list links. For other clubs,
-paste a page containing a Name, Rating and USCF ID table, then review and confirm
-the players. Clubs can contribute their own URL rules and parsers; see
-[adding a club website](docs/CLUB_ROSTER_ADAPTERS.md).
-
-**Find by name** beside a player's US Chess ID searches official member records.
-**Check ID** warns about missing records or a different official name and offers
-possible corrections. Choose a candidate, then Save (or Add for a new player).
-Ratings stay unchanged. Event details offers the same name search for the chief
-and assistant chief TD: enter a name, choose **Find by name**, then select the ID.
-Search uses public access when available or the API key in Data sources; service
-failures leave the identity unverified. Report city, state and ZIP refer to the
-tournament site.
-
-On **Players**, **Show rating estimates** (under **Player tools**) is off by
-default. Enable it to see approximate Regular ratings and changes as results are entered or
-corrected between rounds. This just-for-fun preview assumes 50 prior rated games,
-uses starting ratings and completed games in each section, and omits personal
-floors and provisional formulas. It never changes pairing ratings or exports.
-See [calculation details and limits](docs/RATING_PREVIEW.md).
-
-Linux build prerequisites include GTK 3, CMake, Ninja, C++ tooling and libsecret
-development headers (`libsecret-1-dev` on Debian/Ubuntu, `libsecret-devel` on Fedora).
-The workstation wrapper discovers the local dependency prefix if present.
-
-Events are `.meow` files; use the app’s **Save copy…** or backup actions
-to transfer an open event safely. `MEOW_DATA_DIR` overrides the recent-event library
-location for isolated testing. A filename argument opens that event; in release
-builds a second launch hands its file to the window already open.
-
-## Browser version
-
-Meow-Chess also runs in a browser at https://chessautoprep.com/meow-chess/, built
-from this repository by `python3 scripts/build_web.py` and copied into the Chess
-Auto Prep website. Events stay in the browser; FIDE-rated pairing and the FIDE
-rating list still need the desktop app. **The website is a static copy: after a
-release or any change a TD would notice, sync it** with
-`python3 scripts/build_web.py --site ../Chess-Auto-Prep` and commit there. See
-[the browser version](docs/WEB.md).
-
-## Install and release
-
-Pushing a `v*` tag (`git tag v0.2.0 && git push origin v0.2.0`) runs
-[release.yml](.github/workflows/release.yml): the CI gate, then a GitHub Release with
-a Windows setup `.exe` and portable zip, and Linux `.deb`, `.rpm`, `.flatpak` and
-portable zip, plus checksums, with no release description. A tag with a dash
-(`v0.2.0-rc1`) is published as a pre-release. The Windows build alone can be tried
-from Actions → Windows build → Run workflow.
-
-Every package makes `.meow` files open in Meow Chess on double-click. The portable
-zips do it on first launch instead: the app asks "Set up Meow Chess on this
-computer?" and, on Linux, installs a menu entry, icon and the `.meow` file type under
-`~/.local/share`; on Windows, it registers `.meow` for the current user. Nothing needs
-administrator rights. Debug builds never ask. `MEOW_CHESS_DESKTOP_SETUP=1` sets up
-without asking and `=0` never asks, for scripted installs. The icon is
-[meow_chess_master.png](assets/icon/meow_chess_master.png); `tools/make_icons.sh` regenerates every
-platform size from it.
-
-The logo appears on the welcome screen and as the desktop app icon. The tournament
-toolbar starts with the editable event title. Window controls, movement and
-resizing use the operating system’s standard window decorations; whether an icon
-appears in the title bar depends on the desktop environment.
-
-For a local checkout on KDE/Wayland, build the app and run
-`python3 tools/install_linux_launcher.py`. This installs the menu entry and icon
-whose name matches the Wayland app ID, without changing default file handlers.
-Use `--bundle build/linux/x64/debug/bundle` to point the launcher at a debug build.
-Rerun after changing the logo or moving the checkout; reopen the app if Plasma
-still shows a cached icon. Packaged installations already include this entry.
-
-Run `scripts/ci.sh analyze`, `scripts/ci.sh lint`, `scripts/ci.sh test`, and
-`scripts/ci.sh integration` here. On another machine, configure `MEOW_JOB_RUNNER`
-or run the corresponding standard Flutter commands in your own resource limits.
-
-See [release qualification and the test matrix](docs/TESTING.md) for Linux/Windows
-commands, tested guarantees and remaining acceptance checks.
-
-No real tournament submissions, account changes or player communications are made
-by the app. US Chess validation packages remain explicitly unverified.
+[Developing](docs/DEVELOPING.md) covers the CI gate, the release tags, the
+browser build and desktop integration.
