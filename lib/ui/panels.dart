@@ -696,6 +696,15 @@ class _PrintPanelState extends State<PrintPanel> {
               'prizes-r${e.revision}.txt',
               utf8.encode(prizeReport(e, sectionId: widget.sectionId)),
             )
+          : widget.kind == ReportKind.wallChart
+          ? await saveArtifact(
+              'wall-chart-r${e.revision}.txt',
+              wallChart(
+                e,
+                asciiOnly: true,
+                sectionId: widget.sectionId,
+              ).codeUnits,
+            )
           : await saveArtifact(
               'crosstable-r${e.revision}.txt',
               crosstable(
@@ -720,12 +729,14 @@ class _PrintPanelState extends State<PrintPanel> {
       ReportKind.packet || ReportKind.pairings => 'Pairing sheets',
       ReportKind.standings => 'Standings',
       ReportKind.crosstable => 'Crosstable',
+      ReportKind.wallChart => 'Wall chart',
       ReportKind.prizes => 'Prizes',
       ReportKind.conditions => 'Event conditions',
     };
     final ranking =
         widget.kind == ReportKind.standings ||
         widget.kind == ReportKind.crosstable ||
+        widget.kind == ReportKind.wallChart ||
         widget.kind == ReportKind.prizes;
     final pairingSheet =
         widget.kind == ReportKind.packet || widget.kind == ReportKind.pairings;
@@ -784,6 +795,10 @@ class _PrintPanelState extends State<PrintPanel> {
                               ButtonSegment(
                                 value: ReportKind.crosstable,
                                 label: Text('Crosstable'),
+                              ),
+                              ButtonSegment(
+                                value: ReportKind.wallChart,
+                                label: Text('Wall chart'),
                               ),
                               ButtonSegment(
                                 value: ReportKind.prizes,

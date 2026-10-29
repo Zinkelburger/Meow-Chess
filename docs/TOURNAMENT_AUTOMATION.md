@@ -71,7 +71,7 @@ Sonneborn–Berger values in the structured standings are quarter-points.
 
 `standings`, `rating_preflight`, `export_event`, `backup_event`, `undo` and `redo`
 complete the workflow. Exports produce event JSON, standings CSV, a text
-crosstable and preflight JSON. The three DBFs and a `manifest.json` (marked
+crosstable, a text wall chart and preflight JSON. The three DBFs and a `manifest.json` (marked
 unverified until a TD validates the upload) are included only when the normal
 rating preflight passes. `rating_preflight` and `export_event` list blockers
 separately from `advice` that US Chess does not require, such as missing player

@@ -8,6 +8,7 @@ import 'player_actions.dart' show contextMenu;
 /// What a section tab's right-click menu asks the workspace to do.
 enum SectionMenuAction {
   print,
+  wallChart,
   preview,
   settings,
   sideGame,
@@ -220,6 +221,10 @@ class SectionTabs extends StatelessWidget {
               const PopupMenuItem(
                 value: SectionMenuAction.preview,
                 child: Text('Preview player list…'),
+              ),
+              const PopupMenuItem(
+                value: SectionMenuAction.wallChart,
+                child: Text('Print wall chart'),
               ),
               if (section != null) ...[
                 const PopupMenuDivider(),

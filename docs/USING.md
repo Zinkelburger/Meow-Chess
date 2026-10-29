@@ -38,6 +38,14 @@ The quad setup preview only displays the rating groups.
 section's players by pairing number with rating and US Chess ID; it never
 depends on pairings.
 
+**Print wall chart** (right-click a section tab, or choose Wall chart in any
+Standings print) prints the chart to post on the wall (rule 28O): players in
+pairing-number order with rating, and a column for every planned round showing
+the result, opponent number and color with the score so far underneath. Rounds
+not yet paired are blank, so results can be pencilled in between prints, and
+withdrawn players are greyed. The **Crosstable** print has the same cells in
+standings order, for played rounds only.
+
 Pairing sheets print from the Pairings view: a quad prints its plain result
 sheet with all round-robin pairings, including future rounds, and Swiss sections
 print only the selected posted round. Pairing sheets use

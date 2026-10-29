@@ -4,6 +4,13 @@ Downloads for each version are on
 [Releases](https://github.com/Zinkelburger/Meow-Chess/releases); the browser
 version at https://chessautoprep.com/meow-chess/ follows the latest release.
 
+## Unreleased
+
+- A Wall chart print (rule 28O): the crosstable in pairing-number order with a
+  column for every planned round, blank until paired, and withdrawn players
+  greyed. Right-click a section tab, or pick Wall chart in a Standings print.
+  Exports include `wall_chart.txt`.
+
 ## 1.3.1 — October 29, 2026
 
 - The browser version: the same workspace at chessautoprep.com/meow-chess/.

@@ -680,6 +680,14 @@ class _WorkspaceState extends State<Workspace> {
           kind: ReportKind.sections,
           dock: dock,
         );
+      case SectionMenuAction.wallChart:
+        printSheets(
+          context,
+          c.event!,
+          sectionId: id,
+          kind: ReportKind.wallChart,
+          dock: dock,
+        );
       case SectionMenuAction.settings:
         pickSection(id);
         sectionSettings();

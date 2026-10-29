@@ -22,6 +22,7 @@ enum ReportKind {
   pairings,
   standings,
   crosstable,
+  wallChart,
   sections,
   prizes,
   conditions,
@@ -71,6 +72,50 @@ String crosstableCell(
       .join('/');
 }
 
+/// The small marks in a wall chart box: whom the player met, as a pairing
+/// number (with F/X for a forfeit, ? while unresolved) or the kind of bye,
+/// and the color they had. Double-game legs are joined with a slash.
+({String opponent, String color}) wallChartMarks(
+  Event event,
+  Round round,
+  String playerId,
+  Map<String, int> numbers,
+) {
+  final games =
+      round.games
+          .where((g) => g.white == playerId || g.black == playerId)
+          .toList()
+        ..sort((a, b) => a.leg.compareTo(b.leg));
+  if (games.isEmpty) {
+    final bye = round.byes.where((b) => b.player == playerId).firstOrNull;
+    if (bye == null) return (opponent: '-', color: '');
+    return (
+      opponent: switch (bye.points) {
+        2 => 'bye',
+        1 => '½ bye',
+        _ => '0 bye',
+      },
+      color: '',
+    );
+  }
+  String opponent(Game game) {
+    final white = game.white == playerId;
+    final other = white ? game.black : game.white;
+    final points = white ? game.outcome.whiteScore : game.outcome.blackScore;
+    final mark = !game.outcome.resolved
+        ? ' ?'
+        : !game.outcome.played
+        ? (points == 2 ? ' X' : ' F')
+        : '';
+    return '${numbers[other] ?? reportName(event.player(other).name)}$mark';
+  }
+
+  return (
+    opponent: games.map(opponent).join('/'),
+    color: games.map((g) => g.white == playerId ? 'W' : 'B').join('/'),
+  );
+}
+
 /// A name on one line: a line break or tab pasted into a name would split a
 /// printed row or misalign a text column.
 String reportName(String name) => name.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -101,24 +146,51 @@ String wallChartRating(Player player) => player.rating != 0
     ? 'NEW'
     : 'UNR';
 
-String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
+/// The wall chart (rule 28O): the crosstable in pairing-number order, with a
+/// column for every planned round so results can be pencilled in between
+/// prints, and withdrawn players marked. Posted before round 1 so players can
+/// find their number and check their name and rating.
+String wallChart(Event e, {bool asciiOnly = false, String? sectionId}) =>
+    crosstable(e, asciiOnly: asciiOnly, sectionId: sectionId, wall: true);
+
+/// Every round a wall chart has a column for: the planned rounds, plus any
+/// extra round that was actually played.
+List<int> wallChartRounds(Section s) {
+  final planned = s.format == Format.ladder ? 0 : s.plannedRounds;
+  final last = s.rounds.isEmpty ? 0 : s.rounds.last.number;
+  final count = planned > last ? planned : last;
+  return [
+    for (var n = 1; n <= count; n++)
+      if (n > last || s.rounds.any((r) => r.number == n)) n,
+  ];
+}
+
+String crosstable(
+  Event e, {
+  bool asciiOnly = false,
+  String? sectionId,
+  bool wall = false,
+}) {
   final lines = <String>['${e.name} | ${e.date} | revision ${e.revision}', ''];
   for (final s in e.sections.where(
     (s) => s.players.isNotEmpty && (sectionId == null || s.id == sectionId),
   )) {
     final numbers = {for (final (i, id) in s.players.indexed) id: i + 1};
     // A ladder reads top down: # is the place, not a pairing number.
-    final rows = s.format == Format.ladder
+    final rows = s.format == Format.ladder || wall
         ? (standings(e, s)..sort(
             (a, b) => numbers[a.player.id]!.compareTo(numbers[b.player.id]!),
           ))
         : standings(e, s);
-    final nameWidth = rows.fold(
-      12,
-      (int n, Standing r) => reportName(r.player.name).length > n
-          ? reportName(r.player.name).length
-          : n,
-    );
+    final columns = wall
+        ? wallChartRounds(s)
+        : [for (final r in s.rounds) r.number];
+    final nameWidth = rows.fold(12, (int n, Standing r) {
+      final width =
+          reportName(r.player.name).length +
+          (wall && r.player.withdrawn ? ' (withdrawn)'.length : 0);
+      return width > n ? width : n;
+    });
     // Rule 28O: each cell is the result, then the score so far.
     final cellWidth = s.doubleGames ? 22 : 12;
     lines.add(
@@ -127,20 +199,25 @@ String crosstable(Event e, {bool asciiOnly = false, String? sectionId}) {
           : '${s.name} — ${s.rounds.length}/${s.plannedRounds} rounds',
     );
     lines.add(
-      '${'#'.padLeft(3)}  ${'Name'.padRight(nameWidth)}  ${'Rtg'.padLeft(4)}  ${'Pts'.padLeft(4)}  ${[for (final r in s.rounds) 'R${r.number}'.padRight(cellWidth)].join(' ')}',
+      '${'#'.padLeft(3)}  ${'Name'.padRight(nameWidth)}  ${'Rtg'.padLeft(4)}  ${'Pts'.padLeft(4)}  ${[for (final n in columns) 'R$n'.padRight(cellWidth)].join(' ')}',
     );
     for (final row in rows) {
       final id = row.player.id;
       final totals = cumulativeScores(s, id);
-      final cells = s.rounds.indexed
-          .map(
-            (entry) =>
-                '${crosstableCell(e, entry.$2, id, numbers)} ${scoreText(totals[entry.$1])}'
-                    .padRight(cellWidth),
-          )
+      final cells = columns
+          .map((n) {
+            final i = s.rounds.indexWhere((r) => r.number == n);
+            return i < 0
+                ? ''
+                : '${crosstableCell(e, s.rounds[i], id, numbers)} ${scoreText(totals[i])}';
+          })
+          .map((cell) => cell.padRight(cellWidth))
           .join(' ');
+      final name = wall && row.player.withdrawn
+          ? '${reportName(row.player.name)} (withdrawn)'
+          : reportName(row.player.name);
       lines.add(
-        '${numbers[id].toString().padLeft(3)}  ${reportName(row.player.name).padRight(nameWidth)}  ${wallChartRating(row.player).padLeft(4)}  ${scoreText(row.points).padLeft(4)}  $cells',
+        '${numbers[id].toString().padLeft(3)}  ${name.padRight(nameWidth)}  ${wallChartRating(row.player).padLeft(4)}  ${scoreText(row.points).padLeft(4)}  $cells',
       );
     }
     // A knockout places by the bracket, not by points.
@@ -893,6 +970,134 @@ Future<Uint8List> reportPdf(
           ),
         );
       }
+    }
+    if (kind == ReportKind.wallChart) {
+      // The chart posted on the wall (rule 28O): one row per pairing number,
+      // one box per planned round. Each box carries the opponent's number in
+      // its top corner, the color in its bottom corner and the score so far
+      // large in the middle, as a TD would pencil it in; the last box is the
+      // total and Pos is filled once the section is complete.
+      title('Wall chart');
+      final numbers = {for (final (i, id) in s.players.indexed) id: i + 1};
+      final rows = [
+        ...table,
+      ]..sort((a, b) => numbers[a.player.id]!.compareTo(numbers[b.player.id]!));
+      final columns = wallChartRounds(s);
+      final complete =
+          columns.isNotEmpty &&
+          columns.every(
+            (n) => s.rounds.any(
+              (r) => r.number == n && r.games.every((g) => g.outcome.resolved),
+            ),
+          );
+      pw.Widget small(String text) =>
+          pw.Text(text, style: const pw.TextStyle(fontSize: 7));
+      pw.Widget head(String text) => pw.Padding(
+        padding: const pw.EdgeInsets.all(4),
+        child: pw.Text(
+          text,
+          style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+        ),
+      );
+      pw.Widget box(Standing row, int n) {
+        final i = s.rounds.indexWhere((r) => r.number == n);
+        if (i < 0) return pw.SizedBox(height: 34);
+        final marks = wallChartMarks(e, s.rounds[i], row.player.id, numbers);
+        return pw.SizedBox(
+          height: 34,
+          child: pw.Stack(
+            children: [
+              pw.Positioned(left: 2, top: 1, child: small(marks.opponent)),
+              pw.Positioned(left: 2, bottom: 1, child: small(marks.color)),
+              pw.Center(
+                child: pw.Text(
+                  _halves(cumulativeScores(s, row.player.id)[i]),
+                  style: const pw.TextStyle(fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      widgets.add(
+        pw.Table(
+          border: pw.TableBorder.all(width: 0.6),
+          defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+          columnWidths: {
+            0: const pw.FixedColumnWidth(28),
+            1: const pw.FlexColumnWidth(3),
+            for (var c = 0; c < columns.length; c++)
+              2 + c: const pw.FlexColumnWidth(1),
+            2 + columns.length: const pw.FixedColumnWidth(32),
+          },
+          children: [
+            pw.TableRow(
+              repeat: true,
+              children: [
+                head('No.'),
+                head('Player'),
+                for (final n in columns) head('R$n'),
+                head('Pos'),
+              ],
+            ),
+            for (final row in rows)
+              pw.TableRow(
+                decoration: row.player.withdrawn
+                    ? const pw.BoxDecoration(
+                        color: PdfColor.fromInt(0xffe0e0e0),
+                      )
+                    : null,
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Text(
+                      '${numbers[row.player.id]}',
+                      style: const pw.TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(4),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          reportName(row.player.name),
+                          style: const pw.TextStyle(fontSize: 11),
+                        ),
+                        small(
+                          '${wallChartRating(row.player)}'
+                          '${row.player.withdrawn ? ' · withdrawn' : ''}',
+                        ),
+                      ],
+                    ),
+                  ),
+                  for (final n in columns) box(row, n),
+                  pw.Center(
+                    child: pw.Text(
+                      complete ? '${row.rank}' : '',
+                      style: const pw.TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      );
+      widgets.add(
+        pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 6),
+          child: pw.Text(
+            'Players in pairing-number order. In each round box: top, the '
+            'opponent\'s number (F = forfeit loss, X = forfeit win, '
+            '? = unresolved, bye = full point, ½ bye, 0 bye, - = not paired); '
+            'bottom, the color; middle, the score after that round. A blank '
+            'box is a round not yet paired. Pos is the final place. '
+            'NEW = unrated with no US Chess ID; UNR = unrated.',
+            style: const pw.TextStyle(fontSize: 9),
+          ),
+        ),
+      );
     }
     if (kind == ReportKind.crosstable) {
       title('Crosstable');

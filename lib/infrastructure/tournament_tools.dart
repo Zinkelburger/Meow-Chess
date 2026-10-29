@@ -617,7 +617,7 @@ class TournamentTools {
       ),
       tool(
         'export_event',
-        'Write JSON, CSV, text crosstable, preflight and (when valid) the three DBFs into a NEW directory, plus one FIDE TRF26 file per FIDE-rated section when its checks pass. Never submits results. Returns DBF and FIDE blockers.',
+        'Write JSON, CSV, text crosstable and wall chart, preflight and (when valid) the three DBFs into a NEW directory, plus one FIDE TRF26 file per FIDE-rated section when its checks pass. Never submits results. Returns DBF and FIDE blockers.',
         {
           'directory': _string(),
           'sectionId': _string(
@@ -1374,6 +1374,7 @@ class TournamentTools {
           ).convert(snapshot.toJson()),
           'standings.csv': standingsCsv(snapshot),
           'crosstable.txt': crosstable(snapshot),
+          'wall_chart.txt': wallChart(snapshot),
           'preflight.json': jsonEncode({
             'issues': issues,
             'submitted': false,
