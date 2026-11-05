@@ -120,6 +120,71 @@ difference from the accepted SwissSys report that has no stated reason, or any
 result that disagrees with what US Chess rated where SwissSys's own report did
 not.
 
+## Controller fuzzer
+
+`test/fuzz/` drives the real `TournamentController` and SQLite event file
+through random tournament days. It registers and imports players, makes
+sections and quads, reserves byes, pairs, scores, corrects results, withdraws
+after posting and re-pairs (29G3), replaces pairings, moves back, forward and
+to any point in history, applies stale proposals and reviews, and reopens the
+file. Steps are drawn from phase-weighted tables (setup, play, repairs), so a
+run spends its time in deep tournament states rather than on refusals.
+
+After every controller command:
+
+- A `TournamentException` is a refusal and must leave the event untouched. Any
+  other error is a crash.
+- An accepted command commits at most one revision, never changes the event
+  without one, and never spends one on nothing.
+- A stale proposal or result review must be refused.
+- The saved rows (`load()`) and the current history node equal the event in
+  memory. Reopening the file changes nothing.
+
+After every step:
+
+- `validateEvent` passes.
+- The history summary, wall chart, crosstable, standings CSV, prize report,
+  rating-report issues, standings and rating previews refuse plainly or
+  succeed. If the rating preflight passes, the rating report must be produced.
+- In each simple section, every player's score equals their game scores plus
+  their byes, and ranks never decrease.
+- A newly posted or re-paired Swiss round holds every active player once. It
+  pairs no withdrawn player and no player with a reserved bye, repeats no
+  played pairing without 27A1, and gives no second full-point bye without 28L3.
+
+The suite also counts every event a command built that `validateEvent`
+refuses. The repository refuses those, so no data is at risk, but the TD
+then sees a generic message instead of one naming the player.
+`MEOW_FUZZ_STRICT=1` turns each into a failure.
+
+A failure is shrunk by delta debugging: first steps, then arguments. Each step
+names its choices as indices into the live event, so any subsequence still
+runs. The minimal trace is printed and written to `build/fuzz/seed-N.json`.
+To make it a permanent test, copy it into `test/fuzz/regressions/` with a
+`why`, and `"strict": true` if it was a refused invalid event. Every pinned
+trace is replayed on each run.
+
+```sh
+flutter test test/fuzz                                         # 12 seeds × 120 steps, as in CI
+MEOW_FUZZ_SEEDS=0-999 MEOW_FUZZ_STEPS=400 flutter test test/fuzz # a campaign
+MEOW_FUZZ_STRICT=1 MEOW_FUZZ_SEEDS=0-199 flutter test test/fuzz  # also fail on refused invalid events
+MEOW_FUZZ_REPLAY=build/fuzz/seed-17.json flutter test test/fuzz  # replay one trace
+```
+
+The first campaigns (November 5, 2026) ran about 100,000 commands with sections
+up to ten rounds deep. They found three faults, each now pinned and covered by
+a focused test:
+
+| Trace | Fault | Fix |
+|---|---|---|
+| `side-game-blocks-next-round` | A player with a bye began a side game, and the next round was posted while it was still being played. Only the repository's validation refused it, without naming anyone. | `post` names the player and board. |
+| `reopen-result-during-side-game` | A finished game was set back to unreported after its player began a side game, again refused only by validation. | `recordResult` and `correctResult` name the side game. |
+| `repair-keeps-withdrawn-board` | A 29G3 re-pairing (MCP `repair_round`) could keep the unstarted board of a player who had withdrawn, leaving the opponent waiting. | `repairUnstartedRound` refuses. |
+
+Not yet covered: knockout, ladder, bughouse and Scheveningen commands,
+section transfers after play, team awards, ratings and membership, and FIDE
+sections.
+
 ## 1.2.1 maintenance regressions
 
 The maintenance suite checks that replacing pairings invalidates old game IDs,

@@ -1,0 +1,12 @@
+{
+ "found": "seeds 2 and 24, 300 steps, shrunk to 5",
+ "violation": "[paired-withdrawn] Round 1 paired withdrawn Zoë Ñúñez 2.",
+ "why": "29G3 re-pairing kept the unstarted board of a player who had already withdrawn, so the re-paired round still paired them. repairUnstartedRound must refuse.",
+ "trace": [
+  ["import", 12942, 0, 40708, 0, 0],
+  ["addSection", 0, 0, 0, 0, 0],
+  ["pair", 0, 0, 0, 0, 0],
+  ["withdraw", 2256, 20857, 0, 0, 0],
+  ["lateWithdraw", 0, 20903, 0, 37711, 0]
+ ]
+}
