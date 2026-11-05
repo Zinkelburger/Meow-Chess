@@ -169,38 +169,42 @@ class SectionTabs extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Semantics(
-            selected: active,
-            child: TextButton(
-              key: ValueKey('section-chip-${id ?? 'all'}'),
-              onPressed: () => onPick(id),
-              style: TextButton.styleFrom(
-                foregroundColor: colors.onSurface,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
+          // One node: the tab's name and whether it is the current tab,
+          // not an unnamed "selected" wrapper around a separate button.
+          MergeSemantics(
+            child: Semantics(
+              selected: active,
+              child: TextButton(
+                key: ValueKey('section-chip-${id ?? 'all'}'),
+                onPressed: () => onPick(id),
+                style: TextButton.styleFrom(
+                  foregroundColor: colors.onSurface,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  shape: const RoundedRectangleBorder(),
                 ),
-                shape: const RoundedRectangleBorder(),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colors.onSurfaceVariant,
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -209,6 +213,9 @@ class SectionTabs extends StatelessWidget {
     );
     return Builder(
       builder: (context) => GestureDetector(
+        // The right-click menu repeats commands found elsewhere; as a
+        // semantics tap it did nothing and hid the tab's name.
+        excludeFromSemantics: true,
         onSecondaryTapDown: (details) async {
           final action = await contextMenu<SectionMenuAction>(
             context,

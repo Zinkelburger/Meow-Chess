@@ -24,6 +24,7 @@ import 'reports_view.dart';
 import 'results_view.dart';
 import 'rulings_panel.dart';
 import 'section_tabs.dart';
+import 'selection_keys.dart';
 import 'side_game_panel.dart';
 import 'side_panel.dart';
 import 'update_panels.dart';
@@ -454,6 +455,9 @@ class _WorkspaceState extends State<Workspace> {
           shift: shift,
         );
     return Shortcuts(
+      // Its focus node only routes keys; in the semantics tree it was a
+      // window-sized control with no name.
+      includeSemantics: false,
       shortcuts: {
         const SingleActivator(LogicalKeyboardKey.escape): _KeyIntent(
           dock.close,
@@ -487,155 +491,161 @@ class _WorkspaceState extends State<Workspace> {
             child: Scaffold(
               // Names, IDs, scores and messages can be dragged over and copied.
               body: SelectionArea(
-                child: SafeArea(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      WorkspaceTopBar(
-                        eventName: e.name,
-                        eventOpen: eventOpen,
-                        onToggleEvent: toggleEvent,
-                        helpOpen: dock.id == 'help',
-                        onHelp: help,
-                        rulingsOpen: dock.id == 'rulings',
-                        onRulings: rulings,
-                        keyboardHelpOpen: dock.id == 'keyboard-help',
-                        onKeyboardHelp: keyboardHelp,
-                        undoLabel: c.undoLabel,
-                        onUndo: c.canUndo ? undo : null,
-                        redoLabel: c.redoLabel,
-                        onRedo: c.canRedo ? redo : null,
-                        historyOpen: historyOpen,
-                        onToggleHistory: toggleHistory,
-                        onTheme: widget.onTheme,
-                        onClose: widget.onClose,
-                      ),
-                      if (e.practice) const PracticeBanner(),
-                      WorkspacePageRow(
-                        view: view,
-                        onGo: go,
-                        action: PostControl(
-                          event: e,
-                          pairingEvent: c.pairingEvent,
-                          section: section,
-                          pairing: pairing,
-                          onPair: pair,
-                          onPairSideGame: pairSideGame,
-                          onFinish: () => go(TaskView.reports),
+                child: TextFieldKeysInSelection(
+                  child: SafeArea(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        WorkspaceTopBar(
+                          eventName: e.name,
+                          eventOpen: eventOpen,
+                          onToggleEvent: toggleEvent,
+                          helpOpen: dock.id == 'help',
+                          onHelp: help,
+                          rulingsOpen: dock.id == 'rulings',
+                          onRulings: rulings,
+                          keyboardHelpOpen: dock.id == 'keyboard-help',
+                          onKeyboardHelp: keyboardHelp,
+                          undoLabel: c.undoLabel,
+                          onUndo: c.canUndo ? undo : null,
+                          redoLabel: c.redoLabel,
+                          onRedo: c.canRedo ? redo : null,
+                          historyOpen: historyOpen,
+                          onToggleHistory: toggleHistory,
+                          onTheme: widget.onTheme,
+                          onClose: widget.onClose,
                         ),
-                      ),
-                      if (showSections)
-                        SectionTabs(
-                          event: e,
-                          sectionId: sectionId,
-                          scroll: sectionScroll,
-                          tabKey: (id) =>
-                              sectionKeys.putIfAbsent(id, GlobalKey.new),
-                          onPick: pickSection,
-                          onMenu: sectionMenu,
-                          onNewSection: newSection,
-                          onEditQuadPairings: editQuadPairings,
+                        if (e.practice) const PracticeBanner(),
+                        WorkspacePageRow(
+                          view: view,
+                          onGo: go,
+                          action: PostControl(
+                            event: e,
+                            pairingEvent: c.pairingEvent,
+                            section: section,
+                            pairing: pairing,
+                            onPair: pair,
+                            onPairSideGame: pairSideGame,
+                            onFinish: () => go(TaskView.reports),
+                          ),
                         ),
-                      Expanded(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  if (c.backupWarning != null)
-                                    MaterialBanner(
-                                      content: Text(c.backupWarning!),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: c.secondaryBackup,
-                                          child: const Text('Retry'),
-                                        ),
-                                      ],
-                                    ),
-                                  if (c.repository
-                                      case final SqliteEventRepository file
-                                      when !file.crashProtected)
-                                    MaterialBanner(
-                                      key: const ValueKey('crash-unprotected'),
-                                      content: const Text(
-                                        'This folder doesn’t let Meow-Chess protect the event file while it saves, so a crash or power cut could damage it. Keep backups on.',
+                        if (showSections)
+                          SectionTabs(
+                            event: e,
+                            sectionId: sectionId,
+                            scroll: sectionScroll,
+                            tabKey: (id) =>
+                                sectionKeys.putIfAbsent(id, GlobalKey.new),
+                            onPick: pickSection,
+                            onMenu: sectionMenu,
+                            onNewSection: newSection,
+                            onEditQuadPairings: editQuadPairings,
+                          ),
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (c.backupWarning != null)
+                                      MaterialBanner(
+                                        content: Text(c.backupWarning!),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: c.secondaryBackup,
+                                            child: const Text('Retry'),
+                                          ),
+                                        ],
                                       ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: showBackups,
-                                          child: const Text('Backups…'),
+                                    if (c.repository
+                                        case final SqliteEventRepository file
+                                        when !file.crashProtected)
+                                      MaterialBanner(
+                                        key: const ValueKey(
+                                          'crash-unprotected',
                                         ),
-                                      ],
-                                    ),
-                                  if (postNotes.isNotEmpty)
-                                    PostNotes(
-                                      notes: postNotes,
-                                      onDismiss: () =>
-                                          setState(() => postNotes = const []),
-                                    ),
-                                  Expanded(
-                                    child: LayoutBuilder(
-                                      builder: (context, layout) {
-                                        // Each tool docks in the same column
-                                        // at the right, over the page.
-                                        Widget docked(Widget panel) =>
-                                            Positioned(
-                                              top: 0,
-                                              bottom: 0,
-                                              right: 0,
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(
-                                                  top: 16,
-                                                ),
-                                                child: ConstrainedBox(
-                                                  constraints: BoxConstraints(
-                                                    maxWidth:
-                                                        detailsColumnWidth(
-                                                          layout.maxWidth,
-                                                        ),
+                                        content: const Text(
+                                          'This folder doesn’t let Meow-Chess protect the event file while it saves, so a crash or power cut could damage it. Keep backups on.',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: showBackups,
+                                            child: const Text('Backups…'),
+                                          ),
+                                        ],
+                                      ),
+                                    if (postNotes.isNotEmpty)
+                                      PostNotes(
+                                        notes: postNotes,
+                                        onDismiss: () => setState(
+                                          () => postNotes = const [],
+                                        ),
+                                      ),
+                                    Expanded(
+                                      child: LayoutBuilder(
+                                        builder: (context, layout) {
+                                          // Each tool docks in the same column
+                                          // at the right, over the page.
+                                          Widget docked(
+                                            Widget panel,
+                                          ) => Positioned(
+                                            top: 0,
+                                            bottom: 0,
+                                            right: 0,
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 16,
+                                              ),
+                                              child: ConstrainedBox(
+                                                constraints: BoxConstraints(
+                                                  maxWidth: detailsColumnWidth(
+                                                    layout.maxWidth,
                                                   ),
-                                                  child: panel,
                                                 ),
+                                                child: panel,
                                               ),
-                                            );
-                                        return Stack(
-                                          fit: StackFit.expand,
-                                          children: [
-                                            content,
-                                            if (dock.panel case final panel?)
-                                              docked(panel),
-                                            if (eventOpen)
-                                              docked(
-                                                EventPanel(
-                                                  key: eventPanel,
-                                                  controller: c,
-                                                  onClose: toggleEvent,
-                                                  backLabel: dock.backLabel,
+                                            ),
+                                          );
+                                          return Stack(
+                                            fit: StackFit.expand,
+                                            children: [
+                                              content,
+                                              if (dock.panel case final panel?)
+                                                docked(panel),
+                                              if (eventOpen)
+                                                docked(
+                                                  EventPanel(
+                                                    key: eventPanel,
+                                                    controller: c,
+                                                    onClose: toggleEvent,
+                                                    backLabel: dock.backLabel,
+                                                  ),
                                                 ),
-                                              ),
-                                            if (historyOpen)
-                                              docked(
-                                                HistoryPanel(
-                                                  controller: c,
-                                                  review: historyReview,
-                                                  onClose: toggleHistory,
+                                              if (historyOpen)
+                                                docked(
+                                                  HistoryPanel(
+                                                    controller: c,
+                                                    review: historyReview,
+                                                    onClose: toggleHistory,
+                                                  ),
                                                 ),
-                                              ),
-                                          ],
-                                        );
-                                      },
+                                            ],
+                                          );
+                                        },
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      statusBar(e),
-                    ],
+                        statusBar(e),
+                      ],
+                    ),
                   ),
                 ),
               ),

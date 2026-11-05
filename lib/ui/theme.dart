@@ -365,8 +365,8 @@ class EmptyState extends StatelessWidget {
   final String title, body;
   final Widget? action;
   @override
-  Widget build(BuildContext context) => Center(
-    child: Padding(
+  Widget build(BuildContext context) {
+    final content = Padding(
       padding: const EdgeInsets.all(32),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
@@ -390,6 +390,18 @@ class EmptyState extends StatelessWidget {
           ],
         ),
       ),
-    ),
-  );
+    );
+    // Centred when there is room; in a short window (the minimum size, or
+    // large text) it scrolls rather than overflowing.
+    return LayoutBuilder(
+      builder: (context, box) => !box.hasBoundedHeight
+          ? Center(child: content)
+          : SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: box.maxHeight),
+                child: Center(child: content),
+              ),
+            ),
+    );
+  }
 }

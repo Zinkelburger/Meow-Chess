@@ -152,6 +152,29 @@ After every step:
   pairs no withdrawn player and no player with a reserved bye, repeats no
   played pairing without 27A1, and gives no second full-point bye without 28L3.
 
+History moves are checked as a model:
+
+- Undo, Redo and Restore land exactly on the saved state they target.
+- The losses History shows equal the play the move removes. A move that loses play
+  is refused unless accepted, and one that loses none is never refused.
+- Undo then Redo returns to the same version and node.
+- Every 25 steps and at the end: every state ever committed is still in the history,
+  and every saved state is valid.
+- Every recovery point is true: "Before round N pairings" has N - 1 rounds, and the
+  next step paired round N. Every posted round has such a point, and a limited walk
+  is a prefix of the full one.
+
+Each history oracle was checked by mutation. With `recoveryMarks` off by one round,
+the first seeds fail at once, naming the false point.
+
+Steps name players, sections and games by stable identity. Every ID minted during
+a step derives from the step's permanent tag, and a choice among candidates is a
+rendezvous hash of the step's argument and each candidate's identity. Deleting
+another step or candidate therefore never changes what a step picks, and faults that
+need one particular player still shrink, typically to 4–9 steps.
+`MEOW_FUZZ_VERBOSE=1` prints the most common refusal of each command, which shows
+where a campaign wastes its steps.
+
 The suite also counts every event a command built that `validateEvent`
 refuses. The repository refuses those, so no data is at risk, but the TD
 then sees a generic message instead of one naming the player.
@@ -171,9 +194,10 @@ MEOW_FUZZ_STRICT=1 MEOW_FUZZ_SEEDS=0-199 flutter test test/fuzz  # also fail on 
 MEOW_FUZZ_REPLAY=build/fuzz/seed-17.json flutter test test/fuzz  # replay one trace
 ```
 
-The first campaigns (November 5, 2026) ran about 100,000 commands with sections
-up to ten rounds deep. They found four faults, each now pinned and covered by
-a focused test:
+The first campaigns (November 5, 2026) ran a few hundred thousand commands, with
+sections up to ten rounds deep. They found six faults, each now pinned and covered
+by a focused test. Each pin was checked both ways: it fails with its fix reverted
+and passes with it.
 
 | Trace | Fault | Fix |
 |---|---|---|
@@ -181,14 +205,105 @@ a focused test:
 | `reopen-result-during-side-game` | A finished game was set back to unreported after its player began a side game, again refused only by validation. | `recordResult` and `correctResult` name the side game. |
 | `move-second-entry-of-person` | Moving a side-game entry into the section holding the same person's main entry was refused only by validation. | `movePlayers` names the existing entry. |
 | `repair-keeps-withdrawn-board` | A 29G3 re-pairing (MCP `repair_round`) could keep the unstarted board of a player who had withdrawn, leaving the opponent waiting. | `repairUnstartedRound` refuses. |
+| `repair-keeps-second-meeting` | A 29G3 re-pairing kept a board that 27A1 allowed as a second meeting, but dropped the round's explanation, so nothing said the two players were meeting again. | The repaired round names the kept repeat. |
+| `bughouse-partner-moved-away` | Moving or removing a partnered bughouse player left the partnership naming them. | Before play the partner is left unpartnered; after play the move is refused with both names. |
 
-Shrinking is weakest when a fault needs one particular player: steps choose
-players by index, so deleting an earlier step can change who a later step
-picks. Such traces stay long (seed 431 kept 59 steps) but still replay exactly.
+One oracle was found too weak this way. To allow a kept board whose withdrawn
+player had already been scored, the repaired-round check had exempted every kept
+board, including the waiting one it was written to catch. Hunting for the bug on
+code without its fix showed nothing, which exposed the gap. Kept boards are now
+exempt only once they have a result.
 
-Not yet covered: knockout, ladder, bughouse and Scheveningen commands,
-section transfers after play, team awards, ratings and membership, and FIDE
-sections.
+Knockout, ladder, bughouse and Scheveningen sections are generated too, with
+their own steps: partners, home team, ladder games and reorders, and knockout
+decisions. Play weights follow the hall: results while boards are open, pairing
+once a section is ready, and new sections once every section has finished. Not
+yet covered: team awards, ratings and membership, and FIDE sections.
+
+## UI fuzzer
+
+`test/fuzz/ui_fuzz_test.dart` mounts the real workspace on an event the
+controller fuzzer built part way through a tournament day. It then taps, types,
+presses keys and scrolls, choosing among what the semantics tree says can be done
+on screen. Choices use the same stable hashing on each control's label. Each run
+uses one window: desktop (1400 × 900), the app's minimum window (960 × 540), or
+200% text. Each seed runs as Linux, Windows or macOS, because widget tests default
+to Android, whose scrolling and keys differ. A keyboard-only mode drives the
+workspace from Tab, Enter, Escape, the arrows, digits, `=`, Space and F2 alone.
+Printing goes to a stand-in printer that still lays out every PDF the app asks for.
+Pairing runs on the test's thread through `runProposal`, because a fake clock
+cannot wait for an isolate.
+
+After every step: nothing threw or overflowed, with the error's widget and source
+line in the report; the event is valid; and memory, the saved rows and the current
+history node agree. Every tenth step and at the end, the run checks that every
+tappable control has a label and that text has legible contrast. Failures shrink
+like controller traces and are written to `build/fuzz/ui-*.json`.
+
+```sh
+flutter test test/fuzz/ui_fuzz_test.dart                                        # 2 seeds per window, as in CI
+MEOW_UI_FUZZ_SEEDS=0-49 MEOW_UI_FUZZ_STEPS=120 flutter test test/fuzz/ui_fuzz_test.dart
+```
+
+What it found, each fixed with a test:
+
+- **Up and Down did nothing in every text field.** Flutter 3.47 throws when a
+  `TextField` inside a `SelectionArea` receives them, on Linux, Windows and macOS.
+  The workspace is one selection area, so names can be dragged and copied. The
+  error was logged and the key dropped. `TextFieldKeysInSelection` works around it.
+  `test/ui/selection_keys_test.dart` shows Flutter still needs the workaround,
+  checks that the caret moves, and checks that keyboard selection outside fields
+  still extends.
+- **Section tabs were unnamed controls.** The tab's right-click menu detector
+  wrapped each tab in its own tappable, unlabeled semantics node, so a screen reader
+  heard an unnamed "selected" control before each tab. The workspace's shortcut
+  focus also formed a window-sized, unnamed tappable node.
+- **The empty state overflowed at the minimum window.** Searching the players for
+  something nothing matched showed an empty state 27 pixels taller than the space
+  left. It now scrolls when short.
+- **The Board heading vanished at 200% text.** The board column had a fixed width
+  while the score columns grew. It now grows with the text.
+- The status line's `·` separators no longer read aloud.
+
+Two early reports were artifacts of the test environment rather than app faults:
+the Android default's scroll behaviour and a missing print plugin. Both are now
+modelled correctly.
+
+## Printed reports
+
+`test/infrastructure/pdf_bounds_test.dart` prints every report on Letter and A4,
+in Inter as the app prints them and in the built-in Helvetica. The rosters are
+built to break layouts: long and unbreakable names, accented names, long section,
+club and event names, nine rounds, unrated players and 180 entrants across pages.
+`test/pdf_geometry.dart` reads where every word lands from the PDF's own drawing
+commands (`cm` transforms, `re W n` cell clips, and font widths from `/Widths`,
+`/W` and `/ToUnicode`). The test requires that every word lies on the page and
+inside its cell, that no two words on a line overlap, and that names print whole,
+not broken mid-word. The checker shows it can fail: a word in a too-narrow clipped
+box and two words stacked are both reported, and a PDF it reads no text from fails.
+Every report passed.
+
+## Scale
+
+`test/ui/scale_test.dart` counts rows built rather than timing frames, because
+times vary by machine and mean little in debug mode. A roster of 2,000 builds
+about 20 rows, before and after typing a search. With boards beside standings
+(a window about 1,500 pixels or wider), a round of 500 boards builds about 60
+score boxes. Before this change it built all 1,000, and entering one result took
+7–11 seconds in debug mode with 1,000 players; it now takes about 0.4 seconds at
+any size. Committing a result costs about 85 ms at 1,000 players in debug mode.
+
+**Known limit:** narrower windows stack the boards above the standings in one
+scroll view, and both are still built in full. With 1,000 players that costs
+seconds per result in debug mode, growing faster than the field. The fix is to
+make the stacked page a `CustomScrollView` with the board rows and standings rows
+as slivers, which means splitting each bordered table into per-row pieces.
+`focusBox` already finds boards that a lazy list has not built yet.
+
+A pinned trace means something only to the step semantics that produced it. When
+steps change, re-derive each pin: run a strict campaign on code with only its fix
+reverted, check that the new trace fails there and passes on the fixed code, then
+replace the pin.
 
 ## 1.2.1 maintenance regressions
 

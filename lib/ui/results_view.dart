@@ -317,8 +317,26 @@ class ResultsViewState extends State<ResultsView> {
     });
   }
 
-  void focusBox(String gameId, bool white) {
-    final node = box(gameId, white)..requestFocus();
+  void focusBox(String gameId, bool white, [int tries = 4]) {
+    final node = box(gameId, white);
+    // The boards are a lazy list: a board far down has no box yet. Jump to
+    // where it should be, and look again once that part is built.
+    if (node.context == null && scroll.hasClients && tries > 0) {
+      final all = visibleRows();
+      final index = all.indexWhere((r) => r.game.id == gameId);
+      if (index >= 0) {
+        final position = scroll.position;
+        position.jumpTo(
+          (position.maxScrollExtent * index / math.max(1, all.length - 1))
+              .clamp(0.0, position.maxScrollExtent),
+        );
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => mounted ? focusBox(gameId, white, tries - 1) : null,
+        );
+        return;
+      }
+    }
+    node.requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final target = node.context;
       if (target != null && target.mounted) {
@@ -1338,13 +1356,14 @@ class ResultsViewState extends State<ResultsView> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _columns(context),
+                          // Lazy: a round of hundreds of boards builds only
+                          // those on screen, so entering a result stays quick.
                           Flexible(
-                            child: SingleChildScrollView(
+                            child: ListView(
                               controller: scroll,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: items,
-                              ),
+                              shrinkWrap: true,
+                              padding: EdgeInsets.zero,
+                              children: items,
                             ),
                           ),
                           ?footer,
@@ -1361,6 +1380,11 @@ class ResultsViewState extends State<ResultsView> {
   static const _board = 40.0, _row = 32.0;
   double scoreWidth(BuildContext context) =>
       math.max(36, MediaQuery.textScalerOf(context).scale(32));
+
+  /// The board column grows with the text, so its "Board" heading still fits
+  /// at large text sizes (it vanished at 200%; found by the UI fuzzer).
+  double boardWidth(BuildContext context) =>
+      math.max(_board, MediaQuery.textScalerOf(context).scale(_board));
 
   /// Before round 1: the board sheet with nothing filled in, one row per
   /// board the section will need, so nothing moves when pairings arrive.
@@ -1393,7 +1417,7 @@ class ResultsViewState extends State<ResultsView> {
       child: Row(
         children: [
           SizedBox(
-            width: _board,
+            width: boardWidth(context),
             child: Text(label, style: muted),
           ),
           if (bye) SizedBox(width: scoreWidth(context)) else box(),
@@ -1452,7 +1476,7 @@ class ResultsViewState extends State<ResultsView> {
         ),
         child: Row(
           children: [
-            const SizedBox(width: _board, child: Text('Board')),
+            SizedBox(width: boardWidth(context), child: const Text('Board')),
             SizedBox(
               width: scoreWidth(context),
               child: Text('Score', textAlign: TextAlign.center),
@@ -1528,7 +1552,7 @@ class ResultsViewState extends State<ResultsView> {
       child: Row(
         children: [
           SizedBox(
-            width: _board,
+            width: boardWidth(context),
             child: Text(
               'Bye',
               style: TextStyle(
@@ -1742,7 +1766,7 @@ class ResultsViewState extends State<ResultsView> {
           child: Row(
             children: [
               SizedBox(
-                width: _board,
+                width: boardWidth(context),
                 child: Text(
                   '${g.board}${row.section.doubleGames ? '·${g.leg}' : ''}',
                   style: TextStyle(
