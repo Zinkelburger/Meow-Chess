@@ -1162,6 +1162,23 @@ void main() {
         ),
         throwsA(isA<TournamentException>()),
       );
+      // Keeping the withdrawn player's waiting board would leave the
+      // opponent waiting for nobody. Found by the controller fuzzer.
+      expect(
+        () => repairUnstartedRound(withdrawn, withdrawn.sections.single, {
+          ...keep,
+          r1.games[2].id,
+        }, ids('n')),
+        throwsA(
+          isA<TournamentException>().having(
+            (x) => x.message,
+            'message',
+            contains(
+              'Board 3 pairs ${withdrawn.player(gone).name}, who has withdrawn',
+            ),
+          ),
+        ),
+      );
     });
   });
 }

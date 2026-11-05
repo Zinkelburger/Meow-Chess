@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/diagnostics.dart';
 import 'package:meow_chess/domain/model.dart';
+import 'package:meow_chess/application/tournament_controller.dart';
+import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import '../support.dart';
 
 Matcher refuses(String text) => throwsA(
@@ -181,6 +183,74 @@ void main() {
       );
     });
   });
+
+  test(
+    'a side game during a bye holds the player out of the next posting',
+    () async {
+      // Found by the controller fuzzer (test/fuzz): posting used to leave this
+      // to the repository's validation, which could not say who was playing.
+      final c = TournamentController(SqliteEventRepository(':memory:'));
+      addTearDown(c.dispose);
+      c.create('Thursday Swiss');
+      c.importPlayers([
+        for (var i = 0; i < 5; i++)
+          Player(id: 's$i', name: 'Swiss $i', rating: 1800 - i * 50),
+      ]);
+      c.addSection('Open', Format.swiss, 3);
+      c.post(await c.propose());
+      final bye = c.event!.sections.single.rounds.single.byes.single.player;
+      c.savePlayer(Player(id: 'walkin', name: 'Walk In', rating: 1200));
+      c.addSideGame(bye, 'walkin');
+      final open = c.event!.sections.first;
+      for (final g in open.rounds.single.games) {
+        c.recordResult(g.id, Outcome.draw);
+      }
+      final next = await c.propose(sectionId: open.id);
+      final name = c.event!.player(bye).name;
+      expect(() => c.post(next), refuses('$name is still playing board'));
+      final side = c.event!.sections.firstWhere((s) => s.sideGames);
+      c.recordResult(side.rounds.single.games.single.id, Outcome.whiteWin);
+      c.post(await c.propose(sectionId: open.id));
+      expect(c.event!.sections.first.rounds, hasLength(2));
+    },
+  );
+
+  test(
+    'a finished game cannot be reopened while its player is in a side game',
+    () async {
+      // Found by the controller fuzzer, like the posting case above.
+      final c = TournamentController(SqliteEventRepository(':memory:'));
+      addTearDown(c.dispose);
+      c.create('Thursday Swiss');
+      c.importPlayers([
+        for (var i = 0; i < 4; i++)
+          Player(id: 's$i', name: 'Swiss $i', rating: 1800 - i * 50),
+      ]);
+      c.addSection('Open', Format.swiss, 3);
+      c.post(await c.propose());
+      final game = c.event!.sections.single.rounds.single.games.first;
+      c.recordResult(game.id, Outcome.whiteWin);
+      c.savePlayer(Player(id: 'walkin', name: 'Walk In', rating: 1200));
+      c.addSideGame(game.white, 'walkin');
+      final name = c.event!.player(game.white).name;
+      for (final reopen in [
+        Outcome.unreported,
+        Outcome.unfinished,
+        Outcome.disputed,
+      ]) {
+        expect(
+          () => c.recordResult(game.id, reopen),
+          refuses('$name is now playing board'),
+        );
+      }
+      // Changing it to another final result is still a plain correction.
+      c.recordResult(game.id, Outcome.draw);
+      expect(
+        c.event!.games.firstWhere((g) => g.id == game.id).outcome,
+        Outcome.draw,
+      );
+    },
+  );
 
   test('a placeholder US Chess ID identifies nobody', () {
     final c = fixture(count: 4);

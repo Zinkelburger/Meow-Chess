@@ -186,6 +186,26 @@ mixin _RoundCommands on _CommandContext {
         busy[board] = s.name;
       }
     }
+    // A person still at a board elsewhere, typically a side game played
+    // during a bye, cannot be paired until that game has a result.
+    final playing = <String, (Section, Game)>{
+      for (final s in e.sections)
+        if (!batch.rounds.containsKey(s.id))
+          for (final r in s.unresolvedRounds)
+            for (final g in r.games.where((g) => !g.outcome.resolved))
+              for (final id in [g.white, g.black])
+                e.player(id).personId ?? id: (s, g),
+    };
+    for (final r in batch.rounds.values) {
+      for (final id in r.games.expand((g) => [g.white, g.black])) {
+        final p = e.player(id);
+        if (playing[p.personId ?? id] case (final s, final g)) {
+          throw TournamentException(
+            '${p.name} is still playing board ${g.board} in ${s.name}. Enter that result before pairing them again.',
+          );
+        }
+      }
+    }
     for (final r in batch.rounds.values) {
       checkPairingRequests(e, r.games);
     }

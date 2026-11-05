@@ -25,6 +25,7 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
         'The event changed while this review was open. Close it and review the correction again.',
       );
     }
+    _refuseReopenWhilePlaying(review.event, review.gameId, outcome);
     final next = _withIrrevocableByeRule(
       review.apply(
         outcome,
@@ -87,9 +88,42 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
     );
   }
 
+  /// Refuses to leave [gameId] unresolved while one of its players is at a
+  /// board in another section, typically a side game begun after it ended.
+  static void _refuseReopenWhilePlaying(
+    Event e,
+    String gameId,
+    Outcome outcome,
+  ) {
+    if (outcome.resolved) return;
+    final home = e.sections.firstWhere(
+      (s) => s.rounds.any((r) => r.games.any((g) => g.id == gameId)),
+    );
+    final game = home.rounds
+        .expand((r) => r.games)
+        .firstWhere((g) => g.id == gameId);
+    for (final id in [game.white, game.black]) {
+      final p = e.player(id), person = p.personId ?? id;
+      for (final s in e.sections.where((s) => s.id != home.id)) {
+        for (final g in s.unresolvedRounds.expand((r) => r.games)) {
+          if (g.outcome.resolved) continue;
+          if ([
+            g.white,
+            g.black,
+          ].any((x) => (e.player(x).personId ?? x) == person)) {
+            throw TournamentException(
+              '${p.name} is now playing board ${g.board} in ${s.name}. Enter that result before reopening this game.',
+            );
+          }
+        }
+      }
+    }
+  }
+
   void recordResult(String gameId, Outcome outcome, {String reason = ''}) {
     final (e, game) = _materialize(gameId);
     if (game.outcome == outcome && game.note == reason) return;
+    _refuseReopenWhilePlaying(e, gameId, outcome);
     if (correctionHasDependencies(gameId) && reason.trim().isEmpty) {
       throw const TournamentException(
         'Explain the correction: later posted rounds will be retained and need review.',

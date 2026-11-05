@@ -314,6 +314,19 @@ Round repairUnstartedRound(
         k.board == g.board,
   );
   final redo = round.games.where((g) => !kept(g)).toList();
+  // Keeping a waiting board of a player who has withdrawn would leave the
+  // opponent waiting for someone who has left.
+  for (final g in round.games.where(kept)) {
+    if (g.outcome != Outcome.unreported) continue;
+    for (final id in [g.white, g.black]) {
+      final p = event.player(id);
+      if (p.withdrawn) {
+        throw TournamentException(
+          'Board ${g.board} pairs ${p.name}, who has withdrawn. Re-pair that board too, or reinstate them.',
+        );
+      }
+    }
+  }
   if (redo.isEmpty) {
     throw const TournamentException(
       'Every game is kept: there is nothing to re-pair.',
