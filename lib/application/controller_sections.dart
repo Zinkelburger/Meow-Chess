@@ -234,6 +234,17 @@ mixin _SectionCommands on _CommandContext {
     final sources = e.sections
         .where((s) => s.id != targetId && s.players.any(ids.contains))
         .toList();
+    // Bughouse partners are fixed once round 1 is posted; before that a
+    // move leaves the partner unpartnered, as setPartners describes.
+    for (final s in sources.where((s) => s.rounds.isNotEmpty)) {
+      for (final pair in s.partners) {
+        if (pair.any(ids.contains)) {
+          throw TournamentException(
+            '${e.player(pair[0]).name} and ${e.player(pair[1]).name} are partners in ${s.name}, and partnerships are fixed once round 1 is posted.',
+          );
+        }
+      }
+    }
     // A round-robin schedule is derived from its full roster, so removing only
     // some players after play would silently re-pair earlier opponents.
     for (final s in sources) {
@@ -291,6 +302,10 @@ mixin _SectionCommands on _CommandContext {
       changed.add(s.id);
       return s.copy(
         players: players,
+        partners: [
+          for (final pair in s.partners)
+            if (pair.every(players.contains)) pair,
+        ],
         format: s.id == targetId && played ? Format.swiss : null,
         // A manual quad schedule names roster slots, which shift.
         quadPairings: const [],

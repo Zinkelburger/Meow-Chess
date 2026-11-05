@@ -392,12 +392,24 @@ Round repairUnstartedRound(
         ? a.board.compareTo(b.board)
         : a.leg.compareTo(b.leg),
   );
+  // A kept board may be a second meeting the original pairing justified;
+  // its explanation goes with the round it replaces, so say it again.
+  String pair(Game g) => ([g.white, g.black]..sort()).join('/');
+  final met = {
+    for (final r in section.rounds.take(n - 1))
+      for (final g in r.games.where((g) => g.outcome.played)) pair(g),
+  };
+  final again = {
+    for (final g in keptGames.where((g) => met.contains(pair(g))))
+      'Board ${g.board} keeps a second meeting of ${event.player(g.white).name} and ${event.player(g.black).name}, allowed where unavoidable (27A1).',
+  };
   return round.copy(
     games: games,
     byes: proposal.byes,
     revision: round.revision + 1,
     explanations: [
       'Selective re-pairing (29G3): ${keptGames.length} game${keptGames.length == 1 ? '' : 's'} kept; ${available.length} waiting player${available.length == 1 ? '' : 's'} re-paired as a separate group.',
+      ...again,
       ...proposal.explanations,
     ],
   );

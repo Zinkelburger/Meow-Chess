@@ -287,6 +287,79 @@ void main() {
     );
   });
 
+  test('a 29G3 re-pairing that keeps a second meeting still says why', () async {
+    // Found by the controller fuzzer: the re-paired round dropped the 27A1
+    // note of the board it kept, so nothing said two players met again.
+    final c = TournamentController(SqliteEventRepository(':memory:'));
+    addTearDown(c.dispose);
+    c.create('Thursday Swiss');
+    c.importPlayers([
+      for (var i = 0; i < 4; i++)
+        Player(id: 's$i', name: 'Swiss $i', rating: 1800 - i * 50),
+    ]);
+    c.addSection('Open', Format.swiss, 4);
+    // Four players meet everyone in three rounds; round 4 must repeat.
+    for (var r = 0; r < 3; r++) {
+      c.post(await c.propose());
+      for (final g in c.event!.sections.single.rounds.last.games) {
+        c.recordResult(g.id, Outcome.draw);
+      }
+    }
+    c.post(await c.propose());
+    final open = c.event!.sections.single;
+    expect(open.rounds.last.explanations.join(' '), contains('27A1'));
+    final [leaving, staying] = [...open.rounds.last.games]
+      ..sort((a, b) => a.board.compareTo(b.board));
+    c.setWithdrawn([leaving.white], true);
+    final notes = c.repairUnstarted(open.id, [staying.id], 'Left early');
+    expect(
+      notes,
+      contains(
+        'Board ${staying.board} keeps a second meeting of '
+        '${c.event!.player(staying.white).name} and '
+        '${c.event!.player(staying.black).name}, allowed where unavoidable (27A1).',
+      ),
+    );
+  });
+
+  test(
+    'moving or removing a bughouse partner leaves the other unpartnered',
+    () async {
+      // Found by the controller fuzzer: the partnership still named the player
+      // who left, and only the repository's validation refused the move.
+      final c = TournamentController(SqliteEventRepository(':memory:'));
+      addTearDown(c.dispose);
+      c.create('Bughouse night');
+      c.importPlayers([
+        for (var i = 0; i < 4; i++)
+          Player(id: 'b$i', name: 'Bug $i', rating: 1500 - i * 10),
+      ]);
+      c.addSection('Bughouse', Format.bughouse, 3);
+      final bug = c.event!.sections.single;
+      c.addSection('Open', Format.swiss, 3, assignUnassigned: false);
+      final open = c.event!.sections.last;
+      c.setPartners(bug.id, [
+        ['b0', 'b1'],
+        ['b2', 'b3'],
+      ]);
+      c.movePlayers(['b0'], open.id);
+      expect(c.event!.sections.first.partners, [
+        ['b2', 'b3'],
+      ]);
+      c.removePlayers(['b2']);
+      expect(c.event!.sections.first.partners, isEmpty);
+      // Once paired, partnerships stay: a partner cannot be moved away.
+      c.setPartners(bug.id, [
+        ['b1', 'b3'],
+      ]);
+      c.post(await c.propose(sectionId: bug.id));
+      expect(
+        () => c.movePlayers(['b1'], open.id, reason: 'Wants to play Swiss'),
+        refuses('Bug 1 and Bug 3 are partners in Bughouse'),
+      );
+    },
+  );
+
   test('a placeholder US Chess ID identifies nobody', () {
     final c = fixture(count: 4);
     addTearDown(c.dispose);

@@ -281,6 +281,11 @@ mixin _RosterCommands on _CommandContext {
                     players: s.players
                         .where((id) => !gone.contains(id))
                         .toList(),
+                    // A removed player's bughouse partner is left unpartnered.
+                    partners: [
+                      for (final pair in s.partners)
+                        if (!pair.any(gone.contains)) pair,
+                    ],
                     quadPairings: const [],
                   )
                 : s,
