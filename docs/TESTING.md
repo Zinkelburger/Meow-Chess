@@ -172,14 +172,19 @@ MEOW_FUZZ_REPLAY=build/fuzz/seed-17.json flutter test test/fuzz  # replay one tr
 ```
 
 The first campaigns (November 5, 2026) ran about 100,000 commands with sections
-up to ten rounds deep. They found three faults, each now pinned and covered by
+up to ten rounds deep. They found four faults, each now pinned and covered by
 a focused test:
 
 | Trace | Fault | Fix |
 |---|---|---|
 | `side-game-blocks-next-round` | A player with a bye began a side game, and the next round was posted while it was still being played. Only the repository's validation refused it, without naming anyone. | `post` names the player and board. |
 | `reopen-result-during-side-game` | A finished game was set back to unreported after its player began a side game, again refused only by validation. | `recordResult` and `correctResult` name the side game. |
+| `move-second-entry-of-person` | Moving a side-game entry into the section holding the same person's main entry was refused only by validation. | `movePlayers` names the existing entry. |
 | `repair-keeps-withdrawn-board` | A 29G3 re-pairing (MCP `repair_round`) could keep the unstarted board of a player who had withdrawn, leaving the opponent waiting. | `repairUnstartedRound` refuses. |
+
+Shrinking is weakest when a fault needs one particular player: steps choose
+players by index, so deleting an earlier step can change who a later step
+picks. Such traces stay long (seed 431 kept 59 steps) but still replay exactly.
 
 Not yet covered: knockout, ladder, bughouse and Scheveningen commands,
 section transfers after play, team awards, ratings and membership, and FIDE

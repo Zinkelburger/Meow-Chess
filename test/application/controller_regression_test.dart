@@ -252,6 +252,41 @@ void main() {
     },
   );
 
+  test('a person\'s side-game entry cannot join their own section', () async {
+    // Found by the controller fuzzer: the repository refused the move
+    // without naming who already had an entry.
+    final c = TournamentController(SqliteEventRepository(':memory:'));
+    addTearDown(c.dispose);
+    c.create('Thursday Swiss');
+    c.importPlayers([
+      for (var i = 0; i < 4; i++)
+        Player(id: 's$i', name: 'Swiss $i', rating: 1800 - i * 50),
+    ]);
+    c.addSection('Open', Format.swiss, 3);
+    c.post(await c.propose());
+    final open = c.event!.sections.single;
+    for (final g in open.rounds.single.games) {
+      c.recordResult(g.id, Outcome.draw);
+    }
+    c.savePlayer(Player(id: 'walkin', name: 'Walk In', rating: 1200));
+    final side = c.addSideGame('s0', 'walkin');
+    final game = c.event!.sections
+        .firstWhere((s) => s.id == side)
+        .rounds
+        .single
+        .games
+        .single;
+    c.recordResult(game.id, Outcome.draw);
+    final copy = c.event!.sections
+        .firstWhere((s) => s.id == side)
+        .players
+        .firstWhere((id) => c.event!.player(id).personId == 's0');
+    expect(
+      () => c.movePlayers([copy], open.id, reason: 'Joined the main event'),
+      refuses('Swiss 0 already has an entry in Open'),
+    );
+  });
+
   test('a placeholder US Chess ID identifies nobody', () {
     final c = fixture(count: 4);
     addTearDown(c.dispose);

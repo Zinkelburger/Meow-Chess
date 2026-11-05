@@ -261,6 +261,21 @@ mixin _SectionCommands on _CommandContext {
         'Record the transition reason. Original games remain attributed to their source section; rating export needs a validated mapping.',
       );
     }
+    // Side-game entries and re-entries are the same person as another entry;
+    // a section holds at most one entry per person.
+    final people = <String, String>{
+      for (final id in target.players)
+        if (!ids.contains(id)) e.player(id).personId ?? id: id,
+    };
+    for (final id in ids.toSet()) {
+      final p = e.player(id), person = p.personId ?? id;
+      if (people[person] case final other? when other != id) {
+        throw TournamentException(
+          '${p.name} already has an entry in ${target.name} (${e.player(other).name}).',
+        );
+      }
+      people[person] = id;
+    }
     final members = {...target.players, ...ids}.toList();
     // Before any play a move is only a roster edit; afterwards the merged
     // section's schedule no longer holds, so it continues as a Swiss.
