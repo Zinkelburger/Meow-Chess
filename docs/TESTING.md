@@ -195,8 +195,8 @@ MEOW_FUZZ_REPLAY=build/fuzz/seed-17.json flutter test test/fuzz  # replay one tr
 ```
 
 The first campaigns (November 5, 2026) ran a few hundred thousand commands, with
-sections up to ten rounds deep. They found six faults, each now pinned and covered
-by a focused test. Each pin was checked both ways: it fails with its fix reverted
+sections up to ten rounds deep. They found eight faults, each now pinned and covered
+by a focused test or pin. Each pin was checked both ways: it fails with its fix reverted
 and passes with it.
 
 | Trace | Fault | Fix |
@@ -206,6 +206,8 @@ and passes with it.
 | `move-second-entry-of-person` | Moving a side-game entry into the section holding the same person's main entry was refused only by validation. | `movePlayers` names the existing entry. |
 | `repair-keeps-withdrawn-board` | A 29G3 re-pairing (MCP `repair_round`) could keep the unstarted board of a player who had withdrawn, leaving the opponent waiting. | `repairUnstartedRound` refuses. |
 | `repair-keeps-second-meeting` | A 29G3 re-pairing kept a board that 27A1 allowed as a second meeting, but dropped the round's explanation, so nothing said the two players were meeting again. | The repaired round names the kept repeat. |
+| `repair-pairs-player-in-side-game` | A 29G3 re-pairing could pair a player who was still in a side game, the posting fault on a second path. | Posting and re-pairing share one check that names the player and board. |
+| `replace-pairs-player-with-self` | Replacing a double-game round's pairings could swap Black between a board's two legs, pairing a player with themselves. Only validation refused it. | `replacePairing` names the board. |
 | `bughouse-partner-moved-away` | Moving or removing a partnered bughouse player left the partnership naming them. | Before play the partner is left unpartnered; after play the move is refused with both names. |
 
 One oracle was found too weak this way. To allow a kept board whose withdrawn
@@ -271,9 +273,12 @@ What it found, each fixed with a test:
 - **The Board heading vanished at 200% text.** The board column had a fixed width
   while the score columns grew. It now grows with the text.
 - The status line's `·` separators no longer read aloud.
+- **A print preview leaked its error** when it was replaced before being shown.
+  If, for example, the chosen sections had no players, the error went unhandled
+  instead of appearing as "Could not make the PDF".
 
 Two early reports were artifacts of the test environment rather than app faults:
-the Android default's scroll behaviour and a missing print plugin. Both are now
+the Android default's scroll behaviour and missing print and app-folder plugins. Both are now
 modelled correctly.
 
 ## Printed reports

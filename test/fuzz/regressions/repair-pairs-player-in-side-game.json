@@ -1,0 +1,140 @@
+{
+ "found": "seed-1051 of a strict campaign on the final code; 12 steps after shrinking",
+ "violation": "[invalid-commit]: The repository refused an invalid event: Re-pair round 1 boards not started: A person is scheduled in two active sections.",
+ "why": "A 29G3 re-pairing paired a player who was still playing a side game. repairUnstarted must refuse and name the player, as posting does.",
+ "strict": true,
+ "trace": [
+  {
+   "k": "import",
+   "t": 153,
+   "a": [
+    27582,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "addSection",
+   "t": 161,
+   "a": [
+    0,
+    0,
+    50191,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "register",
+   "t": 169,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 174,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 179,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 180,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "import",
+   "t": 192,
+   "a": [
+    3346,
+    0,
+    36993,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "register",
+   "t": 206,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "addSection",
+   "t": 207,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "sideGame",
+   "t": 208,
+   "a": [
+    46244,
+    42394,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 210,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "lateWithdraw",
+   "t": 215,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  }
+ ]
+}

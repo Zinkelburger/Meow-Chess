@@ -1,0 +1,162 @@
+{
+ "found": "seed-1027 of a strict campaign on the final code; 14 steps after shrinking",
+ "violation": "[invalid-commit]: The repository refused an invalid event: Replace round 3 pairings: A game needs two distinct registered entries.",
+ "why": "Replacing a double-game round's pairings swapped Black between the board's two legs, pairing a player with themselves. replacePairing must refuse.",
+ "strict": true,
+ "trace": [
+  {
+   "k": "import",
+   "t": 2,
+   "a": [
+    35681,
+    0,
+    22711,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "addSection",
+   "t": 194,
+   "a": [
+    2966,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "withdraw",
+   "t": 200,
+   "a": [
+    0,
+    50335,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 202,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 210,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 211,
+   "a": [
+    0,
+    21362,
+    34856,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 212,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 229,
+   "a": [
+    43124,
+    0,
+    46986,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 236,
+   "a": [
+    0,
+    14128,
+    6537,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 238,
+   "a": [
+    0,
+    0,
+    61992,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 244,
+   "a": [
+    0,
+    31844,
+    6109,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 247,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 248,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "replace",
+   "t": 252,
+   "a": [
+    0,
+    51543,
+    0,
+    22465,
+    0
+   ]
+  }
+ ]
+}

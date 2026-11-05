@@ -195,17 +195,30 @@ mixin _RoundCommands on _CommandContext {
         busy[board] = s.name;
       }
     }
-    // A person still at a board elsewhere, typically a side game played
-    // during a bye, cannot be paired until that game has a result.
+    _refuseBusyPeople(e, batch.rounds);
+    for (final r in batch.rounds.values) {
+      checkPairingRequests(e, r.games);
+    }
+    change(
+      'Create pairings for ${batch.rounds.length} section${batch.rounds.length == 1 ? '' : 's'}',
+      e.copy(sections: updated, colorToss: colorToss),
+    );
+    secondaryBackup();
+  }
+
+  /// A person still at a board elsewhere, typically a side game played
+  /// during a bye, cannot be paired in [rounds] (section ID → round) until
+  /// that game has a result.
+  void _refuseBusyPeople(Event e, Map<String, Round> rounds) {
     final playing = <String, (Section, Game)>{
       for (final s in e.sections)
-        if (!batch.rounds.containsKey(s.id))
+        if (!rounds.containsKey(s.id))
           for (final r in s.unresolvedRounds)
             for (final g in r.games.where((g) => !g.outcome.resolved))
               for (final id in [g.white, g.black])
                 e.player(id).personId ?? id: (s, g),
     };
-    for (final r in batch.rounds.values) {
+    for (final r in rounds.values) {
       for (final id in r.games.expand((g) => [g.white, g.black])) {
         final p = e.player(id);
         if (playing[p.personId ?? id] case (final s, final g)) {
@@ -215,14 +228,6 @@ mixin _RoundCommands on _CommandContext {
         }
       }
     }
-    for (final r in batch.rounds.values) {
-      checkPairingRequests(e, r.games);
-    }
-    change(
-      'Create pairings for ${batch.rounds.length} section${batch.rounds.length == 1 ? '' : 's'}',
-      e.copy(sections: updated, colorToss: colorToss),
-    );
-    secondaryBackup();
   }
 
   void startRound(String sectionId) => startRounds([sectionId]);
@@ -296,6 +301,7 @@ mixin _RoundCommands on _CommandContext {
       );
     }
     final r = repairUnstartedRound(e, s, keep.toSet(), newId);
+    _refuseBusyPeople(e, {s.id: r});
     checkPairingRequests(e, r.games);
     final repaired = r.copy(note: reason.trim());
     change(
@@ -340,6 +346,14 @@ mixin _RoundCommands on _CommandContext {
       throw const TournamentException(
         'Record why the posted pairing is changing.',
       );
+    }
+    for (final g in games) {
+      final white = e.player(g.white), black = e.player(g.black);
+      if ((white.personId ?? white.id) == (black.personId ?? black.id)) {
+        throw TournamentException(
+          'Board ${g.board} pairs ${white.name} with themselves. Choose two different players.',
+        );
+      }
     }
     final oldIds = r.games.expand((g) => [g.white, g.black]).toList()..sort();
     final newIds = games.expand((g) => [g.white, g.black]).toList()..sort();

@@ -576,8 +576,11 @@ class _PrintPanelState extends State<PrintPanel> {
   int? get currentRevision => widget.controller?.event?.revision;
   bool get stale => preview.isStale(currentRevision);
 
+  // A preview replaced before it was shown is never listened to; its error
+  // (such as nothing to print) is shown by the preview that is, not raised
+  // as an unhandled one. Found by the UI fuzzer.
   _PrintPreviewJob createPreview(Event event) =>
-      _PrintPreviewJob(event, generate(event));
+      _PrintPreviewJob(event, generate(event)..ignore());
 
   /// Printers to choose from, shown in the panel while a print waits for
   /// one; [choosing] completes with the TD's choice, or null for Cancel.

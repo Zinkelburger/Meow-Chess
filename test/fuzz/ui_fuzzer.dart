@@ -214,6 +214,13 @@ class UiHarness {
     debugDefaultTargetPlatformOverride = platform;
     final printing = PrintingPlatform.instance;
     PrintingPlatform.instance = printer;
+    // App folders, such as where the FIDE rating list is kept.
+    final support = Directory.systemTemp.createTempSync('meow-ui-support-');
+    const folders = MethodChannel('plugins.flutter.io/path_provider');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      folders,
+      (_) async => support.path,
+    );
     final semantics = tester.ensureSemantics();
     // The details name the widget that caused a layout error.
     final reported = FlutterError.onError;
@@ -258,6 +265,11 @@ class UiHarness {
       tester.platformDispatcher.clearTextScaleFactorTestValue();
       debugDefaultTargetPlatformOverride = null;
       PrintingPlatform.instance = printing;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        folders,
+        null,
+      );
+      support.deleteSync(recursive: true);
     }
   }
 
