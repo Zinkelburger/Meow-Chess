@@ -1,19 +1,52 @@
 {
- "found": "seed 14, 300 steps, shrunk to 11",
- "violation": "[invalid-commit] Create pairings for 1 section: A person is scheduled in two active sections.",
- "why": "A player with a round-1 bye starts a side game; round 2 was paired while it was still on. post() must refuse and name the player instead of leaving it to the repository's validation.",
+ "found": "seed-85 of a strict campaign on code without the fix; 4 steps after shrinking",
+ "violation": "[invalid-commit]: The repository refused an invalid event: Create pairings for 1 section: A person is scheduled in two active sections.",
+ "why": "A player with a bye began a side game, and the next round was posted while it was still being played. post() must refuse and name the player, not leave it to the repository's validation.",
  "strict": true,
  "trace": [
-  ["register", 0, 0, 0, 0, 0],
-  ["import", 18918, 0, 5415, 0, 0],
-  ["bye", 0, 0, 19693, 0, 0],
-  ["addSection", 0, 0, 0, 0, 0],
-  ["import", 34830, 0, 0, 8275, 0],
-  ["pair", 0, 0, 0, 0, 0],
-  ["sideGame", 35701, 0, 0, 0, 0],
-  ["result", 0, 0, 0, 0, 0],
-  ["result", 0, 0, 29276, 0, 0],
-  ["result", 0, 0, 43723, 0, 0],
-  ["pair", 0, 0, 0, 0, 0]
+  {
+   "k": "import",
+   "t": 42,
+   "a": [
+    37196,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "applyQuads",
+   "t": 71,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "sideGame",
+   "t": 171,
+   "a": [
+    0,
+    28827,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 172,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  }
  ]
 }

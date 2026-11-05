@@ -99,8 +99,18 @@ class WorkspaceStatusBar extends StatelessWidget {
     required this.onBackups,
     required this.workspaceStateFailed,
     required this.onRetryWorkspaceState,
+    this.moved,
+    this.moveBack,
+    this.onMoveBack,
     super.key,
   });
+
+  /// After Undo, Redo or Restore: what it did, in the director's words.
+  final String? moved;
+
+  /// The opposite move's label and action, such as Redo.
+  final String? moveBack;
+  final VoidCallback? onMoveBack;
 
   /// When the event was last saved, as History writes it; null if unknown.
   final String? savedAt;
@@ -137,7 +147,22 @@ class WorkspaceStatusBar extends StatelessWidget {
               key: const ValueKey('status-saved'),
               style: style,
             ),
-            Text('  ·  ', style: style),
+            if (moved != null) ...[
+              ExcludeSemantics(child: Text('  ·  ', style: style)),
+              Text(moved!, key: const ValueKey('status-moved'), style: style),
+              if (moveBack != null && onMoveBack != null)
+                TextButton(
+                  key: const ValueKey('status-move-back'),
+                  onPressed: onMoveBack,
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                  child: Text(moveBack!),
+                ),
+            ],
+            ExcludeSemantics(child: Text('  ·  ', style: style)),
             TextButton(
               key: const ValueKey('status-backup'),
               onPressed: onBackups,
@@ -148,7 +173,7 @@ class WorkspaceStatusBar extends StatelessWidget {
               ),
               child: Text(backup),
             ),
-            Text('  ·  ', style: style),
+            ExcludeSemantics(child: Text('  ·  ', style: style)),
             Text(summary, overflow: TextOverflow.ellipsis, style: style),
             if (workspaceStateFailed) ...[
               Text(

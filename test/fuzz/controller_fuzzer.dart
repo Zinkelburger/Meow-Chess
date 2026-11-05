@@ -8,28 +8,40 @@ import 'dart:math';
 
 import 'package:meow_chess/application/event_repository.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
+import 'package:meow_chess/application/tournament_controller_core.dart'
+    show LadderCommands;
 import 'package:meow_chess/domain/history.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/domain/rating_preview.dart';
+import 'package:meow_chess/domain/recovery.dart';
 import 'package:meow_chess/domain/standings.dart';
 import 'package:meow_chess/infrastructure/dbf_export.dart';
 import 'package:meow_chess/infrastructure/reports.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 
 /// One step of a trace. [args] are raw choices, resolved against whatever
-/// the event holds when the step runs (an index modulo the candidates), so
-/// any subsequence of a trace is still a runnable trace. That is what lets
-/// the shrinker delete steps freely.
+/// the event holds when the step runs, so any subsequence of a trace is
+/// still a runnable trace. That is what lets the shrinker delete steps.
+///
+/// Identities are stable under deletion, so a fault that needs one
+/// particular player still shrinks: [tag] is the step's index in the trace
+/// as generated and never changes, every ID minted during the step derives
+/// from it, and a choice among candidates is a rendezvous hash of the
+/// argument and each candidate's identity ([Harness._pick]), which removing
+/// an unrelated candidate cannot change.
 class Act {
-  const Act(this.kind, [this.args = const []]);
+  const Act(this.kind, [this.args = const [], this.tag = 0]);
   final String kind;
   final List<int> args;
+  final int tag;
   int arg(int i) => i < args.length ? args[i] : 0;
-  List<Object> toJson() => [kind, ...args];
-  factory Act.fromJson(List<dynamic> j) =>
-      Act(j.first as String, [for (final a in j.skip(1)) a as int]);
+  Act withArgs(List<int> args) => Act(kind, args, tag);
+  Map<String, Object> toJson() => {'k': kind, 't': tag, 'a': args};
+  factory Act.fromJson(Map<String, dynamic> j) => Act(j['k'] as String, [
+    for (final a in j['a'] as List) a as int,
+  ], j['t'] as int);
   @override
-  String toString() => jsonEncode(toJson());
+  String toString() => '#$tag $kind ${jsonEncode(args)}';
 }
 
 /// A broken invariant. [id] names which one; two failures are "the same
@@ -44,19 +56,36 @@ class Violation implements Exception {
       '[$id]${errorType.isEmpty ? '' : ' $errorType'}: $message';
 }
 
-/// Shared by every controller of one run, so reopening never reuses an ID.
+/// IDs minted during a step derive from its [Act.tag], so deleting other
+/// steps never renames anything. Shared by every controller of one run.
 class FuzzIds {
-  var next = 0;
-  String call() => 'x${next++}';
+  var _step = -1, _next = 0;
+  void begin(int tag) {
+    _step = tag;
+    _next = 0;
+  }
+
+  String call() => 'x${_step}_${_next++}';
 }
 
 /// The real controller with deterministic IDs. Pairing proposals still mint
 /// their own game IDs on the isolate; traces never name a game by ID.
 class FuzzController extends TournamentController {
-  FuzzController(super.repository, this._ids);
+  FuzzController(super.repository, this._ids, {this.pairInline = false});
   final FuzzIds _ids;
+
+  /// Pair on the calling thread, for widget tests on a fake clock.
+  final bool pairInline;
   @override
   String newId() => _ids();
+  @override
+  Future<PairingBatch> runProposal(
+    Event snapshot,
+    String? sectionId,
+    bool onlyReady,
+  ) => pairInline
+      ? Future.value(proposeRounds(snapshot, sectionId, onlyReady))
+      : super.runProposal(snapshot, sectionId, onlyReady);
 }
 
 /// Delegates to SQLite, but first notes whether the event the controller
@@ -102,6 +131,8 @@ class _CheckedRepository implements EventRepository {
   @override
   List<Json> history() => inner.history();
   @override
+  String? lastSaved() => inner.lastSaved();
+  @override
   String? readPreference(String key) => inner.readPreference(key);
   @override
   void writePreference(String key, String value) =>
@@ -142,12 +173,11 @@ const _names = [
 
 /// Formats a USCF club director runs. Knockout, ladder, bughouse and
 /// Scheveningen have their own command families and are left for later.
+/// Weighted toward the formats a US Chess club runs most.
 const _formats = [
-  Format.swiss,
-  Format.swiss,
-  Format.swiss,
-  Format.quad,
-  Format.roundRobin,
+  Format.swiss, Format.swiss, Format.swiss, Format.swiss, //
+  Format.quad, Format.quad, Format.roundRobin,
+  Format.knockout, Format.ladder, Format.bughouse, Format.scheveningen,
 ];
 
 const _outcomes = [
@@ -176,6 +206,9 @@ class Harness {
 
   /// Per command: [accepted, refused], to see what a campaign reached.
   final tally = <String, List<int>>{};
+
+  /// Per command: refusal message → count, to see why steps are wasted.
+  final reasons = <String, Map<String, int>>{};
   var maxRounds = 0;
 
   void open() {
@@ -201,12 +234,19 @@ class Harness {
         onStep?.call(i, act);
         steps = i + 1;
         final before = e;
+        _ids.begin(act.tag);
         try {
           await _step(act);
           _checkState(before);
+          if (i % 25 == 24) _checkRecoverable();
         } on Violation catch (v) {
           throw TraceFailure(i, act, v);
         }
+      }
+      try {
+        _checkRecoverable();
+      } on Violation catch (v) {
+        throw TraceFailure(steps, const Act('finalHistory', [], -1), v);
       }
       // The file on disk is the event: closing and reopening changes nothing.
       final last = _content(e);
@@ -215,7 +255,7 @@ class Harness {
       if (_content(e) != last) {
         throw TraceFailure(
           steps,
-          const Act('finalReopen'),
+          const Act('finalReopen', [], -1),
           Violation(
             'reopen',
             'Reopened file differs from the event in memory.',
@@ -248,9 +288,11 @@ class Harness {
     var ok = true;
     try {
       result = command();
-    } on TournamentException {
+    } on TournamentException catch (x) {
       ok = false;
       refused++;
+      final why = (reasons[name] ??= {});
+      why[x.message] = (why[x.message] ?? 0) + 1;
     } on Violation {
       rethrow;
     } catch (error, stack) {
@@ -307,9 +349,152 @@ class Harness {
         );
       }
     }
+    if (ok) _committed.add(_content(after));
     _checkPersistence(name);
     return result;
   }
+
+  /// Moves through history to [target] and checks the move: the losses the
+  /// UI would show are the play the move removes; a move that loses play is
+  /// refused unless accepted, and one that does not is never refused; and
+  /// the event lands exactly on the target's saved state.
+  void _historyMove(
+    String name,
+    int? target,
+    bool accept,
+    void Function() move,
+  ) {
+    if (target == null || target == c.graph.head) {
+      _call(name, move, history: true);
+      return;
+    }
+    final saved = _repo.snapshot(target);
+    final losses = c.lossesTo(target);
+    final lost = playLost(e, saved);
+    if (losses.join('\n') != lost.join('\n')) {
+      throw Violation(
+        'losses',
+        '$name: the losses shown differ from the play removed.',
+      );
+    }
+    final rev = e.revision;
+    final mustRefuse = losses.isNotEmpty && !accept;
+    _call(name, move, history: true, mustRefuse: mustRefuse);
+    if (e.revision == rev && !mustRefuse && !e.practice) {
+      throw Violation(
+        'history-refused',
+        '$name to a state without lost play was refused.',
+      );
+    }
+    if (e.revision != rev && _content(e) != _content(saved)) {
+      throw Violation(
+        'history-target',
+        '$name did not land on the saved state it targeted.',
+      );
+    }
+  }
+
+  /// Every state ever committed is still in the history, and every saved
+  /// state is a valid event: going back can always reach any of them.
+  void _checkRecoverable() {
+    final kept = <String>{};
+    for (final node in c.graph.nodes.keys) {
+      final saved = _repo.snapshot(node);
+      try {
+        validateEvent(saved);
+      } on TournamentException catch (x) {
+        throw Violation(
+          'invalid-snapshot',
+          'History node $node is invalid: ${x.message}',
+        );
+      }
+      kept.add(_content(saved));
+    }
+    final lost = _committed.difference(kept);
+    if (lost.isNotEmpty) {
+      throw Violation(
+        'unrecoverable',
+        '${lost.length} committed states are no longer in the history.',
+      );
+    }
+    _checkRecoveryPoints();
+  }
+
+  /// Recovery points say true things: "Before round N pairings" is a state
+  /// with N - 1 rounds that the next step paired, and so on. Every round on
+  /// the board can be gone back before, and a limited walk is a prefix.
+  void _checkRecoveryPoints() {
+    final points = c.recoveryPoints();
+    Never wrong(RecoveryPoint p, String why) =>
+        throw Violation('recovery-point', '"${p.mark}" (node ${p.node}): $why');
+    int rounds(Event e, String id) =>
+        e.sections.where((s) => s.id == id).firstOrNull?.rounds.length ?? 0;
+    final covered = <String, Set<int>>{};
+    for (final p in points) {
+      if (c.graph.nodes[p.step]?.parent != p.node) {
+        wrong(p, 'not the step parent');
+      }
+      final before = _repo.snapshot(p.node), after = _repo.snapshot(p.step);
+      final m = p.mark;
+      switch (m.kind) {
+        case RecoveryKind.pairing:
+          for (final id in m.sectionIds) {
+            if (rounds(before, id) != m.round - 1 ||
+                rounds(after, id) < m.round) {
+              wrong(
+                p,
+                'section $id went ${rounds(before, id)} → ${rounds(after, id)} rounds',
+              );
+            }
+            for (var r = m.round; r <= rounds(after, id); r++) {
+              (covered[id] ??= {}).add(r);
+            }
+          }
+        case RecoveryKind.unpairing:
+          for (final id in m.sectionIds) {
+            if (rounds(before, id) < m.round ||
+                rounds(after, id) != m.round - 1) {
+              wrong(
+                p,
+                'section $id went ${rounds(before, id)} → ${rounds(after, id)} rounds',
+              );
+            }
+          }
+        case RecoveryKind.import:
+          if (after.players.length - before.players.length != m.players) {
+            wrong(
+              p,
+              '${before.players.length} → ${after.players.length} players',
+            );
+          }
+        case RecoveryKind.transfer:
+          if (after.transitions.length <= before.transitions.length) {
+            wrong(p, 'no move recorded');
+          }
+      }
+    }
+    for (final s in e.sections.where((s) => !s.sideGames)) {
+      for (var r = 1; r <= s.rounds.length; r++) {
+        if (!(covered[s.id] ?? const {}).contains(r)) {
+          throw Violation(
+            'recovery-coverage',
+            '${s.name} round $r has no "before pairings" point.',
+          );
+        }
+      }
+    }
+    final some = c.recoveryPoints(limit: 3);
+    for (final (i, p) in some.take(min(3, points.length)).indexed) {
+      if (p.node != points[i].node || p.mark.title != points[i].mark.title) {
+        throw Violation(
+          'recovery-limit',
+          'A limited walk is not a prefix of the full one.',
+        );
+      }
+    }
+  }
+
+  final _committed = <String>{};
 
   void _checkPersistence(String name) {
     final saved = _repo.load();
@@ -431,8 +616,8 @@ class Harness {
   }
 
   /// Checks a round just posted against the state it was paired from.
-  /// [kept] names games a 29G3 repair kept as they were; only the boards
-  /// it paired afresh must avoid withdrawn players.
+  /// [kept] names games a 29G3 repair kept as they were; a kept board with a
+  /// result may name a player who has since withdrawn.
   void _checkPosted(
     Event before,
     Section s,
@@ -451,7 +636,9 @@ class Harness {
         for (final b in r.byes.where((b) => b.allocated)) b.player,
     };
     for (final g in round.games) {
-      if (kept.contains(g.id)) continue;
+      // A kept board may name a player who withdrew after it was scored,
+      // never one still waiting to start.
+      if (kept.contains(g.id) && g.outcome != Outcome.unreported) continue;
       for (final id in [g.white, g.black]) {
         final p = before.player(id);
         if (p.withdrawn) {
@@ -471,7 +658,9 @@ class Harness {
       if (played.contains(pair) && !explained.contains('27A1')) {
         throw Violation(
           'repeat-pairing',
-          'Round ${round.number} repeats a played pairing without 27A1.',
+          'Round ${round.number} repeats a played pairing without 27A1: '
+              '${before.player(g.white).name} – ${before.player(g.black).name}'
+              '${kept.contains(g.id) ? ' (kept by the re-pairing)' : ''}.',
         );
       }
     }
@@ -503,23 +692,67 @@ class Harness {
   // ---------------------------------------------------------------------
   // Choices, resolved against the current event.
 
-  static X? _pick<X>(List<X> xs, int arg) =>
-      xs.isEmpty ? null : xs[arg.abs() % xs.length];
+  /// The candidate whose identity hashes lowest with [arg]: rendezvous
+  /// hashing, so the choice survives the deletion of any other candidate.
+  X? _pick<X extends Object>(List<X> xs, int arg) {
+    X? best;
+    int? low;
+    for (final x in xs) {
+      final h = _mix(arg, _key(x));
+      if (low == null || h < low) {
+        best = x;
+        low = h;
+      }
+    }
+    return best;
+  }
+
+  /// A coin flip per candidate that is stable in the same way.
+  bool _flip(Object x, int arg) => _mix(arg, _key(x)).isOdd;
+
+  final _gameKeys = <String, String>{};
+  String _key(Object x) => switch (x) {
+    Player p => p.id,
+    Section s => s.id,
+    Game g => _gameKeys[g.id] ?? g.id,
+    _ => '$x',
+  };
+
+  /// The same hash, for the UI fuzzer's choices.
+  static int mixForUi(int arg, String key) => _mix(arg, key);
+
+  /// FNV-1a over [key] seeded with [arg], then a murmur3 finalizer.
+  static int _mix(int arg, String key) {
+    var h = 0x811c9dc5 ^ (arg & 0xffffffff);
+    for (final u in key.codeUnits) {
+      h = ((h ^ u) * 0x01000193) & 0xffffffff;
+    }
+    h ^= h >> 16;
+    h = (h * 0x85ebca6b) & 0xffffffff;
+    h ^= h >> 13;
+    h = (h * 0xc2b2ae35) & 0xffffffff;
+    return h ^ (h >> 16);
+  }
 
   List<Player> get _players => e.players;
   List<Section> get _sections => e.sections.where((s) => !s.sideGames).toList();
 
-  /// Games in board order within section and round order.
-  List<Game> _games({bool Function(Game)? where}) => [
-    for (final s in e.sections)
-      for (final r in s.rounds)
-        for (final g in [
-          ...r.games,
-        ]..sort((a, b) => a.board.compareTo(b.board)))
-          if (where == null || where(g)) g,
-  ];
+  /// Games, identified by section, round and players: proposals mint
+  /// random game IDs, and boards move when a round is re-paired.
+  List<Game> _games({bool Function(Game)? where}) {
+    final out = <Game>[];
+    for (final s in e.sections) {
+      for (final r in s.rounds) {
+        for (final g in r.games) {
+          _gameKeys[g.id] =
+              '${s.id}/${r.number}/${g.white}/${g.black}/${g.leg}';
+          if (where == null || where(g)) out.add(g);
+        }
+      }
+    }
+    return out;
+  }
 
-  var _nameCount = 0;
   Player _newPlayer(int nameArg, int ratingArg, int memberArg) {
     final id = _ids();
     final rating = ratingArg % 7 == 0 ? 0 : 100 + ratingArg.abs() % 2600;
@@ -529,7 +762,7 @@ class Harness {
         : '${12340000 + memberArg.abs() % 40}';
     return Player(
       id: id,
-      name: '${_names[nameArg.abs() % _names.length]} ${_nameCount++}',
+      name: '${_names[nameArg.abs() % _names.length]} ${id.substring(1)}',
       rating: rating,
       memberId: member,
       checkedIn: nameArg.isEven,
@@ -538,7 +771,15 @@ class Harness {
 
   void _skip() => skipped++;
 
+  static bool _readyToPair(Section s) =>
+      s.players.isNotEmpty &&
+      !s.sideGames &&
+      s.format != Format.ladder &&
+      (s.format == Format.knockout || s.rounds.length < s.plannedRounds) &&
+      s.rounds.every((r) => r.complete);
+
   Future<void> _step(Act a) async {
+    _games(); // names every game for _pick
     switch (a.kind) {
       case 'register':
         _call(
@@ -643,7 +884,16 @@ class Harness {
           ),
         );
       case 'pair':
-        final s = a.arg(0) % 3 == 0 ? null : _pick(_sections, a.arg(0));
+        // Mostly a section that is ready, sometimes all, sometimes any.
+        final ready = [
+          for (final s in _sections)
+            if (_readyToPair(s)) s,
+        ];
+        final s = switch (a.arg(0) % 6) {
+          0 => null,
+          1 => _pick(_sections, a.arg(0)),
+          _ => _pick(ready, a.arg(0)) ?? _pick(_sections, a.arg(0)),
+        };
         final before = e;
         final batch = await _propose(s?.id, a.arg(1).isEven);
         if (batch == null) return;
@@ -656,7 +906,16 @@ class Harness {
           }
         }
       case 'start':
-        final s = _pick(_sections, a.arg(0));
+        final waiting = [
+          for (final s in _sections)
+            if (s.rounds.isNotEmpty &&
+                s.rounds.last.startedAt == null &&
+                !s.rounds.last.hasPlay)
+              s,
+        ];
+        final s = a.arg(1) % 5 == 0
+            ? _pick(_sections, a.arg(0))
+            : _pick(waiting, a.arg(0));
         if (s == null) return _skip();
         _call('start', () => c.startRound(s.id));
       case 'result':
@@ -745,7 +1004,7 @@ class Harness {
           ..sort((x, y) => x.board.compareTo(y.board));
         final keep = [
           for (final (i, g) in games.indexed)
-            if ((a.arg(1) >> i) & 1 == 1) g.id,
+            if (_flip(g, a.arg(1) + i)) g.id,
         ];
         _call(
           'repair',
@@ -754,6 +1013,114 @@ class Harness {
             keep,
             a.arg(2) % 5 == 0 ? '' : 'Late withdrawal',
           ),
+        );
+      case 'partners':
+        // Bughouse: partner the section's players in a stable shuffled order.
+        final s = _pick([
+          for (final s in _sections)
+            if (s.format == Format.bughouse && s.rounds.isEmpty) s,
+        ], a.arg(0));
+        if (s == null) return _skip();
+        final order = [...s.players]
+          ..sort((x, y) => _mix(a.arg(1), x).compareTo(_mix(a.arg(1), y)));
+        _call(
+          'partners',
+          () => c.setPartners(s.id, [
+            for (var i = 0; i + 1 < order.length; i += 2)
+              [order[i], order[i + 1]],
+          ]),
+        );
+      case 'homeTeam':
+        // Scheveningen: name side A, after teams are assigned.
+        final s = _pick([
+          for (final s in _sections)
+            if (s.format == Format.scheveningen && s.rounds.isEmpty) s,
+        ], a.arg(0));
+        if (s == null) return _skip();
+        for (final id in s.players) {
+          _call(
+            'team',
+            () => c.assignTeam([
+              id,
+            ], _mix(a.arg(1), id).isEven ? 'Knights' : 'Rooks'),
+          );
+        }
+        _call(
+          'homeTeam',
+          () => c.change(
+            'Set home team',
+            e.copy(
+              sections: [
+                for (final x in e.sections)
+                  x.id == s.id ? x.copy(homeTeam: 'Knights') : x,
+              ],
+            ),
+          ),
+        );
+      case 'ladderGame':
+        final s = _pick([
+          for (final s in _sections)
+            if (s.format == Format.ladder && s.players.length > 1) s,
+        ], a.arg(0));
+        if (s == null) return _skip();
+        // Challengers mostly reach up a few rungs, as ladder rules expect.
+        final i = 1 + a.arg(1).abs() % (s.players.length - 1);
+        final j = max(0, i - 1 - a.arg(2).abs() % 3);
+        _call(
+          'ladderGame',
+          () => c.recordLadderGame(
+            s.id,
+            s.players[i],
+            s.players[j],
+            _outcomes[a.arg(3).abs() % 9],
+            challengerWhite: a.arg(4).isEven,
+          ),
+        );
+      case 'ladderOrder':
+        final s = _pick([
+          for (final s in _sections)
+            if (s.format == Format.ladder && s.players.length > 1) s,
+        ], a.arg(0));
+        if (s == null) return _skip();
+        final order = [...s.players];
+        final i = a.arg(1).abs() % order.length,
+            j = a.arg(2).abs() % order.length;
+        order[i] = s.players[j];
+        order[j] = s.players[i];
+        _call(
+          'ladderOrder',
+          () => c.setLadderOrder(s.id, order, 'Late arrival placed by rating'),
+        );
+      case 'advance':
+        // Knockout: the TD decides a drawn match.
+        final s = _pick([
+          for (final s in _sections)
+            if (s.format == Format.knockout && s.rounds.isNotEmpty) s,
+        ], a.arg(0));
+        if (s == null) return _skip();
+        final g = _pick(s.rounds.last.games, a.arg(1));
+        if (g == null) return _skip();
+        _call(
+          'advance',
+          () => c.advanceKnockout(
+            s.id,
+            g.board,
+            a.arg(2).isEven ? g.white : g.black,
+            reason: 'Armageddon won',
+          ),
+        );
+      case 'withdrawWaiting':
+        // A player leaves before their board starts, and the TD has not yet
+        // re-paired: the opponent's board still names them.
+        final waiting = _games(
+          where: (g) =>
+              g.outcome == Outcome.unreported && g.pairingAssumption == null,
+        );
+        final g = _pick(waiting, a.arg(0));
+        if (g == null) return _skip();
+        _call(
+          'withdraw',
+          () => c.setWithdrawn([a.arg(1).isEven ? g.white : g.black], true),
         );
       case 'lateWithdraw':
         // Rule 29G3: a player withdraws after posting; the TD keeps the
@@ -785,7 +1152,7 @@ class Harness {
         final keep = [
           for (final (i, g) in games.indexed)
             if (g.id != victim.id &&
-                (!waiting.contains(g) || (a.arg(3) >> i) & 1 == 1))
+                (!waiting.contains(g) || _flip(g, a.arg(3) + i)))
               g.id,
         ];
         _call(
@@ -833,26 +1200,54 @@ class Harness {
           () => c.replacePairing(s.id, n, replaced, 'Board order corrected'),
         );
       case 'undo':
-        _call(
+        final accept = a.arg(0).isEven;
+        _historyMove(
           'undo',
-          () => c.undo(acceptLosses: a.arg(0).isEven),
-          history: true,
+          c.graph.back,
+          accept,
+          () => c.undo(acceptLosses: accept),
         );
       case 'redo':
-        _call(
+        final accept = a.arg(0).isEven;
+        _historyMove(
           'redo',
-          () => c.redo(acceptLosses: a.arg(0).isEven),
-          history: true,
+          c.graph.forward,
+          accept,
+          () => c.redo(acceptLosses: accept),
         );
       case 'restore':
         final nodes = c.graph.nodes.keys.toList()..sort();
         final node = _pick(nodes, a.arg(0));
         if (node == null) return _skip();
-        _call(
+        final accept = a.arg(1).isEven;
+        _historyMove(
           'restore',
-          () => c.restore(node, acceptLosses: a.arg(1).isEven),
-          history: true,
+          node,
+          accept,
+          () => c.restore(node, acceptLosses: accept),
         );
+      case 'roundTrip':
+        // Undo then Redo is the identity, on content and on the graph.
+        if (!c.canUndo) return _skip();
+        final from = _content(e), head = c.graph.head;
+        _historyMove(
+          'undo',
+          c.graph.back,
+          true,
+          () => c.undo(acceptLosses: true),
+        );
+        _historyMove(
+          'redo',
+          c.graph.forward,
+          true,
+          () => c.redo(acceptLosses: true),
+        );
+        if (_content(e) != from || c.graph.head != head) {
+          throw Violation(
+            'round-trip',
+            'Undo then Redo did not return to the same version.',
+          );
+        }
       case 'stalePost':
         final batch = await _propose(null, false);
         if (batch == null || batch.rounds.isEmpty) return _skip();
@@ -947,6 +1342,8 @@ const _setup = {
   'withdraw': 1,
   'removeSection': 1,
   'details': 1,
+  'partners': 2,
+  'homeTeam': 2,
   'pair': 4,
 };
 const _play = {
@@ -961,15 +1358,30 @@ const _play = {
   'withdraw': 2,
   'register': 1,
   'reopen': 1,
+  'ladderGame': 2,
+  'ladderOrder': 1,
+  'advance': 1,
+};
+const _nextEvent = {
+  'import': 4,
+  'register': 2,
+  'addSection': 6,
+  'applyQuads': 1,
+  'move': 1,
+  'details': 1,
+  'pair': 3,
+  'ladderGame': 1,
 };
 const _chaos = {
   'lateWithdraw': 3,
+  'withdrawWaiting': 2,
   'correct': 5,
   'resultWithReason': 2,
   'repair': 3,
   'replace': 3,
   'undo': 4,
   'redo': 2,
+  'roundTrip': 2,
   'restore': 3,
   'stalePost': 2,
   'staleCorrect': 2,
@@ -978,6 +1390,27 @@ const _chaos = {
   'move': 1,
   'reopen': 1,
 };
+
+/// Play weights follow the hall: while boards are open the TD enters
+/// results; once a section is ready, pairing and starting the next round.
+Map<String, int> _adjustedPlay(Event e) {
+  final open = e.games.any((g) => !g.outcome.resolved);
+  final ready = e.sections.any(Harness._readyToPair);
+  final unstarted = e.sections.any(
+    (s) =>
+        s.rounds.isNotEmpty &&
+        s.rounds.last.startedAt == null &&
+        !s.rounds.last.hasPlay,
+  );
+  return {
+    ..._play,
+    'pair': ready ? 12 : 1,
+    'result': open ? 20 : 2,
+    'start': unstarted ? 4 : 0,
+    'holdOut': open ? 1 : 0,
+    'assume': open ? 1 : 0,
+  };
+}
 
 String _weighted(Random rng, Map<String, int> weights) {
   var roll = rng.nextInt(weights.values.fold(0, (a, b) => a + b));
@@ -988,17 +1421,25 @@ String _weighted(Random rng, Map<String, int> weights) {
 }
 
 /// The next step for the state [e] is in.
-Act generate(Random rng, Event e) {
+Act generate(Random rng, Event e, int tag) {
   final paired = e.sections.any((s) => s.rounds.isNotEmpty);
+  // Every section played out: like a club's next event, add sections and
+  // players rather than knock on closed rounds.
+  final idle =
+      paired &&
+      !e.games.any((g) => !g.outcome.resolved) &&
+      !e.sections.any(Harness._readyToPair);
   final phase = rng.nextInt(100) < (paired ? 18 : 4)
       ? _chaos
+      : idle
+      ? _nextEvent
       : (!paired && e.players.length < 6) ||
             rng.nextInt(100) < (paired ? 8 : 70)
       ? _setup
-      : _play;
+      : _adjustedPlay(e);
   return Act(_weighted(rng, phase), [
     for (var i = 0; i < 5; i++) rng.nextInt(1 << 16),
-  ]);
+  ], tag);
 }
 
 /// Generates and runs one seeded trace of [steps] steps. Returns the trace
@@ -1042,7 +1483,7 @@ class _Gen implements Iterator<Act> {
   @override
   bool moveNext() {
     if (t.out.length >= t.steps) return false;
-    _current = generate(t.rng, t.h.e);
+    _current = generate(t.rng, t.h.e, t.out.length);
     t.out.add(_current!);
     return true;
   }
@@ -1076,13 +1517,21 @@ Future<List<Act>> shrink(
   Directory parent, {
   int budget = 400,
   bool strict = false,
+}) => shrinkWith(trace, (t) async {
+  final f = await replay(t, parent, strict: strict);
+  return f != null && f.violation.signature == signature;
+}, budget: budget);
+
+/// [shrink] for any runner: [fails] says whether a trace still fails the
+/// same way.
+Future<List<Act>> shrinkWith(
+  List<Act> trace,
+  Future<bool> Function(List<Act>) failsSame, {
+  int budget = 400,
 }) async {
   var runs = 0;
-  Future<bool> fails(List<Act> t) async {
-    if (runs++ >= budget) return false;
-    final f = await replay(t, parent, strict: strict);
-    return f != null && f.violation.signature == signature;
-  }
+  Future<bool> fails(List<Act> t) async =>
+      runs++ < budget && await failsSame(t);
 
   var current = trace;
   var n = 2;
@@ -1116,7 +1565,7 @@ Future<List<Act>> shrink(
     for (var j = 0; j < current[i].args.length; j++) {
       if (current[i].args[j] == 0) continue;
       final simpler = [...current];
-      simpler[i] = Act(current[i].kind, [...current[i].args]..[j] = 0);
+      simpler[i] = current[i].withArgs([...current[i].args]..[j] = 0);
       if (await fails(simpler)) current = simpler;
     }
   }

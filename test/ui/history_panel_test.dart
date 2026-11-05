@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
+import 'package:meow_chess/ui/history_panel.dart' show historyTime;
 import 'package:meow_chess/ui/workspace.dart';
 import '../support.dart';
 
@@ -100,7 +101,7 @@ void main() {
       await tester.tap(find.byTooltip('History (Ctrl+H)'));
       await tester.pumpAndSettle();
       expect(find.text('Player 02: Round 3 bye (0.5 pt)'), findsOneWidget);
-      expect(find.text('2 undone changes, kept'), findsOneWidget);
+      expect(find.textContaining('2 undone changes, kept · '), findsOneWidget);
       expect(find.text('Now'), findsOneWidget);
       expect(find.byKey(ValueKey('history-$tip')), findsNothing);
       expect(find.byKey(ValueKey('history-details-$current')), findsNothing);
@@ -233,4 +234,125 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     },
   );
+
+  group('going back by recovery point', () {
+    testWidgets(
+      'a recovery point selects its version, then Return to latest comes back',
+      (tester) async {
+        final c = fixture(format: Format.swiss);
+        addTearDown(c.dispose);
+        c.post((await tester.runAsync(() => c.propose()))!);
+        for (final g in c.event!.games) {
+          c.recordResult(g.id, Outcome.draw);
+        }
+        final newest = c.graph.head;
+        await mount(tester, c);
+        await tester.tap(find.byTooltip('History (Ctrl+H)'));
+        await tester.pumpAndSettle();
+        final point = c.recoveryPoints().firstWhere(
+          (p) => p.mark.title == 'Before round 1 pairings',
+        );
+        expect(find.text('Recovery points (2)'), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('history-points')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('history-earlier')), findsNothing);
+        await tester.tap(
+          find.byKey(
+            ValueKey('history-point-${point.node}-${point.mark.title}'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        // Choosing only shows the version: what it holds and what it removes.
+        expect(c.graph.head, newest);
+        expect(find.text('At this point'), findsOneWidget);
+        expect(find.text('Quad 1: not paired yet'), findsOneWidget);
+        expect(find.text('Removes recorded play'), findsOneWidget);
+        await tester.ensureVisible(
+          find.byKey(const ValueKey('history-restore')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('history-restore')));
+        await tester.pumpAndSettle();
+        expect(c.graph.head, point.node);
+        expect(c.event!.sections.every((s) => s.rounds.isEmpty), isTrue);
+
+        // The newest version is one press away, from the top of History.
+        await tester.drag(
+          find.byKey(const ValueKey('history-graph')),
+          const Offset(0, 2000),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('The event is on an earlier version'), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('history-return')));
+        await tester.pumpAndSettle();
+        expect(c.graph.head, newest);
+        expect(c.event!.games.every((g) => g.outcome == Outcome.draw), isTrue);
+        expect(find.byKey(const ValueKey('history-earlier')), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(const Duration(milliseconds: 500));
+      },
+    );
+
+    testWidgets('the status line says what Undo did and offers Redo', (
+      tester,
+    ) async {
+      final c = fixture(format: Format.swiss);
+      addTearDown(c.dispose);
+      c.post((await tester.runAsync(() => c.propose()))!);
+      final game = c.event!.games.first;
+      c.recordResult(game.id, Outcome.whiteWin);
+      await mount(tester, c);
+      expect(find.byKey(const ValueKey('status-moved')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('undo')));
+      await tester.pumpAndSettle();
+      expect(c.event!.games.first.outcome, Outcome.unreported);
+      final moved = tester.widget<Text>(
+        find.byKey(const ValueKey('status-moved')),
+      );
+      expect(moved.data, startsWith('Undid: '));
+      expect(moved.data, contains('1–0'));
+      expect(find.byType(SnackBar), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('status-move-back')));
+      await tester.pumpAndSettle();
+      expect(c.event!.games.first.outcome, Outcome.whiteWin);
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('status-moved'))).data,
+        startsWith('Redid: '),
+      );
+      // The next change ends the report.
+      c.recordResult(c.event!.games.last.id, Outcome.draw);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('status-moved')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 500));
+    });
+
+    testWidgets('undone groups say when their work was done', (tester) async {
+      final c = fixture(format: Format.swiss);
+      addTearDown(c.dispose);
+      c.post((await tester.runAsync(() => c.propose()))!);
+      final [a, b, ...] = c.event!.games.toList();
+      c.recordResult(a.id, Outcome.whiteWin);
+      c.undo();
+      c.recordResult(b.id, Outcome.draw);
+      await mount(tester, c);
+      await tester.tap(find.byTooltip('History (Ctrl+H)'));
+      await tester.pumpAndSettle();
+      final time = historyTime(
+        c.graph.nodes[c.graph.branches.values.single.single]!.timestamp,
+      );
+      expect(find.text('1 undone change, kept · $time'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('history-keys')),
+        200,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('history-graph')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      expect(find.textContaining('Ctrl+Z undo'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 500));
+    });
+  });
 }

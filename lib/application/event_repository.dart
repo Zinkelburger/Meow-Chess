@@ -19,6 +19,10 @@ abstract interface class EventRepository {
   HistoryGraph historyGraph();
   Event snapshot(int node);
   List<Json> history();
+
+  /// When the event was last saved: the newest audit row, which a history
+  /// move writes too. Null before the first save.
+  String? lastSaved();
   String? readPreference(String key);
   void writePreference(String key, String value);
 

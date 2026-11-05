@@ -12,6 +12,46 @@ mixin _ControllerHistory on ChangeNotifier {
 
   HistoryGraph? _graph;
 
+  /// The last Undo, Redo or Restore and the version it left, until the next
+  /// change: what the status line reports, with the way back.
+  ({String verb, int from, int to})? lastMove;
+
+  /// The newest version saved: where Return to latest goes after moving
+  /// back. A version left by going back stays in the history, so the newest
+  /// one is the work most recently done.
+  int? get latestNode => graph.nodes.keys.fold<int?>(
+    null,
+    (newest, id) => newest == null || id > newest ? id : newest,
+  );
+
+  // Saved states never change, so their landmarks are worked out once.
+  final _marks = <int, List<RecoveryMark>>{};
+
+  /// Recovery points on the event's line, newest first: before each round
+  /// was paired or unpaired, before each import and each move of players.
+  /// [limit] stops the walk early, as reading saved states costs time.
+  List<RecoveryPoint> recoveryPoints({int? limit}) {
+    if (_closed) throw const TournamentException('This event has closed.');
+    final out = <RecoveryPoint>[];
+    final graph = this.graph;
+    Event? child;
+    for (int? id = graph.head; id != null; id = graph.nodes[id]?.parent) {
+      final node = graph.nodes[id]!, parent = node.parent;
+      if (parent == null) break;
+      Event? before;
+      final marks = _marks[id] ??= recoveryMarks(
+        before = repository.snapshot(parent),
+        child ?? repository.snapshot(id),
+      );
+      child = before;
+      for (final mark in marks) {
+        out.add(RecoveryPoint(parent, id, mark, node.timestamp));
+      }
+      if (limit != null && out.length >= limit) break;
+    }
+    return out;
+  }
+
   /// The saved history. History lives in the event file, so once the event
   /// has closed only a graph already read remains; otherwise it refuses
   /// plainly instead of surfacing a database error.
@@ -53,13 +93,13 @@ mixin _ControllerHistory on ChangeNotifier {
   void undo({bool acceptLosses = false}) {
     _refuseClosed('Undo');
     if (!canUndo) return;
-    _move(graph.back!, 'Undo $undoLabel', acceptLosses);
+    _move(graph.back!, 'Undo $undoLabel', acceptLosses, 'Undid');
   }
 
   void redo({bool acceptLosses = false}) {
     _refuseClosed('Redo');
     if (!canRedo) return;
-    _move(graph.forward!, 'Redo $redoLabel', acceptLosses);
+    _move(graph.forward!, 'Redo $redoLabel', acceptLosses, 'Redid');
   }
 
   void restore(int node, {bool acceptLosses = false}) {
@@ -69,10 +109,11 @@ mixin _ControllerHistory on ChangeNotifier {
       node,
       'Restore #$node · ${graph.nodes[node]?.action ?? ''}',
       acceptLosses,
+      'Went to',
     );
   }
 
-  void _move(int node, String action, bool acceptLosses) {
+  void _move(int node, String action, bool acceptLosses, String verb) {
     final context = <String, Object?>{
       'action': action,
       'eventId': event?.id,
@@ -96,12 +137,14 @@ mixin _ControllerHistory on ChangeNotifier {
           'Going there removes play already recorded: ${lost.join('; ')}.',
         );
       }
+      final from = graph.head!;
       event = repository.checkout(
         node,
         expectedRevision: event!.revision,
         action: action,
       );
       _graph = null;
+      lastMove = (verb: verb, from: from, to: node);
       Diagnostics.record(
         'save event',
         'succeeded',

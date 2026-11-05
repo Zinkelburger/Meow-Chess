@@ -9,7 +9,16 @@ mixin _RoundCommands on _CommandContext {
   Future<PairingBatch> propose({
     String? sectionId,
     bool onlyReady = false,
-  }) async => _proposeInBackground(event!, sectionId, onlyReady);
+  }) async => runProposal(event!, sectionId, onlyReady);
+
+  /// Where a proposal is worked out: on a background isolate, so a long
+  /// Swiss never freezes the window. A widget test on a fake clock, which
+  /// cannot wait for an isolate, runs [proposeRounds] here directly.
+  Future<PairingBatch> runProposal(
+    Event snapshot,
+    String? sectionId,
+    bool onlyReady,
+  ) => _proposeInBackground(snapshot, sectionId, onlyReady);
 
   /// A TD-selected game with independent entries and score, committed atomically.
   /// Finishing/forfeiting the main game frees that person for a side game.
@@ -381,7 +390,7 @@ mixin _RoundCommands on _CommandContext {
   }
 }
 
-/// Runs [_proposeRounds] on a background isolate. Top-level, so the isolate's
+/// Runs [proposeRounds] on a background isolate. Top-level, so the isolate's
 /// closure can only capture the plain data passed here, never the controller
 /// and its open event file. Browsers have no isolates, so the browser version
 /// pairs on the UI thread.
@@ -390,12 +399,14 @@ Future<PairingBatch> _proposeInBackground(
   String? sectionId,
   bool onlyReady,
 ) => _hasIsolates
-    ? Isolate.run(() => _proposeRounds(snapshot, sectionId, onlyReady))
-    : Future(() => _proposeRounds(snapshot, sectionId, onlyReady));
+    ? Isolate.run(() => proposeRounds(snapshot, sectionId, onlyReady))
+    : Future(() => proposeRounds(snapshot, sectionId, onlyReady));
 
 const _hasIsolates = !bool.fromEnvironment('dart.library.js_interop');
 
-PairingBatch _proposeRounds(Event snapshot, String? sectionId, bool onlyReady) {
+/// The next round of [sectionId], or of every section that can be paired,
+/// worked out from [snapshot] alone.
+PairingBatch proposeRounds(Event snapshot, String? sectionId, bool onlyReady) {
   final rounds = <String, Round>{}, issues = <String, String>{};
   // A knockout runs until its bracket is decided, not to a round count: a
   // drawn final still takes tie-break games after the planned rounds, and a

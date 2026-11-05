@@ -1,12 +1,63 @@
 {
- "found": "seeds 2 and 24, 300 steps, shrunk to 5",
- "violation": "[paired-withdrawn] Round 1 paired withdrawn Zoë Ñúñez 2.",
- "why": "29G3 re-pairing kept the unstarted board of a player who had already withdrawn, so the re-paired round still paired them. repairUnstartedRound must refuse.",
+ "found": "seed-53 of a strict campaign on code without the fix; 5 steps after shrinking",
+ "violation": "[paired-withdrawn]: Round 1 paired withdrawn =HYPERLINK(\"x\") 96_6.",
+ "why": "A 29G3 re-pairing kept the waiting board of a player who had already withdrawn. repairUnstartedRound must refuse.",
+ "strict": false,
  "trace": [
-  ["import", 12942, 0, 40708, 0, 0],
-  ["addSection", 0, 0, 0, 0, 0],
-  ["pair", 0, 0, 0, 0, 0],
-  ["withdraw", 2256, 20857, 0, 0, 0],
-  ["lateWithdraw", 0, 20903, 0, 37711, 0]
+  {
+   "k": "import",
+   "t": 96,
+   "a": [
+    38902,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "addSection",
+   "t": 100,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 170,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "withdraw",
+   "t": 171,
+   "a": [
+    49258,
+    6513,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "lateWithdraw",
+   "t": 180,
+   "a": [
+    0,
+    0,
+    0,
+    31560,
+    0
+   ]
+  }
  ]
 }

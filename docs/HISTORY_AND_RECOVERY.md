@@ -83,6 +83,23 @@ final report generation. Name them in TD terms, including section, round and tim
 The underlying per-command history preserves edits between these larger milestones.
 A checkpoint is not a claim that an external backup was made.
 
+**Implemented (November 5, 2026).** History lists recovery points above the
+changes: before each round was paired or unpaired, before each import of more than
+one player and before each move of players, each with its sections and time
+(`lib/domain/recovery.dart`, derived from the saved states, so no separate record can
+drift). Choosing one selects that version's row. It shows the same "Undoes" and
+"Removes recorded play" details and needs the same button press as any other move.
+Each row's details begin with **At this point**: how far each section had got and
+how many players were registered. When the event is on an earlier version, a banner
+names the newest version and offers **Return to latest**. If that return would remove
+play, it opens the row for review first. After Undo, Redo or a restore, the status
+line says what happened ("Undid: Kim – Lee 1–0") and offers the opposite move.
+Following the design rules, this is quiet inline text, not a SnackBar. The status
+line's save time is now the newest save, which a history move also writes, not the
+time of the version shown. Still to do: named recovery points, recovery points before
+migration and final reports, a read-only preview of pairings and standings, filters,
+and actor labels.
+
 Saved alternatives normally appear as a compact list: Current live version,
 Before reopening round 3, Round 3 repair in progress. Optional ancestry disclosure
 can show where an alternative began; no Git terminology or giant per-keystroke graph.

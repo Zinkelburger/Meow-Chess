@@ -4,11 +4,13 @@ import 'package:flutter/services.dart';
 import '../application/tournament_controller.dart';
 import '../domain/history.dart';
 import '../domain/model.dart';
+import '../domain/recovery.dart';
 import 'dialogs.dart';
 import 'panels.dart';
 import 'result_correction_panel.dart';
 import 'side_panel.dart';
 import 'theme.dart';
+import 'workspace_toolbar.dart' show shortcutLabel;
 
 /// Whether moving to [node] changes an earlier result while rounds paired
 /// after it stay in place. That needs the correction review, not a restore.
@@ -27,6 +29,23 @@ bool changesDependentResult(TournamentController c, Event target) {
 bool historyNeedsReview(TournamentController c, int node) =>
     c.lossesTo(node).isNotEmpty ||
     changesDependentResult(c, c.repository.snapshot(node));
+
+/// A history step in the director's words: what changed and where.
+/// [read] supplies saved states, so a caller may cache them.
+HistoryStep historyStep(
+  TournamentController c,
+  int id, [
+  Event Function(int node)? read,
+]) {
+  final node = c.graph.nodes[id]!;
+  if (node.parent == null) return (title: node.action, context: '');
+  final snapshot = read ?? c.repository.snapshot;
+  try {
+    return summarizeStep(snapshot(node.parent!), snapshot(id));
+  } catch (_) {
+    return (title: node.action, context: 'Details unavailable');
+  }
+}
 
 String historyTime(String timestamp) {
   final t = DateTime.parse(timestamp).toLocal(), now = DateTime.now();
@@ -83,6 +102,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
   final openAsides = <int>{};
   final rowKeys = <int, GlobalKey>{};
   final expandedLists = <String>{};
+  var allPoints = false, pointsOpen = false;
   int? selected;
   int? shownHead;
 
@@ -101,15 +121,8 @@ class _HistoryPanelState extends State<HistoryPanel> {
     return event;
   }
 
-  HistoryStep summary(int id) => summaries.putIfAbsent(id, () {
-    final node = c.graph.nodes[id]!;
-    if (node.parent == null) return (title: node.action, context: '');
-    try {
-      return summarizeStep(snapshot(node.parent!), snapshot(id));
-    } catch (_) {
-      return (title: node.action, context: 'Details unavailable');
-    }
-  });
+  HistoryStep summary(int id) =>
+      summaries.putIfAbsent(id, () => historyStep(c, id, snapshot));
 
   @override
   void initState() {
@@ -144,20 +157,37 @@ class _HistoryPanelState extends State<HistoryPanel> {
     setState(() => selected = id);
     focus.requestFocus();
     if (id == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final rowContext = rowKeys[id]?.currentContext;
-      if (rowContext != null) {
-        Scrollable.ensureVisible(
-          rowContext,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
-        );
-        Scrollable.ensureVisible(
-          rowContext,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-        );
-      }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => reveal(id));
+  }
+
+  /// Scrolls [id]'s row into view. The list builds rows lazily, so a row far
+  /// down may not exist yet: jump toward where it should be and look again
+  /// on the next frame, a few times, as row heights become known.
+  void reveal(int id, [int tries = 4]) {
+    if (!mounted || selected != id) return;
+    final rowContext = rowKeys[id]?.currentContext;
+    if (rowContext != null) {
+      Scrollable.ensureVisible(
+        rowContext,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+      );
+      Scrollable.ensureVisible(
+        rowContext,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+      return;
+    }
+    if (tries == 0 || !scroll.hasClients) return;
+    final list = entries(c.graph);
+    final index = list.indexWhere((e) => e is _Change && e.id == id);
+    if (index < 0) return;
+    final position = scroll.position;
+    // Average height of what has been laid out so far; the header is row 0.
+    final average = position.extentTotal / (list.length + 2);
+    position.jumpTo(
+      ((index + 1) * average).clamp(0.0, position.maxScrollExtent),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => reveal(id, tries - 1));
   }
 
   /// The event's line newest first, with each group of undone changes just
@@ -268,14 +298,16 @@ class _HistoryPanelState extends State<HistoryPanel> {
             scrollCacheExtent: const ScrollCacheExtent.pixels(600),
             // The explanation follows the changes, so large text never
             // pushes the newest change out of view.
-            itemCount: list.length + 1,
-            itemBuilder: (context, i) => i == list.length
+            itemCount: list.length + 2,
+            itemBuilder: (context, i) => i == 0
+                ? _header(context, graph)
+                : --i == list.length
                 ? Padding(
                     key: const ValueKey('history-keys'),
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                     child: Text(
-                      'Choosing a change only shows it. The event moves when you go back.\n'
-                      '↑ ↓ choose · Enter go back · Ctrl+Z undo',
+                      'Choosing a change only shows it. The event moves when you press its button.\n'
+                      '↑ ↓ choose · Enter go to the chosen version · ${shortcutLabel('Z')} undo',
                       style: muted.copyWith(height: 1.5),
                     ),
                   )
@@ -295,9 +327,142 @@ class _HistoryPanelState extends State<HistoryPanel> {
     );
   }
 
+  /// Above the changes: the way back to the newest version when the event
+  /// is on an earlier one, and the recovery points: named states such as
+  /// "Before round 3 pairings". Choosing a point selects its row, so going
+  /// there shows the same details and warnings as any other change.
+  Widget _header(BuildContext context, HistoryGraph graph) {
+    final colors = Theme.of(context).colorScheme;
+    final muted = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
+    final latest = c.latestNode;
+    List<RecoveryPoint> points;
+    try {
+      points = c.recoveryPoints(limit: allPoints ? null : 6);
+    } catch (_) {
+      points = const [];
+    }
+    final shown = allPoints ? points : points.take(5).toList();
+    return Padding(
+      key: const ValueKey('history-header'),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (latest != null && latest != graph.head) ...[
+            Container(
+              key: const ValueKey('history-earlier'),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'The event is on an earlier version',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'The newest, from ${historyTime(graph.nodes[latest]!.timestamp)}, is kept: '
+                    '${summary(latest).title}',
+                    style: muted.copyWith(height: 1.4),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    key: const ValueKey('history-return'),
+                    icon: const Icon(Icons.update),
+                    label: const Text('Return to latest'),
+                    // Returning that would remove play is reviewed like any
+                    // other move: the row opens with its warning.
+                    onPressed: () => c.lossesTo(latest).isEmpty
+                        ? moveTo(latest)
+                        : select(latest),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          // One line until asked for, so the newest changes stay in view
+          // at any text size.
+          if (shown.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('history-points'),
+                onPressed: () => setState(() => pointsOpen = !pointsOpen),
+                icon: Icon(
+                  pointsOpen ? Icons.expand_less : Icons.flag_outlined,
+                ),
+                label: Text(
+                  'Recovery points (${points.length > 5 && !allPoints ? '5+' : points.length})',
+                ),
+              ),
+            ),
+          if (shown.isNotEmpty && pointsOpen) ...[
+            for (final p in shown)
+              InkWell(
+                key: ValueKey('history-point-${p.node}-${p.mark.title}'),
+                onTap: () => select(p.node),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.flag_outlined,
+                        size: 16,
+                        color: colors.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text.rich(
+                          TextSpan(
+                            text: p.mark.title,
+                            children: [
+                              if (p.mark.detail.isNotEmpty)
+                                TextSpan(
+                                  text: ' · ${p.mark.detail}',
+                                  style: muted,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Text(historyTime(p.timestamp), style: muted),
+                    ],
+                  ),
+                ),
+              ),
+            if (points.length > 5)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: const ValueKey('history-all-points'),
+                  onPressed: () => setState(() => allPoints = !allPoints),
+                  child: Text(
+                    allPoints ? 'Show fewer' : 'Show all recovery points',
+                  ),
+                ),
+              ),
+            const SizedBox(height: 4),
+            Divider(color: colors.outlineVariant),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _asideToggle(BuildContext context, _Aside a) {
     final colors = Theme.of(context).colorScheme;
     final noun = a.count == 1 ? 'change' : 'changes';
+    // When the group's work was done tells it apart from other groups.
+    final times = [
+      for (final id in c.graph.branches[a.root]!) c.graph.nodes[id]!.timestamp,
+    ]..sort();
+    final first = historyTime(times.first), last = historyTime(times.last);
+    final span = first == last ? first : '$first–$last';
     return CustomPaint(
       painter: _Rail(colors: colors, kind: _RailKind.toggle, open: a.open),
       child: Padding(
@@ -323,7 +488,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
             label: Text(
               a.open
                   ? 'Hide ${a.count} undone $noun'
-                  : '${a.count} undone $noun, kept',
+                  : '${a.count} undone $noun, kept · $span',
             ),
           ),
         ),
@@ -557,6 +722,12 @@ class _HistoryPanelState extends State<HistoryPanel> {
               child: Text('The event is here now.', style: muted),
             )
           else ...[
+            heading('At this point'),
+            for (final line in stateSummary(snapshot(id)))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(line, style: small),
+              ),
             ...changes('Undoes', path.undo),
             ...changes('Brings back', path.apply),
             if (lost.isNotEmpty) ...[

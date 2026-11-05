@@ -557,6 +557,12 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
       Map<String, dynamic>.from(r),
   ];
   @override
+  String? lastSaved() =>
+      _db
+              .select('SELECT timestamp FROM audit ORDER BY id DESC LIMIT 1')
+              .firstOrNull?['timestamp']
+          as String?;
+  @override
   String? readPreference(String key) =>
       _db.select('SELECT value FROM preference WHERE key=?', [
             key,

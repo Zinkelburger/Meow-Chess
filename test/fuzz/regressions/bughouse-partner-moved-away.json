@@ -1,0 +1,74 @@
+{
+ "found": "seed-89 of a strict campaign on code without the fix; 6 steps after shrinking",
+ "violation": "[invalid-commit]: The repository refused an invalid event: Move 1 players to Section 5: A bughouse partnership is two distinct players of the section, each in one partnership.",
+ "why": "Moving a partnered player out of a bughouse section left the partnership naming them. Before play the partner is left unpartnered; after play the move is refused.",
+ "strict": true,
+ "trace": [
+  {
+   "k": "register",
+   "t": 4,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "register",
+   "t": 9,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "addSection",
+   "t": 19,
+   "a": [
+    0,
+    0,
+    58523,
+    19125,
+    0
+   ]
+  },
+  {
+   "k": "addSection",
+   "t": 20,
+   "a": [
+    24132,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "partners",
+   "t": 21,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "move",
+   "t": 23,
+   "a": [
+    0,
+    35155,
+    0,
+    0,
+    0
+   ]
+  }
+ ]
+}

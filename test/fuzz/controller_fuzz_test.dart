@@ -76,7 +76,8 @@ void main() {
     test('replay $path', () async {
       final j = jsonDecode(File(path).readAsStringSync()) as Map;
       final trace = [
-        for (final a in j['trace'] as List) Act.fromJson(a as List),
+        for (final a in j['trace'] as List)
+          Act.fromJson(a as Map<String, dynamic>),
       ];
       final f = await replay(trace, Directory.systemTemp, strict: strict);
       if (f != null) fail(_report(null, trace, f));
@@ -93,7 +94,8 @@ void main() {
       test(file.uri.pathSegments.last, () async {
         final j = jsonDecode(file.readAsStringSync()) as Map;
         final trace = [
-          for (final a in j['trace'] as List) Act.fromJson(a as List),
+          for (final a in j['trace'] as List)
+            Act.fromJson(a as Map<String, dynamic>),
         ];
         final f = await replay(
           trace,
@@ -112,6 +114,7 @@ void main() {
     final soft = <String>{};
     final tally = <String, List<int>>{};
     final depth = <int>[];
+    final reasons = <String, Map<String, int>>{};
     for (var seed = first; seed <= last; seed++) {
       test('seed $seed', () async {
         final dir = Directory.systemTemp.createTempSync('meow-fuzz-');
@@ -122,6 +125,12 @@ void main() {
         skipped += h.skipped;
         soft.addAll(h.soft);
         depth.add(h.maxRounds);
+        for (final MapEntry(:key, :value) in h.reasons.entries) {
+          final r = reasons[key] ??= {};
+          for (final MapEntry(key: m, value: n) in value.entries) {
+            r[m] = (r[m] ?? 0) + n;
+          }
+        }
         for (final MapEntry(:key, :value) in h.tally.entries) {
           final t = tally[key] ??= [0, 0];
           t[0] += value[0];
@@ -131,6 +140,16 @@ void main() {
       }, timeout: const Timeout(Duration(minutes: 10)));
     }
     tearDownAll(() {
+      if (env['MEOW_FUZZ_VERBOSE'] == '1') {
+        for (final MapEntry(:key, :value) in reasons.entries) {
+          final top = value.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
+          // ignore: avoid_print
+          print(
+            '$key refused: ${top.take(3).map((e) => '${e.value}× ${e.key}').join(' | ')}',
+          );
+        }
+      }
       // ignore: avoid_print
       print(
         'fuzz: seeds $first-$last × $steps steps, $commands commands, '

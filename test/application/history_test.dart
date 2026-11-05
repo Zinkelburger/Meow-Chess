@@ -5,6 +5,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/history.dart';
 import 'package:meow_chess/domain/model.dart';
+import 'package:meow_chess/domain/recovery.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import '../support.dart';
 
@@ -368,6 +369,107 @@ PRAGMA user_version = 1;''');
     expect(
       migrated.repository.history().map((h) => h['action']),
       containsAll(['Create event', 'Start history graph']),
+    );
+  });
+
+  group('recovery points', () {
+    /// A three-round Swiss of eight, every round played out.
+    Future<TournamentController> threeRounds() async {
+      final c = TournamentController(SqliteEventRepository(':memory:'));
+      c.create('Tuesday Swiss');
+      c.importPlayers([
+        for (var i = 0; i < 8; i++)
+          Player(id: 's$i', name: 'Swiss $i', rating: 1800 - i * 50),
+      ]);
+      c.addSection('Open', Format.swiss, 3);
+      for (var r = 0; r < 3; r++) {
+        c.post(await c.propose());
+        for (final g in c.event!.sections.single.rounds.last.games) {
+          c.recordResult(g.id, Outcome.whiteWin);
+        }
+      }
+      return c;
+    }
+
+    test('name every pairing and the import, newest first', () async {
+      final c = await threeRounds();
+      addTearDown(c.dispose);
+      final points = c.recoveryPoints();
+      expect(points.map((p) => p.mark.title), [
+        'Before round 3 pairings',
+        'Before round 2 pairings',
+        'Before round 1 pairings',
+        'Before importing 8 players',
+      ]);
+      expect(points.first.mark.detail, 'Open');
+      // A limited walk stops early and agrees with the full one.
+      expect(
+        c.recoveryPoints(limit: 2).map((p) => p.node),
+        points.take(2).map((p) => p.node),
+      );
+    });
+
+    test('going to one lands just before that round was paired', () async {
+      final c = await threeRounds();
+      addTearDown(c.dispose);
+      final point = c.recoveryPoints().first;
+      expect(c.lossesTo(point.node), isNotEmpty);
+      c.restore(point.node, acceptLosses: true);
+      final open = c.event!.sections.single;
+      expect(open.rounds, hasLength(2));
+      expect(open.rounds.every((r) => r.complete), isTrue);
+      // The round paired and played afterwards is still the newest version.
+      expect(c.latestNode, isNot(c.graph.head));
+      c.restore(c.latestNode!);
+      expect(c.event!.sections.single.rounds, hasLength(3));
+      expect(c.latestNode, c.graph.head);
+    });
+
+    test('the last move is reported until the next change', () async {
+      final c = await threeRounds();
+      addTearDown(c.dispose);
+      final head = c.graph.head!;
+      c.undo();
+      expect(c.lastMove?.verb, 'Undid');
+      expect(c.lastMove?.from, head);
+      expect(c.lastMove?.to, c.graph.head);
+      c.redo();
+      expect(c.lastMove?.verb, 'Redid');
+      c.restore(c.recoveryPoints().first.node, acceptLosses: true);
+      expect(c.lastMove?.verb, 'Went to');
+      c.savePlayer(c.event!.players.first.copy(club: 'Boylston'));
+      expect(c.lastMove, isNull);
+    });
+
+    test('the save time is the newest save, not the version shown', () async {
+      final c = await threeRounds();
+      addTearDown(c.dispose);
+      final first = c.graph.nodes[c.recoveryPoints().last.node]!.timestamp;
+      c.restore(c.recoveryPoints().last.node, acceptLosses: true);
+      // Going back is saved now; the version it went to is older.
+      expect(
+        c.repository.lastSaved()!.compareTo(first),
+        greaterThanOrEqualTo(0),
+      );
+      expect(
+        c.repository.lastSaved(),
+        c.repository.history().first['timestamp'],
+      );
+    });
+
+    test(
+      'marks are the same whether read from the controller or computed',
+      () async {
+        final c = await threeRounds();
+        addTearDown(c.dispose);
+        for (final p in c.recoveryPoints()) {
+          final marks = recoveryMarks(
+            c.repository.snapshot(p.node),
+            c.repository.snapshot(p.step),
+          );
+          expect(marks.map((m) => m.title), contains(p.mark.title));
+        }
+      },
     );
   });
 }

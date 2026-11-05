@@ -1,21 +1,74 @@
 {
- "found": "seed 1, 300 steps, shrunk to 13",
- "violation": "[invalid-commit] Result, board 3: A person is scheduled in two active sections.",
- "why": "A finished game was set back to unreported after its player began a side game. recordResult must refuse and name the side game instead of leaving it to the repository's validation.",
+ "found": "seed-99 of a strict campaign on code without the fix; 6 steps after shrinking",
+ "violation": "[invalid-commit]: The repository refused an invalid event: Result, board 1: A person is scheduled in two active sections.",
+ "why": "A finished game was set back to unreported after its player began a side game. recordResult must refuse and name the side game.",
  "strict": true,
  "trace": [
-  ["import", 17485, 0, 43535, 23741, 0],
-  ["import", 35989, 0, 37071, 0, 0],
-  ["register", 0, 53290, 0, 0, 0],
-  ["register", 0, 0, 0, 0, 0],
-  ["import", 49695, 0, 0, 22689, 0],
-  ["applyQuads", 0, 0, 0, 0, 0],
-  ["pair", 0, 41957, 0, 0, 0],
-  ["register", 0, 0, 0, 0, 0],
-  ["undo", 0, 0, 0, 0, 0],
-  ["import", 62046, 0, 0, 0, 0],
-  ["resultWithReason", 29897, 0, 0, 0, 0],
-  ["sideGame", 31759, 8130, 0, 0, 0],
-  ["resultWithReason", 19970, 31079, 0, 0, 0]
+  {
+   "k": "import",
+   "t": 8,
+   "a": [
+    7963,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "sideGame",
+   "t": 27,
+   "a": [
+    0,
+    61982,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "addSection",
+   "t": 104,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 143,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 147,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 152,
+   "a": [
+    33184,
+    32277,
+    0,
+    0,
+    0
+   ]
+  }
  ]
 }

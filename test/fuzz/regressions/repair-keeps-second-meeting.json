@@ -1,0 +1,162 @@
+{
+ "found": "seed-68 of a strict campaign on code without the fix; 14 steps after shrinking",
+ "violation": "[repeat-pairing]: Round 4 repeats a played pairing without 27A1.",
+ "why": "A 29G3 re-pairing kept a board that was a second meeting allowed by 27A1, and dropped the explanation. The repaired round must say why the two meet again.",
+ "strict": false,
+ "trace": [
+  {
+   "k": "import",
+   "t": 9,
+   "a": [
+    3844,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "addSection",
+   "t": 17,
+   "a": [
+    0,
+    30283,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 18,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 25,
+   "a": [
+    0,
+    54953,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "withdraw",
+   "t": 26,
+   "a": [
+    0,
+    57007,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 27,
+   "a": [
+    0,
+    34169,
+    34312,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 33,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 35,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 40,
+   "a": [
+    0,
+    0,
+    59622,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 43,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 58,
+   "a": [
+    29877,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "result",
+   "t": 59,
+   "a": [
+    0,
+    0,
+    19674,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "pair",
+   "t": 65,
+   "a": [
+    0,
+    0,
+    0,
+    0,
+    0
+   ]
+  },
+  {
+   "k": "lateWithdraw",
+   "t": 70,
+   "a": [
+    0,
+    0,
+    0,
+    56200,
+    0
+   ]
+  }
+ ]
+}

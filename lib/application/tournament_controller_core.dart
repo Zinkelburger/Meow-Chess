@@ -13,6 +13,7 @@ import '../domain/fide_pairing.dart' show fideDutchPolicy;
 import '../domain/history.dart';
 import '../domain/holland.dart';
 import '../domain/knockout.dart';
+import '../domain/recovery.dart';
 import '../domain/result_correction.dart';
 import '../domain/rulings.dart';
 import '../domain/section_placement.dart';
@@ -136,6 +137,7 @@ class TournamentControllerCore extends ChangeNotifier
         action: action,
       );
       _graph = null;
+      lastMove = null;
       Diagnostics.record(
         'save event',
         'succeeded',

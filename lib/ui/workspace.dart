@@ -727,14 +727,51 @@ class _WorkspaceState extends State<Workspace> {
 
   /// What is safe: when the file was last saved, when it was last backed
   /// up, and the revision. Backups open from here.
+  // The status line's account of the last history move, worked out once
+  // per move: summaries read saved states.
+  Object? _movedFor;
+  String? _moved;
+
   Widget statusBar(Event e) {
-    final head = c.graph.nodes[c.graph.head];
+    final saved = c.repository.lastSaved();
+    final move = c.lastMove;
+    if (!identical(move, _movedFor)) {
+      _movedFor = move;
+      _moved = move == null
+          ? null
+          : switch (move.verb) {
+              'Undid' => 'Undid: ${historyStep(c, move.from).title}',
+              'Redid' => 'Redid: ${historyStep(c, move.to).title}',
+              _ =>
+                'Went to the version from ${historyTime(c.graph.nodes[move.to]!.timestamp)}',
+            };
+    }
     final backup = c.repository.readPreference('lastBackup')?.split('|');
     final backedUp = backup != null && backup.length > 2
         ? historyTime(backup[2])
         : null;
     return WorkspaceStatusBar(
-      savedAt: head == null ? null : historyTime(head.timestamp),
+      // A history move saves too, so this is the newest audit, not the
+      // time of the version the event is on.
+      savedAt: saved == null ? null : historyTime(saved),
+      moved: _moved,
+      moveBack: switch (move?.verb) {
+        'Undid' => 'Redo',
+        'Redid' => 'Undo',
+        null => null,
+        _ => 'Go back',
+      },
+      onMoveBack: move == null
+          ? null
+          : switch (move.verb) {
+              'Undid' => redo,
+              'Redid' => undo,
+              _ => () => step(
+                move.from,
+                ({bool acceptLosses = false}) =>
+                    c.restore(move.from, acceptLosses: acceptLosses),
+              ),
+            },
       // The browser version has no folders; copies are downloads.
       backup: kIsWeb
           ? 'Download a copy'
