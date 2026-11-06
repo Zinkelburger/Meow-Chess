@@ -4,7 +4,7 @@ Downloads for each version are on
 [Releases](https://github.com/Zinkelburger/Meow-Chess/releases); the browser
 version at https://chessautoprep.com/meow-chess/ follows the latest release.
 
-## Unreleased
+## 1.4.0 — November 6, 2026
 
 - A Wall chart print (rule 28O): the crosstable in pairing-number order with a
   column for every planned round, blank until paired, and withdrawn players
@@ -21,6 +21,10 @@ version at https://chessautoprep.com/meow-chess/ follows the latest release.
 - Bughouse partners moved together into another section stay partners.
 - The backup folder also gets a copy when a round's last result is entered,
   not only when the next round is paired.
+- Re-pairing an unstarted round refuses a player still in a side game, and
+  replacing a pairing refuses a game with the same player on both sides; each
+  names the player and board.
+- A print preview with nothing to print no longer leaves a stray error behind.
 
 ## 1.3.1 — October 29, 2026
 
