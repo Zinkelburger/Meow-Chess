@@ -291,6 +291,15 @@ mixin _SectionCommands on _CommandContext {
     // Before any play a move is only a roster edit; afterwards the merged
     // section's schedule no longer holds, so it continues as a Swiss.
     final played = affected.any((s) => s.rounds.isNotEmpty);
+    // Partners moved together into a bughouse section stay partners; one
+    // moved alone leaves the other unpartnered, as setPartners describes.
+    final carried = target.format == Format.bughouse
+        ? [
+            for (final s in sources)
+              for (final pair in s.partners)
+                if (pair.every(ids.contains)) pair,
+          ]
+        : const <List<String>>[];
     final changed = <String>{};
     final sections = e.sections.map((s) {
       final players = s.id == targetId
@@ -305,6 +314,7 @@ mixin _SectionCommands on _CommandContext {
         partners: [
           for (final pair in s.partners)
             if (pair.every(players.contains)) pair,
+          if (s.id == targetId) ...carried,
         ],
         format: s.id == targetId && played ? Format.swiss : null,
         // A manual quad schedule names roster slots, which shift.

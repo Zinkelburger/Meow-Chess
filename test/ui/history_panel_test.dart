@@ -293,6 +293,41 @@ void main() {
       },
     );
 
+    testWidgets(
+      'Return to latest reviews a result later rounds were paired on',
+      (tester) async {
+        final c = fixture(format: Format.swiss);
+        addTearDown(c.dispose);
+        final section = c.event!.sections.first.id;
+        c.post((await tester.runAsync(() => c.propose(sectionId: section)))!);
+        for (final g in c.event!.sections.first.rounds.single.games) {
+          c.recordResult(g.id, Outcome.whiteWin);
+        }
+        c.post((await tester.runAsync(() => c.propose(sectionId: section)))!);
+        final early = c.event!.sections.first.rounds.first.games.first.id;
+        expect(c.correctionHasDependencies(early), isTrue);
+        c.correctResult(c.reviewResult(early), Outcome.blackWin);
+        final newest = c.graph.head;
+        // Back to before the correction: nothing played is lost by
+        // returning, but round 2 was paired on the result it changes.
+        c.undo(acceptLosses: true);
+        final back = c.graph.head;
+        expect(c.lossesTo(newest!), isEmpty);
+        await mount(tester, c);
+        await tester.tap(find.byTooltip('History (Ctrl+H)'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const ValueKey('history-return')));
+        await tester.pumpAndSettle();
+        expect(c.graph.head, back);
+        expect(
+          find.text('An earlier result changes while later rounds stay paired'),
+          findsOneWidget,
+        );
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(const Duration(milliseconds: 500));
+      },
+    );
+
     testWidgets('the status line says what Undo did and offers Redo', (
       tester,
     ) async {

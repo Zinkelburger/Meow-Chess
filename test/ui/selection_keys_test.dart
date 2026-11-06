@@ -61,6 +61,30 @@ void main() {
     expect(field.selection, const TextSelection.collapsed(offset: 4));
   }, variant: TargetPlatformVariant.desktop());
 
+  // The selection area overrides only the line-by-line intent, not the
+  // page one, so Page Up and Page Down never hit the cast. Kept as a check
+  // in case a Flutter upgrade starts overriding it too.
+  testWidgets('Page Up and Page Down in a field never throw', (tester) async {
+    final field = TextEditingController(text: '1800');
+    addTearDown(field.dispose);
+    await tester.pumpWidget(app(fixed: true, field: field));
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    for (final key in [
+      LogicalKeyboardKey.pageUp,
+      LogicalKeyboardKey.pageDown,
+    ]) {
+      await tester.sendKeyEvent(key);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    }
+  }, variant: TargetPlatformVariant.desktop());
+
   testWidgets('selecting text by keyboard outside fields still works', (
     tester,
   ) async {

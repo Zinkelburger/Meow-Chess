@@ -10,8 +10,10 @@ import '../infrastructure/reports.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
 
+import '../application/diagnostics.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
@@ -317,24 +319,40 @@ class ResultsViewState extends State<ResultsView> {
     });
   }
 
-  void focusBox(String gameId, bool white, [int tries = 4]) {
+  /// Where each board sits in the list of rows last drawn (section
+  /// headings, score groups and byes included), and how many rows there are.
+  Map<String, int> _itemOf = const {};
+  int _itemCount = 0;
+
+  /// Whether [node]'s box is on screen now. The boards are a lazy list, and
+  /// a node keeps the context of a row the list has since dropped, so only
+  /// a mounted context counts.
+  static bool _built(FocusNode node) => node.context?.mounted ?? false;
+
+  void focusBox(String gameId, bool white, [int tries = 8]) {
     final node = box(gameId, white);
-    // The boards are a lazy list: a board far down has no box yet. Jump to
-    // where it should be, and look again once that part is built.
-    if (node.context == null && scroll.hasClients && tries > 0) {
-      final all = visibleRows();
-      final index = all.indexWhere((r) => r.game.id == gameId);
-      if (index >= 0) {
-        final position = scroll.position;
-        position.jumpTo(
-          (position.maxScrollExtent * index / math.max(1, all.length - 1))
-              .clamp(0.0, position.maxScrollExtent),
-        );
+    if (!_built(node)) {
+      if (tries > 0) {
+        // A board scrolled away, or never reached, has no box yet. Jump to
+        // where it should be. Either way the row may simply not be drawn
+        // yet, so look again once the sheet has been built.
+        if (scroll.hasClients) {
+          if (_itemOf[gameId] case final index?) {
+            scroll.position.jumpTo(_offsetNear(index));
+          }
+        }
         WidgetsBinding.instance.addPostFrameCallback(
           (_) => mounted ? focusBox(gameId, white, tries - 1) : null,
         );
         return;
       }
+      // Out of reach: never leave the cursor on the board just entered,
+      // where the next key would change its result, and never ask a
+      // dropped box for focus, which it would take later at random.
+      if (boxes.values.any((n) => n.hasPrimaryFocus)) {
+        FocusManager.instance.primaryFocus?.unfocus();
+      }
+      return;
     }
     node.requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -350,6 +368,39 @@ class ResultsViewState extends State<ResultsView> {
         );
       }
     });
+  }
+
+  /// The scroll offset that brings row [target] into view, a third of the
+  /// way down. Worked out from the boards on screen now, whose positions
+  /// and spacing are measured, so a long round with headings, score groups
+  /// and byes between the boards is reached in a jump or two.
+  double _offsetNear(int target) {
+    final position = scroll.position;
+    final anchors = <(int, double)>[];
+    for (final MapEntry(key: id, value: index) in _itemOf.entries) {
+      // Only rows still on the list: a dropped row's context is defunct.
+      final row = boxes['$id-w']?.context;
+      if (row == null || !row.mounted) continue;
+      final object = row.findRenderObject();
+      if (object == null || !object.attached) continue;
+      final viewport = RenderAbstractViewport.maybeOf(object);
+      if (viewport == null) continue;
+      anchors.add((index, viewport.getOffsetToReveal(object, 0).offset));
+    }
+    final lead = position.viewportDimension / 3;
+    double offset;
+    if (anchors.length >= 2) {
+      anchors.sort((a, b) => a.$1.compareTo(b.$1));
+      final (first, firstAt) = anchors.first;
+      final (last, lastAt) = anchors.last;
+      final perRow = (lastAt - firstAt) / math.max(1, last - first);
+      final (from, fromAt) = target < first ? anchors.first : anchors.last;
+      offset = fromAt + (target - from) * perRow - lead;
+    } else {
+      final total = position.maxScrollExtent + position.viewportDimension;
+      offset = total * target / math.max(1, _itemCount) - lead;
+    }
+    return offset.clamp(position.minScrollExtent, position.maxScrollExtent);
   }
 
   /// Puts the cursor in White's box on the first board without a result.
@@ -443,13 +494,27 @@ class ResultsViewState extends State<ResultsView> {
     final order = [for (final r in visibleRows()) r.game.id];
     try {
       c.recordResult(row.game.id, outcome, reason: why);
-      if (!mounted) return;
-      setState(() {});
-      advance(row.game.id, white, outcome, order: order);
     } catch (e) {
       if (mounted) showFailure(context, e);
+      return;
     } finally {
       busy = false;
+    }
+    // Saved. Moving the cursor is separate, so a problem finding the next
+    // board is never reported as a result that failed to save; it is
+    // logged, and the cursor stays where it was.
+    if (!mounted) return;
+    setState(() {});
+    try {
+      advance(row.game.id, white, outcome, order: order);
+    } catch (error, stack) {
+      Diagnostics.record(
+        'advance cursor',
+        'failed',
+        context: {'game': row.game.id},
+        error: error,
+        stack: stack,
+      );
     }
   }
 
@@ -1282,7 +1347,9 @@ class ResultsViewState extends State<ResultsView> {
         final round = a.$2.number.compareTo(b.$2.number);
         return round != 0 ? round : firstBoard(a).compareTo(firstBoard(b));
       });
-    final items = <Widget>[];
+    // Builders, not rows: the list makes only the rows on screen.
+    final items = <WidgetBuilder>[];
+    final itemOf = <String, int>{};
     for (final (s, r) in ordered) {
       final boards = bySection[(s.id, r.number)] ?? const <BoardRow>[];
       final byes = missingOnly
@@ -1290,7 +1357,7 @@ class ResultsViewState extends State<ResultsView> {
           : r.byes.where((b) => named(e.player(b.player))).toList();
       if (boards.isEmpty && byes.isEmpty) continue;
       if (widget.sectionId == null || allRoundsOf(s)) {
-        items.add(_sectionRow(context, s, r));
+        items.add((context) => _sectionRow(context, s, r));
       }
       // Swiss boards fall into score groups once anyone has a score.
       final before = s.format == Format.swiss && r.number > 1
@@ -1303,22 +1370,37 @@ class ResultsViewState extends State<ResultsView> {
       int? last;
       for (final row in boards) {
         if (grouped && group(row.game) != last) {
-          last = group(row.game);
-          items.add(_scoreGroup(context, last));
+          final points = last = group(row.game);
+          items.add((context) => _scoreGroup(context, points));
         }
-        items.add(_game(context, row, before));
+        itemOf[row.game.id] = items.length;
+        items.add((context) => _game(context, row, before));
       }
       for (final b in byes) {
-        items.add(_bye(context, b, r.number, every: allRoundsOf(s)));
+        items.add(
+          (context) => _bye(context, b, r.number, every: allRoundsOf(s)),
+        );
       }
     }
+    _itemOf = itemOf;
+    _itemCount = items.length;
     return _frame(context, items, footer: _legend(context, visible));
   }
 
   /// The ruled sheet the boards sit on, with a column header that stays put
   /// while the boards scroll under it.
-  Widget _frame(BuildContext context, List<Widget> items, {Widget? footer}) {
+  Widget _frame(
+    BuildContext context,
+    List<WidgetBuilder> items, {
+    Widget? footer,
+  }) {
     final colors = Theme.of(context).colorScheme;
+    // The sheet built in full, for the layouts that are not lazy.
+    List<Widget> whole(BuildContext context) => [
+      _columns(context),
+      for (final item in items) item(context),
+      ?footer,
+    ];
     return LayoutBuilder(
       builder: (context, constraints) {
         // Keep player names and inline actions readable at enlarged text sizes.
@@ -1340,7 +1422,7 @@ class ResultsViewState extends State<ResultsView> {
                     ? Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [_columns(context), ...items, ?footer],
+                        children: whole(context),
                       )
                     : constraints.maxHeight <
                           MediaQuery.textScalerOf(context).scale(150)
@@ -1348,7 +1430,7 @@ class ResultsViewState extends State<ResultsView> {
                         controller: scroll,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [_columns(context), ...items, ?footer],
+                          children: whole(context),
                         ),
                       )
                     : Column(
@@ -1358,12 +1440,15 @@ class ResultsViewState extends State<ResultsView> {
                           _columns(context),
                           // Lazy: a round of hundreds of boards builds only
                           // those on screen, so entering a result stays quick.
+                          // Shrink-wrapped so a short round's sheet ends at
+                          // its last board; it still lays out only what shows.
                           Flexible(
-                            child: ListView(
+                            child: ListView.builder(
                               controller: scroll,
                               shrinkWrap: true,
                               padding: EdgeInsets.zero,
-                              children: items,
+                              itemCount: items.length,
+                              itemBuilder: (context, i) => items[i](context),
                             ),
                           ),
                           ?footer,
@@ -1451,11 +1536,14 @@ class ResultsViewState extends State<ResultsView> {
       }
       if (entrants.isOdd) items.add(row('Bye', bye: true));
     }
+    // No boards: a jump must not use positions from the last sheet drawn.
+    _itemOf = const {};
+    _itemCount = 0;
     return KeyedSubtree(
       key: const ValueKey('blank-board-sheet'),
       child: Semantics(
         label: 'Boards appear here when pairings are created.',
-        child: _frame(context, items),
+        child: _frame(context, [for (final item in items) (_) => item]),
       ),
     );
   }

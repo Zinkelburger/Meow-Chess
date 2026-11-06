@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
+import '../application/diagnostics.dart';
 import '../application/tournament_controller.dart';
 import '../domain/history.dart';
 import '../domain/model.dart';
@@ -299,8 +300,12 @@ class _HistoryPanelState extends State<HistoryPanel> {
             // The explanation follows the changes, so large text never
             // pushes the newest change out of view.
             itemCount: list.length + 2,
+            // Not selectable: the header changes on its own as recovery
+            // points are found, and a selectable child that changes while
+            // the workspace's selection is being updated trips Flutter's
+            // selection container (the UI fuzzer found the exception).
             itemBuilder: (context, i) => i == 0
-                ? _header(context, graph)
+                ? SelectionContainer.disabled(child: _header(context, graph))
                 : --i == list.length
                 ? Padding(
                     key: const ValueKey('history-keys'),
@@ -336,10 +341,34 @@ class _HistoryPanelState extends State<HistoryPanel> {
     final muted = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
     final latest = c.latestNode;
     List<RecoveryPoint> points;
+    var complete = true;
     try {
-      points = c.recoveryPoints(limit: allPoints ? null : 6);
-    } catch (_) {
+      // A few milliseconds of saved states per frame: on a long history the
+      // points fill in over the next frames instead of freezing the window.
+      final found = c.recoveryPointsWithin(
+        limit: allPoints ? null : 6,
+        reads: 24,
+        within: const Duration(milliseconds: 8),
+      );
+      points = found.points;
+      complete = found.complete;
+    } on TournamentException {
+      // The event has closed: nothing to list.
       points = const [];
+    } catch (error, stack) {
+      // A damaged file is logged, not hidden behind an empty list.
+      Diagnostics.record(
+        'recovery points',
+        'failed',
+        error: error,
+        stack: stack,
+      );
+      points = const [];
+    }
+    if (!complete) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
     }
     final shown = allPoints ? points : points.take(5).toList();
     return Padding(
@@ -374,11 +403,12 @@ class _HistoryPanelState extends State<HistoryPanel> {
                     key: const ValueKey('history-return'),
                     icon: const Icon(Icons.update),
                     label: const Text('Return to latest'),
-                    // Returning that would remove play is reviewed like any
-                    // other move: the row opens with its warning.
-                    onPressed: () => c.lossesTo(latest).isEmpty
-                        ? moveTo(latest)
-                        : select(latest),
+                    // Returning is reviewed like any other move when it
+                    // would remove play or change a result later rounds
+                    // were paired on: the row opens with its warning.
+                    onPressed: () => historyNeedsReview(c, latest)
+                        ? select(latest)
+                        : moveTo(latest),
                   ),
                 ],
               ),
@@ -397,7 +427,11 @@ class _HistoryPanelState extends State<HistoryPanel> {
                   pointsOpen ? Icons.expand_less : Icons.flag_outlined,
                 ),
                 label: Text(
-                  'Recovery points (${points.length > 5 && !allPoints ? '5+' : points.length})',
+                  'Recovery points (${points.length > 5 && !allPoints
+                      ? '5+'
+                      : complete
+                      ? points.length
+                      : '${points.length}+'})',
                 ),
               ),
             ),

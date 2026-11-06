@@ -80,15 +80,17 @@ List<RecoveryMark> recoveryMarks(Event before, Event after) {
       ),
     );
   }
-  final known = {for (final p in before.players) p.id};
-  final added = after.players.where((p) => !known.contains(p.id)).length;
+  // People, not entries: a side game, re-entry or Holland final gives a
+  // person already registered another entry, which is not an import.
+  final known = registeredPeople(before);
+  final added = registeredPeople(after).difference(known).length;
   // One registration is routine; an import changes the roster wholesale.
   if (added > 1) {
     marks.add(
       RecoveryMark(
         RecoveryKind.import,
         'Before importing $added players',
-        switch (before.players.length) {
+        switch (known.length) {
           0 => 'the roster was empty',
           1 => '1 already registered',
           final n => '$n already registered',
@@ -141,7 +143,12 @@ List<String> stateSummary(Event e) {
               '$done of $games ${games == 1 ? 'result' : 'results'} in';
     lines.add('${s.name}: $where');
   }
-  final players = e.players.length;
+  final players = registeredPeople(e).length;
   lines.add('$players ${players == 1 ? 'player' : 'players'} registered');
   return lines;
 }
+
+/// The people registered: one per person, however many entries they hold.
+Set<String> registeredPeople(Event e) => {
+  for (final p in e.players) p.personId ?? p.id,
+};

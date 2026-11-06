@@ -70,6 +70,29 @@ void main() {
     expect(lines.single, contains('revision: ${c.event!.revision}'));
   });
 
+  test(
+    'the last result of a round copies the event to the backup folder',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('meow-backup');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      c.change('Backup config', c.event!.copy(backupFolder: directory.path));
+      c.post(await c.propose());
+      int copies() => directory.listSync().length;
+      final posted = copies();
+      final games = c.event!.sections.single.rounds.single.games;
+      c.recordResult(games.first.id, Outcome.whiteWin);
+      expect(copies(), posted);
+      c.recordResult(games.last.id, Outcome.draw);
+      expect(copies(), posted + 1);
+      expect(c.backupWarning, isNull);
+      // Changing a result in a round already complete makes no further copy.
+      c.recordResult(games.last.id, Outcome.whiteWin);
+      expect(copies(), posted + 1);
+    },
+  );
+
   test('a section removed meanwhile refuses drawing lots', () {
     final c = fixture(count: 4);
     addTearDown(c.dispose);

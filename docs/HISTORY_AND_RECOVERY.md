@@ -85,14 +85,22 @@ A checkpoint is not a claim that an external backup was made.
 
 **Implemented (November 5, 2026).** History lists recovery points above the
 changes: before each round was paired or unpaired, before each import of more than
-one player and before each move of players, each with its sections and time
+one new person (another entry for someone already registered, such as a side game
+or a Holland final, is not an import) and before each move of players, each with
+its sections and time
 (`lib/domain/recovery.dart`, derived from the saved states, so no separate record can
 drift). Choosing one selects that version's row. It shows the same "Undoes" and
 "Removes recorded play" details and needs the same button press as any other move.
 Each row's details begin with **At this point**: how far each section had got and
-how many players were registered. When the event is on an earlier version, a banner
+how many people were registered. When the event is on an earlier version, a banner
 names the newest version and offers **Return to latest**. If that return would remove
-play, it opens the row for review first. After Undo, Redo or a restore, the status
+play or change a result later rounds were paired on, it opens the row for review
+first, as Undo and Redo do. Points are found a few milliseconds of saved states per
+frame, so a long history fills the list in over a moment instead of freezing the
+window; steps saved since the event opened are known without reading anything back.
+The header that fills in is not selectable text: a selectable child that changes on
+its own while the workspace's text selection is being updated trips Flutter's
+selection container, which the UI fuzzer found. After Undo, Redo or a restore, the status
 line says what happened ("Undid: Kim – Lee 1–0") and offers the opposite move.
 Following the design rules, this is quiet inline text, not a SnackBar. The status
 line's save time is now the newest save, which a history move also writes, not the

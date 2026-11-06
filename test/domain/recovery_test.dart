@@ -105,6 +105,31 @@ void main() {
       expect(marks.single.players, 24);
     });
 
+    test('more entries for people already registered are not an import', () {
+      // A side game, re-entry or Holland final adds an entry per person.
+      final before = event(players: 4);
+      final after = before.copy(
+        players: [
+          ...before.players,
+          Player(id: 'x0', name: 'Player 0', personId: 'p0'),
+          Player(id: 'x1', name: 'Player 1', personId: 'p1'),
+        ],
+      );
+      expect(recoveryMarks(before, after), isEmpty);
+      expect(stateSummary(after).last, '4 players registered');
+      // Newcomers among them still count, and only they do.
+      final mixed = after.copy(
+        players: [
+          ...after.players,
+          Player(id: 'n0', name: 'New 0'),
+          Player(id: 'n1', name: 'New 1'),
+        ],
+      );
+      final marks = recoveryMarks(before, mixed);
+      expect(marks.single.title, 'Before importing 2 players');
+      expect(marks.single.detail, '4 already registered');
+    });
+
     test('moving players names the destination', () {
       final marks = recoveryMarks(
         event(sections: [section('o', 1), section('r', 1)]),

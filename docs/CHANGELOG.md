@@ -10,6 +10,17 @@ version at https://chessautoprep.com/meow-chess/ follows the latest release.
   column for every planned round, blank until paired, and withdrawn players
   greyed. Right-click a section tab, or pick Wall chart in a Standings print.
   Exports include `wall_chart.txt`.
+- History lists recovery points: before each round was paired or unpaired,
+  each import and each move of players. When the event is on an earlier
+  version, Return to latest comes back, and asks first when that would remove
+  play or change a result later rounds were paired on.
+- Pairing several sections at once refuses to put one person on two boards
+  and names who and where.
+- After a result far down a long round, the cursor reaches a board skipped
+  near the top, and the next key lands there.
+- Bughouse partners moved together into another section stay partners.
+- The backup folder also gets a copy when a round's last result is entered,
+  not only when the next round is paired.
 
 ## 1.3.1 — October 29, 2026
 

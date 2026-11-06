@@ -70,6 +70,67 @@ void main() {
     });
   });
 
+  group('one person is never at two boards at once', () {
+    test('pairing two sections together names who and where', () async {
+      final c = fixture(count: 8);
+      addTearDown(c.dispose);
+      final [q1, q2] = c.event!.sections;
+      c.addSection('Blitz', Format.swiss, 3, assignUnassigned: false);
+      final blitz = c.event!.sections.last;
+      for (final id in [
+        q1.players[0],
+        q1.players[1],
+        q2.players[0],
+        q2.players[1],
+      ]) {
+        c.addSectionEntry(id, blitz.id);
+      }
+      final before = c.event!.revision;
+      final batch = await c.propose();
+      expect(batch.rounds, hasLength(3));
+      expect(() => c.post(batch), refuses('at the same time'));
+      expect(c.event!.revision, before);
+      // One section at a time is fine.
+      c.post(await c.propose(sectionId: q1.id));
+      expect(c.event!.sections.first.rounds, hasLength(1));
+    });
+  });
+
+  test('bughouse partners moved together stay partners', () {
+    final c = fixture(count: 8);
+    addTearDown(c.dispose);
+    c.change(
+      'Use bughouse',
+      c.event!.copy(
+        sections: [
+          for (final s in c.event!.sections)
+            s.copy(
+              format: Format.bughouse,
+              unrated: true,
+              partners: [
+                [s.players[0], s.players[1]],
+                [s.players[2], s.players[3]],
+              ],
+            ),
+        ],
+      ),
+    );
+    final [b1, b2] = c.event!.sections;
+    c.movePlayers([b1.players[0], b1.players[1]], b2.id);
+    final [left, joined] = c.event!.sections;
+    expect(left.partners, [
+      [b1.players[2], b1.players[3]],
+    ]);
+    expect(joined.partners, [
+      ...b2.partners,
+      [b1.players[0], b1.players[1]],
+    ]);
+    // One moved alone leaves the other unpartnered.
+    c.movePlayers([b1.players[2]], b2.id);
+    expect(c.event!.sections.first.partners, isEmpty);
+    expect(c.event!.sections.last.partners, hasLength(3));
+  });
+
   test('undo, redo and restore are written to the diagnostic log', () {
     final lines = <String>[];
     final previous = Diagnostics.sink;

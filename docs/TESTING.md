@@ -247,6 +247,13 @@ MEOW_UI_FUZZ_SEEDS=0-49 MEOW_UI_FUZZ_STEPS=120 flutter test test/fuzz/ui_fuzz_te
 
 What it found, each fixed with a test:
 
+- **History's header tripped Flutter's selection container.** Recovery points
+  fill in over a few frames, so the header changed on its own after a tap or
+  scroll, and `SelectionArea` threw `ConcurrentModificationError` while replaying
+  its selection over the changed children (large text, seeds 0 and 1). The header
+  is now `SelectionContainer.disabled`; the saved traces pass and HEAD never did
+  fail, so the fuzzer caught it before it shipped.
+
 - **Up and Down did nothing in every text field.** Flutter 3.47 throws when a
   `TextField` inside a `SelectionArea` receives them, on Linux, Windows and macOS.
   The workspace is one selection area, so names can be dragged and copied. The
@@ -298,7 +305,14 @@ scroll view, and both are still built in full. With 1,000 players that costs
 seconds per result in debug mode, growing faster than the field. The fix is to
 make the stacked page a `CustomScrollView` with the board rows and standings rows
 as slivers, which means splitting each bordered table into per-row pieces.
-`focusBox` already finds boards that a lazy list has not built yet.
+
+The board list is a `ListView.builder` over row builders, so a keystroke rebuilds
+only the rows on screen. A focus node keeps the context of a row the list has
+dropped, so `focusBox` treats only a mounted context as built, and it reaches an
+unbuilt board by measuring the rows on screen (headings, score groups and byes
+included) rather than assuming even spacing. The scale test enters a result on
+board 181 of 200 and checks that the cursor returns to skipped board 2 and that
+the next key records there.
 
 A pinned trace means something only to the step semantics that produced it. When
 steps change, re-derive each pin: run a strict campaign on code with only its fix

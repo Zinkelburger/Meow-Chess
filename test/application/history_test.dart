@@ -391,6 +391,91 @@ PRAGMA user_version = 1;''');
       return c;
     }
 
+    test('a reading budget finds the same points over several calls', () async {
+      final dir = Directory.systemTemp.createTempSync('meow-history-');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = p.join(dir.path, 'e.meow');
+      final first = TournamentController(SqliteEventRepository(path));
+      first.create('Tuesday Swiss');
+      first.importPlayers([
+        for (var i = 0; i < 8; i++)
+          Player(id: 's$i', name: 'Swiss $i', rating: 1800 - i * 50),
+      ]);
+      first.addSection('Open', Format.swiss, 3);
+      for (var r = 0; r < 3; r++) {
+        first.post(await first.propose());
+        for (final g in first.event!.sections.single.rounds.last.games) {
+          first.recordResult(g.id, Outcome.whiteWin);
+        }
+      }
+      final expected = [
+        for (final x in first.recoveryPoints()) (x.node, x.mark.title),
+      ];
+      first.dispose();
+      // Reopened, nothing is known yet: each call reads a few saved states
+      // and carries on from there the next time.
+      final c = TournamentController(SqliteEventRepository(path));
+      addTearDown(c.dispose);
+      var calls = 0;
+      ({List<RecoveryPoint> points, bool complete}) found;
+      do {
+        found = c.recoveryPointsWithin(reads: 3);
+        calls++;
+      } while (!found.complete && calls < 100);
+      expect(found.complete, isTrue);
+      expect(calls, greaterThan(3));
+      expect([for (final x in found.points) (x.node, x.mark.title)], expected);
+    });
+
+    test('a time budget always reads at least one step', () async {
+      final dir = Directory.systemTemp.createTempSync('meow-history-');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final path = p.join(dir.path, 'e.meow');
+      final first = TournamentController(SqliteEventRepository(path));
+      first.create('Tuesday Swiss');
+      first.importPlayers([
+        for (var i = 0; i < 8; i++)
+          Player(id: 's$i', name: 'Swiss $i', rating: 1800 - i * 50),
+      ]);
+      first.addSection('Open', Format.swiss, 3);
+      for (var r = 0; r < 3; r++) {
+        first.post(await first.propose());
+        for (final g in first.event!.sections.single.rounds.last.games) {
+          first.recordResult(g.id, Outcome.whiteWin);
+        }
+      }
+      final expected = [
+        for (final x in first.recoveryPoints()) (x.node, x.mark.title),
+      ];
+      first.dispose();
+      // A zero budget still reads one step per call, so it finishes.
+      final fresh = TournamentController(SqliteEventRepository(path));
+      addTearDown(fresh.dispose);
+      var calls = 0;
+      ({List<RecoveryPoint> points, bool complete}) found;
+      do {
+        found = fresh.recoveryPointsWithin(within: Duration.zero);
+        calls++;
+      } while (!found.complete && calls < 1000);
+      expect(found.complete, isTrue);
+      expect(calls, greaterThan(1));
+      expect([for (final x in found.points) (x.node, x.mark.title)], expected);
+    });
+
+    test('a step saved now costs no reading to find later', () async {
+      final c = blank();
+      addTearDown(c.dispose);
+      c.addSection('Open', Format.swiss, 3);
+      c.importPlayers([
+        for (var i = 0; i < 6; i++) Player(id: 'n$i', name: 'New $i'),
+      ]);
+      // The workspace reads the history after every save.
+      c.graph;
+      final found = c.recoveryPointsWithin(limit: 1, reads: 0);
+      expect(found.complete, isTrue);
+      expect(found.points.single.mark.title, 'Before importing 6 players');
+    });
+
     test('name every pairing and the import, newest first', () async {
       final c = await threeRounds();
       addTearDown(c.dispose);

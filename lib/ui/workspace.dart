@@ -739,13 +739,22 @@ class _WorkspaceState extends State<Workspace> {
   /// up, and the revision. Backups open from here.
   // The status line's account of the last history move, worked out once
   // per move: summaries read saved states.
+  // Compared by value: a record has no identity to rely on.
   Object? _movedFor;
   String? _moved;
+  // Every save, history move included, advances the revision, so the
+  // newest save time is read once per revision, not on every redraw.
+  Object? _savedFor;
+  String? _saved;
 
   Widget statusBar(Event e) {
-    final saved = c.repository.lastSaved();
+    if (_savedFor != (c, e.revision)) {
+      _savedFor = (c, e.revision);
+      _saved = c.repository.lastSaved();
+    }
+    final saved = _saved;
     final move = c.lastMove;
-    if (!identical(move, _movedFor)) {
+    if (move != _movedFor) {
       _movedFor = move;
       _moved = move == null
           ? null

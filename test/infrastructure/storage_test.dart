@@ -571,6 +571,36 @@ void main() {
     );
     expect(File(path).readAsBytesSync(), original);
   });
+  test(
+    'what is on disk mid-session opens with every result and all history',
+    () async {
+      // Power goes out: no close, no checkpoint. The event file and its WAL
+      // as they lie on disk must be the whole event.
+      final path = p.join(directory.path, 'live.meow');
+      final c = fixture(path: path, format: Format.swiss);
+      addTearDown(c.dispose);
+      c.post(await c.propose());
+      for (final g in c.event!.sections.first.rounds.single.games) {
+        c.recordResult(g.id, Outcome.whiteWin);
+      }
+      final expected = c.event!.encode(), nodes = c.graph.nodes.length;
+      expect(File('$path-wal').lengthSync(), greaterThan(0));
+      final copy = Directory(p.join(directory.path, 'copy'))..createSync();
+      for (final suffix in ['', '-wal', '-shm']) {
+        final file = File('$path$suffix');
+        if (file.existsSync()) {
+          file.copySync(p.join(copy.path, 'live.meow$suffix'));
+        }
+      }
+      final reopened = SqliteEventRepository(p.join(copy.path, 'live.meow'));
+      try {
+        expect(reopened.load()!.encode(), expected);
+        expect(reopened.historyGraph().nodes.length, nodes);
+      } finally {
+        reopened.close();
+      }
+    },
+  );
   test('undo history is durable across closing and reopening', () {
     final path = p.join(directory.path, 'undo.meow');
     final c = fixture(path: path);

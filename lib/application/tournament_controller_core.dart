@@ -131,6 +131,8 @@ class TournamentControllerCore extends ChangeNotifier
         return;
       }
       _refuseNewDuplicateSectionName(event, next);
+      _refuseDoubleBooking(next);
+      final previous = event;
       event = repository.commit(
         next,
         expectedRevision: event?.revision ?? 0,
@@ -138,6 +140,7 @@ class TournamentControllerCore extends ChangeNotifier
       );
       _graph = null;
       lastMove = null;
+      if (previous != null) _rememberMarks(previous, event!);
       Diagnostics.record(
         'save event',
         'succeeded',
@@ -156,6 +159,48 @@ class TournamentControllerCore extends ChangeNotifier
     // Outside the try: the save has succeeded, so a failing listener must not
     // be logged as a failed save.
     notifyListeners();
+  }
+
+  /// Who is at a board now: each person with a game still waiting for a
+  /// result, and where. A person's entries in different sections (side
+  /// games, re-entries, Holland finals) are one person here.
+  static Map<String, List<(Section, Game)>> _seated(Event e) {
+    final out = <String, List<(Section, Game)>>{};
+    final personOf = {for (final p in e.players) p.id: p.personId ?? p.id};
+    for (final s in e.sections) {
+      for (final r in s.unresolvedRounds) {
+        for (final g in r.games.where((g) => !g.outcome.resolved)) {
+          for (final id in [g.white, g.black]) {
+            if (personOf[id] case final person?) {
+              (out[person] ??= []).add((s, g));
+            }
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /// Refuses any change that would seat one person at boards in two
+  /// sections at once, whichever command it came from: pairing several
+  /// sections together, a side game, a manual round or a repair. The
+  /// repository's last check refuses such an event too (validateEvent);
+  /// this refuses it first and says who and where.
+  static void _refuseDoubleBooking(Event next) {
+    for (final MapEntry(key: person, value: seats) in _seated(next).entries) {
+      if ({for (final (s, _) in seats) s.id}.length < 2) continue;
+      final (s1, g1) = seats.first;
+      final (s2, g2) = seats.firstWhere((x) => x.$1.id != s1.id);
+      final id = [
+        g1.white,
+        g1.black,
+      ].firstWhere((id) => (next.player(id).personId ?? id) == person);
+      throw TournamentException(
+        '${next.player(id).name} would be at board ${g1.board} in ${s1.name} '
+        'and board ${g2.board} in ${s2.name} at the same time. Enter the '
+        'result in one before pairing the other.',
+      );
+    }
   }
 
   /// Refuses a change that gives two sections the same name. Older files

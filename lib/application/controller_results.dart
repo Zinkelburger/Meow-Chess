@@ -146,7 +146,16 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
         gameId,
       ),
     );
+    // The last result of a round: the backup folder gets the whole round,
+    // not only its pairings, before the next one is made.
+    if (!_roundOf(e, gameId).complete && _roundOf(event!, gameId).complete) {
+      secondaryBackup();
+    }
   }
+
+  static Round _roundOf(Event e, String gameId) => e.sections
+      .expand((s) => s.rounds)
+      .firstWhere((r) => r.games.any((g) => g.id == gameId));
 
   void setPairingAssumption(String gameId, Outcome assumption, String reason) {
     final (e, game) = _materialize(gameId);
