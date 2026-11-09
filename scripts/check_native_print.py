@@ -166,7 +166,9 @@ def macos_queue(work):
             run('sudo', 'chmod', 'a+r', target)
 
     try:
-        yield {}, collect
+        # GitHub's macOS runners will not launch an ad hoc signed app ("Unable
+        # to start the app"); Flutter passes FLUTTER_XCODE_* on to xcodebuild.
+        yield {'FLUTTER_XCODE_CODE_SIGNING_ALLOWED': 'NO'}, collect
     finally:
         subprocess.run(['sudo', 'lpadmin', '-x', QUEUE])
 
