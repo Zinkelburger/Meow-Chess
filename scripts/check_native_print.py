@@ -143,10 +143,17 @@ def windows_queue(work):
 @contextlib.contextmanager
 def macos_queue(work):
     conf = '/etc/cups/cupsd.conf'
+    files = '/etc/cups/cups-files.conf'
     run('sudo', 'sh', '-c', f'grep -q PreserveJobFiles {conf} || echo "PreserveJobFiles Yes" >> {conf}')
+    run('sudo', 'sh', '-c', f'grep -q "^FileDevice" {files} || echo "FileDevice Yes" >> {files}')
     run('sudo', 'launchctl', 'kickstart', '-k', 'system/org.cups.cupsd')
     time.sleep(3)
-    run('sudo', 'lpadmin', '-p', QUEUE, '-E', '-v', 'file:///dev/null', '-m', 'raw')
+    # macOS refuses raw queues. Its generic driver only filters at print time;
+    # the spool keeps the document as the app submitted it.
+    driver = next(Path('/System/Library/Frameworks/ApplicationServices.framework').rglob('Generic.ppd'), None)
+    if driver is None:
+        raise SystemExit('No generic printer driver (Generic.ppd) on this Mac')
+    run('sudo', 'lpadmin', '-p', QUEUE, '-E', '-v', 'file:///dev/null', '-P', driver)
     spool = Path('/private/var/spool/cups')
     before = set(subprocess.run(['sudo', 'ls', spool], capture_output=True, text=True, check=True).stdout.split())
 
