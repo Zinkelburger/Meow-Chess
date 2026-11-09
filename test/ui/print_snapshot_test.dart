@@ -206,7 +206,15 @@ void main() {
     late RememberedPrinting service;
     setUp(() {
       dir = Directory.systemTemp.createTempSync('meow-print-panel-');
-      addTearDown(() => dir.deleteSync(recursive: true));
+      addTearDown(() {
+        // A save started under the test's fake clock may still hold a file
+        // open, which Windows will not delete around.
+        try {
+          dir.deleteSync(recursive: true);
+        } on FileSystemException {
+          // Left for the system's temporary-file cleanup.
+        }
+      });
       sent = [];
       service = RememberedPrinting(
         preference: PrinterPreference(directory: dir),
