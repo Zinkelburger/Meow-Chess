@@ -132,6 +132,12 @@ class RememberedPrinting {
           windowsModernDialog: true,
         );
       }
+      // Windows' plugin never answers for a printer that has gone away since
+      // it was listed, so look once more just before sending.
+      final listed = await Printing.listPrinters().timeout(
+        const Duration(seconds: 20),
+      );
+      if (!listed.any((p) => p.url == printer.url)) throw 'Printer not found';
       final sent = Future.value(
         Printing.directPrintPdf(
           printer: printer,

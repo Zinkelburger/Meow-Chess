@@ -194,7 +194,8 @@ jobs:
       # the sandboxed app needs; a real sandboxed print is a manual check.
       - name: Real print jobs through the system spooler
         run: |
-          plutil -remove com.apple.security.app-sandbox macos/Runner/DebugProfile.entitlements
+          # PlistBuddy, because plutil reads the dots in the key as a path.
+          /usr/libexec/PlistBuddy -c 'Delete :com.apple.security.app-sandbox' macos/Runner/DebugProfile.entitlements
           python scripts/check_native_print.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
