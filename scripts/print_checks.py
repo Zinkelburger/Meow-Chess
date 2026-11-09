@@ -25,6 +25,10 @@ diffs = root / 'artifacts/print-render-diffs'
 # table, a lost font or a missing column.
 PIXEL_TOLERANCE = 64
 PAGE_TOLERANCE = 0.002
+# A job redrawn by a spooler (Windows GDI, macOS Quartz) differs from the app's
+# own PDF in under 1% of its pixels; an A4 sheet drawn unscaled on Letter, with
+# its bottom cut off, in about 4%.
+JOB_TOLERANCE = 0.02
 
 
 def render(page, dpi=72):
@@ -36,14 +40,20 @@ def ink_box(image):
     return ImageOps.invert(image).point(lambda v: 255 if v > 64 else 0).getbbox()
 
 
-def job_issues(path, expected, require_text=True):
-    """What is wrong with the job at [path] against the manifest entry."""
+def job_issues(path, expected, require_text=True, reference_dir=None):
+    """What is wrong with the job at [path] against the manifest entry. With
+    [reference_dir], each page is also compared with the app's own PDF of the
+    sheet, which finds a cut-off page even when the spooler drew text as
+    shapes."""
     name = expected['name']
     try:
         document = pdfium.PdfDocument(str(path))
     except Exception as error:
         return [f'{name}: not a readable PDF: {error}']
     issues = []
+    reference = None
+    if reference_dir is not None and expected.get('reference'):
+        reference = pdfium.PdfDocument(str(Path(reference_dir) / expected['reference']))
     if len(document) != expected['pages']:
         issues.append(f'{name}: {len(document)} pages, expected {expected["pages"]}')
     text = ''
@@ -62,6 +72,11 @@ def job_issues(path, expected, require_text=True):
             # Every sheet has a footer, so its absence means a clipped page.
             issues.append(f'{name} page {index + 1}: nothing below '
                           f'{box[3] / image.height:.0%} of the page; the footer was lost')
+        if reference is not None and index < len(reference):
+            share = compare_page(image, render(reference[index]), crop=True)
+            if share > JOB_TOLERANCE:
+                issues.append(f'{name} page {index + 1}: {share:.1%} differs from the '
+                              f'sheet the app sent, so something was moved or cut off')
         text += page.get_textpage().get_text_bounded()
     # Some spoolers redraw text as outlines, which still prints.
     if require_text or text.strip():
@@ -70,11 +85,18 @@ def job_issues(path, expected, require_text=True):
             if word not in squeezed:
                 issues.append(f'{name}: "{word}" is not on the page')
     document.close()
+    if reference is not None:
+        reference.close()
     return issues
 
 
-def compare_page(image, golden):
-    """The share of pixels that differ, or 1.0 when the page size changed."""
+def compare_page(image, golden, crop=False):
+    """The share of pixels that differ, or 1.0 when the page size changed.
+    With [crop], a page a pixel or two larger, from a rounded size, is
+    compared over the area both have."""
+    if crop and abs(image.width - golden.width) <= 2 and abs(image.height - golden.height) <= 2:
+        width, height = min(image.width, golden.width), min(image.height, golden.height)
+        image, golden = image.crop((0, 0, width, height)), golden.crop((0, 0, width, height))
     if image.size != golden.size:
         return 1.0
     different = ImageChops.difference(image, golden).point(

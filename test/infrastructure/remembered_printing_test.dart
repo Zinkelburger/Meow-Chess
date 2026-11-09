@@ -32,7 +32,7 @@ void main() {
       info: () async => direct,
       printers: () async => [a, b],
       send: (p, data, name, _) async {
-        expect(data, bytes);
+        expect(await data(PdfPageFormat.letter), bytes);
         sent.add(p?.url);
         return true;
       },
@@ -322,4 +322,103 @@ void main() {
       expect(service.busy, false, reason: 'Print works again afterwards');
     },
   );
+
+  group('the sheet follows the paper it goes out on', () {
+    final letter = Uint8List.fromList([1]), a4 = Uint8List.fromList([4]);
+    test(
+      'the layout that fits the paper, or the setting when both or neither do',
+      () {
+        bool on(PdfPageFormat paper, bool prefer) =>
+            a4LayoutFor(paper, preferA4: prefer);
+        expect(on(PdfPageFormat.letter, true), false);
+        expect(on(PdfPageFormat.a4, false), true);
+        expect(on(PdfPageFormat.a4.landscape, false), true);
+        // A driver's rounded A4.
+        expect(on(const PdfPageFormat(595, 842), false), true);
+        expect(on(PdfPageFormat.legal, true), true);
+        expect(on(PdfPageFormat.legal, false), false);
+        expect(on(PdfPageFormat.a5, true), true);
+      },
+    );
+
+    Future<(Uint8List, bool?, int)> printOn(
+      PdfPageFormat paper, {
+      required bool builtA4,
+      TargetPlatform platform = TargetPlatform.windows,
+      bool dialog = false,
+    }) async {
+      debugDefaultTargetPlatformOverride = platform;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      late Uint8List sent;
+      var relayouts = 0;
+      final service = RememberedPrinting(
+        preference: preference,
+        info: () async => direct,
+        printers: () async => [a],
+        send: (_, layout, _, _) async {
+          sent = await layout(paper);
+          return true;
+        },
+      );
+      Future<Uint8List> relayout(bool asA4) async {
+        relayouts++;
+        return asA4 ? a4 : letter;
+      }
+
+      final built = builtA4 ? a4 : letter;
+      if (dialog) {
+        await service.printWithDialog(
+          built,
+          'Sheets',
+          builtA4: builtA4,
+          relayout: relayout,
+        );
+      } else {
+        await service.print(
+          built,
+          'Sheets',
+          choose: (_) async => a,
+          builtA4: builtA4,
+          relayout: relayout,
+        );
+      }
+      return (sent, service.printedA4, relayouts);
+    }
+
+    test('an A4 sheet going to Letter paper is laid out for Letter', () async {
+      expect(await printOn(PdfPageFormat.letter, builtA4: true), (
+        letter,
+        false,
+        1,
+      ));
+    });
+
+    test('a sheet already on the right paper is sent as previewed', () async {
+      expect(await printOn(PdfPageFormat.a4, builtA4: true), (a4, true, 0));
+    });
+
+    test('the print window\'s paper is followed, Linux included', () async {
+      expect(
+        await printOn(
+          PdfPageFormat.a4,
+          builtA4: false,
+          platform: TargetPlatform.linux,
+          dialog: true,
+        ),
+        (a4, true, 1),
+      );
+    });
+
+    test('a Linux direct print keeps the Paper setting', () async {
+      // GTK reports the language's default there, not the tray.
+      expect(
+        await printOn(
+          PdfPageFormat.letter,
+          builtA4: true,
+          platform: TargetPlatform.linux,
+        ),
+        (a4, true, 0),
+      );
+    });
+  });
 }

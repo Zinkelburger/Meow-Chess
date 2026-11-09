@@ -133,6 +133,8 @@ def windows_queue(work):
     powershell('Start-Service Spooler')
     powershell(f"Add-PrinterPort -Name '{port}'")
     powershell(f"Add-Printer -Name '{QUEUE}' -DriverName 'Microsoft Print To PDF' -PortName '{port}'")
+    # Letter, so the A4 sheet must be laid out again to fit; see the spool test.
+    powershell(f"Set-PrintConfiguration -PrinterName '{QUEUE}' -PaperSize Letter")
     try:
         yield {'MEOW_PRINT_PORT_FILE': port}, lambda out: None
     finally:
@@ -208,10 +210,10 @@ def check_spool(work, env, collect):
     # Windows redraws through the print driver, which may turn text to outlines.
     require_text = platform.system() != 'Windows'
     for job, expected in zip(jobs, manifest):
-        issues += job_issues(job, expected, require_text=require_text)
+        issues += job_issues(job, expected, require_text=require_text, reference_dir=out)
     evidence = root / 'artifacts/print-spool'
     evidence.mkdir(parents=True, exist_ok=True)
-    for job in jobs:
+    for job in [*jobs, *out.glob('expected-*.pdf')]:
         shutil.copy(job, evidence / job.name)
     if issues:
         raise SystemExit('\n'.join(issues))

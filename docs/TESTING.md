@@ -308,13 +308,15 @@ The tests above stop at the PDF, and the widget tests fake the printer.
 `scripts/check_native_print.py` runs `integration_test/native/print_spool_test.dart`
 with the real printing plugin against a stand-in printer, then reads each job
 back from the spooler: page count, paper size, a page that is not blank, a footer
-that was not clipped, and the expected words. It covers discovery, the saved
+that was not clipped, the expected words, and each page's render against the PDF
+the app sent, which finds a cut-off page even where the spooler draws text as
+shapes (a redrawn job differs in under 1% of its pixels; a cut-off one, about 4%). It covers discovery, the saved
 printer, job submission and a printer that has gone away.
 
 | Platform | Stand-in printer | What it proves |
 |---|---|---|
 | Linux | A private `cupsd` on its own socket and a raw queue, needing no root and able to reach no real printer | The job leaves the plugin byte for byte |
-| Windows (CI only) | Microsoft Print To PDF on a file port | The job survives the GDI print path, drawn by the driver at the printer's own paper size; A4 is left out because the driver prints on its default |
+| Windows (CI only) | Microsoft Print To PDF on a file port, set to Letter | The job survives the GDI print path; with Paper set to A4, the sheet is laid out again for the Letter tray and comes out whole |
 | macOS (CI only) | A raw queue on the system CUPS, without the app sandbox | The job survives the Quartz print path |
 | Flatpak (CI) | The private `cupsd`, with `meow_chess --list-printers` run from the built bundle | The sandbox lets the app see printers |
 

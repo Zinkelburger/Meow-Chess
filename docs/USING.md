@@ -60,9 +60,11 @@ paper, tray and two-sided settings it has in your computer's printer settings.
 Use **Choose printer…** beside **Print** to pick another printer. **Copies and
 options…** opens your computer's own print window for copies, two-sided printing
 and trays, for that one print. **Save PDF** keeps the sheet as a file, to print
-from another computer. **Paper** chooses Letter or A4 for this computer; set the
-printer's default paper to match, because a direct print uses the printer's
-paper. Printers come from your computer: one that is not listed needs adding in
+from another computer. Each sheet is laid out for the paper the printer reports,
+or the paper chosen in the print window, so a Letter tray never cuts off an A4
+sheet; the panel says when a print went out on other paper than the preview.
+**Paper** chooses Letter or A4 for the preview and for printers that do not
+report their paper. Printers come from your computer: one that is not listed needs adding in
 its printer settings, and **Refresh list** then finds it without starting over.
 
 ## Export and the rating report

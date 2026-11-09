@@ -51,57 +51,65 @@ void main() {
           for (final p in await service.available()) p.name,
         ], contains(queue));
 
-        final jobs = <(String, Event, ReportKind, int?, bool, List<String>)>[
-          (
-            'quad',
-            printQuad(),
-            ReportKind.pairings,
-            null,
-            false,
-            ['Alexandra', 'Round-robin'],
-          ),
-          (
-            'round-robin',
-            printRoundRobin(),
-            ReportKind.pairings,
-            null,
-            false,
-            ['Montgomery', 'Board'],
-          ),
-          (
-            'swiss-wall-chart',
-            printSwiss(),
-            ReportKind.wallChart,
-            null,
-            false,
-            ['Wall', 'Montgomery'],
-          ),
-          (
-            'swiss-round',
-            printSwiss(),
-            ReportKind.pairings,
-            3,
-            false,
-            ['Board', 'White'],
-          ),
-          // Windows prints on the driver's own paper, whatever the PDF says,
-          // so A4 has nothing to show on a Letter default; see docs/TESTING.md.
-          if (!Platform.isWindows)
-            (
-              'quad-a4',
-              printQuad(),
-              ReportKind.pairings,
-              null,
-              true,
-              ['Alexandra'],
-            ),
-        ];
+        // (name, event, kind, round, Paper setting, layout that must come
+        // out, words that must be on it). The stand-in queue's paper is
+        // Letter, so on Windows, which reports the tray's real paper, the A4
+        // sheet must come out laid out for Letter and keep its footer. Linux
+        // and macOS keep the setting and leave fitting to CUPS.
+        final jobs =
+            <(String, Event, ReportKind, int?, bool, bool, List<String>)>[
+              (
+                'quad',
+                printQuad(),
+                ReportKind.pairings,
+                null,
+                false,
+                false,
+                ['Alexandra', 'Round-robin'],
+              ),
+              (
+                'round-robin',
+                printRoundRobin(),
+                ReportKind.pairings,
+                null,
+                false,
+                false,
+                ['Montgomery', 'Board'],
+              ),
+              (
+                'swiss-wall-chart',
+                printSwiss(),
+                ReportKind.wallChart,
+                null,
+                false,
+                false,
+                ['Wall', 'Montgomery'],
+              ),
+              (
+                'swiss-round',
+                printSwiss(),
+                ReportKind.pairings,
+                3,
+                false,
+                false,
+                ['Board', 'White'],
+              ),
+              (
+                'quad-a4',
+                printQuad(),
+                ReportKind.pairings,
+                null,
+                true,
+                !Platform.isWindows,
+                ['Alexandra', 'Revision'],
+              ),
+            ];
 
         var picks = 0;
         final expected = <Map<String, Object>>[];
         for (final (i, job) in jobs.indexed) {
-          final (name, event, kind, round, a4, words) = job;
-          final bytes = await reportPdf(
+          final (name, event, kind, round, setting, outA4, words) = job;
+          Future<Uint8List> sheet(bool a4) => reportPdf(
             event,
             kind,
             roundNumber: round,
@@ -109,19 +117,26 @@ void main() {
             font: font,
             bold: bold,
           );
-          final pages = pdfPages(bytes);
-          service.a4 = a4;
+          final built = await sheet(setting);
+          final out_ = setting == outA4 ? built : await sheet(outA4);
+          final pages = pdfPages(out_);
+          final reference = 'expected-$i.pdf';
+          File(path.join(out!, reference)).writeAsBytesSync(out_);
+          service.a4 = setting;
           final sent = await service.print(
-            bytes,
+            built,
             'meow-$name',
+            builtA4: setting,
+            relayout: sheet,
             choose: (found) async {
               picks++;
               return found.firstWhere((p) => p.name == queue);
             },
           );
           expect(sent, isTrue, reason: name);
+          expect(service.printedA4, outA4, reason: '$name paper');
           if (portFile != null) {
-            await _collect(File(portFile), path.join(out!, 'job-$i.pdf'));
+            await _collect(File(portFile), path.join(out, 'job-$i.pdf'));
           }
           expected.add({
             'name': name,
@@ -129,6 +144,7 @@ void main() {
             'width': pages.first.width,
             'height': pages.first.height,
             'words': words,
+            'reference': reference,
           });
         }
         expect(picks, 1, reason: 'later jobs use the saved printer');
@@ -145,7 +161,7 @@ void main() {
                 url: 'meow-virtual-gone',
                 name: 'meow-virtual-gone',
               ),
-              await reportPdf(printQuad(), ReportKind.pairings),
+              (_) => reportPdf(printQuad(), ReportKind.pairings),
               'meow-gone',
               PdfPageFormat.letter,
             );

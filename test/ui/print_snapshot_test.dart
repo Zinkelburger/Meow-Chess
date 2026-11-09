@@ -204,6 +204,8 @@ void main() {
     late Directory dir;
     late List<(String?, PdfPageFormat)> sent;
     late RememberedPrinting service;
+    // The paper the plugin reports for the job; the request's when null.
+    PdfPageFormat? tray;
     setUp(() {
       dir = Directory.systemTemp.createTempSync('meow-print-panel-');
       addTearDown(() {
@@ -216,6 +218,7 @@ void main() {
         }
       });
       sent = [];
+      tray = null;
       service = RememberedPrinting(
         preference: PrinterPreference(directory: dir),
         info: () async => const PrintingInfo(
@@ -224,7 +227,8 @@ void main() {
           canListPrinters: true,
         ),
         printers: () async => const [Printer(url: 'club', name: 'Club')],
-        send: (printer, _, _, format) async {
+        send: (printer, layout, _, format) async {
+          await layout(tray ?? format);
           sent.add((printer?.url, format));
           return true;
         },
@@ -353,6 +357,27 @@ void main() {
       c.change('Rename event', c.event!.copy(name: 'New name'));
       await tester.pump();
       expect(save().onPressed, isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('a print on other paper than the preview says so', (
+      tester,
+    ) async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      tester.view.physicalSize = const Size(1200, 1400);
+      addTearDown(tester.view.reset);
+      tray = PdfPageFormat.a4;
+      await tester.pumpWidget(panel(c));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('print-paper-note')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('print-system-dialog')));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Printed on A4 to match the printer.'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     });
   });

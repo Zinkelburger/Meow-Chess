@@ -75,13 +75,29 @@ class PrinterPreference {
   }
 }
 
+/// Whether a sheet printed on [paper] should use the A4 layout rather than
+/// Letter: the one that fits, or [preferA4] when both fit (Legal, A3) or
+/// neither does. Sheets are laid out for Letter and A4 only, because those are
+/// the sizes every report is checked on.
+bool a4LayoutFor(PdfPageFormat paper, {required bool preferA4}) {
+  // Points; a driver may round a page size by a point or two.
+  const slack = 3.0;
+  final short = paper.width < paper.height ? paper.width : paper.height;
+  final long = paper.width < paper.height ? paper.height : paper.width;
+  bool fits(PdfPageFormat layout) =>
+      layout.width <= short + slack && layout.height <= long + slack;
+  final letter = fits(PdfPageFormat.letter), a4 = fits(PdfPageFormat.a4);
+  return letter == a4 ? preferA4 : a4;
+}
+
 /// Sends exactly one job; cancellation and failures never trigger a retry.
 class RememberedPrinting {
   RememberedPrinting({
     PrinterPreference? preference,
     Future<PrintingInfo> Function()? info,
     Future<List<Printer>> Function()? printers,
-    Future<bool> Function(Printer?, Uint8List, String, PdfPageFormat)? send,
+    Future<bool> Function(Printer?, LayoutCallback, String, PdfPageFormat)?
+    send,
     this.discoveryTimeout = const Duration(seconds: 20),
   }) : preference = preference ?? PrinterPreference(),
        info = info ?? Printing.info,
@@ -92,7 +108,8 @@ class RememberedPrinting {
   final PrinterPreference preference;
   final Future<PrintingInfo> Function() info;
   final Future<List<Printer>> Function() printers;
-  final Future<bool> Function(Printer?, Uint8List, String, PdfPageFormat) send;
+  final Future<bool> Function(Printer?, LayoutCallback, String, PdfPageFormat)
+  send;
 
   /// How long to wait for the computer to list its printers, normally about a
   /// second. A stuck print service must not leave the panel on "Printing…".
@@ -110,23 +127,51 @@ class RememberedPrinting {
     await preference.writeA4(value);
   }
 
+  /// The layout the last job went out in: true for A4, false for Letter, null
+  /// before any. It differs from the preview when the printer's paper did.
+  bool? printedA4;
+
+  /// Just before a job goes out, the plugin says what paper it is going on,
+  /// and the sheet is laid out again if it was built for the other size, so a
+  /// Letter tray never cuts off the bottom of an A4 sheet. Windows reports the
+  /// printer's real paper, and the print window reports the TD's choice. A
+  /// direct print on Linux reports only the language's default, so there the
+  /// Paper setting stands and CUPS fits the sheet to the tray.
+  LayoutCallback _layout(
+    Uint8List bytes, {
+    required bool builtA4,
+    required bool trustPaper,
+    Future<Uint8List> Function(bool a4)? relayout,
+  }) => (paper) async {
+    final want = trustPaper ? a4LayoutFor(paper, preferA4: builtA4) : builtA4;
+    if (want == builtA4 || relayout == null) {
+      printedA4 = builtA4;
+      return bytes;
+    }
+    final relaid = await relayout(want);
+    printedA4 = want;
+    return relaid;
+  };
+
   /// Paper, tray and two-sided printing come from the printer's own settings,
   /// or from the system print window; a forced custom page size can stall a
   /// driver and discards those settings. False from a direct print means the
   /// job failed, as nothing was offered to cancel; from the window, cancelled.
   static Future<bool> _send(
     Printer? printer,
-    Uint8List bytes,
+    LayoutCallback onLayout,
     String name,
     PdfPageFormat format,
   ) async {
     try {
       if (printer == null) {
         return await Printing.layoutPdf(
-          onLayout: (_) => bytes,
+          onLayout: onLayout,
           name: name,
           format: format,
-          dynamicLayout: false,
+          // On macOS this is what puts paper size in the print window, and
+          // lays the sheet out again when it changes.
+          dynamicLayout: true,
           usePrinterSettings: true,
           // The classic Windows window is print setup, with no copies field.
           windowsModernDialog: true,
@@ -141,7 +186,7 @@ class RememberedPrinting {
       final sent = Future.value(
         Printing.directPrintPdf(
           printer: printer,
-          onLayout: (_) => bytes,
+          onLayout: onLayout,
           name: name,
           format: format,
           dynamicLayout: false,
@@ -203,6 +248,8 @@ class RememberedPrinting {
     Uint8List bytes,
     String name, {
     bool Function()? canSend,
+    bool? builtA4,
+    Future<Uint8List> Function(bool a4)? relayout,
   }) async {
     if (busy) return false;
     busy = true;
@@ -213,12 +260,26 @@ class RememberedPrinting {
         );
       }
       if (canSend != null && !canSend()) return false;
-      return await send(null, bytes, name, pageFormat);
+      printedA4 = null;
+      return await send(
+        null,
+        _layout(
+          bytes,
+          builtA4: builtA4 ?? a4,
+          trustPaper: true,
+          relayout: relayout,
+        ),
+        name,
+        pageFormat,
+      );
     } finally {
       busy = false;
     }
   }
 
+  /// [bytes] is the sheet as laid out for [builtA4] (the Paper setting when
+  /// null); [relayout] builds it for the other size, if the printer's paper
+  /// turns out to be that.
   Future<bool> print(
     Uint8List bytes,
     String name, {
@@ -227,9 +288,18 @@ class RememberedPrinting {
     // Recheck snapshot validity after asynchronous discovery or selection.
     bool Function()? canSend,
     void Function(Object)? onPreferenceError,
+    bool? builtA4,
+    Future<Uint8List> Function(bool a4)? relayout,
   }) async {
     if (busy) return false;
     busy = true;
+    printedA4 = null;
+    LayoutCallback layout({required bool trustPaper}) => _layout(
+      bytes,
+      builtA4: builtA4 ?? a4,
+      trustPaper: trustPaper,
+      relayout: relayout,
+    );
     try {
       final capabilities = await info();
       if (!capabilities.canPrint) {
@@ -239,7 +309,7 @@ class RememberedPrinting {
       }
       if (!capabilities.directPrint || !capabilities.canListPrinters) {
         if (canSend != null && !canSend()) return false;
-        return await send(null, bytes, name, pageFormat);
+        return await send(null, layout(trustPaper: true), name, pageFormat);
       }
       final found = await available();
       if (found.isEmpty) {
@@ -259,7 +329,14 @@ class RememberedPrinting {
           : found.where((p) => p.url == saved?.url).firstOrNull;
       printer ??= await choose(found);
       if (printer == null || (canSend != null && !canSend())) return false;
-      final success = await send(printer, bytes, name, pageFormat);
+      final success = await send(
+        printer,
+        layout(
+          trustPaper: kIsWeb || defaultTargetPlatform != TargetPlatform.linux,
+        ),
+        name,
+        pageFormat,
+      );
       if (success) {
         try {
           await preference.write(printer);

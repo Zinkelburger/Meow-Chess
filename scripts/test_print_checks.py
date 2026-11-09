@@ -8,10 +8,11 @@ from PIL import Image
 import print_checks
 
 
-def write_pdf(path, pages=1, size=(612, 792), text='Player', footer=True, blank=False):
+def write_pdf(path, pages=1, size=(612, 792), text='Player', footer=True, blank=False, shift=0):
     """The smallest PDF the checkers can read, with a line of text and a footer."""
     width, height = size
-    drawing = '' if blank else f'BT /F1 18 Tf 72 {height - 72} Td ({text}) Tj ET\n'
+    drawing = '' if blank else ''.join(
+        f'BT /F1 18 Tf 72 {height - 72 - shift - line * 24} Td ({text}) Tj ET\n' for line in range(12))
     if footer and not blank:
         drawing += f'BT /F1 9 Tf 32 30 Td (Revision 7) Tj ET\n'
     stream = drawing.encode('latin-1')
@@ -67,6 +68,23 @@ class JobTest(unittest.TestCase):
 
     def test_text_drawn_as_outlines_can_be_allowed_but_not_wrong_text(self):
         self.assertIn('"Player"', self.issues(text='Someone', require_text=False)[0])
+
+    def test_a_job_matching_the_sheet_the_app_sent_passes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            write_pdf(Path(temp) / 'sent.pdf')
+            write_pdf(Path(temp) / 'job.pdf')
+            expected = {**EXPECTED, 'reference': 'sent.pdf'}
+            self.assertEqual(print_checks.job_issues(Path(temp) / 'job.pdf', expected,
+                                                     reference_dir=temp), [])
+
+    def test_a_job_drawn_lower_than_the_sheet_sent_fails_without_text(self):
+        with tempfile.TemporaryDirectory() as temp:
+            write_pdf(Path(temp) / 'sent.pdf', text='Player Player Player Player Player')
+            write_pdf(Path(temp) / 'job.pdf', text='Player Player Player Player Player', shift=40)
+            expected = {**EXPECTED, 'reference': 'sent.pdf'}
+            issues = print_checks.job_issues(Path(temp) / 'job.pdf', expected,
+                                             require_text=False, reference_dir=temp)
+            self.assertTrue(any('differs from the sheet' in i for i in issues), issues)
 
     def test_something_that_is_not_a_pdf_fails(self):
         with tempfile.TemporaryDirectory() as temp:

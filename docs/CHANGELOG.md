@@ -8,8 +8,12 @@ version at https://chessautoprep.com/meow-chess/ follows the latest release.
 
 - **Save PDF** in every print panel, and **Copies and options…** for the
   computer's own print window: copies, two-sided printing and trays.
-- **Paper** chooses Letter or A4 for this computer. Direct prints now use the
-  printer's own paper and settings instead of forcing a custom page size.
+- Each sheet is laid out for the paper it prints on: the printer's tray on
+  Windows, or the paper chosen in the print window, so an A4 sheet on a Letter
+  tray no longer loses its bottom. The macOS print window now offers paper size.
+  **Paper** chooses Letter or A4 for the preview and for printers that do not
+  say. Direct prints use the printer's own settings instead of forcing a custom
+  page size.
 - A round robin of any size prints a one-page pairing grid to post, ahead of its
   board tables, and its wall chart shows the coming rounds' opponents and colors.
 - The Flatpak can reach printers; it had no access to CUPS. The macOS app has
