@@ -41,21 +41,29 @@ depends on pairings.
 **Print wall chart** (right-click a section tab, or choose Wall chart in any
 Standings print) prints the chart to post on the wall (rule 28O): players in
 pairing-number order with rating, and a column for every planned round showing
-the result, opponent number and color with the score so far underneath. Rounds
-not yet paired are blank, so results can be pencilled in between prints, and
-withdrawn players are greyed. The **Crosstable** print has the same cells in
+the result, opponent number and color with the score so far underneath. Swiss
+rounds not yet paired are blank, so results can be pencilled in between prints;
+a round robin's coming rounds already show the opponent and color. Withdrawn
+players are greyed. The **Crosstable** print has the same cells in
 standings order, for played rounds only.
 
 Pairing sheets print from the Pairings view: a quad prints its plain result
-sheet with all round-robin pairings, including future rounds, and Swiss sections
-print only the selected posted round. Pairing sheets use
+sheet with all round-robin pairings, including future rounds. A larger round
+robin prints the same grid on its own page to post, then every round's board
+table. Swiss sections print only the selected posted round. Pairing sheets use
 **Board | Result | White | Black | Result**, with blank result boxes for
 handwriting and unused space left blank. Each section starts on a fresh page;
 large Swiss sections continue onto additional pages as needed.
 
-The first print asks for a printer; later prints use the saved device. Use
-**Choose printer…** beside **Print** to pick another printer. Systems without
-direct printing support use the operating system's print dialog.
+The first print asks for a printer; later prints use the saved device, with the
+paper, tray and two-sided settings it has in your computer's printer settings.
+Use **Choose printer…** beside **Print** to pick another printer. **Copies and
+options…** opens your computer's own print window for copies, two-sided printing
+and trays, for that one print. **Save PDF** keeps the sheet as a file, to print
+from another computer. **Paper** chooses Letter or A4 for this computer; set the
+printer's default paper to match, because a direct print uses the printer's
+paper. Printers come from your computer: one that is not listed needs adding in
+its printer settings, and **Refresh list** then finds it without starting over.
 
 ## Export and the rating report
 

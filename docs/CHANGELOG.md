@@ -4,6 +4,22 @@ Downloads for each version are on
 [Releases](https://github.com/Zinkelburger/Meow-Chess/releases); the browser
 version at https://chessautoprep.com/meow-chess/ follows the latest release.
 
+## Unreleased
+
+- **Save PDF** in every print panel, and **Copies and options…** for the
+  computer's own print window: copies, two-sided printing and trays.
+- **Paper** chooses Letter or A4 for this computer. Direct prints now use the
+  printer's own paper and settings instead of forcing a custom page size.
+- A round robin of any size prints a one-page pairing grid to post, ahead of its
+  board tables, and its wall chart shows the coming rounds' opponents and colors.
+- The Flatpak can reach printers; it had no access to CUPS. The macOS app has
+  the print entitlement its sandbox requires.
+- Linux no longer offers GTK's "Print to File" and "Print to LPR" as printers,
+  so a computer with no printers says so, and sheets cannot silently go to a file.
+- A printer that fails or has gone away gets a plain message rather than the
+  print plugin's raw error, or none at all. A print service that stops
+  responding ends in a message, and never leaves Print stuck on "Printing…".
+
 ## 1.4.0 — November 6, 2026
 
 - A Wall chart print (rule 28O): the crosstable in pairing-number order with a

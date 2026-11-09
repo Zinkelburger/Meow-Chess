@@ -363,7 +363,7 @@ void main() {
           canListPrinters: true,
         ),
         printers: () async => [a, b],
-        send: (printer, _, _) async {
+        send: (printer, _, _, _) async {
           sent.add(printer?.url);
           return true;
         },

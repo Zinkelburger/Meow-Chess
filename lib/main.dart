@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show AppExitResponse;
@@ -11,6 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import 'package:uuid/uuid.dart';
 import 'application/event_template.dart';
 import 'application/failures.dart';
@@ -19,6 +21,7 @@ import 'domain/model.dart';
 import 'domain/trf_read.dart';
 import 'infrastructure/fide_cli.dart';
 import 'infrastructure/native_file_requests.dart';
+import 'infrastructure/remembered_printing.dart';
 import 'infrastructure/sqlite_event_repository.dart';
 import 'infrastructure/save_location.dart';
 import 'ui/brand.dart';
@@ -35,6 +38,26 @@ Future<void> main(List<String> args) async {
     exit(await runFideCli(args));
   }
   WidgetsFlutterBinding.ensureInitialized();
+  // The printers this install can see, for support and for the Flatpak check
+  // in CI: a sandbox can hide them from the app but not from the OS.
+  if (args.contains('--list-printers')) {
+    try {
+      final found = await Printing.listPrinters().timeout(
+        const Duration(seconds: 20),
+      );
+      for (final p in found) {
+        stdout.writeln(
+          jsonEncode({'name': p.name, 'available': p.isAvailable}),
+        );
+      }
+      // exit() does not wait for stdout, and a pipe would get nothing.
+      await stdout.flush();
+    } on TimeoutException {
+      stderr.writeln('The print service did not list printers in time.');
+      exit(3);
+    }
+    exit(0);
+  }
   final configured = Platform.environment['MEOW_DATA_DIR'];
   final directory = configured == null
       ? await getApplicationSupportDirectory()
@@ -42,6 +65,7 @@ Future<void> main(List<String> args) async {
   await directory.create(recursive: true);
   DiagnosticLog.initialize(directory);
   await restoreFileAccess();
+  await RememberedPrinting.shared.loadPaper();
   final previousFlutterError = FlutterError.onError;
   FlutterError.onError = (details) {
     Diagnostics.record(

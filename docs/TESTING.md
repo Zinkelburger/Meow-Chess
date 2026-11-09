@@ -295,6 +295,51 @@ not broken mid-word. The checker shows it can fail: a word in a too-narrow clipp
 box and two words stacked are both reported, and a PDF it reads no text from fails.
 Every report passed.
 
+`test/infrastructure/print_samples_test.dart` writes the sheets a TD posts from
+the fixed events in `test/print_fixtures.dart`. With `MEOW_PRINT_SAMPLES=1`,
+`scripts/print_checks.py` renders them with PDFium and compares each page with
+`test/goldens/print`, which catches what word positions cannot: a lost font, a
+moved rule, a missing shade. After an intended change, look at the sheets and run
+`scripts/print_checks.py --update`. Requires `pypdfium2` and `pillow`.
+
+## Real print jobs
+
+The tests above stop at the PDF, and the widget tests fake the printer.
+`scripts/check_native_print.py` runs `integration_test/native/print_spool_test.dart`
+with the real printing plugin against a stand-in printer, then reads each job
+back from the spooler: page count, paper size, a page that is not blank, a footer
+that was not clipped, and the expected words. It covers discovery, the saved
+printer, job submission and a printer that has gone away.
+
+| Platform | Stand-in printer | What it proves |
+|---|---|---|
+| Linux | A private `cupsd` on its own socket and a raw queue, needing no root and able to reach no real printer | The job leaves the plugin byte for byte |
+| Windows (CI only) | Microsoft Print To PDF on a file port | The job survives the GDI print path, drawn by the driver at the printer's own paper size; A4 is left out because the driver prints on its default |
+| macOS (CI only) | A raw queue on the system CUPS, without the app sandbox | The job survives the Quartz print path |
+| Flatpak (CI) | The private `cupsd`, with `meow_chess --list-printers` run from the built bundle | The sandbox lets the app see printers |
+
+The queue is named `meow-virtual`, and the test refuses any other, so a local run
+cannot put paper through a real printer. On Linux it needs `cupsd`, `lpadmin`,
+`pypdfium2` and `pillow`, and uses Xvfb when it is installed.
+
+`meow_chess --list-printers` prints what the app can see, one JSON object per
+printer, which is the first thing to ask for when a printer does not appear.
+
+### Before a release, on real printers
+
+CI cannot show that paper comes out right. Print a quad grid, a two-page Swiss
+sheet and a wall chart on each, and check that nothing is cut off at any edge:
+
+- A USB laser on Windows, and a network or AirPrint printer on Windows
+- A printer shared from another Windows computer
+- An inkjet, whose bottom margin is the largest
+- A Linux driverless (IPP Everywhere) printer, from the `.deb` and the Flatpak
+- A sandboxed, signed macOS build, if macOS is shipping
+- Letter on a Letter tray, A4 on an A4 tray, and Letter on an A4 tray
+- Copies and two-sided printing through **Copies and options…**
+- Printer off, out of paper, and unplugged after being saved: the app must say so
+  or leave the job in the computer's queue, and must not claim a printed page
+
 ## Scale
 
 `test/ui/scale_test.dart` counts rows built rather than timing frames, because
@@ -372,7 +417,7 @@ eight-package export matrix, independent byte reader and corruption tests.
 | US Chess 2C exports | Independent dbfread and fixed-offset mock readers; source-event oracle; eight synthetic packages covering 1–32 rounds, mixed counts, side games, quads, 1,000 players, leading-zero IDs, text limits and every supported outcome; 89 mock-importer tests plus source/schema corruption controls; seven club-report replays compare exports with rated records, including blitz and double-game expansion. | Live MUIR acceptance remains unverified. Local format and semantic checks, including comparisons with previously accepted reports, do not certify portal acceptance. |
 | Swiss pairings | Seeded multi-round simulations, no duplicate assignment or played-opponent repeats, bye fairness, color handling, withdrawals, reproducibility, stale proposals and explicit impossible-constraint failure | Full US Chess priority/exception conformance remains a pilot limitation; experienced TD review is still required. |
 | Teams and do-not-pair requests | UI assignment and do-not-pair action, legal alternative opponent, four-round persistence, backup, invalid/stale mutations rejected; team names alone do not change pairings | Team names are organizer labels (for example mixed-doubles partners). Fixed-board team tournaments and team scoring are not implemented. |
-| Tournament day | Native app library create/close/reopen; roster paste, section creation, pairing, keyboard scoring, PDF, dark/light screenshots and independent backup | File-picker/print-driver UI, actual physical printers and OS double-click forwarding need separate native/manual qualification. |
+| Tournament day | Native app library create/close/reopen; roster paste, section creation, pairing, keyboard scoring, PDF, dark/light screenshots and independent backup | File-picker UI and OS double-click forwarding need separate native/manual qualification. Print jobs reach a real spooler in `scripts/check_native_print.py`; print-driver windows and physical printers are the manual list under "Before a release, on real printers". |
 | Data durability | Atomic rollback and auto-rollback injection, exclusive ownership, stale writes, exact backup/reopen, no-clobber publication, unknown/corrupt/future-file refusal, durable history, real process kill after acknowledged WAL commits | Tests cannot prove zero data loss under power failure, faulty storage, filesystem failure or every migration. Keep independent backups. |
 | Safe APIs and boundaries | SQL-looking/Unicode text stored literally, parameterized repository operations, fixed HTTPS ratings host, credentials only in headers, redirects disabled, response identity checks, private data excluded from public reports; lint enforces domain/application boundaries | No live API credentials are used. macOS coverage is limited to compilation and native artifact publication. |
 

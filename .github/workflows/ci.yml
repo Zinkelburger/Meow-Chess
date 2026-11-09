@@ -34,6 +34,7 @@ jobs:
     timeout-minutes: 35
     env:
       MEOW_EXPORT_FIXTURES: '1'
+      MEOW_PRINT_SAMPLES: '1'
       MEOW_CHESS_DESKTOP_SETUP: '0'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -49,7 +50,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build clang pkg-config libgtk-3-dev libsecret-1-dev libjson-glib-dev xvfb libgl1-mesa-dri
+          sudo apt-get install -y cmake ninja-build clang pkg-config libgtk-3-dev libsecret-1-dev libjson-glib-dev xvfb libgl1-mesa-dri cups cups-client
       - run: flutter pub get --enforce-lockfile
       - name: Analyze
         run: flutter analyze lib test integration_test tools scripts
@@ -63,14 +64,18 @@ jobs:
           python scripts/test_toolchain.py
           if [[ "$RUNNER_OS" == Linux ]]; then python tools/test_install_linux_launcher.py; fi
           python scripts/lint.py
-      - name: Install independent DBF reader
-        run: python -m pip install dbfread==2.0.7
+      - name: Install independent DBF and PDF readers
+        run: python -m pip install dbfread==2.0.7 pypdfium2==5.15.0 pillow==13.0.0
+      - name: Test the print checkers
+        run: python scripts/test_print_checks.py
       - name: Prepare evidence directory
         run: python -c "from pathlib import Path; Path('artifacts').mkdir(exist_ok=True)"
       - name: Unit and widget tests
         run: flutter test --concurrency=2 --reporter expanded --file-reporter json:artifacts/unit-tests.json
       - name: Independently validate DBFs and exercise fragile mock importer
         run: python scripts/check_exports.py --validate-only
+      - name: Printed sheets rendered by an independent reader
+        run: python scripts/print_checks.py
       - name: Build MCP server
         run: dart build cli --target=tools/tournament_mcp.dart --output=build/tournament-cli
       - name: Exercise MCP through the portable launcher
@@ -92,6 +97,9 @@ jobs:
         run: python scripts/check_fide_rtg.py --count 300
       - name: Abrupt process termination and SQLite recovery
         run: python scripts/verify_recovery.py
+      # The real plugin and the OS spooler; everything above fakes the printer.
+      - name: Real print jobs through the system spooler
+        run: python scripts/check_native_print.py
       - name: Linux desktop tournament day
         if: runner.os == 'Linux'
         env:
@@ -139,6 +147,17 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: Test the Dart file boundaries
         run: flutter test test/infrastructure/artifact_file_test.dart test/infrastructure/artifact_save_test.dart test/infrastructure/event_save_test.dart test/infrastructure/file_access_test.dart
+      - name: Test printing and printed sheets on macOS
+        env:
+          MEOW_PRINT_SAMPLES: '1'
+        run: >-
+          flutter test test/infrastructure/print_samples_test.dart
+          test/infrastructure/remembered_printing_test.dart
+          test/ui/print_snapshot_test.dart
+      - name: Install independent PDF reader
+        run: python -m pip install pypdfium2==5.15.0 pillow==13.0.0
+      - name: Printed sheets rendered by an independent reader
+        run: python scripts/print_checks.py
       # The same rating reports, written on macOS and checked by the
       # independent reader, so a platform difference cannot reach a TD's DBF.
       - name: Write the DBF fixtures on macOS
@@ -170,6 +189,13 @@ jobs:
           -configuration Debug -destination 'platform=macOS'
           -resultBundlePath artifacts/macos-publication.xcresult
           CODE_SIGNING_ALLOWED=NO
+      # The sandboxed test host cannot launch here, as above, so this runs
+      # without the sandbox. scripts/lint.py holds the print entitlement that
+      # the sandboxed app needs; a real sandboxed print is a manual check.
+      - name: Real print jobs through the system spooler
+        run: |
+          plutil -remove com.apple.security.app-sandbox macos/Runner/DebugProfile.entitlements
+          python scripts/check_native_print.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -177,3 +203,41 @@ jobs:
           path: artifacts/
           if-no-files-found: warn
           retention-days: 14
+
+  # The Flatpak is the one package whose sandbox can hide printers from an
+  # otherwise working app, so build the real bundle and ask it what it sees.
+  flatpak-printing:
+    name: Flatpak can see printers
+    # The release builds its bundle on this runner too.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: true
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang pkg-config libgtk-3-dev \
+            libsecret-1-dev libjson-glib-dev flatpak flatpak-builder xvfb \
+            libgl1-mesa-dri cups cups-client
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter build linux --release
+      - name: Build and install the Flatpak
+        run: |
+          BRANCH="$(sed -n "s/^runtime-version: '\(.*\)'$/\1/p" packaging/flatpak/org.meowchess.meow_chess.yml)"
+          test -n "$BRANCH"
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub "org.freedesktop.Platform//$BRANCH" "org.freedesktop.Sdk//$BRANCH"
+          flatpak-builder --user --force-clean --disable-rofiles-fuse --install flatpak-build \
+            packaging/flatpak/org.meowchess.meow_chess.yml
+      - name: Install independent PDF reader
+        run: python -m pip install pypdfium2==5.15.0 pillow==13.0.0
+      - name: Flatpak lists the stand-in printer
+        run: python scripts/check_native_print.py --flatpak

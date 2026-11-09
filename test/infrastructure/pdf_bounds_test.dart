@@ -14,6 +14,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../pdf_geometry.dart';
+import '../print_fixtures.dart';
 
 /// A Swiss of [players] played through [rounds], every result in.
 Future<Event> tournament({
@@ -203,6 +204,16 @@ void main() {
     );
     expect(await problems(e), isEmpty);
   });
+
+  test('a round robin grid and wall chart fit at any size', () async {
+    for (final count in [5, 6, 8, 11, 16]) {
+      expect(
+        await problems(printRoundRobin(count: count)),
+        isEmpty,
+        reason: '$count players',
+      );
+    }
+  }, timeout: const Timeout(Duration(minutes: 3)));
 
   test('a large section breaks across pages cleanly', () async {
     final e = await tournament(

@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import unittest
 
-from lint import architecture_issues, release_issues, whitespace_issues
+from lint import architecture_issues, print_permission_issues, release_issues, whitespace_issues
 
 
 def write_metainfo(root, *versions):
@@ -12,6 +12,23 @@ def write_metainfo(root, *versions):
     metainfo.parent.mkdir(parents=True, exist_ok=True)
     releases = ''.join(f'<release version="{v}" date="2026-10-01" />' for v in versions)
     metainfo.write_text(f'<component><releases>{releases}</releases></component>', encoding='utf-8')
+
+
+class PrintPermissionTest(unittest.TestCase):
+    def tree(self, root, flatpak='--socket=cups', entitlement='com.apple.security.print'):
+        manifest = root / 'packaging/flatpak/org.meowchess.meow_chess.yml'
+        manifest.parent.mkdir(parents=True)
+        manifest.write_text(flatpak, encoding='utf-8')
+        (root / 'macos/Runner').mkdir(parents=True)
+        (root / 'macos/Runner/DebugProfile.entitlements').write_text(entitlement, encoding='utf-8')
+        (root / 'macos/Runner/Release.entitlements').write_text(entitlement, encoding='utf-8')
+
+    def test_both_sandboxes_must_allow_printing(self):
+        for options, count in [({}, 0), ({'flatpak': ''}, 1), ({'entitlement': ''}, 2)]:
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp).resolve()
+                self.tree(root, **options)
+                self.assertEqual(len(print_permission_issues(root)), count)
 
 
 class ArchitectureTest(unittest.TestCase):

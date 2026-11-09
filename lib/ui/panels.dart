@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -570,6 +571,9 @@ class _PrintPanelState extends State<PrintPanel> {
 
   /// Rule 28J TD TIP: a by-name list after each round's board table.
   bool alphabetical = false;
+
+  RememberedPrinting get service =>
+      widget.printing ?? RememberedPrinting.shared;
   Event get snapshot => preview.event;
   bool printing = false;
   String? savedPath;
@@ -596,6 +600,47 @@ class _PrintPanelState extends State<PrintPanel> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) printPreview();
       });
+    }
+  }
+
+  Future<void> changePaper(bool value) async {
+    final saved = service.setPaper(value);
+    refresh();
+    try {
+      await saved;
+    } catch (_) {
+      if (mounted) {
+        showFailure(
+          context,
+          const TournamentException(
+            'The paper size could not be saved. Choose it again next time.',
+          ),
+        );
+      }
+    }
+  }
+
+  /// Printers come from the computer; one added while the panel waits shows
+  /// up here without starting the print over.
+  Future<void> refreshPrinters() async {
+    try {
+      final found = await service.available();
+      if (!mounted || choosing == null) return;
+      if (found.isEmpty) {
+        throw const TournamentException(
+          'No printers are available. Add one in this computer\'s printer '
+          'settings, or use Save PDF.',
+        );
+      }
+      setState(() {
+        printers = found;
+        printer =
+            found.where((p) => p.url == printer?.url).firstOrNull ??
+            found.where((p) => p.isDefault).firstOrNull ??
+            found.first;
+      });
+    } catch (e) {
+      if (mounted) showFailure(context, e);
     }
   }
 
@@ -649,6 +694,7 @@ class _PrintPanelState extends State<PrintPanel> {
       ceiling: widget.ceiling,
       forPrizes: widget.forPrizes,
       alphabetical: alphabetical,
+      a4: service.a4,
       font: font,
       bold: bold,
     );
@@ -677,6 +723,49 @@ class _PrintPanelState extends State<PrintPanel> {
       if (mounted) showFailure(context, e);
     } finally {
       if (mounted) setState(() => printing = false);
+    }
+  }
+
+  /// The computer's own print window, for copies, two-sided printing and
+  /// trays. Opened only by asking for it.
+  Future<void> printWithDialog() async {
+    if (printing) return;
+    final job = preview;
+    bool canSend() =>
+        mounted && identical(preview, job) && job.canPrint(currentRevision);
+    if (!canSend()) return;
+    setState(() => printing = true);
+    try {
+      final bytes = await job.pdf;
+      if (!mounted || !canSend()) return;
+      await service.printWithDialog(bytes, job.event.name, canSend: canSend);
+    } catch (e) {
+      if (mounted) showFailure(context, e);
+    } finally {
+      if (mounted) setState(() => printing = false);
+    }
+  }
+
+  /// The previewed PDF as a file, to print from another computer or to send.
+  Future<void> savePdf() async {
+    final job = preview;
+    try {
+      final what = switch (widget.kind) {
+        ReportKind.sections => 'player-list',
+        ReportKind.packet || ReportKind.pairings => 'pairing-sheets',
+        ReportKind.standings => 'standings',
+        ReportKind.crosstable => 'crosstable',
+        ReportKind.wallChart => 'wall-chart',
+        ReportKind.prizes => 'prizes',
+        ReportKind.conditions => 'event-conditions',
+      };
+      final path = await saveArtifact(
+        '$what-r${job.event.revision}.pdf',
+        await job.pdf,
+      );
+      if (path != null && mounted) setState(() => savedPath = path);
+    } catch (e) {
+      if (mounted) showFailure(context, e);
     }
   }
 
@@ -830,6 +919,31 @@ class _PrintPanelState extends State<PrintPanel> {
                                 ].join('\n'),
                           key: const ValueKey('print-scope'),
                         ),
+                        if (stale) ...[
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Out of date — the event has changed.',
+                            key: ValueKey('print-stale'),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              OutlinedButton(
+                                onPressed: refresh,
+                                child: const Text('Refresh preview'),
+                              ),
+                              if (!canPrint)
+                                TextButton(
+                                  onPressed: () => setState(
+                                    () => preview = preview.approve(
+                                      currentRevision,
+                                    ),
+                                  ),
+                                  child: const Text('Print older version'),
+                                ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 8),
                         if (printers case final available?) ...[
                           // The first print, or Choose printer…, asks here.
@@ -860,6 +974,11 @@ class _PrintPanelState extends State<PrintPanel> {
                                 onPressed: () => finishChoice(null),
                                 child: const Text('Cancel'),
                               ),
+                              TextButton(
+                                key: const ValueKey('print-refresh-printers'),
+                                onPressed: refreshPrinters,
+                                child: const Text('Refresh list'),
+                              ),
                             ],
                           ),
                         ] else
@@ -879,6 +998,20 @@ class _PrintPanelState extends State<PrintPanel> {
                                     ? () => printPreview(changePrinter: true)
                                     : null,
                                 child: const Text('Choose printer…'),
+                              ),
+                              // A browser's Print already opens its own window.
+                              if (!kIsWeb)
+                                TextButton(
+                                  key: const ValueKey('print-system-dialog'),
+                                  onPressed: canPrint && !printing
+                                      ? printWithDialog
+                                      : null,
+                                  child: const Text('Copies and options…'),
+                                ),
+                              TextButton(
+                                key: const ValueKey('save-pdf'),
+                                onPressed: canPrint ? savePdf : null,
+                                child: const Text('Save PDF'),
                               ),
                             ],
                           ),
@@ -905,12 +1038,12 @@ class _PrintPanelState extends State<PrintPanel> {
                               ),
                             ],
                           ),
-                          if (savedPath != null)
-                            SelectableText(
-                              'Saved to $savedPath',
-                              key: const ValueKey('print-saved'),
-                            ),
                         ],
+                        if (savedPath != null)
+                          SelectableText(
+                            'Saved to $savedPath',
+                            key: const ValueKey('print-saved'),
+                          ),
                         if (pairingSheet)
                           CheckboxListTile(
                             key: const ValueKey('print-alphabetical'),
@@ -927,35 +1060,25 @@ class _PrintPanelState extends State<PrintPanel> {
                                     refresh();
                                   },
                           ),
+                        const SizedBox(height: 8),
+                        PlainSelect<bool>(
+                          key: const ValueKey('print-paper'),
+                          label: 'Paper',
+                          value: service.a4,
+                          options: const [
+                            SelectOption(false, 'Letter'),
+                            SelectOption(true, 'A4'),
+                          ],
+                          onChanged: printing
+                              ? null
+                              : (value) {
+                                  if (value != service.a4) changePaper(value);
+                                },
+                        ),
                         if (widget.ceiling > 0)
                           Text('Prize class: Under ${widget.ceiling}'),
                         if (widget.forPrizes)
                           const Text('Excluding early round-robin withdrawals'),
-                        if (stale) ...[
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Out of date — the event has changed.',
-                            key: ValueKey('print-stale'),
-                          ),
-                          Wrap(
-                            spacing: 8,
-                            children: [
-                              OutlinedButton(
-                                onPressed: refresh,
-                                child: const Text('Refresh preview'),
-                              ),
-                              if (!canPrint)
-                                TextButton(
-                                  onPressed: () => setState(
-                                    () => preview = preview.approve(
-                                      currentRevision,
-                                    ),
-                                  ),
-                                  child: const Text('Print older version'),
-                                ),
-                            ],
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -1306,6 +1429,7 @@ Future<void> printSheets(
       currentRoundOnly: currentRoundOnly,
       ceiling: ceiling,
       forPrizes: forPrizes,
+      a4: (printing ?? RememberedPrinting.shared).a4,
       font: font,
       bold: bold,
     );

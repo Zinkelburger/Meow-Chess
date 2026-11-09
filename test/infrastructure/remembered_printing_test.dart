@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/remembered_printing.dart';
@@ -29,7 +31,7 @@ void main() {
       preference: preference,
       info: () async => direct,
       printers: () async => [a, b],
-      send: (p, data, name) async {
+      send: (p, data, name, _) async {
         expect(data, bytes);
         sent.add(p?.url);
         return true;
@@ -56,7 +58,7 @@ void main() {
         preference: preference,
         info: () async => direct,
         printers: () async => [b],
-        send: (p, _, _) async {
+        send: (p, _, _, _) async {
           sent.add(p?.url);
           return true;
         },
@@ -81,7 +83,7 @@ void main() {
       preference: preference,
       info: () async => direct,
       printers: () async => [a, b],
-      send: (_, _, _) async {
+      send: (_, _, _, _) async {
         sends++;
         return true;
       },
@@ -107,7 +109,7 @@ void main() {
         preference: preference,
         info: () async => direct,
         printers: () async => [a],
-        send: (_, _, _) async {
+        send: (_, _, _, _) async {
           sends++;
           throw StateError('offline');
         },
@@ -127,7 +129,7 @@ void main() {
       preference: preference,
       info: () async => const PrintingInfo(canPrint: true),
       printers: () async => throw StateError('should not enumerate'),
-      send: (p, _, _) async {
+      send: (p, _, _, _) async {
         expect(p, isNull);
         return true;
       },
@@ -147,7 +149,7 @@ void main() {
       preference: preference,
       info: () async => direct,
       printers: () async => [],
-      send: (_, _, _) async => throw StateError('should not submit'),
+      send: (_, _, _, _) async => throw StateError('should not submit'),
     );
     await expectLater(
       service.print(bytes, 'Sheets', choose: (_) async => a),
@@ -167,7 +169,7 @@ void main() {
             return directPrint ? direct : const PrintingInfo(canPrint: true);
           },
           printers: () async => [a],
-          send: (_, _, _) async {
+          send: (_, _, _, _) async {
             sends++;
             return true;
           },
@@ -190,4 +192,134 @@ void main() {
       },
     );
   }
+
+  test('the chosen paper reaches the job and survives a restart', () async {
+    expect(await preference.readA4(), false);
+    await preference.writeA4(true);
+    expect(await PrinterPreference(directory: dir).readA4(), true);
+    final formats = <PdfPageFormat>[];
+    final service = RememberedPrinting(
+      preference: preference,
+      info: () async => direct,
+      printers: () async => [a],
+      send: (_, _, _, format) async {
+        formats.add(format);
+        return true;
+      },
+    );
+    await service.print(bytes, 'Letter', choose: (_) async => a);
+    await service.loadPaper();
+    await service.print(bytes, 'Sheets', choose: (_) async => a);
+    await service.printWithDialog(bytes, 'Sheets');
+    expect(formats, [PdfPageFormat.letter, PdfPageFormat.a4, PdfPageFormat.a4]);
+  });
+
+  test('a damaged paper file means Letter, never a failed print', () async {
+    await File('${dir.path}/paper.json').writeAsString('{not json');
+    expect(await preference.readA4(), false);
+  });
+
+  test('the print window offers no printer and keeps the saved one', () async {
+    await preference.write(a);
+    final sent = <String?>[];
+    final service = RememberedPrinting(
+      preference: preference,
+      info: () async => direct,
+      printers: () async => throw StateError('should not enumerate'),
+      send: (p, _, _, _) async {
+        sent.add(p?.url);
+        return true;
+      },
+    );
+    expect(await service.printWithDialog(bytes, 'Sheets'), true);
+    expect(sent, [null]);
+    expect((await preference.read())?.url, a.url);
+  });
+
+  test(
+    'a cancelled print window sends nothing further and frees the job',
+    () async {
+      var sends = 0;
+      final service = RememberedPrinting(
+        preference: preference,
+        info: () async => direct,
+        send: (_, _, _, _) async {
+          sends++;
+          return false;
+        },
+      );
+      expect(await service.printWithDialog(bytes, 'Sheets'), false);
+      expect(sends, 1);
+      expect(service.busy, false);
+    },
+  );
+
+  test('an invalidated job never opens the print window', () async {
+    var sends = 0;
+    final service = RememberedPrinting(
+      preference: preference,
+      info: () async => direct,
+      send: (_, _, _, _) async {
+        sends++;
+        return true;
+      },
+    );
+    expect(
+      await service.printWithDialog(bytes, 'Sheets', canSend: () => false),
+      false,
+    );
+    expect(sends, 0);
+  });
+
+  test('offline printers are not offered', () async {
+    final service = RememberedPrinting(
+      preference: preference,
+      printers: () async => const [
+        Printer(url: 'on', name: 'On'),
+        Printer(url: 'off', name: 'Off', isAvailable: false),
+      ],
+    );
+    expect((await service.available()).map((p) => p.url), ['on']);
+  });
+
+  test('GTK file and LPR entries are not printers on Linux', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final service = RememberedPrinting(
+      preference: preference,
+      info: () async => direct,
+      printers: () async => const [
+        Printer(url: 'Print to File', name: 'Print to File'),
+        Printer(url: 'Print to LPR', name: 'Print to LPR'),
+      ],
+    );
+    // So a Linux computer with no printers gets the useful error.
+    await expectLater(
+      service.print(bytes, 'Sheets', choose: (_) async => a),
+      throwsA(isA<TournamentException>()),
+    );
+  });
+
+  test(
+    'a print service that never answers ends in a message, not a hang',
+    () async {
+      var sends = 0;
+      final service = RememberedPrinting(
+        preference: preference,
+        info: () async => direct,
+        printers: () => Completer<List<Printer>>().future,
+        send: (_, _, _, _) async {
+          sends++;
+          return true;
+        },
+        discoveryTimeout: const Duration(milliseconds: 10),
+      );
+      await expectLater(
+        service.print(bytes, 'Sheets', choose: (_) async => a),
+        throwsA(isA<TournamentException>()),
+      );
+      expect(sends, 0);
+      expect(service.busy, false, reason: 'Print works again afterwards');
+    },
+  );
 }

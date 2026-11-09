@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:printing/src/interface.dart';
+import 'package:meow_chess/domain/model.dart';
+import 'package:meow_chess/infrastructure/remembered_printing.dart';
 import 'package:meow_chess/infrastructure/reports.dart';
 import 'package:meow_chess/ui/panels.dart';
 
@@ -195,5 +198,154 @@ void main() {
     await tester.pumpWidget(panel(ReportKind.packet));
     expect(find.byKey(const ValueKey('print-ranking-kind')), findsNothing);
     expect(find.byKey(const ValueKey('save-standings-csv')), findsNothing);
+  });
+
+  group('print panel options', () {
+    late Directory dir;
+    late List<(String?, PdfPageFormat)> sent;
+    late RememberedPrinting service;
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('meow-print-panel-');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      sent = [];
+      service = RememberedPrinting(
+        preference: PrinterPreference(directory: dir),
+        info: () async => const PrintingInfo(
+          canPrint: true,
+          directPrint: true,
+          canListPrinters: true,
+        ),
+        printers: () async => const [Printer(url: 'club', name: 'Club')],
+        send: (printer, _, _, format) async {
+          sent.add((printer?.url, format));
+          return true;
+        },
+      );
+    });
+
+    Widget panel(c, {Future<Uint8List> Function(Event)? generate}) =>
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 900,
+              child: PrintPanel(
+                event: c.event!,
+                controller: c,
+                kind: ReportKind.packet,
+                onClose: () {},
+                printing: service,
+                generate: generate ?? (_) async => Uint8List(3),
+              ),
+            ),
+          ),
+        );
+
+    testWidgets('Copies and options opens the system window, no printer', (
+      tester,
+    ) async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      tester.view.physicalSize = const Size(1200, 1400);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(panel(c));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('print-system-dialog')));
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+      expect(sent, [(null, PdfPageFormat.letter)]);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('choosing A4 regenerates the preview and is remembered', (
+      tester,
+    ) async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      tester.view.physicalSize = const Size(1200, 1400);
+      addTearDown(tester.view.reset);
+      var generated = 0;
+      await tester.pumpWidget(
+        panel(
+          c,
+          generate: (_) async {
+            generated++;
+            return Uint8List(3);
+          },
+        ),
+      );
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump();
+      expect(generated, 1);
+      await chooseOption(
+        tester,
+        find.byKey(const ValueKey('print-paper')),
+        'A4',
+      );
+      expect(generated, 2);
+      expect(service.pageFormat, PdfPageFormat.a4);
+      // The write is real file I/O started inside the test's fake clock.
+      var remembered = false;
+      for (var i = 0; i < 100 && !remembered; i++) {
+        await tester.pump();
+        remembered =
+            await tester.runAsync(() async {
+              await Future<void>.delayed(const Duration(milliseconds: 5));
+              return service.preference.readA4();
+            }) ??
+            false;
+      }
+      expect(remembered, true);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('a saved A4 preference is applied when the panel opens', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await service.preference.writeA4(true);
+        await service.loadPaper();
+      });
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      tester.view.physicalSize = const Size(1200, 1400);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(panel(c));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('print-preview')));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      // First print asks for a printer here, in the panel.
+      await tester.tap(find.byKey(const ValueKey('print-to-printer')));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      expect(sent, [('club', PdfPageFormat.a4)]);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('Save PDF waits for approval of an out-of-date preview', (
+      tester,
+    ) async {
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      tester.view.physicalSize = const Size(1200, 1400);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(panel(c));
+      await tester.pump();
+      TextButton save() =>
+          tester.widget<TextButton>(find.byKey(const ValueKey('save-pdf')));
+      expect(save().onPressed, isNotNull);
+      c.change('Rename event', c.event!.copy(name: 'New name'));
+      await tester.pump();
+      expect(save().onPressed, isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
   });
 }

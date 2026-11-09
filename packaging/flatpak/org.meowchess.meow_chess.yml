@@ -24,6 +24,8 @@ finish-args:
   - --socket=fallback-x11
   - --share=ipc
   - --device=dri
+  # Printing: the plugin talks to CUPS directly rather than through a portal.
+  - --socket=cups
   # Rating lookups.
   - --share=network
   # Event files live wherever the director keeps them, and each one needs its

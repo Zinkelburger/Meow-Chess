@@ -79,8 +79,10 @@ String crosstableCell(
   Event event,
   Round round,
   String playerId,
-  Map<String, int> numbers,
-) {
+  Map<String, int> numbers, {
+  // A fixed schedule's coming round: the pairing, with no result to mark.
+  bool scheduled = false,
+}) {
   final games =
       round.games
           .where((g) => g.white == playerId || g.black == playerId)
@@ -102,7 +104,9 @@ String crosstableCell(
     final white = game.white == playerId;
     final other = white ? game.black : game.white;
     final points = white ? game.outcome.whiteScore : game.outcome.blackScore;
-    final mark = !game.outcome.resolved
+    final mark = scheduled
+        ? ''
+        : !game.outcome.resolved
         ? ' ?'
         : !game.outcome.played
         ? (points == 2 ? ' X' : ' F')
@@ -114,6 +118,22 @@ String crosstableCell(
     opponent: games.map(opponent).join('/'),
     color: games.map((g) => g.white == playerId ? 'W' : 'B').join('/'),
   );
+}
+
+/// The rounds of a fixed schedule still to come, by number, so a round robin's
+/// wall chart shows every pairing from the start. Empty when pairings depend
+/// on results.
+Map<int, Round> wallChartScheduledRounds(Event event, Section section) {
+  final fixed =
+      (hasFixedSchedule(section) && !section.sideGames) ||
+      (section.format == Format.scheveningen &&
+          scheveningenProblem(event, section) == null);
+  if (!fixed) return const {};
+  return {
+    for (final round in reportPairingRounds(section, event: event))
+      if (!section.rounds.any((r) => r.number == round.number))
+        round.number: round,
+  };
 }
 
 /// A name on one line: a line break or tab pasted into a name would split a
@@ -515,6 +535,9 @@ List<pw.Widget> _roundRobinPairingGrid(
   final numbers = {
     for (final (index, id) in section.players.indexed) id: index + 1,
   };
+  // Seven single games fit across, so an eight-player round robin is one
+  // table; a double game splits its box and needs the wider columns.
+  final perTable = section.doubleGames ? 5 : 7;
   const line = pw.BorderSide(width: 0.6);
   pw.Widget label(String text, {bool header = false, bool left = false}) =>
       pw.Container(
@@ -586,13 +609,13 @@ List<pw.Widget> _roundRobinPairingGrid(
       ),
     ),
     // Keep larger round robins legible instead of squeezing every round across.
-    for (var offset = 0; offset < rounds.length; offset += 5) ...[
+    for (var offset = 0; offset < rounds.length; offset += perTable) ...[
       pw.Table(
         border: pw.TableBorder.all(width: 0.6),
         columnWidths: {
           0: const pw.FixedColumnWidth(28),
           1: const pw.FlexColumnWidth(2.5),
-          for (var i = 0; i < rounds.skip(offset).take(5).length; i++)
+          for (var i = 0; i < rounds.skip(offset).take(perTable).length; i++)
             i + 2: const pw.FlexColumnWidth(),
         },
         children: [
@@ -602,8 +625,13 @@ List<pw.Widget> _roundRobinPairingGrid(
             children: [
               label('#', header: true),
               label('Player', header: true, left: true),
-              for (final round in rounds.skip(offset).take(5))
-                label('Round ${round.number}', header: true),
+              for (final round in rounds.skip(offset).take(perTable))
+                label(
+                  rounds.length > 5
+                      ? 'R${round.number}'
+                      : 'Round ${round.number}',
+                  header: true,
+                ),
             ],
           ),
           for (final player in section.players)
@@ -611,7 +639,7 @@ List<pw.Widget> _roundRobinPairingGrid(
               children: [
                 label('${numbers[player]}'),
                 label(reportName(event.player(player).name), left: true),
-                for (final round in rounds.skip(offset).take(5))
+                for (final round in rounds.skip(offset).take(perTable))
                   roundCell(player, round),
               ],
             ),
@@ -750,8 +778,8 @@ Future<Uint8List> reportPdf(
     }
     if (kind == ReportKind.pairings || kind == ReportKind.packet) {
       // A quad prints its complete reusable grid from every print entry. Larger
-      // round robins and Swiss keep board tables, which players need to find
-      // their seats, and honor the selected round.
+      // round robins print the same grid to post, then the board tables players
+      // need to find their seats; Swiss has only the selected round's table.
       final quadGrid = hasFixedQuadSchedule(scope);
       final rounds = reportPairingRounds(
         scope,
@@ -765,6 +793,12 @@ Future<Uint8List> reportPdf(
       }
       if (quadGrid && rounds.isNotEmpty) {
         widgets.addAll(_roundRobinPairingGrid(source, scope, rounds));
+      } else if (hasFixedSchedule(scope) &&
+          !scope.sideGames &&
+          !currentRoundOnly &&
+          rounds.length > 1) {
+        widgets.addAll(_roundRobinPairingGrid(source, scope, rounds));
+        widgets.add(pw.NewPage());
       }
       for (final round in quadGrid ? <Round>[] : rounds) {
         widgets.add(pw.NewPage(freeSpace: 100));
@@ -983,6 +1017,7 @@ Future<Uint8List> reportPdf(
         ...table,
       ]..sort((a, b) => numbers[a.player.id]!.compareTo(numbers[b.player.id]!));
       final columns = wallChartRounds(s);
+      final scheduled = wallChartScheduledRounds(e, s);
       final complete =
           columns.isNotEmpty &&
           columns.every(
@@ -1001,7 +1036,26 @@ Future<Uint8List> reportPdf(
       );
       pw.Widget box(Standing row, int n) {
         final i = s.rounds.indexWhere((r) => r.number == n);
-        if (i < 0) return pw.SizedBox(height: 34);
+        if (i < 0) {
+          final coming = scheduled[n];
+          if (coming == null) return pw.SizedBox(height: 34);
+          final marks = wallChartMarks(
+            e,
+            coming,
+            row.player.id,
+            numbers,
+            scheduled: true,
+          );
+          return pw.SizedBox(
+            height: 34,
+            child: pw.Stack(
+              children: [
+                pw.Positioned(left: 2, top: 1, child: small(marks.opponent)),
+                pw.Positioned(left: 2, bottom: 1, child: small(marks.color)),
+              ],
+            ),
+          );
+        }
         final marks = wallChartMarks(e, s.rounds[i], row.player.id, numbers);
         return pw.SizedBox(
           height: 34,
@@ -1091,8 +1145,9 @@ Future<Uint8List> reportPdf(
             'Players in pairing-number order. In each round box: top, the '
             'opponent\'s number (F = forfeit loss, X = forfeit win, '
             '? = unresolved, bye = full point, ½ bye, 0 bye, - = not paired); '
-            'bottom, the color; middle, the score after that round. A blank '
-            'box is a round not yet paired. Pos is the final place. '
+            'bottom, the color; middle, the score after that round. '
+            '${scheduled.isEmpty ? 'A blank box is a round not yet paired.' : 'A box with no score is a round still to play.'} '
+            'Pos is the final place. '
             'NEW = unrated with no US Chess ID; UNR = unrated.',
             style: const pw.TextStyle(fontSize: 9),
           ),

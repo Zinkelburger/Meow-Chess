@@ -118,9 +118,8 @@ jobs:
             meow-chess-${{ github.ref_name }}-linux.flatpak
 
   # The .rpm is built on Ubuntu; install it where it is meant to go, so its
-  # Requires must resolve from the distribution's own repositories. Flatpak is
-  # not install-tested: it needs a session bus and a second runtime download,
-  # and flatpak-builder already validated its manifest and exports.
+  # Requires must resolve from the distribution's own repositories. The Flatpak
+  # is installed and run by the quality gate's flatpak-printing job.
   test-rpm:
     needs: build-linux
     name: Install the .rpm (${{ matrix.image }})

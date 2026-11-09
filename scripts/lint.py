@@ -58,6 +58,19 @@ def release_issues(root, ref=''):
     return issues
 
 
+def print_permission_issues(root):
+    """Sandboxes that hide printers fail on the tournament floor, not in a test."""
+    issues = []
+    manifest = root / 'packaging/flatpak/org.meowchess.meow_chess.yml'
+    if '--socket=cups' not in manifest.read_text(encoding='utf-8'):
+        issues.append(f'{manifest.relative_to(root)}: no --socket=cups, so printers are hidden')
+    for name in ['DebugProfile', 'Release']:
+        file = root / f'macos/Runner/{name}.entitlements'
+        if 'com.apple.security.print' not in file.read_text(encoding='utf-8'):
+            issues.append(f'{file.relative_to(root)}: no com.apple.security.print, so the sandbox blocks printing')
+    return issues
+
+
 # Copied verbatim from elsewhere (a font license, a saved web page) or written
 # by a tool, so their whitespace is not ours to fix.
 WHITESPACE_EXEMPT = [
@@ -91,6 +104,7 @@ def whitespace_issues(root):
 
 def main():
     issues = architecture_issues(root) + release_issues(root, os.environ.get('GITHUB_REF', ''))
+    issues += print_permission_issues(root)
     for file in [root / 'README.md', *(root / 'docs').glob('*.md')]:
         for target in re.findall(r'\]\(([^)]+)\)', file.read_text(encoding='utf-8')):
             if '://' not in target and not target.startswith('#') and not (file.parent / target.split('#')[0]).exists():
@@ -107,7 +121,7 @@ def main():
     issues += whitespace_issues(root)
     if issues:
         raise SystemExit('\n'.join(issues))
-    print('PASS: domain boundaries, application boundaries, local links, requirement IDs, release version, whitespace')
+    print('PASS: domain boundaries, application boundaries, local links, requirement IDs, release version, print permissions, whitespace')
 
 
 if __name__ == "__main__":
