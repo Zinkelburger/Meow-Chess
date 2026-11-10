@@ -129,7 +129,14 @@ class _MeowAppState extends State<MeowApp> {
   late final files = NativeFileRequests(open: openFromDesktop);
 
   /// Quitting closes the event, so its .meow holds every commit on its own.
+  /// Coming back to the window is when a file moved in the file manager is
+  /// first worth looking for.
   late final AppLifecycleListener exits;
+
+  /// Looks every few seconds whether the open event's file is still where it
+  /// was opened, so a moved or deleted file is reported before much is
+  /// entered, not only at the next save.
+  late final Timer fileWatch;
 
   /// Replaced controllers whose views have not unmounted yet.
   final _retiring = <TournamentController>{};
@@ -169,10 +176,15 @@ class _MeowAppState extends State<MeowApp> {
     if (widget.initialPath != null) open(widget.initialPath!);
     files.start();
     exits = AppLifecycleListener(
+      onResume: () => controller?.checkFile(),
       onExitRequested: () async {
         _closeForExit();
         return AppExitResponse.exit;
       },
+    );
+    fileWatch = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => controller?.checkFile(),
     );
   }
 
@@ -197,6 +209,7 @@ class _MeowAppState extends State<MeowApp> {
     newName.dispose();
     files.dispose();
     exits.dispose();
+    fileWatch.cancel();
     _closeForExit();
     super.dispose();
   }
@@ -279,26 +292,31 @@ class _MeowAppState extends State<MeowApp> {
   bool templating = false;
   String? templatePath;
 
-  /// What a template would copy, read from its file; null when unreadable.
+  /// What a template would copy; null when its file is missing or
+  /// unreadable. The file is read once when it is chosen, not on every
+  /// redraw, and only read: looking at an event to copy its set-up never
+  /// changes it, and never creates a file where one has gone.
   Event? templateSource(String path) {
-    try {
-      final repository = SqliteEventRepository(path);
+    if (_templateRead != path) {
+      _templateRead = path;
       try {
-        return repository.load();
-      } finally {
-        repository.close();
+        _template = SqliteEventRepository.peek(path);
+      } catch (e, stack) {
+        _template = null;
+        Diagnostics.record(
+          'read event template',
+          'failed',
+          error: e,
+          stack: stack,
+          context: {'path': path},
+        );
       }
-    } catch (e, stack) {
-      Diagnostics.record(
-        'read event template',
-        'failed',
-        error: e,
-        stack: stack,
-        context: {'path': path},
-      );
-      return null;
     }
+    return _template;
   }
+
+  Event? _template;
+  String? _templateRead;
 
   Future<void> create(BuildContext context) async {
     final name = newName.text.trim();
@@ -312,6 +330,8 @@ class _MeowAppState extends State<MeowApp> {
         setState(() => error = 'Choose the event to copy the set-up from.');
         return;
       }
+      // Read again: the set-up copied is the file's as it is now.
+      _templateRead = null;
       source = templateSource(templatePath!);
       if (source == null) {
         setState(
@@ -549,6 +569,7 @@ class _MeowAppState extends State<MeowApp> {
             path: path!,
             onClose: close,
             onTheme: toggleTheme,
+            onOpenCopy: open,
           )
         : Builder(
             builder: (context) => Scaffold(
@@ -588,6 +609,7 @@ class _MeowAppState extends State<MeowApp> {
                                     naming = true;
                                     templating = true;
                                     templatePath ??= recent.first;
+                                    _templateRead = null;
                                     error = null;
                                   }),
                                   icon: const Icon(Icons.copy_outlined),

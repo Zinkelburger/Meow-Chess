@@ -14,6 +14,11 @@ import 'model.dart';
 /// included) and `decisions` (`board`, `advanced`, `reason`)).
 const knockoutPolicy = 'knockout-v1';
 
+/// The policy of a bracket round paired again because a corrected result
+/// changed who advanced into it. Its games belong to the bracket round they
+/// replace, like a tie-break posting.
+const knockoutRepairPolicy = 'knockout-repair-v1';
+
 /// What happens when a match is drawn, keyed as stored in `bracket['tiebreak']`.
 const knockoutTiebreakLabels = <String, String>{
   'none': 'Director decides',
@@ -242,6 +247,29 @@ class KnockoutStage {
   final List<Round> rounds;
   bool get posted => rounds.isNotEmpty;
   bool get resolved => matches.every((m) => m.resolved);
+
+  /// Matches of a posted round whose two players have no games against
+  /// each other: a corrected result changed who advanced, so the round was
+  /// paired with someone who is now out and must be paired again.
+  List<KnockoutMatch> get replaced => [
+    if (posted)
+      for (final m in matches)
+        if (m.status == KnockoutMatchStatus.unpaired) m,
+  ];
+
+  /// Games of this round that belong to no match of the bracket as it now
+  /// stands: the pairing a corrected result replaced.
+  List<Game> get orphans {
+    final live = {
+      for (final m in matches)
+        for (final g in m.games) g.id,
+    };
+    return [
+      for (final r in rounds)
+        for (final g in r.games)
+          if (!live.contains(g.id)) g,
+    ];
+  }
 }
 
 class KnockoutBracket {
@@ -287,12 +315,14 @@ Map<int, Map<int, (String, String)>> _decisions(Section section) {
 bool _isTiebreakRound(Round round, int gamesPerMatch) =>
     round.games.isNotEmpty && round.games.every((g) => g.leg > gamesPerMatch);
 
-/// Posted rounds grouped by bracket round: a tie-break posting belongs to
-/// the bracket round before it.
+/// Posted rounds grouped by bracket round: a tie-break posting, or a round
+/// paired again after a correction, belongs to the bracket round before it.
 List<List<Round>> _stageRounds(Section section, int gamesPerMatch) {
   final groups = <List<Round>>[];
   for (final r in section.rounds) {
-    if (groups.isNotEmpty && _isTiebreakRound(r, gamesPerMatch)) {
+    if (groups.isNotEmpty &&
+        (_isTiebreakRound(r, gamesPerMatch) ||
+            r.policy == knockoutRepairPolicy)) {
       groups.last.add(r);
     } else {
       groups.add([r]);
@@ -518,6 +548,59 @@ Round knockoutRound(Event event, Section section, int n, String Function() id) {
       explanations: explanations,
     );
   }
+  // A corrected result changed who advanced into this round after it was
+  // posted: pair the matches it left without games again.
+  final replaced = stage.replaced;
+  if (replaced.isNotEmpty) {
+    final orphans = stage.orphans;
+    final taken = {
+      for (final m in stage.matches)
+        if (m.board != 0) m.board,
+    };
+    var free = section.boardStart;
+    final games = <Game>[];
+    final explanations = <String>[];
+    for (final m in replaced) {
+      // The match keeps the board of the pairing it replaces.
+      final old = orphans
+          .where(
+            (g) =>
+                !taken.contains(g.board) &&
+                [g.white, g.black].any((id) => id == m.high || id == m.low),
+          )
+          .firstOrNull;
+      while (old == null && taken.contains(free)) {
+        free++;
+      }
+      final board = old?.board ?? free;
+      taken.add(board);
+      for (var leg = 1; leg <= bracket.gamesPerMatch; leg++) {
+        final (white, black) = knockoutColors(
+          stage.number,
+          leg,
+          m.high!,
+          m.low!,
+        );
+        games.add(
+          Game(id: id(), white: white, black: black, board: board, leg: leg),
+        );
+      }
+      explanations.add(
+        'Board $board: ${seeded(m.high)} – ${seeded(m.low)}, paired again because a corrected result changed who advanced'
+        '${old == null ? '' : ' (the round was posted as ${name(old.white)} – ${name(old.black)})'}. '
+        'Games already played on the old pairing stay on the record but do not count for the bracket; its unplayed games are removed.',
+      );
+    }
+    return Round(
+      number: n,
+      games: games,
+      policy: knockoutRepairPolicy,
+      note:
+          '${stage.name} paired again after a corrected result: '
+          '${replaced.map((m) => '${name(m.high)} – ${name(m.low)}').join(', ')}.',
+      explanations: explanations,
+    );
+  }
   final pending = stage.matches.where(
     (m) => m.status == KnockoutMatchStatus.pending,
   );
@@ -572,6 +655,21 @@ Round knockoutRound(Event event, Section section, int n, String Function() id) {
 /// the planned rounds equal to the bracket's stages plus the tie-break
 /// postings so far.
 Section knockoutAfterPost(Event event, Section section) {
+  // A round paired again replaces an old pairing: its unplayed games go,
+  // and so does any director's decision made on its boards.
+  final repair = section.rounds.lastOrNull?.policy == knockoutRepairPolicy
+      ? section.rounds.last
+      : null;
+  final repairedBoards = {
+    for (final g in repair?.games ?? const <Game>[]) g.board,
+  };
+  final repairedStage = repair == null
+      ? null
+      : knockoutBracket(
+          event,
+          section,
+        ).stages.where((s) => s.rounds.contains(repair)).firstOrNull?.number;
+  section = _withoutReplacedPairings(event, section);
   final stored = section.bracket['seeds'] as List? ?? const [];
   final frozen = section.copy(
     bracket: {
@@ -587,7 +685,10 @@ Section knockoutAfterPost(Event event, Section section) {
       if (entry is Map && entry['stage'] is int)
         entry['stage'] as int: [
           for (final d in entry['decisions'] as List? ?? const [])
-            if (d is Map) Map<String, dynamic>.from(d),
+            if (d is Map &&
+                !(entry['stage'] == repairedStage &&
+                    repairedBoards.contains(d['board'])))
+              Map<String, dynamic>.from(d),
         ],
   };
   var tiebreakRounds = 0;
@@ -605,6 +706,52 @@ Section knockoutAfterPost(Event event, Section section) {
     bracket: {...frozen.bracket, 'rounds': rounds},
     plannedRounds: bracket.stages.length + tiebreakRounds,
   );
+}
+
+/// [section] without the unplayed games of a pairing its latest round
+/// replaced. A round left with nothing is dropped and the replacement takes
+/// its number as the bracket round itself; played games stay on the record.
+Section _withoutReplacedPairings(Event event, Section section) {
+  final repair = section.rounds.lastOrNull;
+  if (repair == null || repair.policy != knockoutRepairPolicy) return section;
+  final stage = knockoutBracket(
+    event,
+    section,
+  ).stages.where((s) => s.rounds.contains(repair)).firstOrNull;
+  if (stage == null) return section;
+  final unplayed = {
+    for (final g in stage.orphans)
+      if (g.outcome == Outcome.unreported && g.pairingAssumption == null) g.id,
+  };
+  if (unplayed.isEmpty) return section;
+  final rounds = <Round>[];
+  var roundGone = false;
+  for (final r in section.rounds) {
+    final games = [
+      for (final g in r.games)
+        if (!unplayed.contains(g.id)) g,
+    ];
+    if (games.isEmpty && r.byes.isEmpty) {
+      roundGone = roundGone || identical(r, stage.rounds.first);
+      continue;
+    }
+    // The replacement of a round that is gone is that bracket round.
+    final first = identical(r, repair) && roundGone;
+    rounds.add(
+      Round(
+        number: rounds.length + 1,
+        games: games,
+        byes: r.byes,
+        postedAt: r.postedAt,
+        startedAt: r.startedAt,
+        revision: games.length == r.games.length ? r.revision : r.revision + 1,
+        policy: first ? knockoutPolicy : r.policy,
+        note: r.note,
+        explanations: r.explanations,
+      ),
+    );
+  }
+  return section.copy(rounds: rounds);
 }
 
 /// The section with the director's decision that [playerId] advances from
@@ -680,7 +827,20 @@ Section knockoutDecided(
 List<(String playerId, String placing)> knockoutPlacings(
   Event event,
   Section section,
-) {
+) => [
+  for (final (:playerId, rank: _, :placing) in knockoutRanking(event, section))
+    (playerId, placing),
+];
+
+/// One player's finish in the bracket. Players with the same [rank] are
+/// level: the bracket does not separate the losers of one round, nor the
+/// players still in it.
+typedef KnockoutPlacing = ({String playerId, int rank, String placing});
+
+/// Every seeded player from the top: the winner and anyone still in the
+/// bracket (rank 1), the runner-up (2), the semifinalists (3), and so on,
+/// by seed within a rank.
+List<KnockoutPlacing> knockoutRanking(Event event, Section section) {
   final bracket = knockoutBracket(event, section);
   final count = bracket.stages.length;
   final placed = <String, (int, String)>{};
@@ -708,7 +868,7 @@ List<(String playerId, String placing)> knockoutPlacings(
   rows.sort(
     (a, b) => a.$1 != b.$1 ? a.$1.compareTo(b.$1) : a.$2.compareTo(b.$2),
   );
-  return [for (final r in rows) (r.$3, r.$4)];
+  return [for (final r in rows) (playerId: r.$3, rank: r.$1, placing: r.$4)];
 }
 
 /// The match score as seen from [high]: each leg, then the total.
@@ -750,7 +910,10 @@ List<String> knockoutBracketLines(Event event, Section section) {
         KnockoutMatchStatus.bye =>
           '${name(m.advanced)} advances without a game',
         KnockoutMatchStatus.waiting => 'waiting for the previous round',
-        KnockoutMatchStatus.unpaired => 'not yet paired',
+        KnockoutMatchStatus.unpaired =>
+          stage.posted
+              ? 'to be paired again: a corrected result changed who advanced'
+              : 'not yet paired',
         KnockoutMatchStatus.pending => 'in progress',
         KnockoutMatchStatus.tied => 'drawn match; who advances is undecided',
         KnockoutMatchStatus.decided =>

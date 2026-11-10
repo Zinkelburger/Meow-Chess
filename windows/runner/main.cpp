@@ -22,11 +22,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();
-  std::vector<std::string> files = FileArguments(command_line_arguments);
+  // The FIDE tools print their answer and exit with its status, so they run
+  // in this process even when a window is open: handed to that window, the
+  // file they name would be opened as an event and this process would report
+  // success without checking anything.
+  const bool fide_tools = IsFideToolsCommand(command_line_arguments);
+  std::vector<std::string> files;
+  if (!fide_tools) files = FileArguments(command_line_arguments);
 
   // A double-clicked .meow while the app is open starts this process only to
   // pass the file along to the window that already exists.
-  if (!ClaimSingleInstance(files)) {
+  if (!fide_tools && !ClaimSingleInstance(files)) {
     ::CoUninitialize();
     return EXIT_SUCCESS;
   }

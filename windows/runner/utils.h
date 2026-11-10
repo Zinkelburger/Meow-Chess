@@ -26,4 +26,9 @@ std::wstring Utf16FromUtf8(const std::string& utf8_string);
 std::vector<std::string> FileArguments(
     const std::vector<std::string>& arguments);
 
+// Whether |arguments| ask for the FIDE tools (`-check file.trf`,
+// `-generate …`): the words lib/infrastructure/fide_cli.dart answers to, with
+// any leading dashes.
+bool IsFideToolsCommand(const std::vector<std::string>& arguments);
+
 #endif  // RUNNER_UTILS_H_

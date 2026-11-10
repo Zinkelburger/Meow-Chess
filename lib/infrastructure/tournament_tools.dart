@@ -462,11 +462,21 @@ class TournamentTools {
       ),
       tool(
         'move_players',
-        'Move entries through the same transition rules as the GUI.',
+        'Move entries through the same rules as the GUI. Players who are in no section and join a section that is already paired are late entries: allowed while a round is in progress, no reason needed, and each gets a bye on every posted round (half a point where the section byeRules allow it, otherwise zero; missedRoundByes overrides per round). Moving or combining after play started needs a reason; played games stay reported in their original section.',
         {
           'players': _array(_string()),
           'sectionId': _string(),
           'reason': _string(),
+          'missedRoundByes': {
+            'type': 'object',
+            'description':
+                'Late entries only: round number → 0 (zero-point) or 1 (half-point) bye for that missed round.',
+            'additionalProperties': {
+              'type': 'integer',
+              'minimum': 0,
+              'maximum': 1,
+            },
+          },
         },
         required: ['players', 'sectionId'],
         write: true,
@@ -480,7 +490,7 @@ class TournamentTools {
       ),
       tool(
         'reserve_bye',
-        'Reserve a future bye: points 0, 1, 2 mean zero, half, full point. Half-point byes follow the section byeRules (22C1–22C4); irrevocable declares the bye irrevocable (22C4), and a cancelled irrevocable bye scores a later win as a draw for prizes (22C5).',
+        'Reserve a future bye: points 0, 1, 2 mean zero, half, full point. Half-point byes follow the section byeRules (22C1–22C4); irrevocable declares the bye irrevocable (22C4), and a cancelled irrevocable bye scores a later win as a draw for prizes (22C5). For a round already posted in which the player has no game (a late entrant\'s missed round), points 0 or 1 changes that round\'s bye.',
         {
           'playerId': _string(),
           'round': _integer(1),
@@ -843,7 +853,13 @@ class TournamentTools {
             .map((p) => p.memberId)
             .toSet();
         for (final player in additions) {
-          if (isMemberId(player.memberId) && !ids.add(player.memberId)) {
+          // Rule 28S: a re-entry carries the ID of the entry it replaces.
+          final reentered = event.players
+              .where((p) => p.id == player.reentryOf)
+              .firstOrNull;
+          if (isMemberId(player.memberId) &&
+              !ids.add(player.memberId) &&
+              reentered?.memberId != player.memberId) {
             throw TournamentException(
               'Duplicate US Chess ID: ${player.memberId}.',
             );
@@ -1130,10 +1146,25 @@ class TournamentTools {
         );
         return {..._summary(), 'section': _section(id).toJson()};
       case 'move_players':
+        // JSON object keys are text: round number → 0 or 1.
+        final lateByes = <int, int>{};
+        final missed = args['missedRoundByes'];
+        if (missed != null) {
+          const shape = TournamentException(
+            'missedRoundByes maps a round number to 0 or 1.',
+          );
+          if (missed is! Map) throw shape;
+          for (final MapEntry(:key, :value) in missed.entries) {
+            final round = int.tryParse('$key');
+            if (round == null || value is! int) throw shape;
+            lateByes[round] = value;
+          }
+        }
         controller.movePlayers(
           List<String>.from(args['players']),
           args['sectionId'],
           reason: args['reason'] ?? '',
+          lateByes: lateByes,
         );
       case 'remove_players':
         controller.removePlayers(List<String>.from(args['players']));
@@ -1544,6 +1575,13 @@ void _validate(dynamic value, Json schema, String at) {
   if (type == 'object') {
     if (value is! Map<String, dynamic>) fail('expected an object');
     final map = value as Json;
+    // A map with free keys (round number → value) states one value schema.
+    if (schema['additionalProperties'] case final Json each) {
+      for (final key in map.keys) {
+        _validate(map[key], each, '$at.$key');
+      }
+      return;
+    }
     final properties = schema['properties'] as Json;
     for (final required in schema['required'] as List) {
       if (!map.containsKey(required)) fail('missing $required');

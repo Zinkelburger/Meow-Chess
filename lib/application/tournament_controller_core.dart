@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert' show utf8;
+import 'dart:io' show File, Platform;
 import 'dart:isolate';
 import 'dart:math' show Random;
 
@@ -39,6 +41,44 @@ part 'controller_results.dart';
 part 'controller_roster.dart';
 part 'controller_rounds.dart';
 part 'controller_sections.dart';
+
+/// True in the browser version, which has no folders to back up to.
+const _browser = bool.fromEnvironment('dart.library.js_interop');
+
+/// For tests: stands in for this computer, as if the file had been carried
+/// to another one.
+String? debugComputer;
+
+/// Tells this computer and user account from any other without naming
+/// either in the event file. Backup settings apply only where they were
+/// chosen: a folder on one computer means nothing on the next.
+String thisComputer() {
+  if (debugComputer case final name?) return name;
+  if (_browser) return 'browser';
+  final environment = Platform.environment;
+  final name =
+      '${Platform.localHostname}\u0000'
+      '${environment['USERNAME'] ?? environment['USER'] ?? ''}';
+  // FNV-1a over the UTF-8 bytes.
+  var hash = 0x811c9dc5;
+  for (final byte in utf8.encode(name)) {
+    hash = ((hash ^ byte) * 0x01000193) & 0xffffffff;
+  }
+  return hash.toRadixString(16).padLeft(8, '0');
+}
+
+/// The start of a backup copy's file name: the event's name in the letters,
+/// digits and hyphens every file system accepts, so copies of different
+/// events can be told apart in one folder.
+String backupFileStem(String eventName) {
+  var stem = nameKey(
+    eventName,
+  ).replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
+  if (stem.length > 40) {
+    stem = stem.substring(0, 40).replaceAll(RegExp(r'-+$'), '');
+  }
+  return stem.isEmpty ? 'event' : stem;
+}
 
 class PairingBatch {
   const PairingBatch(this.revision, this.rounds, this.issues);
@@ -91,6 +131,18 @@ class TournamentControllerCore extends ChangeNotifier
       } catch (_) {}
       rethrow;
     }
+    try {
+      _useThisComputersBackups();
+    } catch (error, stack) {
+      // The event is open; a foreign folder is still refused when a backup
+      // is attempted.
+      Diagnostics.record(
+        'backup settings',
+        'failed',
+        error: error,
+        stack: stack,
+      );
+    }
   }
   @override
   final EventRepository repository;
@@ -99,6 +151,111 @@ class TournamentControllerCore extends ChangeNotifier
   @override
   Event? event;
   String? backupWarning;
+
+  /// What has become of the event's file since it was opened, as of the last
+  /// [checkFile]; null while it is where it was.
+  @override
+  EventFileProblem? fileProblem;
+
+  /// [fileProblem] in a director's words, with what to do about it.
+  String? get fileWarning => switch (fileProblem) {
+    null => null,
+    EventFileProblem.moved =>
+      'The event file is no longer where it was opened: it was moved, '
+          'renamed or deleted while open here. What you enter now is kept only '
+          'until this window closes. Save a copy under a new name and carry on '
+          'in the copy.',
+    EventFileProblem.unreachable =>
+      'The drive or folder holding this event can no longer be reached, so '
+          'changes are not being saved. Reconnect it and reopen the event, or '
+          'save a copy somewhere else and carry on in the copy.',
+  };
+
+  /// Looks whether the event file is still where it was opened, and tells
+  /// listeners when that has changed. Cheap enough to call before every save
+  /// and every few seconds.
+  @override
+  void checkFile() {
+    if (_closed) return;
+    final found = repository.checkFile();
+    if (found == fileProblem) return;
+    fileProblem = found;
+    Diagnostics.record(
+      'event file',
+      found == null ? 'back where it was opened' : found.name,
+      context: {'eventId': event?.id, 'revision': event?.revision},
+    );
+    notifyListeners();
+  }
+
+  /// The event encoded, kept so comparing a change with it does not encode
+  /// the whole event again each time.
+  String _encoded(Event current) {
+    if (!identical(_encodedEvent, current)) {
+      _encodedEvent = current;
+      _encoding = current.encode();
+    }
+    return _encoding;
+  }
+
+  Event? _encodedEvent;
+  String _encoding = '';
+
+  /// Backup settings are this computer's. When the file was last used on
+  /// another one, its folder and last-copy record are set aside under that
+  /// computer's name and this computer's own are brought back, so a folder
+  /// from elsewhere is never written to here and the last backup shown is
+  /// one made here.
+  void _useThisComputersBackups() {
+    final e = event;
+    if (e == null || _browser) return;
+    final here = thisComputer();
+    final owner = repository.readPreference('backupComputer');
+    final last = repository.readPreference('lastBackup');
+    final usable = e.backupFolder.isEmpty || p.isAbsolute(e.backupFolder);
+    if (owner == here && usable) return;
+    if (owner == null && usable) {
+      // Saved before backups were tied to a computer: take the folder as
+      // ours, but not the record of a copy that is not here.
+      if (last != null &&
+          !File(last.split('|').elementAtOrNull(1) ?? '').existsSync()) {
+        repository.deletePreference('lastBackup');
+      }
+      if (e.backupFolder.isNotEmpty) {
+        repository.writePreference('backupComputer', here);
+      }
+      return;
+    }
+    final theirs = e.backupFolder;
+    final other = owner == null || owner == here ? 'other' : owner;
+    if (theirs.isNotEmpty) {
+      repository.writePreference('backupFolder@$other', theirs);
+    }
+    if (last != null) repository.writePreference('lastBackup@$other', last);
+    var mine = repository.readPreference('backupFolder@$here') ?? '';
+    if (!p.isAbsolute(mine)) mine = '';
+    final mineLast = repository.readPreference('lastBackup@$here');
+    if (mineLast == null) {
+      repository.deletePreference('lastBackup');
+    } else {
+      repository.writePreference('lastBackup', mineLast);
+    }
+    repository.writePreference('backupComputer', here);
+    if (mine != theirs) {
+      event = repository.commit(
+        e.copy(backupFolder: mine),
+        expectedRevision: e.revision,
+        action: 'Use this computer\'s backup folder',
+      );
+    }
+    if (mine.isEmpty && theirs.isNotEmpty) {
+      backupWarning =
+          'Backups are off on this computer. This event\'s backup folder '
+          '($theirs) was chosen on another computer; choose a folder here in '
+          'Backups.';
+    }
+  }
+
   @override
   bool _closed = false;
   @override
@@ -126,21 +283,30 @@ class TournamentControllerCore extends ChangeNotifier
     Diagnostics.record('save event', 'started', context: context);
     try {
       if (_closed) throw const TournamentException('This event has closed.');
-      if (event != null && next.encode() == event!.encode()) {
+      if (event != null && next.encode() == _encoded(event!)) {
         Diagnostics.record('save event', 'unchanged', context: context);
         return;
       }
       _refuseNewDuplicateSectionName(event, next);
       _refuseDoubleBooking(next);
       final previous = event;
+      // Where backups go is this computer's setting, saved without a point
+      // in the history, so there is no step to describe or to undo.
+      final setting = previous != null && backupSettingsOnly(previous, next);
+      checkFile();
       event = repository.commit(
         next,
         expectedRevision: event?.revision ?? 0,
         action: action,
       );
       _graph = null;
-      lastMove = null;
-      if (previous != null) _rememberMarks(previous, event!);
+      if (!setting) {
+        lastMove = null;
+        if (previous != null) _rememberMarks(previous, event!);
+      }
+      if (!_browser && previous?.backupFolder != event!.backupFolder) {
+        repository.writePreference('backupComputer', thisComputer());
+      }
       Diagnostics.record(
         'save event',
         'succeeded',
@@ -154,6 +320,12 @@ class TournamentControllerCore extends ChangeNotifier
         error: error,
         stack: stack,
       );
+      // A drive that has gone is shown where the director will see it, not
+      // only in the message for this one change.
+      if (error is EventFileUnreachable) {
+        fileProblem = EventFileProblem.unreachable;
+        notifyListeners();
+      }
       rethrow;
     }
     // Outside the try: the save has succeeded, so a failing listener must not
@@ -230,20 +402,59 @@ class TournamentControllerCore extends ChangeNotifier
     }
   }
 
+  /// A new name in the backup folder that says which event the copy is of:
+  /// the event's name, the revision, the local date and time, and the start
+  /// of the event's ID so two events of one name stay apart. A counter is
+  /// added should that name be taken, as when a clock is set back.
+  static String _backupDestination(Event e) {
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final id = e.id.replaceAll(RegExp('[^A-Za-z0-9]'), '');
+    final base = [
+      backupFileStem(e.name),
+      'r${e.revision}',
+      '${now.year}${two(now.month)}${two(now.day)}',
+      '${two(now.hour)}${two(now.minute)}${two(now.second)}',
+      if (id.isNotEmpty) id.substring(0, id.length < 8 ? id.length : 8),
+    ].join('-');
+    for (var copy = 1; ; copy++) {
+      final destination = p.join(
+        e.backupFolder,
+        copy == 1 ? '$base.meow' : '$base-$copy.meow',
+      );
+      if (!File(destination).existsSync()) return destination;
+    }
+  }
+
   @override
   void secondaryBackup() {
     final e = event!;
-    if (e.backupFolder.isEmpty) return;
+    if (e.backupFolder.isEmpty || _browser) {
+      // Nothing to copy to; a notice that backups are off has been seen.
+      if (backupWarning != null) {
+        backupWarning = null;
+        notifyListeners();
+      }
+      return;
+    }
     try {
-      final destination = p.join(
-        e.backupFolder,
-        '${e.id}-r${e.revision}-${DateTime.now().microsecondsSinceEpoch}.meow',
-      );
+      // A folder from another kind of computer is not a full path here and
+      // would otherwise be created wherever the app was started.
+      if (!p.isAbsolute(e.backupFolder)) {
+        throw TournamentException(
+          '${e.backupFolder} is not a folder on this computer. Choose a '
+          'backup folder here in Backups.',
+        );
+      }
+      final destination = _backupDestination(e);
       repository.backup(destination);
       repository.writePreference(
         'lastBackup',
         '${e.revision}|$destination|${DateTime.now().toUtc().toIso8601String()}',
       );
+      if (repository.readPreference('backupComputer') != thisComputer()) {
+        repository.writePreference('backupComputer', thisComputer());
+      }
       backupWarning = null;
     } catch (error, stack) {
       // The event file is saved; a failed copy is a warning, not a failure.

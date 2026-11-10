@@ -138,6 +138,10 @@ class _CheckedRepository implements EventRepository {
   void writePreference(String key, String value) =>
       inner.writePreference(key, value);
   @override
+  void deletePreference(String key) => inner.deletePreference(key);
+  @override
+  EventFileProblem? checkFile() => inner.checkFile();
+  @override
   void backup(String destination, {bool replaceExisting = false}) =>
       inner.backup(destination, replaceExisting: replaceExisting);
   @override

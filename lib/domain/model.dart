@@ -1247,6 +1247,18 @@ class Event {
   factory Event.decode(String source) => Event.fromJson(jsonDecode(source));
 }
 
+/// The fields of an event's JSON that belong to the computer it is open on,
+/// not to the tournament: its save counter and where its backups go. A
+/// change to these alone is not a step in the tournament's history. Add a
+/// new per-computer field here and every comparison follows.
+const computerEventFields = {'revision', 'backupFolder', 'lastBackupRevision'};
+
+/// The tournament in [event] without [computerEventFields]: equal for two
+/// events that differ only in those.
+String tournamentContent(Event event) => jsonEncode(
+  event.toJson()..removeWhere((key, _) => computerEventFields.contains(key)),
+);
+
 /// Why [playerId] can no longer be removed from the event, or null while
 /// they can. Removal is only for entries that never took part: once their
 /// section is paired, or a round anywhere names them, they withdraw instead.
@@ -1273,6 +1285,25 @@ String? removeBlocker(Event e, String playerId) {
   }
   return null;
 }
+
+/// Rule 28S: the entry [player]'s chain of re-entries started from. A
+/// re-entry is the same person as the entry it replaced, so it may carry the
+/// same US Chess ID; an entry that re-enters nobody is its own root.
+Player reentryRoot(Event event, Player player) {
+  final byId = {for (final p in event.players) p.id: p};
+  final seen = {player.id};
+  var root = player;
+  while (root.reentryOf.isNotEmpty &&
+      seen.add(root.reentryOf) &&
+      byId[root.reentryOf] != null) {
+    root = byId[root.reentryOf]!;
+  }
+  return root;
+}
+
+/// Whether [a] and [b] are entries of one person linked by re-entry.
+bool sameReentryChain(Event event, Player a, Player b) =>
+    a.id != b.id && reentryRoot(event, a).id == reentryRoot(event, b).id;
 
 /// The first board after every board [sections] use.
 int nextBoard(Iterable<Section> sections) => sections.fold(1, (max, s) {

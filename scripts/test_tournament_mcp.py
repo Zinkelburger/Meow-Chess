@@ -241,10 +241,24 @@ class TournamentMcpTest(unittest.TestCase):
             for g in proposal['rounds'][section['id']]['games']:
                 c.call('record_result', gameId=g['id'], outcome='draw')
         late = c.call('add_players', players=[{'name': 'Late entry', 'rating': 1500}])['added'][0]['id']
-        c.call('move_players', players=[late], sectionId=a['id'], reason='Arrived for round two')
-        moved = 'Players moved between sections after play started; this cannot be reported yet.'
-        self.assertIn(moved, c.call('export_event', directory='a-only', sectionId=a['id'])['dbfIssues'])
-        self.assertNotIn(moved, c.call('export_event', directory='b-only', sectionId=b['id'])['dbfIssues'])
+        # Joining a paired section from no section is a late entry: no reason
+        # needed, a bye on the posted round, and nothing to stop the report.
+        c.call('move_players', players=[late], sectionId=a['id'], missedRoundByes={'1': 0})
+        event = c.call('get_event')
+        self.assertEqual(event['transitions'], [])
+        section = next(s for s in event['sections'] if s['id'] == a['id'])
+        self.assertIn(late, section['players'])
+        self.assertEqual(section['format'], 'swiss')
+        bye = next(x for x in section['rounds'][0]['byes'] if x['player'] == late)
+        self.assertEqual((bye['points'], bye['reason']), (0, 'Late entry'))
+        # The missed round's bye can still be changed to half a point.
+        c.call('reserve_bye', playerId=late, round=1, points=1)
+        section = next(s for s in c.call('get_event')['sections'] if s['id'] == a['id'])
+        bye = next(x for x in section['rounds'][0]['byes'] if x['player'] == late)
+        self.assertEqual(bye['points'], 1)
+        for directory, section in (('a-only', a), ('b-only', b)):
+            issues = c.call('export_event', directory=directory, sectionId=section['id'])['dbfIssues']
+            self.assertFalse([i for i in issues if 'moved' in i or 'no longer in the section' in i], issues)
 
     def test_metadata_is_validated_when_it_changes(self):
         s = self.create()

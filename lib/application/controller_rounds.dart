@@ -11,6 +11,11 @@ mixin _RoundCommands on _CommandContext {
     bool onlyReady = false,
   }) async => runProposal(event!, sectionId, onlyReady);
 
+  /// How long a proposal may take before it is stopped and refused. Pairing
+  /// a few hundred players takes seconds; anything near this limit is a
+  /// fault, and the director is better served by an answer than a wait.
+  Duration pairingTimeLimit = const Duration(seconds: 60);
+
   /// Where a proposal is worked out: on a background isolate, so a long
   /// Swiss never freezes the window. A widget test on a fake clock, which
   /// cannot wait for an isolate, runs [proposeRounds] here directly.
@@ -18,7 +23,7 @@ mixin _RoundCommands on _CommandContext {
     Event snapshot,
     String? sectionId,
     bool onlyReady,
-  ) => _proposeInBackground(snapshot, sectionId, onlyReady);
+  ) => _proposeInBackground(snapshot, sectionId, onlyReady, pairingTimeLimit);
 
   /// A TD-selected game with independent entries and score, committed atomically.
   /// Finishing/forfeiting the main game frees that person for a side game.
@@ -137,11 +142,13 @@ mixin _RoundCommands on _CommandContext {
     final e = event!;
     if (batch.revision != e.revision) {
       throw const TournamentException(
-        'The event changed while pairing. Generate a fresh proposal.',
+        'The event changed while pairing. Create pairings again.',
       );
     }
     if (batch.rounds.isEmpty) {
-      throw const TournamentException('No sections are ready to post.');
+      throw const TournamentException(
+        'No section is ready for its next round.',
+      );
     }
     final now = DateTime.now().toUtc().toIso8601String();
     final updated = e.sections.map((s) {
@@ -244,7 +251,9 @@ mixin _RoundCommands on _CommandContext {
     for (final id in ids) {
       final section = _section(id);
       if (section.rounds.isEmpty) {
-        throw const TournamentException('Post a round before starting it.');
+        throw const TournamentException(
+          'Create pairings for the round before starting it.',
+        );
       }
       final open = section.rounds.indexWhere((r) => !r.complete);
       if (open < 0) {
@@ -296,9 +305,7 @@ mixin _RoundCommands on _CommandContext {
     final e = event!;
     final s = _section(sectionId);
     if (reason.trim().isEmpty) {
-      throw const TournamentException(
-        'Record why the posted pairing is changing.',
-      );
+      throw const TournamentException('Say why the pairings are changing.');
     }
     final r = repairUnstartedRound(e, s, keep.toSet(), newId);
     _refuseBusyPeople(e, {s.id: r});
@@ -343,9 +350,7 @@ mixin _RoundCommands on _CommandContext {
       );
     }
     if (reason.trim().isEmpty) {
-      throw const TournamentException(
-        'Record why the posted pairing is changing.',
-      );
+      throw const TournamentException('Say why the pairings are changing.');
     }
     for (final g in games) {
       final white = e.player(g.white), black = e.player(g.black);
@@ -404,17 +409,91 @@ mixin _RoundCommands on _CommandContext {
   }
 }
 
-/// Runs [proposeRounds] on a background isolate. Top-level, so the isolate's
-/// closure can only capture the plain data passed here, never the controller
+/// Runs [proposeRounds] on a background isolate, which is stopped and the
+/// proposal refused when it takes longer than [limit]. Top-level, so the
+/// isolate is handed only the plain data passed here, never the controller
 /// and its open event file. Browsers have no isolates, so the browser version
-/// pairs on the UI thread.
+/// pairs on the UI thread, where nothing can interrupt it.
 Future<PairingBatch> _proposeInBackground(
   Event snapshot,
   String? sectionId,
   bool onlyReady,
-) => _hasIsolates
-    ? Isolate.run(() => proposeRounds(snapshot, sectionId, onlyReady))
-    : Future(() => proposeRounds(snapshot, sectionId, onlyReady));
+  Duration limit,
+) async {
+  if (!_hasIsolates) return proposeRounds(snapshot, sectionId, onlyReady);
+  return runOnPairingIsolate(
+    () => proposeRounds(snapshot, sectionId, onlyReady),
+    limit,
+  );
+}
+
+/// Runs [work] on a new isolate and returns its answer, or stops it and
+/// refuses once [limit] has passed. What [work] throws is thrown here as
+/// itself, with the isolate's stack, so a fault in the engine reaches
+/// Diagnostics as what it is. [work] must capture only data that can be
+/// sent to an isolate. Public only so tests can run it directly.
+Future<T> runOnPairingIsolate<T>(T Function() work, Duration limit) async {
+  // One port carries the answer, what [work] threw (a _Thrown), an uncaught
+  // error (a two-item list of strings) or the isolate's exit (null),
+  // whichever comes first. Closed however this ends, including a spawn that
+  // fails, so it never keeps the app's event loop alive.
+  final port = ReceivePort();
+  try {
+    final watch = Stopwatch()..start();
+    final isolate = await Isolate.spawn(
+      _runInIsolate,
+      (port.sendPort, work),
+      onError: port.sendPort,
+      onExit: port.sendPort,
+    );
+    final Object? answer;
+    try {
+      final left = limit - watch.elapsed;
+      answer = await port.first.timeout(left.isNegative ? Duration.zero : left);
+      // The limit counts from the request, however the answer and the timer
+      // happen to be ordered on a busy machine.
+      if (watch.elapsed > limit) throw TimeoutException(null);
+    } on TimeoutException {
+      isolate.kill(priority: Isolate.immediate);
+      throw TournamentException(
+        'Pairing took more than ${limit.inSeconds} seconds and was stopped; nothing was changed. '
+        'Pair one section at a time to find the one that cannot be paired, then review its restrictions (do-not-pair requests, team-mates kept apart) or pair that round by hand.',
+      );
+    }
+    if (answer is _Thrown) {
+      Error.throwWithStackTrace(answer.error, answer.stack);
+    }
+    if (answer is T) return answer;
+    if (answer case [final Object error, final Object stack]) {
+      throw RemoteError('$error', '$stack');
+    }
+    throw const TournamentException(
+      'Pairing stopped before it finished. Try again.',
+    );
+  } finally {
+    port.close();
+  }
+}
+
+/// What the work threw on the background isolate.
+class _Thrown {
+  const _Thrown(this.error, this.stack);
+  final Object error;
+  final StackTrace stack;
+}
+
+/// The isolate's entry point: answers on the port with the work's result,
+/// or with what stopped it.
+void _runInIsolate((SendPort, Object? Function()) job) {
+  final (reply, work) = job;
+  final Object? result;
+  try {
+    result = work();
+  } catch (error, stack) {
+    Isolate.exit(reply, _Thrown(error, stack));
+  }
+  Isolate.exit(reply, result);
+}
 
 const _hasIsolates = !bool.fromEnvironment('dart.library.js_interop');
 

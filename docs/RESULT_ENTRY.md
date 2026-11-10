@@ -3,7 +3,8 @@
 User requirement: type results into a large table and continue directly into the
 next cell. Result entry is typing only: **1 or W = win, 0 or L = loss, D = draw**.
 The sheet displays 1, 0, or ½. D is the only draw shortcut; 5, =, decimal,
-and fraction aliases are not accepted. Clicking a cell focuses it without choosing a result.
+and fraction aliases are not accepted (the legend answers them with "Draw is D").
+Clicking a cell, or the row beside it, focuses it without choosing a result.
 This applies to both Players & standings and Pairings & results.
 US Chess's result collection/posting duty motivates the workflow (rules 15H/28O);
 US Chess does not prescribe these keystrokes. See [duty evidence](../research/notes/TD_DUTIES.md).
@@ -40,7 +41,9 @@ win/loss/draw entry. A compact visible keyboard legend makes the interaction dis
 Built: a status bar under the boards carries both. While a score box has focus
 it reads “Round 2 · Board 10 · Morgan vs Sam · entering White's result” (the
 event-wide grid adds the section name first; an earlier round says read-only
-instead of entering), and below it the legend.
+instead of entering), and below it the legend. The context line always has two
+lines' height: a long one wraps instead of being cut off, and the boards and
+the crosstable never move when the cursor enters or leaves the grid.
 
 ## Input and commitment
 
@@ -66,13 +69,16 @@ instead of entering), and below it the legend.
 | F2 on an existing result | Explicit correction | Opens the correction review beside the table, also in an earlier round; preserves history and reviews later-round dependencies. Double-click does not open it (a double-click recognizer would delay the single click that focuses the box) |
 | Space | Player details | Opens the details of the box's player |
 | Shift+F10 or Menu | Player menu | Opens the box's player menu (byes, move, withdraw) |
+| A result key on a box whose game already has a different result | Replace it | Applies at once, like any entry, and never silently: a notice names the board and the change (“Board 7 was 1–0, now ½–½”; the event-wide grid adds the section, an earlier or all-rounds view the round) with Undo. Undo there takes back that change only while it is still the latest. The same applies to an earlier round of a round robin or quad, which has no pairings depending on it; an earlier Swiss round opens the correction review instead |
+| 5, = or the decimal point (number row or numpad) | Not a result | Saves nothing, does not move; the legend leads with “Draw is D. 5, = and the decimal point are not result keys” |
 | Any other printable key | Not a result | Saves nothing, does not move; the legend says “Not a result key” and lists every result key |
-| Delete on selected saved result | Clear result deliberately | Restore unreported state with history/undo; review dependencies if necessary |
+| Delete or Backspace on a saved result | Clear result deliberately | Restore unreported state with history/undo and the same notice (“Board 7 was 1–0, now no result”); the cursor stays; review dependencies if necessary |
 | Undo | Revert latest applicable change | Restore both opponents and focus to that game; review historical dependencies |
 
 Show a persistent compact legend: **1 / W win · 0 / L loss · D draw · F no-show
 (F on both: double forfeit) · Enter skip · F2 correct · Space player details**.
-After a key that is not a result it adds **P playing · ? disputed · Delete clears**.
+After a key that is not a result it adds **P playing · ? disputed · Delete or
+Backspace clears**.
 While a forfeit board has focus the legend says what the keys do there, from that
 player's side: on the absent player "F on the other player makes it a double
 forfeit · 1 gives this player the win", on the winner "F here makes it a double
@@ -101,6 +107,12 @@ as a multi-keystroke sequence in the default immediate-entry grid. Do not advert
 both decimal typing and instant 0 commitment in the same input mode. Invalid command
 keys do not save or advance; show the short legend instead of interpreting them as
 an outcome. Keep bulk paste separate from individual keyboard events.
+
+The letter keys follow the keyboard layout: W is wherever that layout types W
+(AZERTY, Dvorak). A layout of another script (Cyrillic, Greek, Arabic, Thai)
+has no such letters, so there W, L, D, F, P, A, 1 and 0 are read by their
+position on a US keyboard. Punctuation and accented Latin letters never fall
+back to position, so the key Dvorak types a comma with does not score a win.
 
 Keyboard shortcuts apply only when a result cell owns focus. Typing in names,
 search, notes or another window must never enter a result. Ignore key-repeat events
@@ -136,9 +148,12 @@ Built: advance follows the board order captured before the save to the next boar
 still missing a result (in the event-wide grid that is the next board in the room,
 whichever section it belongs to). Past the last board it wraps to the first earlier
 board still missing one, such as a board skipped with Enter. When none remain,
-focus moves to an announced **All results entered** status beside the toolbar
-(**All matching boards entered** while a search narrows the boards), so the next
-key changes nothing.
+focus moves to an announced **All results entered** status in the status line
+under the boards (**All matching boards entered** while a search narrows the
+boards), so the next key changes nothing. The status takes the context line's
+place, and the toolbar keeps its controls, so nothing on the page moves as the
+last result goes in. With Missing only on, the emptied sheet's message is that
+status.
 
 Allow jumping by board number or player search and returning to the entry cursor.
 Out-of-order slips should not require scrolling through the whole tournament.
@@ -171,7 +186,11 @@ of that specific game. A simple same-round typo needs no multi-screen wizard.
 
 Past rounds open in browse mode. Choose Correct results for the displayed historical
 round, or Correct this result, to deliberately enable edits with a visible banner;
-leaving that round exits the mode. Impact review appears only for actual dependencies,
+leaving that round exits the mode. When only some of the rounds on screen are
+earlier ones (the event-wide grid with sections on different rounds), the banner
+names them (“Open round 2 is read-only”, “2 sections are read-only”) instead of
+calling the whole page read-only, and the other boards stay open for entry.
+Impact review appears only for actual dependencies,
 not for every navigation key. Restoring an interrupted current-round cursor shows
 both names, section, round and perspective again before result shortcuts resume.
 
@@ -183,8 +202,16 @@ single guessed decimal mistake. Historical previews never accept result shortcut
 A win/loss key records a played result by default. Forfeits have their own
 keystrokes because a no-show is the second most common outcome after a played
 game. After a forfeit loss, offer once to withdraw the absent player from the
-remaining rounds (K08); declining has no side effect, and the app never withdraws
-on its own. Requested/allocated byes, disputed and unfinished games use labelled
+remaining rounds (K08), in the same words as the player menu (“Withdraw after
+round 2”) and named “Withdraw <player>” in History; declining has no side
+effect, and the app never withdraws on its own. When a withdrawn player still
+sits at a board that has not started, a notice above the boards says so, and
+**Re-pair unstarted boards** (also in the toolbar of a US Chess Swiss section's
+latest round) opens beside the boards: boards with a result, a pairing
+assumption or a tick for “already started” are kept, the rest are paired again
+without withdrawn players, a reason is required and is printed with the round's
+pairings, and the panel then says what changed, with Undo and a reminder to
+reprint. Requested/allocated byes, disputed and unfinished games use labelled
 outcomes in an adjacent menu with a keyboard-accessible command. `0` is not “absent,” “no result,”
 or “withdrawn.” A disputed result has an unresolved status; any TD-authorized
 pairing assumption is stored separately from the actual result and rating record.
@@ -217,7 +244,7 @@ outcome through an explicit action, not overwrite a derived total accidentally.
 | Type W/0.5 into player-name/search fields | No results changed |
 | Double-game match with split wins | Two actual games retained; not converted to draws |
 | Keyboard/screen reader at 200% text | Names/perspective announced, focus visible, grid escapable |
-| TD reads “0.5” in the score column and types 0 then 5 | Named typo fixture: the legend and perspective line are tested against it; 0 records a loss and advances; 5 does nothing. One Undo restores both opponents of the changed game. Never infer a grouped mistake from valid keystrokes |
+| TD reads “0.5” in the score column and types 0 then 5 | Named typo fixture: the legend and perspective line are tested against it; 0 records a loss and advances; 5 saves nothing and the legend leads with “Draw is D”. One Undo restores both opponents of the changed game. Never infer a grouped mistake from valid keystrokes |
 | F on one player, then F on both players of the next board | Forfeit win and double forfeit recorded as unplayed; rating export excludes both; withdraw offer shown once |
 | Event-wide grid across five sections | Global board order; each section's standings update; no cross-section reciprocal error |
 | Entry abandoned mid-sequence, app restarted | Cursor position and Missing-only filter restored; no result invented (K14) |
@@ -240,7 +267,10 @@ lookup and the boards stay usable while it is open. It names the section,
 round, board, colors and game leg. Results are buttons named for the players
 ("Jamie Patel won", Draw), with forfeits and other outcomes behind one
 disclosure; the usual result keys also select them (F on a forfeit win picks
-Double forfeit), and Enter or Ctrl+Enter saves. A held key does not repeat, so
+Double forfeit), and Enter or Ctrl+Enter saves. The keys score the player whose
+box the review was opened from, as in the grid: opened from Black's box, the
+panel says “Keys score <Black>” and 1 picks Black's win. Opened from History,
+which has no box, they score White. A held key does not repeat, so
 holding Enter saves once and never presses Done. In the note Enter also saves and
 Shift+Enter starts a new line. Each player's score change shows before saving. Later paired rounds
 default to **Keep the pairings**; **Unpair from round N** removes that round and
@@ -270,3 +300,8 @@ Covered by `test/application/result_correction_test.dart`,
 `integration_test/result_correction_test.dart`. Traversal, completion, the
 single Tab stop, the legend and context line, F2, mixed quad/Swiss views and
 the panel's key handling are covered by `test/ui/result_entry_regression_test.dart`.
+The overwrite notice is covered by `test/ui/result_overwrite_notice_test.dart`,
+keyboard layouts and the draw-key hint by `test/ui/result_keys_layout_test.dart`,
+the panel's perspective by `test/ui/correction_perspective_test.dart`, the still
+page, empty states and banner wording by `test/ui/pairings_layout_test.dart`, and
+re-pairing by `test/ui/repair_unstarted_test.dart`.

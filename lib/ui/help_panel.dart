@@ -13,10 +13,12 @@ class HelpArticle {
   final List<(String, String)> sections;
 
   /// Every word of [query] appears somewhere in the article, in any order.
+  /// Directors still say USCF, so an article about US Chess answers to it.
   bool matches(String query) {
-    final text =
+    var text =
         '$title $summary ${sections.map((s) => '${s.$1} ${s.$2}').join(' ')}'
             .toLowerCase();
+    if (text.contains('us chess')) text = '$text uscf';
     return query
         .toLowerCase()
         .split(RegExp(r'\s+'))
@@ -146,7 +148,7 @@ const helpArticles = [
     [
       (
         'First import',
-        'On an empty event, choose Players → Add from URL; later, choose Player tools → Refresh from URL. Paste an HTTPS URL and choose Fetch players (or Fetch updates). Boylston accepts either an event page or its entry-list URL. For other clubs, paste the page containing one HTML player table with Name and Rating columns (USCF ID is optional); the generic importer reads that page without finding links to other pages. Review the rows, then confirm changes and save the source. Fetch ratings from USCF is checked by default; uncheck it to skip the optional rating review.',
+        'On an empty event, choose Players → Add from URL; later, choose Player tools → Refresh from URL. Paste an HTTPS URL and choose Fetch players (or Fetch updates). Boylston accepts either an event page or its entry-list URL. For other clubs, paste the page containing one HTML player table with Name and Rating columns (US Chess ID is optional); the generic importer reads that page without finding links to other pages. Review the rows, then confirm changes and save the source. Fetch ratings from US Chess is checked by default; uncheck it to skip the optional rating review.',
       ),
       (
         'Updating later',
@@ -154,14 +156,14 @@ const helpArticles = [
       ),
       (
         'What the website can tell us',
-        'After import, review proposed USCF ratings in the panel at the right and the player table. Changes over 50 points and unrated-to-rated changes are highlighted, and a USCF name that looks like a different person is flagged and left unticked. Confirm ticked ratings or choose Keep current ratings. Click a player to edit them; the review stays open. Missing IDs or published ratings leave current values intact. Website section and bye columns are retained in the source record; assign sections and requested byes explicitly in Meow-Chess.',
+        'After import, review proposed US Chess ratings in the panel at the right and the player table. Changes over 50 points and unrated-to-rated changes are highlighted, and a US Chess name that looks like a different person is flagged and left unticked. Confirm ticked ratings or choose Keep current ratings. Click a player to edit them; the review stays open. Missing IDs or published ratings leave current values intact. Website section and bye columns are retained in the source record; assign sections and requested byes explicitly in Meow-Chess.',
       ),
     ],
   ),
   HelpArticle(
     'ratings',
     'Refresh and verify US Chess ratings',
-    'Review USCF rating changes before applying them.',
+    'Review US Chess rating changes before applying them.',
     [
       (
         'Find or correct a US Chess ID',
@@ -169,11 +171,11 @@ const helpArticles = [
       ),
       (
         'Refresh one or everyone',
-        'Use Players → Refresh from USCF for the whole event, or the refresh arrow beside a player’s US Chess ID for one person. Check the returned official name, ID, category and supplement date. Confirm the rating changes you want in the player table, or keep current ratings. A failed lookup leaves local values intact.',
+        'Use Players → Refresh from US Chess for the whole event, or the refresh arrow beside a player’s US Chess ID for one person. Check the returned official name, ID, category and supplement date. Confirm the rating changes you want in the player table, or keep current ratings. A failed lookup leaves local values intact.',
       ),
       (
-        'Check USCF membership expiration',
-        'Open a player card to see the saved USCF membership expiration date. Choose Players → Refresh from USCF to check everyone directly with US Chess, including unrated players and players in posted sections. Expiration dates save automatically, even if you keep current ratings. Expired dates appear in red with an Expired label. Memberships expiring later this calendar month appear in yellow with Expires this month. Dates before the event ends also receive a warning. Open the player card for provider status and the check time. No date means unknown, not lifetime membership. Failed checks keep the previous observation; changing an ID clears it.',
+        'Check US Chess membership expiration',
+        'Open a player card to see the saved US Chess membership expiration date. Choose Players → Refresh from US Chess to check everyone directly with US Chess, including unrated players and players in posted sections. Expiration dates save automatically, even if you keep current ratings. Expired dates appear in red with an Expired label. Memberships expiring later this calendar month appear in yellow with Expires this month. Dates before the event ends also receive a warning. Open the player card for provider status and the check time. No date means unknown, not lifetime membership. Failed checks keep the previous observation; changing an ID clears it.',
       ),
       (
         'Monthly versus latest',

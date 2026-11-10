@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/infrastructure/dbf_export.dart';
-import 'rating_contract_test.dart' show exportFixture, readDbf;
+import '../dbf_reader.dart';
+import 'rating_contract_test.dart' show exportFixture;
 
 void main() {
   test(

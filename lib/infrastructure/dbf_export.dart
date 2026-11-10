@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 
+import '../domain/membership.dart';
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
 import 'publish_file.dart';
@@ -74,11 +75,6 @@ Uint8List encodeDbf(
   return bytes;
 }
 
-/// Sections that appear in the report: every section with entrants, except
-/// unrated ones (bughouse is never US Chess rated).
-List<Section> reportedSections(Event e) =>
-    e.sections.where((s) => s.players.isNotEmpty && !s.unrated).toList();
-
 String _list(Iterable<String> names) {
   final all = names.toList();
   return all.length <= 6
@@ -102,10 +98,6 @@ String? _textProblem(String value, int width) {
 String _day(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-/// Everything that would make the rating report wrong, unreadable, or likely
-/// to be refused. Each entry says what to change. Empty means the files can be
-/// created. Field rules follow the 2C format (research/local/uscf-fileformat.txt)
-/// and rating categories follow rule 5C (research/local/uscf-rules-2026.txt).
 enum ReportDestination { event, report, player, section, results }
 
 class ReportRepair {
@@ -125,24 +117,423 @@ class ReportIssue {
   final bool blocking;
 }
 
+/// One result cell before pairing numbers are assigned.
+class _Cell {
+  const _Cell(this.code, [this.opponent, this.white = false]);
+
+  /// The 2C result letter.
+  final String code;
+
+  /// The opponent's entry, for a played game only: forfeits, byes and
+  /// unplayed rounds name nobody.
+  final String? opponent;
+  final bool white;
+  bool get played => opponent != null;
+
+  /// How much a cell says, for merging a re-entry with the entry it
+  /// replaced: a played game, then a forfeit, then a bye, then nothing.
+  int get weight => played
+      ? 3
+      : code == 'X' || code == 'F'
+      ? 2
+      : code == 'U'
+      ? 0
+      : 1;
+}
+
+/// One detail record: a player's results in one reported section. A
+/// re-entry merged with the entry it replaced holds both in [entries].
+class _Row {
+  _Row(this.entries, this.player, this.cells);
+  final List<String> entries;
+  final Player player;
+  final List<_Cell> cells;
+  bool get played => cells.any((c) => c.played);
+}
+
+/// A section as the report sees it: the rows it sends and its result columns.
+class _Reported {
+  _Reported(this.section, this.rows, this.columns);
+  final Section section;
+  final List<_Row> rows;
+
+  /// Result columns per record: the section's rounds as reported.
+  final int columns;
+  bool get played => rows.any((r) => r.played);
+
+  /// Pairing numbers by entry: the row's place in the detail file.
+  late final Map<String, int> numbers = {
+    for (final (i, row) in rows.indexed)
+      for (final id in row.entries) id: i + 1,
+  };
+}
+
+/// What the report holds and what it leaves out, worked out once for the
+/// preflight, the files and the manifest.
+class _Report {
+  /// Sections in the files, in event order; their place is `S_SEC_NUM`.
+  final sections = <_Reported>[];
+
+  /// Sections with players that have no played game and none in progress.
+  final leftOut = <Section>[];
+
+  /// Findings that come from building the rows.
+  final issues = <ReportIssue>[];
+
+  /// Whether any rated section has a played game.
+  bool anyPlayed = false;
+}
+
+/// Rule 5C1: a knockout's tie-break games are played at another time control
+/// (rapid, blitz) or at time odds (armageddon), so they are not rated with
+/// the section's own games.
+bool _isTieBreak(Section s, Round r) =>
+    s.format == Format.knockout &&
+    r.games.isNotEmpty &&
+    r.games.every((g) => g.leg > (s.doubleGames ? 2 : 1));
+
+/// The games of one round that the report sends as separate rounds.
+List<int> _legs(Section s) => s.doubleGames ? const [1, 2] : const [1];
+
+/// The rounds of [s] the report sends, tie-break postings left out.
+Iterable<Round> _reportedRoundsOf(Section s) =>
+    s.rounds.where((r) => !_isTieBreak(s, r));
+
+/// Rounds as reported: each game of a double-game round is reported as its
+/// own round, as US Chess rates them (Rated Friday Night Blitz 202604280273:
+/// six double rounds were rated as 12 rounds). A knockout's tie-break
+/// postings are not reported.
+int reportedRounds(Section s) => _reportedRoundsOf(s).length * _legs(s).length;
+
+/// A section is over when its planned rounds have results. One whose players
+/// all moved on (a combined section) is over when its posted rounds are.
+bool _over(Section s) =>
+    s.players.isEmpty ? s.rounds.every((r) => r.complete) : s.finished;
+
+String _controlKey(Event e, Section s) {
+  final text = s.effectiveTimeControl(e);
+  try {
+    return TimeControl.parse(text).uscfText;
+  } on TournamentException {
+    return text.trim();
+  }
+}
+
+/// Builds the report rows. Every game is reported in the section where it
+/// was played, with two exceptions that keep one set of rounds: when all its
+/// players have since moved together into another section with the same
+/// time control (combined sections), the game is reported there in the same
+/// round; and a re-entry's rows merge with the entry it replaced. A player
+/// who left a section keeps a row there for the games played in it.
+///
+/// Built once per event: an Event never changes, and the Export page, the
+/// preflight, the files and the manifest all ask for the same one, several
+/// times per frame on a large event.
+_Report _report(Event e) {
+  if (identical(e, _lastReported)) return _lastReport!;
+  final report = _build(e);
+  _lastReported = e;
+  _lastReport = report;
+  return report;
+}
+
+Event? _lastReported;
+_Report? _lastReport;
+
+_Report _build(Event e) {
+  final report = _Report();
+  final players = {for (final p in e.players) p.id: p};
+  final rated = [
+    for (final s in e.sections)
+      if (!s.unrated) s,
+  ];
+  final current = {
+    for (final s in e.sections)
+      for (final id in s.players) id: s,
+  };
+  final moved = {
+    for (final t in e.transitions)
+      if ((t['effectiveRound'] as int) > 1)
+        for (final id in t['players'] as List) id as String,
+  };
+  final control = {for (final s in rated) s.id: _controlKey(e, s)};
+
+  bool names(Round r, Iterable<String> ids) =>
+      r.games.any((g) => ids.contains(g.white) || ids.contains(g.black)) ||
+      r.byes.any((b) => ids.contains(b.player));
+
+  // Where a game or bye of [ids] in round [r] of [s] is reported.
+  Section home(Section s, Round r, List<String> ids) {
+    final t = current[ids.first];
+    if (t == null || t.id == s.id || t.unrated) return s;
+    if (ids.any((id) => current[id]?.id != t.id || !moved.contains(id))) {
+      return s;
+    }
+    if (t.doubleGames != s.doubleGames ||
+        control[t.id] != control[s.id] ||
+        r.number > t.rounds.length) {
+      return s;
+    }
+    final there = t.rounds[r.number - 1];
+    return _isTieBreak(t, there) || names(there, ids) ? s : t;
+  }
+
+  // Section → entry → round/leg → cell, and the byes that score.
+  final cells = <String, Map<String, Map<String, _Cell>>>{};
+  final byes = <String, Map<String, Map<int, int>>>{};
+  final stray = <String>{};
+  for (final s in rated) {
+    final members = s.players.toSet();
+    void check(Round r, String id) {
+      if (!members.contains(id) &&
+          !moved.contains(id) &&
+          stray.add('${s.id}/${r.number}')) {
+        report.issues.add(
+          ReportIssue(
+            'Section ${s.name}, round ${r.number} includes a player who is no longer in the section.',
+            const [],
+          ),
+        );
+      }
+    }
+
+    for (final r in _reportedRoundsOf(s)) {
+      for (final g in r.games) {
+        check(r, g.white);
+        check(r, g.black);
+        if (!_legs(s).contains(g.leg)) continue;
+        final at = home(s, r, [g.white, g.black]).id;
+        void put(String id, bool white) {
+          final points = white ? g.outcome.whiteScore : g.outcome.blackScore;
+          ((cells[at] ??= {})[id] ??=
+              {})['${r.number}/${g.leg}'] = g.outcome.played
+              ? _Cell(
+                  switch (points) {
+                    2 => 'W',
+                    1 => 'D',
+                    _ => 'L',
+                  },
+                  white ? g.black : g.white,
+                  white,
+                )
+              : _Cell(points == 2 ? 'X' : 'F');
+        }
+
+        put(g.white, true);
+        put(g.black, false);
+      }
+      for (final b in r.byes) {
+        check(r, b.player);
+        // A zero-point bye is an unplayed round wherever it is reported.
+        if (b.points <= 0) continue;
+        final at = home(s, r, [b.player]).id;
+        ((byes[at] ??= {})[b.player] ??= {})[r.number] = b.points;
+      }
+    }
+  }
+
+  final candidates = <_Reported>[];
+  for (final s in rated) {
+    final mine = cells[s.id] ?? const {}, awards = byes[s.id] ?? const {};
+    // Current players in roster order, then those who played here and left.
+    final entries = [
+      ...s.players,
+      for (final id in {...mine.keys, ...awards.keys})
+        if (!s.players.contains(id) && players.containsKey(id)) id,
+    ];
+    if (entries.isEmpty) continue;
+    final legs = _legs(s);
+    final rounds = _reportedRoundsOf(s).toList();
+    List<_Cell> cellsOf(String id) {
+      final out = <_Cell>[];
+      for (final r in rounds) {
+        // A bye is split across the round's games: 4 → B B, 2 → H H.
+        var rest = awards[id]?[r.number];
+        for (final (i, leg) in legs.indexed) {
+          int? share;
+          if (rest != null) {
+            final left = legs.length - i;
+            share = ((rest + left - 1) ~/ left).clamp(0, 2);
+            rest -= share;
+          }
+          out.add(
+            mine[id]?['${r.number}/$leg'] ??
+                _Cell(switch (share) {
+                  2 => 'B',
+                  1 => 'H',
+                  _ => 'U',
+                }),
+          );
+        }
+      }
+      return out;
+    }
+
+    // Rule 28S: a re-entry with the same US Chess ID is the same member.
+    // Its row merges with the entry it replaced, each round keeping the
+    // game over the other entry's bye, unless both played a game in the
+    // same round; then both rows are sent.
+    //
+    // An entry is merged only into one already built, so every entry is
+    // built before its re-entries, whatever the roster order: the one it
+    // replaced may have left the section and so be listed after it. The rows
+    // then go back into roster order, each where its first entry stands.
+    final position = {for (final (i, id) in entries.indexed) id: i};
+    int depth(String id) {
+      var n = 0;
+      final seen = {id};
+      for (
+        var up = players[id]!.reentryOf;
+        up.isNotEmpty && seen.add(up) && players[up] != null;
+        up = players[up]!.reentryOf
+      ) {
+        n++;
+      }
+      return n;
+    }
+
+    final depths = {for (final id in entries) id: depth(id)};
+    final built = [...entries]
+      ..sort((a, b) {
+        final byDepth = depths[a]!.compareTo(depths[b]!);
+        return byDepth != 0 ? byDepth : position[a]!.compareTo(position[b]!);
+      });
+    final rows = <_Row>[];
+    final rowOf = <String, _Row>{};
+    for (final id in built) {
+      final p = players[id]!;
+      final row = _Row([id], p, cellsOf(id));
+      _Row? earlier;
+      final seen = {id};
+      for (
+        var up = p.reentryOf;
+        up.isNotEmpty && seen.add(up) && players[up] != null;
+        up = players[up]!.reentryOf
+      ) {
+        if (rowOf[up] != null &&
+            isMemberId(p.memberId) &&
+            players[up]!.memberId == p.memberId) {
+          earlier = rowOf[up];
+          break;
+        }
+      }
+      if (earlier == null) {
+        rows.add(row);
+        rowOf[id] = row;
+        continue;
+      }
+      final overlap = [
+        for (var i = 0; i < row.cells.length; i++)
+          if (row.cells[i].played && earlier.cells[i].played) i,
+      ];
+      if (overlap.isNotEmpty) {
+        rows.add(row);
+        rowOf[id] = row;
+        report.issues.add(
+          ReportIssue(
+            '${s.name}: ${p.name} re-entered while the earlier entry was still playing (both have results in the same round), so the report sends two records with US Chess ID ${p.memberId}. US Chess may ask about the duplicate; explain the re-entry when uploading.',
+            [ReportRepair('Edit ${p.name}', ReportDestination.player, id: id)],
+            blocking: false,
+          ),
+        );
+        continue;
+      }
+      final merged = _Row(
+        [...earlier.entries, id],
+        p,
+        [
+          for (var i = 0; i < row.cells.length; i++)
+            row.cells[i].weight >= earlier.cells[i].weight
+                ? row.cells[i]
+                : earlier.cells[i],
+        ],
+      );
+      rows[rows.indexOf(earlier)] = merged;
+      for (final entry in merged.entries) {
+        rowOf[entry] = merged;
+      }
+    }
+    int first(_Row row) =>
+        row.entries.map((id) => position[id]!).reduce((a, b) => a < b ? a : b);
+    rows.sort((a, b) => first(a).compareTo(first(b)));
+    candidates.add(_Reported(s, rows, rounds.length * legs.length));
+  }
+
+  report.anyPlayed = candidates.any((c) => c.played);
+  for (final c in candidates) {
+    final s = c.section;
+    // Nothing was played and nothing is waiting for a result: once another
+    // section has games, this one has nothing to send.
+    if (report.anyPlayed && !c.played && s.rounds.every((r) => r.complete)) {
+      report.leftOut.add(s);
+      report.issues.add(
+        ReportIssue(
+          'Section ${s.name} has no played games, so it is left out of the report.',
+          [
+            ReportRepair(
+              'Go to ${s.name} results',
+              ReportDestination.results,
+              id: s.id,
+            ),
+          ],
+          blocking: false,
+        ),
+      );
+      continue;
+    }
+    // A finished section's player who never played and has no US Chess ID
+    // (a no-show who never joined) has nothing to rate.
+    if (report.anyPlayed && _over(s)) {
+      final absent = [
+        for (final row in c.rows)
+          if (!row.played && !isMemberId(row.player.memberId)) row,
+      ];
+      if (absent.isNotEmpty) {
+        c.rows.removeWhere(absent.contains);
+        report.issues.add(
+          ReportIssue(
+            '${s.name}: ${_list(absent.map((r) => r.player.name))} played no games and ${absent.length == 1 ? 'has' : 'have'} no US Chess ID; left out of the report.',
+            [
+              for (final row in absent)
+                ReportRepair(
+                  'Edit ${row.player.name}',
+                  ReportDestination.player,
+                  id: row.entries.last,
+                  field: 'memberId',
+                ),
+            ],
+            blocking: false,
+          ),
+        );
+      }
+    }
+    report.sections.add(c);
+  }
+  return report;
+}
+
+/// Sections that appear in the report: every rated section with entrants
+/// (bughouse is never US Chess rated), except one with no played game once
+/// another section has games.
+List<Section> reportedSections(Event e) => [
+  for (final r in _report(e).sections) r.section,
+];
+
 /// The problems that stop a rating report from being created.
 List<String> ratingPreflight(Event e, {DateTime? today}) => [
   for (final issue in ratingIssues(e, today: today))
     if (issue.blocking) issue.message,
 ];
 
-/// Each section's time control, parsed once for the preflight and the files.
-List<(Section, TimeControl)> _sectionControls(Event e) => [
-  for (final s in reportedSections(e))
-    (s, TimeControl.parse(s.effectiveTimeControl(e))),
-];
+/// Everything that would make the rating report wrong, unreadable, or likely
+/// to be refused. Each entry says what to change. Without a blocking entry
+/// the files can be created. Field rules follow the 2C format
+/// (research/local/uscf-fileformat.txt) and rating categories follow rule 5C
+/// (research/local/uscf-rules-2026.txt).
+List<ReportIssue> ratingIssues(Event e, {DateTime? today}) =>
+    _issues(e, _report(e), today);
 
-/// Rounds as reported: each game of a double-game round is reported as its
-/// own round, as US Chess rates them (Rated Friday Night Blitz 202604280273:
-/// six double rounds were rated as 12 rounds).
-int reportedRounds(Section s) => s.rounds.length * (s.doubleGames ? 2 : 1);
-
-List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
+List<ReportIssue> _issues(Event e, _Report built, DateTime? today) {
   final issues = <ReportIssue>[];
   void add(
     String message, {
@@ -156,11 +547,16 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
     ReportDestination.report,
     field: field,
   );
-  ReportRepair player(Player p, String field) => ReportRepair(
-    'Edit ${p.name}',
+  ReportRepair player(_Row row, String field) => ReportRepair(
+    'Edit ${row.player.name}',
     ReportDestination.player,
-    id: p.id,
+    id: row.entries.last,
     field: field,
+  );
+  ReportRepair results(Section s) => ReportRepair(
+    'Go to ${s.name} results',
+    ReportDestination.results,
+    id: s.id,
   );
   void check(String? problem, String message, {ReportRepair? repair}) {
     if (problem != null) {
@@ -171,7 +567,8 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
     }
   }
 
-  final sections = reportedSections(e);
+  final reported = built.sections;
+  final sections = [for (final r in reported) r.section];
   if (e.practice) add('Practice copies cannot produce rating reports.');
   if (sections.isEmpty) add('Create sections and add players first.');
   for (final s in e.sections.where((s) => s.unrated && s.players.isNotEmpty)) {
@@ -184,17 +581,14 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
       blocking: false,
     );
   }
-  if (sections.any((s) => !s.finished)) {
+  // Before any game is played every section still has its rounds to play.
+  final waiting = built.anyPlayed
+      ? sections.where((s) => !_over(s)).toList()
+      : sections;
+  if (waiting.isNotEmpty) {
     add(
       'Complete all scheduled rounds and results.',
-      repairs: [
-        for (final s in sections.where((s) => !s.finished))
-          ReportRepair(
-            'Go to ${s.name} results',
-            ReportDestination.results,
-            id: s.id,
-          ),
-      ],
+      repairs: [for (final s in waiting) results(s)],
     );
   }
 
@@ -274,6 +668,14 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
           'Time control $control$where is not ratable: rule 5C needs at least five minutes in total, and five in the first control above G/10.',
           repairs: repairs,
         );
+      } else if (tc.reported.assumedDelay) {
+        // Rule 5E2: with no delay or increment stated the standard delay
+        // applies, and it counts toward the rating category.
+        add(
+          '${control.trim()}$where has no delay or increment stated; reported as ${tc.uscfText}, ${tc.category!.label}. Type d0 after the time control if the games had no delay.',
+          repairs: repairs,
+          blocking: false,
+        );
       }
       if (tc.uscfText.length > 40) {
         add(
@@ -318,12 +720,8 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
   if (sections.length > 99) {
     add('US Chess reports allow at most 99 sections.');
   }
-  if (e.transitions.any((t) => (t['effectiveRound'] as int) > 1)) {
-    add(
-      'Players moved between sections after play started; this cannot be reported yet.',
-    );
-  }
-  for (final s in sections) {
+  for (final r in reported) {
+    final s = r.section;
     check(
       _textProblem(s.name, 30),
       'Section name "${s.name}" {}. Rename the section.',
@@ -334,62 +732,75 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
         field: 'name',
       ),
     );
-    final members = s.players.toSet();
-    if (members.length < 2) {
+    if (r.rows.length < 2) {
       add('Section ${s.name} needs at least two players to be rated.');
     }
-    if (reportedRounds(s) > 32 || members.length > 9999) {
+    if (r.columns > 32 || r.rows.length > 9999) {
       add(
         'Section ${s.name} exceeds 32 reported rounds (double-game rounds count twice) or 9999 players.',
       );
     }
-    if (s.finished &&
-        !s.rounds.any((r) => r.games.any((g) => g.outcome.played))) {
-      add('Section ${s.name} has no played games to rate.');
-    }
-    for (final r in s.rounds) {
-      if (r.games.any(
-            (g) => !members.contains(g.white) || !members.contains(g.black),
-          ) ||
-          r.byes.any((b) => !members.contains(b.player))) {
+    for (final round in _reportedRoundsOf(s)) {
+      if (round.games.any((g) => !_legs(s).contains(g.leg))) {
         add(
-          'Section ${s.name}, round ${r.number} includes a player who is no longer in the section.',
+          'Section ${s.name}, round ${round.number} has a game without a leg.',
         );
       }
-      if (s.doubleGames && r.games.any((g) => g.leg != 1 && g.leg != 2)) {
-        add('Section ${s.name}, round ${r.number} has a game without a leg.');
-      }
+    }
+    // Rule 5C1: tie-break games are played at another time control or at
+    // time odds, so they cannot be rated with the section's own games.
+    final tieBreaks = [
+      for (final round in s.rounds)
+        if (_isTieBreak(s, round))
+          ...round.games.where((g) => g.outcome.played),
+    ];
+    if (tieBreaks.isNotEmpty) {
+      final kind = s.bracket['tiebreak'];
+      add(
+        '${s.name}: ${tieBreaks.length} ${kind is String && kind != 'none' ? '$kind ' : ''}tie-break ${tieBreaks.length == 1 ? 'game is' : 'games are'} not in the report. ${kind == 'armageddon' ? 'Armageddon games are played at time odds, which US Chess does not rate (rule 5C1).' : 'They were played at a different time control from the section\'s ${s.effectiveTimeControl(e)}, so US Chess rates them as their own section: add that section in the US Chess portal after uploading if they should be rated.'}',
+        repairs: [results(s)],
+        blocking: false,
+      );
     }
   }
+  issues.addAll(built.issues);
 
   // Players.
   final entrants = [
-    for (final s in sections)
-      for (final id in s.players) (s, e.player(id)),
+    for (final r in reported)
+      for (final row in r.rows) (r.section, row),
   ];
   final noId = [
-    for (final (_, p) in entrants)
-      if (!isMemberId(p.memberId)) p,
+    for (final (_, row) in entrants)
+      if (!isMemberId(row.player.memberId)) row,
   ];
   if (noId.isNotEmpty) {
     add(
-      'US Chess ID missing or invalid for ${_list(noId.map((p) => p.name))}. Every player needs one to be rated.',
-      repairs: [for (final p in noId) player(p, 'memberId')],
+      'US Chess ID missing or invalid for ${_list(noId.map((r) => r.player.name))}. Every player needs one to be rated.',
+      repairs: [for (final row in noId) player(row, 'memberId')],
     );
   }
-  final byId = <String, List<(Section, Player)>>{};
-  for (final entry in entrants) {
-    if (isMemberId(entry.$2.memberId)) {
-      byId.putIfAbsent(entry.$2.memberId, () => []).add(entry);
+  // One member ID belongs to one person: their entries in different
+  // sections and their re-entries (rule 28S) share it.
+  final byId = <String, List<_Row>>{};
+  for (final (_, row) in entrants) {
+    if (isMemberId(row.player.memberId)) {
+      byId.putIfAbsent(row.player.memberId, () => []).add(row);
     }
   }
   for (final MapEntry(key: id, value: same) in byId.entries) {
-    final people = same.map((x) => x.$2.personId ?? x.$2.id).toSet();
-    final sectionIds = same.map((x) => x.$1.id).toSet();
-    if (people.length > 1 || sectionIds.length < same.length) {
+    final people = {
+      for (final row in same)
+        () {
+          final root = reentryRoot(e, row.player);
+          final person = root.memberId == id ? root : row.player;
+          return person.personId ?? person.id;
+        }(),
+    };
+    if (people.length > 1) {
       add(
-        'US Chess ID $id is entered for ${_list(same.map((x) => x.$2.name))}.',
-        repairs: [for (final (_, p) in same) player(p, 'memberId')],
+        'US Chess ID $id is entered for ${_list(same.map((r) => r.player.name))}.',
+        repairs: [for (final row in same) player(row, 'memberId')],
       );
     }
   }
@@ -416,27 +827,39 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
           : '';
       add(
         '${s.name}: ${a.name} and ${b.name} play each other ${same.length} games${wholeSection ? ' and nobody else' : ''}. US Chess rates that as a match (FAQ: a two-player section with two or more games is a match). Mark it as a match when uploading. Both players need established ratings within 400 points, and the rating change is capped at 50 points per match, 100 in 180 days and 200 in three years.$eligibility',
-        repairs: [
-          ReportRepair(
-            'Go to ${s.name} results',
-            ReportDestination.results,
-            id: s.id,
-          ),
-        ],
+        repairs: [results(s)],
         blocking: false,
       );
     }
   }
   final noState = [
-    for (final (_, p) in entrants)
-      if (p.state.isEmpty) p,
+    for (final (_, row) in entrants)
+      if (row.player.state.isEmpty) row,
   ];
   if (noState.isNotEmpty) {
     // US Chess accepts a blank D_STATE and keeps the state on the member
     // record (accepted in six of seven Boylston reports), so this is advice.
     add(
-      'State missing for ${_list(noState.map((p) => p.name))}. US Chess accepts the report without it; to include it, look them up by US Chess ID, enter it in the player panel, or use the button below.',
-      repairs: [for (final p in noState) player(p, 'state')],
+      'State missing for ${_list(noState.map((r) => r.player.name))}. US Chess accepts the report without it; to include it, look them up by US Chess ID, enter it in the player panel, or use the button below.',
+      repairs: [for (final row in noState) player(row, 'state')],
+      blocking: false,
+    );
+  }
+  // MUIR checks every player's membership on the event's last day, so a
+  // lapse found by the last membership check is worth fixing first.
+  final lapsed = <String, _Row>{};
+  final lapses = <String>[];
+  for (final (_, row) in entrants) {
+    final lapse = membershipLapse(row.player, e.lastDate);
+    if (lapse != null &&
+        lapsed.putIfAbsent(row.player.memberId, () => row) == row) {
+      lapses.add('${row.player.name} ($lapse)');
+    }
+  }
+  if (lapses.isNotEmpty) {
+    add(
+      'Membership not current on ${e.lastDate} for ${_list(lapses)}, as of the last membership check. US Chess does not rate a section until every player\'s membership covers the event: renew it with US Chess, then check membership again.',
+      repairs: [for (final row in lapsed.values) player(row, 'memberId')],
       blocking: false,
     );
   }
@@ -459,75 +882,32 @@ List<ReportIssue> ratingIssues(Event e, {DateTime? today}) {
       blocking: false,
     );
   }
-  for (final (_, p) in entrants) {
+  for (final (_, row) in entrants) {
+    final p = row.player;
     if (p.state.length > 2) {
       add(
         '${p.name}: state "${p.state}" is longer than the two letters the report allows. Correct it in the player panel.',
-        repairs: [player(p, 'state')],
+        repairs: [player(row, 'state')],
       );
     }
     check(
       reportNameProblem(playerReportName(p)),
       '${p.name}: name {}. Set "Name on rating report" in the player panel.',
-      repair: player(p, 'reportName'),
+      repair: player(row, 'reportName'),
     );
   }
   return issues;
 }
 
-/// One player's result cells for a section, in reported-round order.
-List<String> _resultCells(Section s, String id, Map<String, int> pairs) {
-  String played(Game game) {
-    final white = game.white == id,
-        points = white ? game.outcome.whiteScore : game.outcome.blackScore;
-    return game.outcome.played
-        ? '${switch (points) {
-            2 => 'W',
-            1 => 'D',
-            _ => 'L',
-          }}${pairs[white ? game.black : game.white]}${white ? 'W' : 'B'}'
-        : '${points == 2 ? 'X' : 'F'}0';
-  }
-
-  String bye(int? points) => switch (points) {
-    2 => 'B0',
-    1 => 'H0',
-    _ => 'U0',
-  };
-  final cells = <String>[];
-  for (final r in s.rounds) {
-    final mine = r.games.where((g) => g.white == id || g.black == id);
-    final award = r.byes.where((b) => b.player == id).firstOrNull?.points;
-    if (!s.doubleGames) {
-      cells.add(mine.isEmpty ? bye(award) : played(mine.first));
-      continue;
-    }
-    // A double-game bye is split across its two legs: 4 → B0 B0, 2 → H0 H0.
-    final first = award == null ? null : ((award + 1) ~/ 2).clamp(0, 2);
-    for (final leg in [1, 2]) {
-      final game = mine.where((g) => g.leg == leg).firstOrNull;
-      cells.add(
-        game != null
-            ? played(game)
-            : bye(
-                award == null
-                    ? null
-                    : leg == 1
-                    ? first
-                    : award - first!,
-              ),
-      );
-    }
-  }
-  return cells;
-}
-
 Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
-  final issues = ratingPreflight(e, today: today);
+  final built = _report(e);
+  final issues = [
+    for (final issue in _issues(e, built, today))
+      if (issue.blocking) issue.message,
+  ];
   if (issues.isNotEmpty) throw TournamentException(issues.join('\n'));
   final begin = e.date.replaceAll('-', ''),
       end = e.lastDate.replaceAll('-', '');
-  final controls = _sectionControls(e);
   // Every field is character type, as in every report US Chess has accepted
   // from SwissSys (including the four dates the 2C text calls Date). Event
   // IDs stay blank, as SwissSys sends them, so nothing is mistaken for an
@@ -571,8 +951,8 @@ Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
   ];
   // One physical detail schema serves every section. SwissSys's supplied
   // mixed-section 2C files use the maximum count and U0 for unused columns.
-  final rounds = controls
-      .map((x) => reportedRounds(x.$1))
+  final rounds = built.sections
+      .map((r) => r.columns)
       .reduce((a, b) => a > b ? a : b);
   String column(int n) => 'D_RND${n.toString().padLeft(2, '0')}';
   final detailFields = [
@@ -587,9 +967,10 @@ Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
   ];
   final sectionRows = <Map<String, String>>[],
       detailRows = <Map<String, String>>[];
-  for (final (i, (s, tc)) in controls.indexed) {
+  for (final (i, r) in built.sections.indexed) {
+    final s = r.section;
+    final tc = TimeControl.parse(s.effectiveTimeControl(e));
     final number = '${i + 1}';
-    final pairs = {for (final (j, id) in s.players.indexed) id: j + 1};
     sectionRows.add({
       'S_SEC_NUM': number,
       'S_SEC_NAME': reportText(s.name)!,
@@ -602,8 +983,8 @@ Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
       // of rounds played, and chronological cells naming each opponent.
       // Double-game rounds are reported as two single-game Swiss rounds.
       'S_TRN_TYPE': hasFixedSchedule(s) && !s.doubleGames ? 'R' : 'S',
-      'S_TOT_RNDS': '${reportedRounds(s)}',
-      'S_LST_PAIR': '${s.players.length}',
+      'S_TOT_RNDS': '${r.columns}',
+      'S_LST_PAIR': '${r.rows.length}',
       'S_BEG_DATE': begin,
       'S_END_DATE': end,
       'S_SCH_LVL': e.level,
@@ -612,18 +993,23 @@ Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
       // The section's "FIDE Rated" box: US Chess forwards it to FIDE.
       'S_FIDE': s.fideRated ? 'Y' : 'N',
     });
-    for (final id in s.players) {
-      final player = e.player(id);
-      final cells = _resultCells(s, id, pairs);
+    for (final (j, row) in r.rows.indexed) {
+      final player = row.player;
       detailRows.add({
         'D_SEC_NUM': number,
-        'D_PAIR_NUM': '${pairs[id]}',
+        'D_PAIR_NUM': '${j + 1}',
         'D_MEM_ID': player.memberId,
         'D_NAME': playerReportName(player)!,
         'D_STATE': player.state,
         'D_RATING': '${player.rating}',
         for (var n = 1; n <= rounds; n++)
-          column(n): n <= cells.length ? cells[n - 1] : 'U0',
+          column(n): n <= row.cells.length
+              ? switch (row.cells[n - 1]) {
+                  final c when c.played =>
+                    '${c.code}${r.numbers[c.opponent]}${c.white ? 'W' : 'B'}',
+                  final c => '${c.code}0',
+                }
+              : 'U0',
       });
     }
   }
@@ -634,7 +1020,7 @@ Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
         'H_FORMAT': '2C',
         'H_PROGRAM': 'MEOW $appVersion',
         'H_NAME': reportText(e.name)!,
-        'H_TOT_SECT': '${controls.length}',
+        'H_TOT_SECT': '${built.sections.length}',
         'H_BEG_DATE': begin,
         'H_END_DATE': end,
         'H_AFF_ID': e.affiliateId,
@@ -655,7 +1041,11 @@ Map<String, Uint8List> ratingPackage(Event e, {DateTime? today}) {
 
 /// What the rating package contains, saved beside the DBFs by every export.
 Map<String, dynamic> ratingManifest(Event e, Map<String, List<int>> files) {
-  final controls = _sectionControls(e);
+  final built = _report(e);
+  final controls = [
+    for (final r in built.sections)
+      (r, TimeControl.parse(r.section.effectiveTimeControl(e))),
+  ];
   String? shared(String Function(TimeControl) value) {
     final all = controls.map((x) => value(x.$2)).toSet();
     return all.length == 1 ? all.single : null;
@@ -670,15 +1060,17 @@ Map<String, dynamic> ratingManifest(Event e, Map<String, List<int>> files) {
     'timeControl': shared((tc) => tc.uscfText),
     'online': e.online,
     'sections': [
-      for (final (section, tc) in controls)
+      for (final (r, tc) in controls)
         {
-          'name': section.name,
+          'name': r.section.name,
           'ratingSystem': tc.category!.reportSystemCode,
           'category': tc.category!.name,
           'timeControl': tc.uscfText,
-          'reportedRounds': reportedRounds(section),
+          'reportedRounds': r.columns,
         },
     ],
+    if (built.leftOut.isNotEmpty)
+      'sectionsLeftOut': [for (final s in built.leftOut) s.name],
     'files': files.map((k, v) => MapEntry(k, v.length)),
   };
 }

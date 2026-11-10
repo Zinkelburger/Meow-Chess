@@ -1,3 +1,4 @@
+import 'knockout.dart';
 import 'model.dart';
 import 'standings.dart';
 
@@ -37,6 +38,12 @@ import 'standings.dart';
 /// Team prizes (`kind: 'team'`) go to teams, not players: [allocatePrizes]
 /// leaves them out and `allocateTeamPrizes` (team_standings.dart) awards
 /// them from the team standings.
+///
+/// Prizes follow the prize standings, except where a format places its
+/// players another way: a knockout by its bracket (both losers of a round
+/// are level, and pool the places they cover), a ladder by its positions
+/// (never tied), and a bughouse section by partnership, each partnership
+/// winning one prize as a unit.
 enum PrizeKind {
   place('place', 'Place'),
   classRange('class', 'Class'),
@@ -99,6 +106,19 @@ class Prize {
       : trophy
       ? 'Trophy'
       : '';
+
+  /// The prize with its award named once: "1st trophy", and "Champion
+  /// trophy" for a prize already labelled that way.
+  String get awardTitle {
+    final word = award.toLowerCase();
+    return word.isEmpty ||
+            RegExp(
+              '\\b${RegExp.escape(word)}\\b',
+              caseSensitive: false,
+            ).hasMatch(title)
+        ? title
+        : '$title $word';
+  }
 
   factory Prize.fromJson(Json j) {
     int integer(String key) {
@@ -354,7 +374,9 @@ class PrizeLine {
     this.trophyWinner,
     this.note, {
     this.trophyNote = '',
+    Map<String, String> names = const {},
   }) : cash = Map.unmodifiable(cash),
+       names = Map.unmodifiable(names),
        pooledWith = List.unmodifiable(pooledWith);
   final Prize prize;
 
@@ -362,8 +384,13 @@ class PrizeLine {
   final int paidCents;
 
   /// Player ID → cents received: the whole amount for a clear winner; for
-  /// a tie, each sharer's full share of the pool this prize went into.
+  /// a tie, each sharer's full share of the pool this prize went into. A
+  /// bughouse partnership is one entry under its first-listed partner.
   final Map<String, int> cash;
+
+  /// How to print a winner who is not one player: the ID a partnership
+  /// appears under in [cash] or as [trophyWinner] → "Chen / Patel".
+  final Map<String, String> names;
 
   /// IDs of the other prizes pooled with this one (32B2); empty otherwise.
   final List<String> pooledWith;
@@ -383,22 +410,46 @@ class PrizeLine {
     'cash': cash,
     if (pooledWith.isNotEmpty) 'pooledWith': pooledWith,
     if (trophyWinner != null) 'trophy': trophyWinner,
+    if (names.isNotEmpty) 'partnerships': names,
     if (trophyNote.isNotEmpty) 'trophyNote': trophyNote,
     if (note.isNotEmpty) 'note': note,
   };
 }
 
-/// What one player takes home.
+/// What one player, or one bughouse partnership, takes home.
 class PlayerAward {
-  PlayerAward(this.player, this.points, this.cents, List<Prize> trophies)
-    : trophies = List.unmodifiable(trophies);
+  PlayerAward(
+    this.player,
+    this.points,
+    this.cents,
+    List<Prize> trophies, {
+    List<Player> partners = const [],
+    this.placing = '',
+  }) : trophies = List.unmodifiable(trophies),
+       partners = List.unmodifiable(partners);
   final Player player;
+
+  /// The rest of a bughouse partnership, which wins as one; empty otherwise.
+  final List<Player> partners;
   final int points, cents;
   final List<Prize> trophies;
+
+  /// The finish that earned it when that is not the score: a knockout's
+  /// bracket placing ("Runner-up") or a ladder position. Empty otherwise.
+  final String placing;
+
+  /// The winner as printed: the player, or "Chen / Patel".
+  String get name => [player, ...partners].map((p) => p.name).join(' / ');
+
+  /// The finish as printed beside the name: the placing, else the score.
+  String get standing => placing.isNotEmpty ? placing : scoreText(points);
+
   Json toJson() => {
     'playerId': player.id,
-    'name': player.name,
+    if (partners.isNotEmpty) 'partnerIds': [for (final p in partners) p.id],
+    'name': name,
     'points': points,
+    if (placing.isNotEmpty) 'placing': placing,
     'cents': cents,
     'trophies': [for (final t in trophies) t.title],
   };
@@ -438,13 +489,118 @@ class PrizeAllocation {
   };
 }
 
-/// Prize-eligible players in prize-standings order.
+/// Rules 32C4 and 32E: what each prize of a section pays when fewer players
+/// entered than its prizes were based on.
+class PrizePayout {
+  PrizePayout({
+    required this.entries,
+    required this.basedOn,
+    required this.halfMinimum,
+  });
+
+  /// The payout terms of [section]: its entries (house players excluded)
+  /// against its based-on number, and whether the event's announced funds
+  /// exceed $500 (32C4b).
+  factory PrizePayout.of(Event event, Section section) {
+    final table = PrizeTable.fromJson(section.prizes);
+    final fund = event.sections.fold(
+      0,
+      (sum, s) => sum + PrizeTable.fromJson(s.prizes).announcedCents,
+    );
+    return PrizePayout(
+      entries: section.players
+          .where((id) => !event.player(id).house)
+          .toSet()
+          .length,
+      basedOn: table.basedOn,
+      halfMinimum: fund > 50000,
+    );
+  }
+
+  final int entries, basedOn;
+
+  /// 32C4b: no prize pays less than half.
+  final bool halfMinimum;
+
+  bool get reduced => basedOn > 0 && entries < basedOn;
+
+  /// The proportion is below the 50% minimum, so every prize pays half.
+  bool get atMinimum => reduced && halfMinimum && entries * 2 < basedOn;
+
+  /// What [prize] pays: its exact share of the turnout, rounded up to the
+  /// cent so it is never below the proportion (32C4a), at least half when
+  /// the minimum applies, and in full when guaranteed (32E).
+  int cents(Prize prize) {
+    if (!reduced || prize.guaranteed) return prize.cents;
+    final share = (prize.cents * entries + basedOn - 1) ~/ basedOn;
+    final half = (prize.cents + 1) ~/ 2;
+    return halfMinimum && half > share ? half : share;
+  }
+
+  /// The proportion as a whole percentage, rounded down; 100 only when
+  /// every prize pays in full.
+  int get percent => !reduced
+      ? 100
+      : atMinimum
+      ? 50
+      : entries * 100 ~/ basedOn;
+
+  /// The proportion in words: `70%`, or `47/60 of its amount (78.33%)`
+  /// when it is not a whole percentage.
+  String get proportion {
+    if (atMinimum || entries * 100 % basedOn == 0) return '$percent%';
+    final hundredths = entries * 10000 ~/ basedOn;
+    return '$entries/$basedOn of its amount '
+        '(${hundredths ~/ 100}.${(hundredths % 100).toString().padLeft(2, '0')}%, '
+        'rounded up to the cent)';
+  }
+}
+
+/// One competitor for the prizes: a player, or a bughouse partnership,
+/// which wins and shares as one.
 class _Entrant {
-  _Entrant(this.standing);
-  final Standing standing;
-  Player get player => standing.player;
-  String get id => player.id;
-  int get points => standing.points;
+  _Entrant({
+    required this.players,
+    required this.points,
+    required this.level,
+    this.placing = '',
+    this.tiebreaks = const [],
+  });
+  final List<Player> players;
+  final int points;
+
+  /// Entrants on the same level are tied; a higher level finished ahead.
+  /// The score for most formats, the bracket placing for a knockout, the
+  /// place on the ladder for a ladder.
+  final int level;
+
+  /// The finish in words when it is not the score ("Semifinalist").
+  final String placing;
+  final List<TiebreakValue> tiebreaks;
+
+  String get id => players.first.id;
+  String get name => players.map((p) => p.name).join(' / ');
+  bool get house => players.every((p) => p.house);
+  bool get withdrawn => players.any((p) => p.withdrawn);
+  bool get computer => players.any((p) => p.computer);
+
+  /// The rating prize eligibility uses (28F): a partnership's is the
+  /// average of its rated partners, zero when neither is rated.
+  int get rating {
+    final rated = [
+      for (final p in players)
+        if (p.effectivePrizeRating > 0) p.effectivePrizeRating,
+    ];
+    return rated.isEmpty
+        ? 0
+        : rated.fold(0, (sum, r) => sum + r) ~/ rated.length;
+  }
+
+  /// The finish as printed beside the name: the score, or the placing.
+  String get standing => placing.isNotEmpty ? placing : scoreText(points);
+
+  /// The IDs of the prizes this entrant may win.
+  Set<String> can = const {};
   int cents = 0;
   final trophies = <Prize>[];
 }
@@ -460,39 +616,117 @@ class _Cash {
       remainderOf == null ? prize.title : 'remainder of ${prize.title}';
 }
 
+/// The tied players who can win exactly the same prizes. They are
+/// interchangeable for pooling, so a tie of any size is a handful of these.
+class _Alike {
+  _Alike(this.prizes) : _set = Set.identity()..addAll(prizes);
+  final List<_Cash> prizes;
+  final Set<_Cash> _set;
+  final members = <_Entrant>[];
+  bool wins(_Cash c) => _set.contains(c);
+
+  /// The largest of [among] a member could win with no tie (32B3).
+  int best(Iterable<_Cash> among) =>
+      among.where(wins).fold(0, (m, c) => c.cents > m ? c.cents : m);
+}
+
+/// The most sub-groups of a tie examined for a prize the rest cannot win
+/// (32B3). Ties with up to twelve kinds of eligibility are examined in full.
+const _maxCarveOuts = 4096;
+
+/// The competitors of [section] from the top, before eligibility: by prize
+/// standings, except that a knockout places by its bracket, a ladder by its
+/// positions, and a bughouse partnership competes as one.
+List<_Entrant> _competitors(Event event, Section section) {
+  // Trophies go by tie-breaks even when equal scores share a place (34A).
+  final rows = standings(event, section, forPrizes: true, byTiebreaks: true);
+  final byId = {for (final row in rows) row.player.id: row};
+  switch (section.format) {
+    case Format.knockout:
+      // Players level in the bracket (both semifinal losers, or everyone
+      // still in) are tied; the bracket has no tie-break between them.
+      return [
+        for (final (:playerId, :rank, :placing) in knockoutRanking(
+          event,
+          section,
+        ))
+          _Entrant(
+            players: [event.player(playerId)],
+            points: byId[playerId]?.points ?? 0,
+            level: -rank,
+            placing: placing,
+          ),
+      ];
+    case Format.ladder:
+      return [
+        for (final (i, id) in section.players.indexed)
+          _Entrant(
+            players: [event.player(id)],
+            points: byId[id]?.points ?? 0,
+            level: -i,
+            placing: '#${i + 1} on the ladder',
+          ),
+      ];
+    case Format.bughouse:
+      // Both partners carry the partnership's score; the first of them in
+      // the standings stands for the pair, listed in its announced order.
+      final placed = <String>{};
+      final pairs = <_Entrant>[];
+      for (final row in rows) {
+        if (placed.contains(row.player.id)) continue;
+        final pair =
+            section.partners
+                .where((pair) => pair.contains(row.player.id))
+                .firstOrNull ??
+            [row.player.id];
+        placed.addAll(pair);
+        pairs.add(
+          _Entrant(
+            players: [for (final id in pair) event.player(id)],
+            points: row.points,
+            level: row.points,
+            tiebreaks: row.tiebreaks,
+          ),
+        );
+      }
+      return pairs;
+    default:
+      return [
+        for (final row in rows)
+          _Entrant(
+            players: [row.player],
+            points: row.points,
+            level: row.points,
+            tiebreaks: row.tiebreaks,
+          ),
+      ];
+  }
+}
+
 /// Rules 32B–32G, 33C–33F: who wins what in [section].
+///
+/// Cash is allocated level by level from the top. Within a tie, players who
+/// can win the same prizes are grouped, the pool is the most valuable set of
+/// prizes the tie can hold at one each (a matching of prizes to groups), and
+/// the work grows with the number of prizes and groups, not with the number
+/// of ways to hand prizes out.
 PrizeAllocation allocatePrizes(Event event, Section section) {
   final table = PrizeTable.fromJson(section.prizes).individual;
   final notes = <String>[];
-  // Trophies go by tie-breaks even when equal scores share a place (34A).
-  final rows = standings(event, section, forPrizes: true, byTiebreaks: true);
-  final entries = section.players
-      .where((id) => !event.player(id).house)
-      .toSet()
-      .length;
+  final payout = PrizePayout.of(event, section);
+  final entries = payout.entries;
 
   // 32C4 / 32E: proportional payout, at least 50% when the whole event
   // announces more than $500; guaranteed prizes are never reduced.
-  var percent = 100;
-  final paid = <String, int>{};
-  if (table.basedOn > 0 && entries < table.basedOn) {
-    final eventFund = event.sections.fold(
-      0,
-      (sum, s) => sum + PrizeTable.fromJson(s.prizes).announcedCents,
-    );
-    final floor = eventFund > 50000 ? 50 : 0;
-    final proportion = entries * 100 ~/ table.basedOn;
-    percent = proportion < floor ? floor : proportion;
+  if (payout.reduced) {
     notes.add(
       'Prizes were based on ${table.basedOn} entries and $entries entered: '
-      'each prize pays $percent%'
-      '${proportion < floor ? ' (the 50% minimum, because the announced fund exceeds \$500)' : ''}'
+      'each prize pays ${payout.proportion}'
+      '${payout.atMinimum ? ' (the 50% minimum, because the announced fund exceeds \$500)' : ''}'
       '${table.list.any((p) => p.guaranteed && p.cents > 0) ? '; guaranteed prizes pay in full' : ''}.',
     );
   }
-  for (final p in table.list) {
-    paid[p.id] = p.guaranteed ? p.cents : (p.cents * percent / 100).round();
-  }
+  final paid = {for (final p in table.list) p.id: payout.cents(p)};
 
   if (table.isEmpty) {
     return PrizeAllocation(
@@ -501,9 +735,12 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
       awards: const [],
       explanations: const ['No prizes are announced for this section.'],
       entries: entries,
-      payoutPercent: percent,
+      payoutPercent: payout.percent,
     );
   }
+
+  final teams = section.format == Format.bughouse;
+  final several = teams ? 'partnerships' : 'players';
 
   // 32C5: an entry replaced by a re-entry competes only for the record.
   final superseded = {
@@ -511,29 +748,29 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
       if (p.reentryOf.isNotEmpty) p.reentryOf,
   };
   final entrants = <_Entrant>[];
-  for (final row in rows) {
-    final p = row.player;
-    if (p.house) continue;
-    if (superseded.contains(p.id)) {
+  for (final e in _competitors(event, section)) {
+    if (e.house) continue;
+    if (e.players.any((p) => superseded.contains(p.id))) {
       notes.add(
-        '${p.name} re-entered; the earlier entry wins no prize (32C5).',
+        '${e.name} re-entered; the earlier entry wins no prize (32C5).',
       );
       continue;
     }
-    if (p.withdrawn && !table.withdrawnEligible) {
-      notes.add('${p.name} withdrew and is not eligible for prizes (32C1).');
+    if (e.withdrawn && !table.withdrawnEligible) {
+      notes.add('${e.name} withdrew and is not eligible for prizes (32C1).');
       continue;
     }
-    entrants.add(_Entrant(row));
+    entrants.add(e);
   }
 
-  bool eligible(Player p, Prize prize) {
-    if (prize.eligible.isNotEmpty && !prize.eligible.contains(p.id)) {
+  bool qualifies(_Entrant e, Prize prize) {
+    if (prize.eligible.isNotEmpty &&
+        !e.players.any((p) => prize.eligible.contains(p.id))) {
       return false;
     }
     // Rule 36: computers only win prizes designated for computers.
-    if (p.computer != (prize.kind == PrizeKind.computer)) return false;
-    final rating = p.effectivePrizeRating;
+    if (e.computer != (prize.kind == PrizeKind.computer)) return false;
+    final rating = e.rating;
     // 33F: unrateds compete for place, points and unrated prizes only.
     if (rating == 0) {
       return const [
@@ -554,6 +791,14 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
       _ => true,
     };
   }
+
+  for (final e in entrants) {
+    e.can = {
+      for (final p in table.list)
+        if (qualifies(e, p)) p.id,
+    };
+  }
+  bool eligible(_Entrant e, Prize prize) => e.can.contains(prize.id);
 
   // 32B4: among equal amounts, place beats class, a higher class beats a
   // lower one, and a rating class beats juniors and seniors.
@@ -587,7 +832,7 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
   final ordered = [...table.list]..sort(comparePrizes);
   final rank = {for (final (i, p) in ordered.indexed) p.id: i};
 
-  // ---- Cash (32B, 34C): ties on points pool and split; never tie-breaks.
+  // ---- Cash (32B, 34C): ties pool and split; never tie-breaks.
   final available = <_Cash>[
     for (final p in table.list)
       if (p.cents > 0 && p.kind != PrizeKind.points) _Cash(p, paid[p.id]!),
@@ -604,61 +849,54 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
 
   /// 32B3 TD TIP: at most one prize per tied player, the largest each can
   /// take, chosen together so the pool is as large as the tie allows.
-  List<_Cash?> match(List<_Entrant> tied, List<_Cash> prizes) {
-    final options = [
-      for (final e in tied)
-        [
-          for (final c in prizes)
-            if (eligible(e.player, c.prize)) c,
-        ]..sort((a, b) => weight(b).compareTo(weight(a))),
-    ];
-    var best = <_Cash?>[for (final _ in tied) null];
-    var bestWeight = -1;
-    final taken = <_Cash>{};
-    final current = <_Cash?>[for (final _ in tied) null];
-    void search(int i, int total) {
-      if (i == tied.length) {
-        if (total > bestWeight) {
-          bestWeight = total;
-          best = [...current];
+  ///
+  /// The prizes a tie can hold at one per player form a matroid, so taking
+  /// them from the most valuable down, keeping each one that still fits,
+  /// gives the most valuable pool. A prize fits when some group that can win
+  /// it has a member to spare, after moving other prizes between groups.
+  List<_Cash> bestPool(List<_Alike> groups, List<_Cash> prizes) {
+    final order = [...prizes]..sort((a, b) => weight(b).compareTo(weight(a)));
+    final held = [for (final _ in groups) <_Cash>[]];
+    bool place(_Cash c, Set<int> tried) {
+      for (final (i, g) in groups.indexed) {
+        if (!g.wins(c) || !tried.add(i)) continue;
+        if (held[i].length < g.members.length) {
+          held[i].add(c);
+          return true;
         }
-        return;
+        // The group is full: one of its prizes may fit elsewhere.
+        for (final other in [...held[i]]) {
+          if (place(other, tried)) {
+            held[i]
+              ..remove(other)
+              ..add(c);
+            return true;
+          }
+        }
       }
-      // Upper bound: every remaining player takes their own best prize.
-      var bound = total;
-      for (var j = i; j < tied.length; j++) {
-        bound += options[j].isEmpty ? 0 : weight(options[j].first);
-      }
-      if (bound <= bestWeight) return;
-      for (final c in options[i]) {
-        if (taken.contains(c)) continue;
-        taken.add(c);
-        current[i] = c;
-        search(i + 1, total + weight(c));
-        taken.remove(c);
-      }
-      current[i] = null;
-      search(i + 1, total);
+      return false;
     }
 
-    search(0, 0);
-    return best;
+    return [
+      for (final c in order)
+        if (place(c, {})) c,
+    ];
   }
 
-  int bestAlone(_Entrant e, List<_Cash> prizes) => prizes
-      .where((c) => eligible(e.player, c.prize))
-      .fold(0, (m, c) => c.cents > m ? c.cents : m);
-
-  /// Splits [pool] equally among [tied], with nobody above the prize they
-  /// would win alone (32B3); any excess flows to the others, then back.
-  Map<String, int> divide(List<_Entrant> tied, int pool, List<_Cash> prizes) {
-    final caps = {for (final e in tied) e.id: bestAlone(e, prizes)};
+  /// Splits [pool] equally among [tied], with nobody above [cap], the prize
+  /// they would win alone (32B3); any excess flows to the others, then back.
+  Map<String, int> divide(
+    List<_Entrant> tied,
+    int pool,
+    int Function(_Entrant) cap,
+  ) {
+    final caps = {for (final e in tied) e.id: cap(e)};
     final out = <String, int>{};
     var remaining = pool;
     var open = tied.map((e) => e.id).toList();
     while (open.isNotEmpty && remaining > 0) {
       final share = remaining ~/ open.length;
-      final capped = open.where((id) => caps[id]! <= share).toList();
+      final capped = open.where((id) => caps[id]! <= share).toSet();
       if (capped.isEmpty) {
         var extra = remaining - share * open.length;
         for (final id in open) {
@@ -679,71 +917,110 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     return out;
   }
 
-  String names(Iterable<_Entrant> es) =>
-      es.map((e) => e.player.name).join(', ');
+  String names(Iterable<_Entrant> es) => es.map((e) => e.name).join(', ');
 
   final awarded = <_Cash>{};
   final pending = <_Cash>[];
 
-  /// Allocates among [tied] (equal points) from [prizes], recursively
-  /// carving out players who do better from prizes the rest cannot win.
+  /// Allocates among [tied] (one level) from [prizes], recursively carving
+  /// out players who do better from prizes the rest cannot win.
   void allocateTie(List<_Entrant> tied, List<_Cash> prizes) {
-    final contenders = tied
-        .where((e) => prizes.any((c) => eligible(e.player, c.prize)))
-        .toList();
+    // Group the tied players by the prizes they can win.
+    final alike = <String, _Alike>{};
+    final groupOf = <String, _Alike>{};
+    for (final e in tied) {
+      final mine = [
+        for (final c in prizes)
+          if (eligible(e, c.prize)) c,
+      ];
+      if (mine.isEmpty) continue;
+      final group = alike[mine.map((c) => c.prize.id).join('|')] ??= _Alike(
+        mine,
+      );
+      group.members.add(e);
+      groupOf[e.id] = group;
+    }
+    final contenders = tied.where((e) => groupOf.containsKey(e.id)).toList();
     if (contenders.isEmpty) return;
-    final matched = match(contenders, prizes);
-    final pool = matched.whereType<_Cash>().toList();
+    final groups = alike.values.toList();
+    final pool = bestPool(groups, prizes);
     final total = pool.fold(0, (sum, c) => sum + c.cents);
-    final full = divide(contenders, total, prizes);
+    final full = divide(contenders, total, (e) => groupOf[e.id]!.best(prizes));
 
     // 32B3: a sub-group takes only prizes the others are ineligible for
     // when every one of them does at least as well and someone does better.
-    if (contenders.length > 1) {
-      final signatures = <String, List<_Entrant>>{};
-      for (final e in contenders) {
-        final key = [
-          for (final c in prizes)
-            if (eligible(e.player, c.prize)) c.prize.id,
-        ].join('|');
-        (signatures[key] ??= []).add(e);
+    // Such a sub-group is made of whole groups, and it is exactly the
+    // groups that can win the prizes it takes, so the candidates are the
+    // unions of "who can win this prize" over the prizes.
+    if (groups.length > 1) {
+      final winners = <String, List<int>>{};
+      for (final c in prizes) {
+        final who = [
+          for (final (i, g) in groups.indexed)
+            if (g.wins(c)) i,
+        ];
+        if (who.isEmpty || who.length == groups.length) continue;
+        winners[who.join(',')] = who;
       }
-      final groups = signatures.values.toList();
+      final candidates = {...winners};
+      final queue = [...winners.values];
+      for (var at = 0; at < queue.length; at++) {
+        if (candidates.length >= _maxCarveOuts) break;
+        for (final who in winners.values) {
+          final union = {...queue[at], ...who}.toList()..sort();
+          if (union.length == groups.length) continue;
+          if (candidates.containsKey(union.join(','))) continue;
+          candidates[union.join(',')] = union;
+          queue.add(union);
+          if (candidates.length >= _maxCarveOuts) break;
+        }
+      }
+      // Examined in a fixed order (as binary numbers over the groups), so
+      // equally good sub-groups always resolve the same way.
+      int byNumber(List<int> a, List<int> b) {
+        for (var i = 1; i <= a.length && i <= b.length; i++) {
+          final c = a[a.length - i].compareTo(b[b.length - i]);
+          if (c != 0) return c;
+        }
+        return a.length.compareTo(b.length);
+      }
+
       List<_Entrant>? bestGroup;
       List<_Cash>? bestRestricted;
       var bestMin = -1;
-      if (groups.length > 1 && groups.length <= 12) {
-        for (var mask = 1; mask < (1 << groups.length) - 1; mask++) {
-          final g = <_Entrant>[
-            for (var i = 0; i < groups.length; i++)
-              if (mask & (1 << i) != 0) ...groups[i],
-          ];
-          final inG = g.map((e) => e.id).toSet();
-          final restricted = [
-            for (final c in prizes)
-              if (contenders.every(
-                (e) => inG.contains(e.id) || !eligible(e.player, c.prize),
-              ))
-                c,
-          ];
-          if (restricted.isEmpty) continue;
-          final sub = match(g, restricted).whereType<_Cash>().toList();
-          final subTotal = sub.fold(0, (sum, c) => sum + c.cents);
-          final split = divide(g, subTotal, restricted);
-          if (!g.every((e) => split[e.id]! >= full[e.id]!) ||
-              !g.any((e) => split[e.id]! > full[e.id]!)) {
-            continue;
-          }
-          final low = g.fold(
-            1 << 60,
-            (m, e) => split[e.id]! < m ? split[e.id]! : m,
-          );
-          if (low > bestMin ||
-              (low == bestMin && g.length < bestGroup!.length)) {
-            bestMin = low;
-            bestGroup = g;
-            bestRestricted = restricted;
-          }
+      for (final who in candidates.values.toList()..sort(byNumber)) {
+        final inside = who.toSet();
+        final part = [for (final i in who) groups[i]];
+        final g = [for (final a in part) ...a.members];
+        final restricted = [
+          for (final c in prizes)
+            if (!groups.indexed.any(
+              (entry) => !inside.contains(entry.$1) && entry.$2.wins(c),
+            ))
+              c,
+        ];
+        final sub = bestPool(part, restricted);
+        final subTotal = sub.fold(0, (sum, c) => sum + c.cents);
+        // Everyone at least level and someone ahead needs more money than
+        // the sub-group's shares of the whole pool.
+        if (subTotal <= g.fold(0, (sum, e) => sum + full[e.id]!)) continue;
+        final split = divide(
+          g,
+          subTotal,
+          (e) => groupOf[e.id]!.best(restricted),
+        );
+        if (!g.every((e) => split[e.id]! >= full[e.id]!) ||
+            !g.any((e) => split[e.id]! > full[e.id]!)) {
+          continue;
+        }
+        final low = g.fold(
+          1 << 30,
+          (m, e) => split[e.id]! < m ? split[e.id]! : m,
+        );
+        if (low > bestMin || (low == bestMin && g.length < bestGroup!.length)) {
+          bestMin = low;
+          bestGroup = g;
+          bestRestricted = restricted;
         }
       }
       if (bestGroup != null) {
@@ -753,7 +1030,8 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
           'others in the tie cannot win, so that money is taken out of the pool.',
         );
         allocateTie(bestGroup, bestRestricted);
-        final rest = contenders.where((e) => !bestGroup!.contains(e)).toList();
+        final chosen = bestGroup.map((e) => e.id).toSet();
+        final rest = contenders.where((e) => !chosen.contains(e.id)).toList();
         allocateTie(rest, prizes.where((c) => !awarded.contains(c)).toList());
         return;
       }
@@ -769,7 +1047,7 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
       e.cents += amount;
       cashLines[c.prize.id]![e.id] = amount;
       notes.add(
-        '${e.player.name} (${scoreText(e.points)}) wins ${c.title}: ${dollars(amount)}'
+        '${e.name} (${e.standing}) wins ${c.title}: ${dollars(amount)}'
         '${c.remainderOf != null ? ' (32C6 remainder)' : ''}.',
       );
     } else {
@@ -778,10 +1056,11 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
           ? '${pool.single.title} (${dollars(total)}) split'
           : '${pool.map((c) => c.title).join(' + ')}: '
                 '${pool.map((c) => dollars(c.cents)).join(' + ')} = ${dollars(total)} pooled';
+      final first = contenders.first;
       notes.add(
-        '${contenders.length} players tied at ${scoreText(contenders.first.points)} '
-        '(${names(contenders)}) for $sum, '
-        '${shares.length == 1 ? '${dollars(shares.single)} each' : contenders.map((e) => '${e.player.name} ${dollars(full[e.id]!)}').join(', ')}.',
+        '${first.placing.isNotEmpty ? '${names(contenders)} are level in the bracket (${first.placing})' : '${contenders.length} $several tied at ${scoreText(first.points)} (${names(contenders)})'} '
+        'for $sum, '
+        '${shares.length == 1 ? '${dollars(shares.single)} each' : contenders.map((e) => '${e.name} ${dollars(full[e.id]!)}').join(', ')}.',
       );
       // Every sharer appears under every pooled prize with their full share.
       for (final c in pool) {
@@ -798,42 +1077,57 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
         e.cents += full[e.id]!;
       }
     }
-    // 33F / 32C6: an unrated player's limit; the excess stays in the
-    // point group, else in the prize group for the next score group.
+    // 33F / 32C6: an unrated player's limit. The excess stays in the point
+    // group, with nobody lifted above the prize they would win alone
+    // (32B3); what is left stays in the prize group for the next level.
     if (table.unratedCapCents > 0) {
       for (final e in contenders) {
-        if (e.player.effectivePrizeRating != 0 ||
-            e.cents <= table.unratedCapCents) {
-          continue;
-        }
-        final excess = e.cents - table.unratedCapCents;
+        if (e.rating != 0 || e.cents <= table.unratedCapCents) continue;
+        var excess = e.cents - table.unratedCapCents;
+        final over = excess;
         e.cents = table.unratedCapCents;
         final source = pool.firstWhere(
           (c) => (cashLines[c.prize.id]![e.id] ?? 0) > 0,
           orElse: () => pool.first,
         );
-        final others = contenders
-            .where((o) => o != e && o.player.effectivePrizeRating != 0)
+        int room(_Entrant o) => groupOf[o.id]!.best(prizes) - o.cents;
+        var open = contenders
+            .where((o) => o != e && o.rating != 0 && room(o) > 0)
             .toList();
-        if (others.isNotEmpty) {
-          // Equal shares; the first `excess % others.length` get a cent more.
-          final each = excess ~/ others.length;
-          var leftover = excess % others.length;
-          for (final o in others) {
-            o.cents += each + (leftover-- > 0 ? 1 : 0);
+        while (open.isNotEmpty && excess > 0) {
+          // Equal shares; the first `excess % open.length` get a cent more.
+          final each = excess ~/ open.length;
+          final filled = open.where((o) => room(o) <= each).toList();
+          if (filled.isEmpty) {
+            var leftover = excess % open.length;
+            for (final o in open) {
+              o.cents += each + (leftover-- > 0 ? 1 : 0);
+            }
+            excess = 0;
+            break;
           }
-          notes.add(
-            '${e.player.name} is unrated and limited to ${dollars(table.unratedCapCents)}; '
-            'the remaining ${dollars(excess)} goes to the others in the tie (32C6).',
-          );
-        } else {
-          pending.add(_Cash(source.prize, excess, remainderOf: source.prize));
-          notes.add(
-            '${e.player.name} is unrated and limited to ${dollars(table.unratedCapCents)}; '
-            'the remaining ${dollars(excess)} of ${source.prize.title} goes to the next '
-            'eligible score group (32C6).',
-          );
+          for (final o in filled) {
+            excess -= room(o);
+            o.cents += room(o);
+          }
+          open = open.where((o) => !filled.contains(o)).toList();
         }
+        final limited =
+            '${e.name} is unrated and limited to ${dollars(table.unratedCapCents)}; ';
+        if (excess > 0) {
+          pending.add(_Cash(source.prize, excess, remainderOf: source.prize));
+        }
+        notes.add(
+          excess == 0
+              ? '${limited}the remaining ${dollars(over)} goes to the others in the tie (32C6).'
+              : excess == over
+              ? '${limited}the remaining ${dollars(excess)} of ${source.prize.title} goes to the next '
+                    'eligible score group (32C6).'
+              : '$limited${dollars(over - excess)} goes to the others in the tie, nobody '
+                    'above the prize they would win alone (32B3), and the remaining '
+                    '${dollars(excess)} of ${source.prize.title} goes to the next eligible '
+                    'score group (32C6).',
+        );
         for (final c in pool) {
           for (final o in contenders) {
             if (o.cents > 0) {
@@ -847,11 +1141,11 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     }
   }
 
-  // Score groups from the top; the pool of a group never reaches below it.
+  // Levels from the top; the pool of a level never reaches below it.
   var i = 0;
   while (i < entrants.length) {
     var j = i;
-    while (j < entrants.length && entrants[j].points == entrants[i].points) {
+    while (j < entrants.length && entrants[j].level == entrants[i].level) {
       j++;
     }
     final tied = entrants.sublist(i, j);
@@ -860,6 +1154,7 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
         if (!awarded.contains(c)) c,
       ...pending.where((c) => !awarded.contains(c)),
     ];
+    if (open.isEmpty) break;
     allocateTie(tied, open);
     i = j;
   }
@@ -871,14 +1166,14 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
   ]..sort((a, b) => b.points.compareTo(a.points));
   for (final e in entrants) {
     final prize = pointPrizes
-        .where((p) => e.points >= p.points && eligible(e.player, p))
+        .where((p) => e.points >= p.points && eligible(e, p))
         .firstOrNull;
     if (prize == null) continue;
     final amount = paid[prize.id]!;
     if (amount <= e.cents) continue;
     if (e.cents > 0) {
       notes.add(
-        '${e.player.name} takes the ${prize.title} prize (${dollars(amount)}) '
+        '${e.name} takes the ${prize.title} prize (${dollars(amount)}) '
         'instead of ${dollars(e.cents)} from the pooled prizes (32B1).',
       );
       for (final line in cashLines.values) {
@@ -886,7 +1181,7 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
       }
     } else {
       notes.add(
-        '${e.player.name} (${scoreText(e.points)}) wins ${prize.title}: ${dollars(amount)}.',
+        '${e.name} (${scoreText(e.points)}) wins ${prize.title}: ${dollars(amount)}.',
       );
     }
     e.cents = amount;
@@ -894,52 +1189,67 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
   }
 
   // ---- Trophies (32F, 33D1, 33D2): one each, by standings order, the
-  // highest-ranked trophy the player qualifies for.
-  final trophies = [
-    for (final p in ordered)
-      if (p.trophy) p,
-  ];
+  // highest-ranked trophy the player qualifies for. 33D1a: the award with
+  // the larger cash component ranks higher; between equal amounts, place
+  // before class and a higher class before a lower one.
+  final trophies =
+      [
+        for (final p in ordered)
+          if (p.trophy) p,
+      ]..sort((a, b) {
+        final cash = paid[b.id]!.compareTo(paid[a.id]!);
+        return cash != 0 ? cash : rank[a.id]!.compareTo(rank[b.id]!);
+      });
   final trophyWinner = <String, String>{}, trophyNotes = <String, String>{};
   for (final (i, e) in entrants.indexed) {
     final prize = trophies
-        .where((p) => !trophyWinner.containsKey(p.id) && eligible(e.player, p))
+        .where((p) => !trophyWinner.containsKey(p.id) && eligible(e, p))
         .firstOrNull;
     if (prize == null) continue;
     trophyWinner[prize.id] = e.id;
     e.trophies.add(prize);
-    // Players tied on points who could have taken it rank lower; the first
-    // of them is the one tie-breaks had to separate.
+    // Entrants on the same level who could have taken it rank lower; the
+    // first of them is the one tie-breaks had to separate.
     final rivals = [
       for (final o in entrants.skip(i + 1))
-        if (o.points == e.points && eligible(o.player, prize)) o,
+        if (o.level == e.level && eligible(o, prize)) o,
     ];
-    final award = prize.award.toLowerCase();
     if (rivals.isEmpty) {
-      notes.add('${e.player.name} takes the ${prize.title} $award.');
+      notes.add('${e.name} takes the ${prize.awardTitle}.');
       continue;
     }
     final next = rivals.first;
     final decided = [
-      for (final (k, mine) in e.standing.tiebreaks.indexed)
-        if (k < next.standing.tiebreaks.length &&
-            mine.value != next.standing.tiebreaks[k].value)
-          (mine, next.standing.tiebreaks[k]),
+      for (final (k, mine) in e.tiebreaks.indexed)
+        if (k < next.tiebreaks.length && mine.value != next.tiebreaks[k].value)
+          (mine, next.tiebreaks[k]),
     ].firstOrNull;
-    final tied = 'Tied on ${scoreText(e.points)} with ${names(rivals)}';
-    trophyNotes[prize.id] = decided == null
+    final tied = e.placing.isNotEmpty
+        ? 'Level in the bracket (${e.placing}) with ${names(rivals)}'
+        : 'Tied on ${scoreText(e.points)} with ${names(rivals)}';
+    trophyNotes[prize.id] = e.tiebreaks.isEmpty
+        ? e.placing.isNotEmpty
+              ? '$tied, and the bracket does not rank them: decide by lot or a play-off.'
+              : '$tied, and the section uses no tie-breaks: decide by lot or a play-off.'
+        : decided == null
         ? rivals.length == 1
               ? '$tied and equal on every tie-break: decide by lot.'
-              : '$tied; equal with ${next.player.name} on every tie-break: '
+              : '$tied; equal with ${next.name} on every tie-break: '
                     'decide by lot.'
-        : '$tied; ahead of ${next.player.name} on ${decided.$1.method.label}, '
+        : '$tied; ahead of ${next.name} on ${decided.$1.method.label}, '
               '${decided.$1.text} to ${decided.$2.text}.';
     notes.add(
-      '${e.player.name} takes the ${prize.title} $award on tie-breaks. '
+      '${e.name} takes the ${prize.awardTitle}'
+      '${e.tiebreaks.isEmpty ? '' : ' on tie-breaks'}. '
       '${trophyNotes[prize.id]}',
     );
   }
 
   // ---- Lines and awards.
+  final unitNames = {
+    for (final e in entrants)
+      if (e.players.length > 1) e.id: e.name,
+  };
   final lines = <PrizeLine>[];
   for (final p in table.list) {
     final cash = cashLines[p.id]!;
@@ -951,7 +1261,7 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     } else if (cash.isEmpty &&
         p.cents > 0 &&
         (!p.trophy || trophyWinner[p.id] == null)) {
-      note = entrants.any((e) => eligible(e.player, p))
+      note = entrants.any((e) => eligible(e, p))
           ? 'Not awarded'
           : 'No eligible player (32C3)';
     } else if (cash.isEmpty && p.trophy && trophyWinner[p.id] == null) {
@@ -966,12 +1276,16 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
         trophyWinner[p.id],
         note,
         trophyNote: trophyNotes[p.id] ?? '',
+        names: {
+          for (final id in [...cash.keys, ?trophyWinner[p.id]])
+            id: ?unitNames[id],
+        },
       ),
     );
   }
   for (final p in table.list) {
     if (p.cents > 0 && p.kind != PrizeKind.points && cashLines[p.id]!.isEmpty) {
-      final why = entrants.any((e) => eligible(e.player, p))
+      final why = entrants.any((e) => eligible(e, p))
           ? 'every eligible player already holds a larger prize'
           : 'no eligible player finished (32C3)';
       notes.add('${p.title} (${dollars(paid[p.id]!)}) is not awarded: $why.');
@@ -980,7 +1294,14 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
   final awards = [
     for (final e in entrants)
       if (e.cents > 0 || e.trophies.isNotEmpty)
-        PlayerAward(e.player, e.points, e.cents, e.trophies),
+        PlayerAward(
+          e.players.first,
+          e.points,
+          e.cents,
+          e.trophies,
+          partners: e.players.skip(1).toList(),
+          placing: e.placing,
+        ),
   ];
   return PrizeAllocation(
     table: table,
@@ -988,6 +1309,6 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     awards: awards,
     explanations: notes,
     entries: entries,
-    payoutPercent: percent,
+    payoutPercent: payout.percent,
   );
 }

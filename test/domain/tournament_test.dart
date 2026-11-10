@@ -147,7 +147,20 @@ void main() {
     final round = c.event!.sections.single.rounds.single;
     expect(round.byes.firstWhere((b) => b.player == 'p0').points, 1);
     expect(round.games.any((g) => g.white == 'p0' || g.black == 'p0'), false);
-    expect(() => c.reserveBye('p0', 1, 0), throwsA(isA<TournamentException>()));
+    // A posted round's bye can still change between zero and half a point;
+    // a round the player played cannot take a bye.
+    c.reserveBye('p0', 1, 0);
+    expect(
+      c.event!.sections.single.rounds.single.byes
+          .firstWhere((b) => b.player == 'p0')
+          .points,
+      0,
+    );
+    final playing = round.games.first.white;
+    expect(
+      () => c.reserveBye(playing, 1, 1),
+      throwsA(isA<TournamentException>()),
+    );
   });
   test(
     'one undo per independently committed result; practice stays practice',

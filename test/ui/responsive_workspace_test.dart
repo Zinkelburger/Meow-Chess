@@ -193,7 +193,7 @@ void main() {
           case 'keyboard help':
             FocusManager.instance.primaryFocus?.unfocus();
             await tester.pumpAndSettle();
-            await click(find.byTooltip('Keyboard shortcuts (F1)'));
+            await click(find.byTooltip('Keyboard shortcuts (Shift+F1)'));
             await tester.sendKeyEvent(LogicalKeyboardKey.escape);
             await tester.pumpAndSettle();
             expect(find.text('Keyboard shortcuts'), findsNothing);

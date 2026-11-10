@@ -257,7 +257,14 @@ List<TeamStanding> teamStandings(
 }) {
   final settings = awards ?? TeamAwards.of(section);
   if (settings == null) return const [];
-  final rows = standings(event, section);
+  // A team's counting players are its best by score and then by the
+  // section's tie-breaks, and Rollins places follow the same order (31A1:
+  // "the normal rules and announced tie-breaks"), whether or not the event
+  // shows its standings ranked by tie-breaks.
+  final rows = rankStandings(
+    standings(event, section, byTiebreaks: true),
+    tiebreaks: true,
+  );
   final field = rows.length;
   final values = {
     for (final r in standings(event, section, tiebreaks: teamTiebreakMethods))
@@ -286,8 +293,8 @@ List<TeamStanding> teamStandings(
           row,
           switch (settings.method) {
             TeamScoring.topN => row.points,
-            // 31A1: overall place counts down from the field size; tied
-            // players share a place and so share the points.
+            // 31A1: overall place counts down from the field size; players
+            // equal on every tie-break share a place and so the points.
             TeamScoring.rollins => field - row.rank,
           },
           i < settings.counting,
@@ -472,11 +479,8 @@ TeamPrizeAllocation allocateTeamPrizes(Event event, Section section) {
       ],
     );
   }
-  final percent = allocatePrizes(event, section).payoutPercent;
-  final paid = {
-    for (final p in prizes)
-      p.id: p.guaranteed ? p.cents : (p.cents * percent / 100).round(),
-  };
+  final payout = PrizePayout.of(event, section);
+  final paid = {for (final p in prizes) p.id: payout.cents(p)};
   final table = teamStandings(event, section, awards: awards);
   final teams = table.where((t) => t.eligible).toList();
   final notes = <String>[
@@ -534,12 +538,13 @@ TeamPrizeAllocation allocateTeamPrizes(Event event, Section section) {
     i = j;
   }
 
-  // Trophies: one per team, in place order (12.3.3 breaks the ties).
+  // Trophies: each to the team in the prize's place (12.3.3 breaks the
+  // ties), one per team.
   final trophy = <String, String>{};
-  var next = 0;
   for (final p in prizes.where((p) => p.trophy)) {
-    if (next >= teams.length) break;
-    final t = teams[next++];
+    if (p.place > teams.length) continue;
+    final t = teams[p.place - 1];
+    if (trophy.containsValue(t.team)) continue;
     trophy[p.id] = t.team;
     final tied = teams.any((o) => o != t && o.score == t.score);
     notes.add(

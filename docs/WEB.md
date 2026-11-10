@@ -26,6 +26,34 @@ the built files, and nothing runs on a server except one small fetch function.
 | Web roster import, US Chess rating lookups | The same, through the site's fetch function (below). |
 | Several windows | One tab at a time: a second tab says Meow-Chess is open elsewhere, because two tabs would overwrite each other's copy of an event. |
 
+### What keeps an event, and what loses it
+
+An event in the browser lives in that browser's storage for this site and
+nowhere else. **Download a copy** (start screen, or Backups) is the safeguard:
+do it after each round, as the status bar says.
+
+- **A private or incognito window** keeps events only until it closes. Then
+  they are gone, with no warning from the browser.
+- **Clearing site data, cookies or history "for all time"**, or a cleaner tool
+  that does it, deletes every event stored here.
+- **Safari** deletes a site's stored data after seven days without a visit,
+  unless the browser has granted the site persistent storage. Meow-Chess asks
+  for that at start-up; a browser may refuse without saying so. Other browsers
+  may also evict a site that was not granted persistence when the disk is
+  nearly full.
+- **Another browser, profile or computer** has its own storage: an event made
+  in one is not in the other. Carry it across with Download and Upload event.
+- **The page needs the network to load.** Events already stored are untouched
+  by a lost connection, but reloading the page without one may not bring the
+  app back until the connection returns.
+
+Each save is written to that storage a few milliseconds after it is made, and
+finished at once when the page is hidden or left. If the tab is closed in the
+instant a save is still on its way, the browser asks whether to leave.
+
+Deleting an event from the start screen asks in its own row (**Delete** or
+**Keep**), not in a window over the list.
+
 Printing uses the browser's print dialog. Pairing runs on the page's own thread,
 since browsers have no isolates; a large section can pause the page briefly.
 

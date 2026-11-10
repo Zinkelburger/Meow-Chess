@@ -284,23 +284,37 @@ void main() {
 
   group('31A1 Rollins scoring', () {
     test('each player earns the field size minus their place', () {
-      // Places shared on points (no tie-breaks): A, J 1st; B, C 3rd;
-      // E, I 5th; F, H 7th; D, G 9th. Ten players.
-      final e = teamEvent(
-        twoSchools,
-        schools,
-        useTiebreaks: false,
-        awards: const TeamAwards(counting: 3, method: TeamScoring.rollins),
-      );
-      final rows = teamStandings(e, e.sections.single);
+      // Places follow the announced tie-breaks, so only players equal on
+      // every one of them share a place. Ten players.
+      List<TeamStanding> rollins({required bool useTiebreaks}) {
+        final e = teamEvent(
+          twoSchools,
+          schools,
+          useTiebreaks: useTiebreaks,
+          awards: const TeamAwards(counting: 3, method: TeamScoring.rollins),
+        );
+        return teamStandings(e, e.sections.single);
+      }
+
+      final rows = rollins(useTiebreaks: false);
       final lincoln = team(rows, 'Lincoln');
-      expect(lincoln.counting.map((m) => m.points), [9, 7, 7]);
-      expect(lincoln.score, 23);
-      expect(lincoln.scoreText, '23');
+      expect(lincoln.counting.map((m) => m.points), [8, 7, 6]);
+      expect(lincoln.score, 21);
+      expect(lincoln.scoreText, '21');
       final grant = team(rows, 'Grant');
-      expect(grant.counting.map((m) => m.points), [9, 5, 3]);
-      expect(grant.score, 17);
+      expect(grant.counting.map((m) => m.points), [9, 4, 3]);
+      expect(grant.score, 16);
       expect(rows.first.team, 'Lincoln');
+      // Showing the standings ranked by tie-breaks changes nothing.
+      final ranked = rollins(useTiebreaks: true);
+      expect(
+        [for (final t in ranked) (t.team, t.score)],
+        [for (final t in rows) (t.team, t.score)],
+      );
+      expect(
+        [for (final m in team(ranked, 'Lincoln').counting) m.player.id],
+        [for (final m in lincoln.counting) m.player.id],
+      );
     });
   });
 

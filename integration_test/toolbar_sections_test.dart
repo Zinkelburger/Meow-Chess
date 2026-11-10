@@ -58,7 +58,7 @@ void main() {
       image.dispose();
     }
 
-    expect(find.text('USCF expires'), findsOneWidget);
+    expect(find.text('US Chess expires'), findsOneWidget);
     expect(find.text('R1'), findsNothing);
     expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
     expect(find.byKey(const ValueKey('refresh-uscf')), findsOneWidget);
@@ -95,7 +95,7 @@ void main() {
       lessThan(tester.getCenter(find.byKey(const ValueKey('section-tabs'))).dy),
     );
     expect(
-      tester.getCenter(find.byTooltip('Help articles')).dy,
+      tester.getCenter(find.byTooltip('Help (F1)')).dy,
       lessThan(tester.getCenter(find.byKey(const ValueKey('section-tabs'))).dy),
     );
     await capture('toolbar-sections-small');
@@ -108,10 +108,12 @@ void main() {
     await capture('toolbar-section-editor');
     // The announcement band and the four rule groups below the format row.
     await tester.drag(
-      find.descendant(
-        of: find.byKey(const ValueKey('new-section-panel')),
-        matching: find.byType(Scrollable),
-      ).first,
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('new-section-panel')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
       const Offset(0, -330),
     );
     await tester.pumpAndSettle();
@@ -145,7 +147,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('R1'), findsOneWidget);
-    expect(find.text('USCF expires'), findsNothing);
+    expect(find.text('US Chess expires'), findsNothing);
     expect(find.byKey(const ValueKey('player-tools')), findsNothing);
     await capture('workflow-crosstable-small');
     await tester.binding.setSurfaceSize(const Size(1440, 900));

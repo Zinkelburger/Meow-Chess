@@ -37,6 +37,7 @@ import 'pane_controls.dart';
 import 'new_section_panel.dart';
 import 'formats/knockout_view.dart';
 import 'team_standings_view.dart';
+import 'workspace_status.dart' show showUndoNotice;
 
 class PlayersView extends StatefulWidget {
   const PlayersView({
@@ -95,7 +96,9 @@ class _PlayersViewState extends State<PlayersView> {
     doneTitle = title;
     doneMessage = message;
     doneHead = c.graph.head;
-    showSide(_Side.done);
+    // A card kept open by an edit it cannot save keeps the column; the
+    // change is confirmed in the window's notice instead.
+    if (!showSide(_Side.done)) showUndoNotice(context, c, message);
   }
 
   void imported(String summary) => showDone('Import saved', summary);
@@ -176,10 +179,45 @@ class _PlayersViewState extends State<PlayersView> {
   String? activeResult;
   bool enteringResult = false;
 
+  /// A score cell's focus. Cells stay out of the Tab order until
+  /// [markEntryCell] picks the one Tab stops at.
   FocusNode standingFocus(Game g, String player) => resultFocus.putIfAbsent(
     '${g.id}-$player',
-    () => FocusNode(debugLabel: 'standing-${g.id}-$player'),
+    () =>
+        FocusNode(debugLabel: 'standing-${g.id}-$player', skipTraversal: true),
   );
+
+  bool entryCellPending = false;
+
+  /// Makes the crosstable one Tab stop: Tab enters at the active cell, or
+  /// the first one missing a result, and every other cell is reached with
+  /// the arrows. Only a cell that is built can take focus, so the choice is
+  /// made among those once the frame has laid the rows out.
+  void markEntryCell() {
+    if (entryCellPending || !widget.standingsOnly) return;
+    entryCellPending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      entryCellPending = false;
+      if (!mounted) return;
+      final cells = [
+        for (final p in order)
+          for (final g in cellGames[p.id] ?? const <Game>[])
+            (
+              key: '${g.id}-${p.id}',
+              node: standingFocus(g, p.id),
+              missing: !g.outcome.resolved,
+            ),
+      ];
+      final built = cells.where((x) => x.node.context != null);
+      final entry =
+          built.where((x) => x.key == activeResult).firstOrNull ??
+          built.where((x) => x.missing).firstOrNull ??
+          built.firstOrNull;
+      for (final x in cells) {
+        x.node.skipTraversal = x.key != entry?.key;
+      }
+    });
+  }
 
   void focusStanding(Game game, String player) {
     entryOrder ??= order.map((p) => p.id).toList();
@@ -207,6 +245,13 @@ class _PlayersViewState extends State<PlayersView> {
             (p, g),
   ];
 
+  /// The games each listed player has a score cell for, rounds left to
+  /// right: where Left and Right move.
+  Map<String, List<Game>> cellGames = const {};
+
+  /// A printable key that is not a result was typed in a cell.
+  bool invalidKey = false;
+
   KeyEventResult standingKey(
     Player p,
     Section section,
@@ -214,13 +259,20 @@ class _PlayersViewState extends State<PlayersView> {
     Game game,
     KeyEvent event,
   ) {
-    if (event is! KeyDownEvent ||
+    final key = event.logicalKey;
+    final arrow = [
+      LogicalKeyboardKey.arrowUp,
+      LogicalKeyboardKey.arrowDown,
+      LogicalKeyboardKey.arrowLeft,
+      LogicalKeyboardKey.arrowRight,
+    ].contains(key);
+    // Holding an arrow keeps moving; holding a result key enters it once.
+    if (!(event is KeyDownEvent || (event is KeyRepeatEvent && arrow)) ||
         HardwareKeyboard.instance.isControlPressed ||
         HardwareKeyboard.instance.isMetaPressed ||
         HardwareKeyboard.instance.isAltPressed) {
       return KeyEventResult.ignored;
     }
-    final key = event.logicalKey;
     final cells = standingCells(round);
     final index = cells.indexWhere(
       (x) => x.$1.id == p.id && x.$2.id == game.id,
@@ -242,12 +294,34 @@ class _PlayersViewState extends State<PlayersView> {
       }
       return KeyEventResult.handled;
     }
+    if (arrow) {
+      // The same player's game in the round before or after.
+      final games = cellGames[p.id] ?? const <Game>[];
+      final at = games.indexWhere((g) => g.id == game.id);
+      final next = at + (key == LogicalKeyboardKey.arrowLeft ? -1 : 1);
+      if (at >= 0 && next >= 0 && next < games.length) {
+        focusStanding(games[next], p.id);
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.space) {
+      openPlayer(p.id);
+      return KeyEventResult.handled;
+    }
     final outcome = resultFromKey(
       event,
       white: game.white == p.id,
       current: game.outcome,
     );
-    if (outcome == null) return KeyEventResult.ignored;
+    if (outcome == null) {
+      // A printable key that is not a result: say which keys are.
+      if ((event.character ?? '').trim().isEmpty) {
+        return KeyEventResult.ignored;
+      }
+      setState(() => invalidKey = true);
+      return KeyEventResult.handled;
+    }
+    if (invalidKey) setState(() => invalidKey = false);
     if (!enteringResult) {
       saveStandingResult(p, section, round, game, outcome, cells, index);
     }
@@ -266,10 +340,29 @@ class _PlayersViewState extends State<PlayersView> {
     enteringResult = true;
     try {
       if (c.correctionHasDependencies(game.id)) {
-        openResultCorrection(context, c, game.id, outcome: outcome);
+        openResultCorrection(
+          context,
+          c,
+          game.id,
+          outcome: outcome,
+          white: game.white == p.id,
+        );
         return;
       }
+      final before = game.outcome;
       c.recordResult(game.id, outcome);
+      // A recorded result was replaced or cleared by one key: never silently.
+      if (mounted && before != Outcome.unreported && before != outcome) {
+        showUndoNotice(
+          context,
+          c,
+          [
+            if (widget.sectionId == null) section.name,
+            if (round != section.rounds.length) 'Round $round',
+            resultChangeText(game.board, before, outcome),
+          ].join(' · '),
+        );
+      }
       if (outcome.resolved) {
         final next = [...cells.skip(index + 1), ...cells.take(index)]
             .where(
@@ -330,11 +423,12 @@ class _PlayersViewState extends State<PlayersView> {
 
   // Fixed column widths keep the table narrow and aligned.
   static const _check = 40.0,
+      _rank = 40.0,
       _number = 28.0,
       _name = 200.0,
       _rating = 64.0,
       _preview = 132.0,
-      _proposal = 168.0,
+      _proposal = 192.0,
       _uscfName = 200.0,
       _membership = 216.0,
       _note = 240.0,
@@ -369,7 +463,17 @@ class _PlayersViewState extends State<PlayersView> {
     prizeStandings = widget.standingsOnly && saved['prizeStandings'] == true;
     moveTo = saved['moveTo'] as String?;
     moveReason.text = saved['moveReason'] as String? ?? '';
-    if (moveTo != null && !c.event!.sections.any((s) => s.id == moveTo)) {
+    // The revision the move or swap was reviewed at comes back with it, so
+    // it still applies after a visit to another page, and is still refused
+    // when the event changed meanwhile.
+    moveRevision = (saved['moveRevision'] as num?)?.toInt();
+    swapping =
+        saved['swapping'] == true &&
+        moveRevision != null &&
+        selected.length == 2;
+    if (moveTo != null &&
+        (moveRevision == null ||
+            !c.event!.sections.any((s) => s.id == moveTo))) {
       moveTo = null;
     }
     ready = true;
@@ -416,7 +520,10 @@ class _PlayersViewState extends State<PlayersView> {
     final now = refreshDraft != null;
     if (!widget.standingsOnly && now != reviewing) {
       reviewing = now;
-      if (now) return showSide(_Side.ratingReview);
+      if (now) {
+        showSide(_Side.ratingReview);
+        return;
+      }
       if (side == _Side.ratingReview) return closeSide();
     }
     setState(() {});
@@ -426,8 +533,8 @@ class _PlayersViewState extends State<PlayersView> {
     try {
       final count = draft.apply();
       showDone(
-        'USCF ratings updated',
-        'Updated $count USCF ${count == 1 ? 'rating' : 'ratings'}.',
+        'US Chess ratings updated',
+        'Updated $count US Chess ${count == 1 ? 'rating' : 'ratings'}.',
       );
     } catch (e) {
       showFailure(context, e);
@@ -454,6 +561,8 @@ class _PlayersViewState extends State<PlayersView> {
   /// not written and broadcast on every frame.
   void scrolled() {
     if (scroll.hasClients) scrollOffset = scroll.offset;
+    // Scrolling changes which cells are built.
+    markEntryCell();
     scrollSave?.cancel();
     scrollSave = Timer(const Duration(milliseconds: 400), remember);
   }
@@ -471,6 +580,8 @@ class _PlayersViewState extends State<PlayersView> {
       'showRatingPreview': showRatingPreview,
       'prizeStandings': prizeStandings,
       'moveTo': moveTo,
+      'moveRevision': moveTo != null || swapping ? moveRevision : null,
+      'swapping': swapping,
       'moveReason': moveReason.text,
       'scroll': scroll.hasClients ? scroll.offset : scrollOffset,
     });
@@ -496,18 +607,26 @@ class _PlayersViewState extends State<PlayersView> {
     super.dispose();
   }
 
-  /// Changes the panel; partial edits remain separate, recoverable drafts.
-  void showSide(_Side? next, [String? id]) {
+  /// Changes the panel. A player's card saves its pending edit first; when
+  /// that edit cannot be saved the card stays open on the problem and this
+  /// returns false. The Add form keeps what was typed as a draft.
+  bool showSide(_Side? next, [String? id]) {
+    if (side == _Side.player &&
+        (next != _Side.player || id != open) &&
+        !(panel.currentState?.applyEdits() ?? true)) {
+      return false;
+    }
     if (next != null) {
       Dock.maybeOf(context)?.claim(panelOwner);
     } else if (Dock.maybeOf(context)?.id == panelOwner) {
       Dock.maybeOf(context)?.close();
     }
-    if (next == side && id == open) return;
+    if (next == side && id == open) return true;
     setState(() {
       side = next;
       open = id;
     });
+    return true;
   }
 
   Future<void> importFile() async {
@@ -593,7 +712,7 @@ class _PlayersViewState extends State<PlayersView> {
         [
           'Moved $count ${count == 1 ? 'player' : 'players'} to '
               '${c.event!.sections.firstWhere((s) => s.id == targetId).name}.',
-          ?rosterNote(c.event!, {...sources, targetId}),
+          ?rosterNote(c.event!, {...sources, targetId}, before: e),
         ].join(' '),
       );
     } catch (e) {
@@ -765,7 +884,7 @@ class _PlayersViewState extends State<PlayersView> {
               row.player.id: row,
           },
     };
-    final numbers = <String, int>{};
+    final numbers = <String, int>{}, ranks = <String, int>{};
     List<Player> ordered(Section s) {
       final table = tables[s.id];
       final players = ranked && table != null
@@ -780,9 +899,13 @@ class _PlayersViewState extends State<PlayersView> {
           (a, b) => frozen.indexOf(a.id).compareTo(frozen.indexOf(b.id)),
         );
       }
-      // Number the full section before filtering so searches preserve positions.
-      for (final (i, player) in players.indexed) {
-        numbers[player.id] = i + 1;
+      // Numbers and places cover the whole section, whatever a search or
+      // the order held during result entry shows of it.
+      numbers.addAll(pairingNumbers(e, s));
+      if (ranked && table != null) {
+        for (final (i, id) in table.keys.indexed) {
+          ranks[id] = i + 1;
+        }
       }
       return players.where(matches).toList();
     }
@@ -819,6 +942,20 @@ class _PlayersViewState extends State<PlayersView> {
               .map((g) => g.$1?.plannedRounds ?? 0)
               .fold(0, (int a, b) => a > b ? a : b);
     order = [for (final g in groups) ...g.$2];
+    cellGames = {
+      if (widget.standingsOnly)
+        for (final (s, players) in groups)
+          if (s != null && s.format != Format.knockout)
+            for (final p in players)
+              p.id: [
+                for (var r = 1; r <= s.rounds.length && r <= rounds; r++)
+                  if (r <= s.plannedRounds)
+                    for (final round in s.rounds.where((x) => x.number == r))
+                      for (final g in round.games)
+                        if (g.white == p.id || g.black == p.id) g,
+              ],
+    };
+    markEntryCell();
     final items = <Widget>[
       for (final (s, players) in groups) ...[
         if (!widget.standingsOnly || widget.sectionId == null)
@@ -827,7 +964,9 @@ class _PlayersViewState extends State<PlayersView> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
             child: Text(
-              'No players. Tick players below and move them here.',
+              widget.standingsOnly
+                  ? 'No players yet.'
+                  : 'No players. Tick players below and move them here.',
               style: TextStyle(color: colors.onSurfaceVariant),
             ),
           ),
@@ -838,12 +977,13 @@ class _PlayersViewState extends State<PlayersView> {
           for (final p in players)
             _row(
               context,
-              s == null ? '' : '${numbers[p.id]}',
+              s == null ? '' : '${numbers[p.id] ?? ''}',
               p,
               s,
               rounds,
               s == null ? null : tables[s.id]?[p.id],
               scores: started,
+              rank: '${ranks[p.id] ?? ''}',
             ),
         // Scholastic team awards: the Teams table under the individuals.
         if (widget.standingsOnly &&
@@ -857,6 +997,7 @@ class _PlayersViewState extends State<PlayersView> {
     scores = started;
     final width =
         (widget.onPlayer != null ? 0 : _check) +
+        (started ? _rank : 0) +
         _number +
         (widget.standingsOnly ? 160 : _name) +
         (widget.standingsOnly ? 0 : _rating) +
@@ -956,6 +1097,19 @@ class _PlayersViewState extends State<PlayersView> {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
+            if (invalidKey)
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  key: const ValueKey('standing-key-hint'),
+                  'Not a result key. $resultKeyHint · $moreResultKeys',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: colors.onSurface,
+                  ),
+                ),
+              ),
           ],
         ),
       );
@@ -1035,7 +1189,7 @@ class _PlayersViewState extends State<PlayersView> {
                                   onPressed: refreshDraft == null
                                       ? widget.onRefreshRatings
                                       : () => showSide(_Side.ratingReview),
-                                  child: const Text('Refresh from USCF'),
+                                  child: const Text('Refresh from US Chess'),
                                 ),
                               _playerTools(context),
                             ],
@@ -1113,56 +1267,72 @@ class _PlayersViewState extends State<PlayersView> {
 
   Widget _table(BuildContext context, List<Widget> items, double width) {
     final colors = Theme.of(context).colorScheme;
-    return items.isEmpty
-        ? const EmptyState(
-            icon: Icons.search_off,
-            title: 'No matches',
-            body: 'Try a different name or US Chess ID.',
-          )
-        : Padding(
-            padding: widget.standingsOnly
-                ? const EdgeInsets.fromLTRB(12, 4, 12, 12)
-                : const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-                final minimum = width * scale;
-                final available = constraints.maxWidth.clamp(0.0, 536 * scale);
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    // Match the boards in Pairings; keep the roster compact.
-                    width: widget.standingsOnly && available > minimum
-                        ? available
-                        : minimum,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.surfaceContainerLowest,
-                        border: Border.all(color: colors.outlineVariant),
-                        borderRadius: BorderRadius.circular(4),
+    if (items.isEmpty) {
+      // Only a search can come up empty; with nothing typed there is simply
+      // nobody to list yet.
+      return search.text.trim().isNotEmpty
+          ? const EmptyState(
+              icon: Icons.search_off,
+              title: 'No matches',
+              body: 'Try a different name or US Chess ID.',
+            )
+          : Align(
+              alignment: Alignment.topLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Text(
+                  'No players yet.',
+                  key: const ValueKey('no-players'),
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                ),
+              ),
+            );
+    }
+    return Padding(
+      padding: widget.standingsOnly
+          ? const EdgeInsets.fromLTRB(12, 4, 12, 12)
+          : const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          final minimum = width * scale;
+          // As wide as the boards pane beside it grows (760 less padding).
+          final available = constraints.maxWidth.clamp(0.0, 736 * scale);
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              // Match the boards in Pairings; keep the roster compact.
+              width: widget.standingsOnly && available > minimum
+                  ? available
+                  : minimum,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerLowest,
+                  border: Border.all(color: colors.outlineVariant),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _columns(context, rounds),
+                    if (!constraints.hasBoundedHeight)
+                      ...items
+                    else
+                      Flexible(
+                        child: ListView(
+                          shrinkWrap: true,
+                          controller: scroll,
+                          children: items,
+                        ),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _columns(context, rounds),
-                          if (!constraints.hasBoundedHeight)
-                            ...items
-                          else
-                            Flexible(
-                              child: ListView(
-                                shrinkWrap: true,
-                                controller: scroll,
-                                children: items,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
+                  ],
+                ),
+              ),
             ),
           );
+        },
+      ),
+    );
   }
 
   Widget _playerTools(BuildContext context) => MenuAnchor(
@@ -1379,8 +1549,21 @@ class _PlayersViewState extends State<PlayersView> {
                     return;
                   }
                   try {
+                    final a = e.player(selected.first).name;
+                    final b = e.player(selected.last).name;
                     c.swapPlayers(selected.first, selected.last, moveRevision!);
-                    clearSelection();
+                    setState(() {
+                      selected.clear();
+                      moveTo = null;
+                      swapping = false;
+                    });
+                    showDone(
+                      'Players swapped',
+                      [
+                        '$a and $b changed places.',
+                        ?pairingsResetNote(e, c.event!),
+                      ].join(' '),
+                    );
                   } catch (error) {
                     showFailure(context, error);
                     setState(() => swapping = false);
@@ -1396,8 +1579,23 @@ class _PlayersViewState extends State<PlayersView> {
               OutlinedButton(
                 onPressed: () {
                   try {
+                    final a = e.player(selected.first).name;
+                    final b = e.player(selected.last).name;
+                    final head = c.graph.head;
                     c.avoidPair(selected.first, selected.last, true);
-                    clearSelection();
+                    // Nothing to confirm or undo when it was already there.
+                    if (c.graph.head == head) return clearSelection();
+                    setState(() {
+                      selected.clear();
+                      moveTo = null;
+                      swapping = false;
+                    });
+                    showDone(
+                      'Request saved',
+                      '$a and $b will not be paired together where another '
+                          'pairing exists. To allow it again, open either '
+                          'player’s card and remove it under Pairing requests.',
+                    );
                   } catch (e) {
                     showFailure(context, e);
                   }
@@ -1511,19 +1709,22 @@ class _PlayersViewState extends State<PlayersView> {
           children: [
             if (!widget.standingsOnly)
               SizedBox(width: _columnWidth(context, _check)),
+            // Once play starts the rows are in standings order: Rank is the
+            // place, # stays the pairing number.
+            if (scores) cell(_rank, 'Rank'),
             cell(_number, '#'),
             const Expanded(child: Text('Name')),
-            if (showsIds) cell(_id, 'USCF ID'),
+            if (showsIds) cell(_id, 'US Chess ID'),
             if (!widget.standingsOnly && (usChessView || refreshDraft != null))
               cell(_rating, refreshDraft == null ? 'Rating' : 'Entered'),
             if (showsFide) ...[cell(_id, 'FIDE ID'), cell(_rating, 'FIDE')],
             if (refreshDraft case final draft?) ...[
               cell(_proposal, proposedHeading(draft)),
-              cell(_uscfName, 'USCF name'),
+              cell(_uscfName, 'US Chess name'),
             ],
             if (showRatingPreview) cell(_preview, 'Est. regular (Δ)'),
             if (!widget.standingsOnly) ...[
-              if (usChessView) cell(_membership, 'USCF expires'),
+              if (usChessView) cell(_membership, 'US Chess expires'),
               cell(_note, 'Registration note'),
             ],
             for (var r = 1; r <= rounds; r++) cell(_round, 'R$r', center: true),
@@ -1687,7 +1888,10 @@ class _PlayersViewState extends State<PlayersView> {
                                 !resultFocus.values.any(
                                   (node) => node.hasFocus,
                                 )) {
-                              setState(() => entryOrder = null);
+                              setState(() {
+                                entryOrder = null;
+                                invalidKey = false;
+                              });
                             }
                           });
                         }
@@ -1699,7 +1903,7 @@ class _PlayersViewState extends State<PlayersView> {
                       },
                       child: Semantics(
                         label:
-                            '${p.name}, round $r, ${games.length > 1 ? 'game ${g.leg}, ' : ''}$tip. $resultKeyHint',
+                            '${p.name}, round $r, ${games.length > 1 ? 'game ${g.leg}, ' : ''}$tip. $resultKeyHint · Space player details',
                         child: Tooltip(
                           message: tip,
                           child: GestureDetector(
@@ -1753,6 +1957,7 @@ class _PlayersViewState extends State<PlayersView> {
     int rounds,
     Standing? standing, {
     required bool scores,
+    String rank = '',
   }) {
     final colors = Theme.of(context).colorScheme;
     final muted = TextStyle(color: colors.onSurfaceVariant);
@@ -1790,6 +1995,9 @@ class _PlayersViewState extends State<PlayersView> {
         },
         child: InkWell(
           key: ValueKey('player-${p.id}'),
+          // The crosstable is one Tab stop, at a score cell; Space there
+          // opens the player, and the search box finds anyone by name.
+          canRequestFocus: !widget.standingsOnly,
           onSecondaryTapDown: (details) => menu(details.globalPosition),
           onTap: () => openPlayer(p.id),
           child: Container(
@@ -1825,6 +2033,11 @@ class _PlayersViewState extends State<PlayersView> {
                             onChanged: (v) => tickRow(p.id, v == true),
                           ),
                         ),
+                      ),
+                    if (scores)
+                      KeyedSubtree(
+                        key: ValueKey('rank-${p.id}'),
+                        child: cell(_rank, rank),
                       ),
                     KeyedSubtree(
                       key: ValueKey('number-${p.id}'),
@@ -1971,7 +2184,7 @@ class _PlayersViewState extends State<PlayersView> {
     );
   }
 
-  /// The USCF rating and its change, ticked to include it in the update.
+  /// The US Chess rating and its change, ticked to include it in the update.
   Widget _proposedRatingCell(
     BuildContext context,
     Player p,
@@ -2019,7 +2232,7 @@ class _PlayersViewState extends State<PlayersView> {
           children: [
             PlainCheckbox(
               key: ValueKey('approve-rating-${p.id}'),
-              label: 'Apply USCF rating for ${p.name}',
+              label: 'Apply US Chess rating for ${p.name}',
               value: problem == null && draft.selected.contains(p.id),
               onChanged: draft.busy || problem != null
                   ? null
@@ -2040,7 +2253,7 @@ class _PlayersViewState extends State<PlayersView> {
                             ),
                           ),
                           TextSpan(
-                            text: ' No USCF ID',
+                            text: ' No US Chess ID',
                             style: TextStyle(
                               color: attentionColor(colors),
                               fontWeight: FontWeight.w600,
@@ -2147,7 +2360,7 @@ class _PlayersViewState extends State<PlayersView> {
           'Entered as ${p.name}. US Chess has ${m.name} for ${p.memberId}. '
           'Check the ID before updating this rating.',
       child: Semantics(
-        label: 'USCF name ${m.name} differs from the entered name',
+        label: 'US Chess name ${m.name} differs from the entered name',
         excludeSemantics: true,
         child: SizedBox(
           key: ValueKey('uscf-name-${p.id}'),
@@ -2203,9 +2416,23 @@ class _PlayersViewState extends State<PlayersView> {
 
 String formatName(Format f) => f.label;
 
-/// Edits one player beside the table, so the list stays in view. Field edits
-/// save on Enter, on Save, when another player is opened, or when the panel
-/// closes. Byes, section and withdrawal apply at once.
+/// Each player's pairing number in [s]: their place on the section's list,
+/// which is what the pairing engine, the wall chart and the printed player
+/// list number them by. A FIDE-rated Swiss numbers by its FIDE pairing order
+/// instead (C.04.2). Results, sorting and searching never change it.
+Map<String, int> pairingNumbers(Event e, Section s) => {
+  for (final (i, id)
+      in (s.fideRated && pairingFormat(s) == Format.swiss
+              ? [for (final p in fidePairingOrder(e, s)) p.id]
+              : s.players)
+          .indexed)
+    id: i + 1,
+};
+
+/// What the right-hand column shows beside the table, so the list stays in
+/// view. A player's card saves its field edits on Enter, on Save, when
+/// another player is opened and when the card closes; byes, section and
+/// withdrawal apply at once.
 enum _Side {
   newSection,
   player,

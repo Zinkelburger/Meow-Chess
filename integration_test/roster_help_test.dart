@@ -68,7 +68,7 @@ void main() {
     await capture('workspace-simplified-rounds');
     await tester.tap(find.text('Players').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Help articles'));
+    await tester.tap(find.byTooltip('Help (F1)'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('help-search')), 'quads');
     await tester.pumpAndSettle();

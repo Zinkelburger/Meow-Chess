@@ -33,7 +33,16 @@ enum RatingCategory {
 /// A parsed time control: zero or more `moves/minutes` stages, then one sudden
 /// death stage, then an optional delay or increment in seconds.
 class TimeControl {
-  const TimeControl._(this.stages, this.bonusKind, this.bonusSeconds);
+  const TimeControl._(
+    this.stages,
+    this.bonusKind,
+    this.bonusSeconds, {
+    this.assumedDelay = false,
+  });
+
+  /// True on [reported] when the delay is the rule 5E2 standard, not one the
+  /// organizer stated.
+  final bool assumedDelay;
 
   /// `(moves, minutes)`; the last stage is sudden death (`moves == null`).
   final List<(int?, int)> stages;
@@ -116,9 +125,22 @@ class TimeControl {
       stages.fold<int>(0, (n, x) => n + x.$2) + bonusSeconds;
   int get primaryMinutes => stages.first.$2;
 
-  /// Rule 5C categories, or null when the time control is not ratable.
+  /// The control as US Chess rates it. Rule 5E2: when the organizer states
+  /// no delay or increment, the recommended minimum delay applies; a stated
+  /// `d0` stays zero.
+  TimeControl get reported => bonusKind != null
+      ? this
+      : TimeControl._(
+          stages,
+          'd',
+          recommendedDelaySeconds(this),
+          assumedDelay: true,
+        );
+
+  /// Rule 5C categories of the [reported] control, or null when the time
+  /// control is not ratable.
   RatingCategory? get category {
-    final total = totalMinutes, primary = primaryMinutes;
+    final total = reported.totalMinutes, primary = primaryMinutes;
     if (total > 10 && primary < 5) return null;
     if (total > 65) return RatingCategory.regular;
     if (total >= 30) return RatingCategory.dual;
@@ -143,14 +165,17 @@ class TimeControl {
   /// The spelling US Chess itself stores for every rated section (`G/60;d5`,
   /// `G/90;+30`, `40/90,SD/30;d5`; `;d0` when there is no delay). Written to
   /// `S_TIMECTL` so the rating system reads its own canonical form back.
+  /// A control with no stated delay carries the rule 5E2 standard delay, so
+  /// the text and [category] always agree.
   String get uscfText {
+    final tc = reported;
     final base = stages.length == 1
         ? 'G/${stages.single.$2}'
         : [
             for (final (moves, minutes) in stages)
               moves == null ? 'SD/$minutes' : '$moves/$minutes',
           ].join(',');
-    return '$base;${bonusKind == 'inc' ? '+' : 'd'}$bonusSeconds';
+    return '$base;${tc.bonusKind == 'inc' ? '+' : 'd'}${tc.bonusSeconds}';
   }
 }
 
@@ -440,6 +465,80 @@ const usStates = {
   'AE',
   'AP',
 };
+
+const _stateNames = {
+  'ALABAMA': 'AL',
+  'ALASKA': 'AK',
+  'ARIZONA': 'AZ',
+  'ARKANSAS': 'AR',
+  'CALIFORNIA': 'CA',
+  'COLORADO': 'CO',
+  'CONNECTICUT': 'CT',
+  'DELAWARE': 'DE',
+  'DISTRICT OF COLUMBIA': 'DC',
+  'WASHINGTON DC': 'DC',
+  'FLORIDA': 'FL',
+  'GEORGIA': 'GA',
+  'HAWAII': 'HI',
+  'IDAHO': 'ID',
+  'ILLINOIS': 'IL',
+  'INDIANA': 'IN',
+  'IOWA': 'IA',
+  'KANSAS': 'KS',
+  'KENTUCKY': 'KY',
+  'LOUISIANA': 'LA',
+  'MAINE': 'ME',
+  'MARYLAND': 'MD',
+  'MASSACHUSETTS': 'MA',
+  'MICHIGAN': 'MI',
+  'MINNESOTA': 'MN',
+  'MISSISSIPPI': 'MS',
+  'MISSOURI': 'MO',
+  'MONTANA': 'MT',
+  'NEBRASKA': 'NE',
+  'NEVADA': 'NV',
+  'NEW HAMPSHIRE': 'NH',
+  'NEW JERSEY': 'NJ',
+  'NEW MEXICO': 'NM',
+  'NEW YORK': 'NY',
+  'NORTH CAROLINA': 'NC',
+  'NORTH DAKOTA': 'ND',
+  'OHIO': 'OH',
+  'OKLAHOMA': 'OK',
+  'OREGON': 'OR',
+  'PENNSYLVANIA': 'PA',
+  'RHODE ISLAND': 'RI',
+  'SOUTH CAROLINA': 'SC',
+  'SOUTH DAKOTA': 'SD',
+  'TENNESSEE': 'TN',
+  'TEXAS': 'TX',
+  'UTAH': 'UT',
+  'VERMONT': 'VT',
+  'VIRGINIA': 'VA',
+  'WASHINGTON': 'WA',
+  'WEST VIRGINIA': 'WV',
+  'WISCONSIN': 'WI',
+  'WYOMING': 'WY',
+  'PUERTO RICO': 'PR',
+  'VIRGIN ISLANDS': 'VI',
+  'US VIRGIN ISLANDS': 'VI',
+  'GUAM': 'GU',
+  'AMERICAN SAMOA': 'AS',
+  'NORTHERN MARIANA ISLANDS': 'MP',
+};
+
+/// The two-letter code for a state as a registration list writes it: a
+/// two-letter code as it stands, or a state's full name ("Massachusetts",
+/// "New  York", "D.C."). Null when it is neither.
+String? stateCodeOf(String text) {
+  final key = text
+      .toUpperCase()
+      .replaceAll(RegExp(r'[.,]'), '')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+  if (isStateCode(key)) return key;
+  return _stateNames[key];
+}
 
 /// A player's two-letter state. Any two letters are accepted because
 /// US Chess membership records may carry codes outside [usStates].

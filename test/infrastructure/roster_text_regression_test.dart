@@ -129,8 +129,8 @@ void main() {
         columns: split.suggestColumns(true),
       );
       expect(rows.map((r) => r.line), [2, 4, 6]);
-      expect(rows[1].error, contains('eight digits'));
-      expect(rows[2].error, contains('Rating'));
+      expect(rows[1].warnings.single, contains('eight digits'));
+      expect(rows[2].warnings.single, contains('Rating'));
       expect(parseRoster(source).map((r) => r.line), [2, 4, 6]);
     });
 
@@ -149,7 +149,7 @@ void main() {
       expect(
         parseRoster(
           'Name,ID\r\n"Lee,\r\nMorgan",123\r\nOk,00123456',
-        ).map((r) => (r.line, r.error != null)),
+        ).map((r) => (r.line, r.warnings.isNotEmpty)),
         [(2, true), (4, false)],
       );
     });

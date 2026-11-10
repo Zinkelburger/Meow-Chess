@@ -97,7 +97,7 @@ class _SideGamePanelState extends State<SideGamePanel> {
           child: FilledButton(
             key: const ValueKey('post-side-game'),
             onPressed: pair,
-            child: const Text('Post side game'),
+            child: const Text('Pair side game'),
           ),
         ),
       ],

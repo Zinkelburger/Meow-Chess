@@ -10,6 +10,12 @@ mixin _ControllerHistory on ChangeNotifier {
   /// Whether the event file has been released.
   bool get _closed;
 
+  EventFileProblem? get fileProblem;
+  set fileProblem(EventFileProblem? value);
+
+  /// Notes whether the event file is still where it was opened.
+  void checkFile();
+
   HistoryGraph? _graph;
 
   /// The last Undo, Redo or Restore and the version it left, until the next
@@ -169,7 +175,7 @@ mixin _ControllerHistory on ChangeNotifier {
       if (_closed) throw const TournamentException('This event has closed.');
       final target = repository.snapshot(node);
       // History before a copy was marked practice belongs to the original
-      // event; restoring it would also restore that event's backup folder.
+      // event, not to the copy.
       if (event!.practice && !target.practice) {
         throw const TournamentException(
           'This practice copy cannot go back to before it was copied.',
@@ -182,6 +188,7 @@ mixin _ControllerHistory on ChangeNotifier {
         );
       }
       final from = graph.head!;
+      checkFile();
       event = repository.checkout(
         node,
         expectedRevision: event!.revision,
@@ -202,6 +209,10 @@ mixin _ControllerHistory on ChangeNotifier {
         error: error,
         stack: stack,
       );
+      if (error is EventFileUnreachable) {
+        fileProblem = EventFileProblem.unreachable;
+        notifyListeners();
+      }
       rethrow;
     }
     // Outside the try: the save has succeeded, so a failing listener must not

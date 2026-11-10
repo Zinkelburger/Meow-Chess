@@ -297,14 +297,22 @@ void main() {
       find.byKey(ValueKey('player-${section.players.first}')),
     );
     expect(top.dy, lessThan(seed1.dy));
+    // Rank is the standing; # stays the pairing number.
     expect(
       find.descendant(
-        of: find.byKey(ValueKey('number-${g.black}')),
+        of: find.byKey(ValueKey('rank-${g.black}')),
         matching: find.text('1'),
       ),
       findsOneWidget,
     );
-    expect(find.text('Rank'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('number-${section.players.first}')),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Rank'), findsOneWidget);
     expect(find.text('Seed order'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 500));

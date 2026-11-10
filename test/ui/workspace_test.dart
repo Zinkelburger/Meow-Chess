@@ -176,7 +176,7 @@ void main() {
           // Replacing the embedded editor with workspace tools must use the
           // same space, including tools wider than the player editor.
           for (final target in [
-            find.byTooltip('Keyboard shortcuts (F1)'),
+            find.byTooltip('Keyboard shortcuts (Shift+F1)'),
             find.byKey(const ValueKey('event-details')),
             find.byTooltip('History (Ctrl+H)'),
           ]) {
@@ -665,7 +665,9 @@ void main() {
     expect(c.event!.sections.any((s) => s.id == first.id), false);
     expect(c.event!.players.length, 8);
     expect(find.byKey(const ValueKey('section-chip-all')), findsOneWidget);
-    expect(find.byType(SnackBar), findsNothing);
+    // The delete is confirmed with Undo, not reported as a failure.
+    expect(find.byKey(const ValueKey('undo-notice')), findsOneWidget);
+    expect(find.byIcon(Icons.error_outline), findsNothing);
     await tester.tap(find.byKey(const ValueKey('undo')));
     await tester.pumpAndSettle();
     expect(c.event!.sections.first.id, first.id);

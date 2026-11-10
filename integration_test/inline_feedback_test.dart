@@ -59,7 +59,10 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
     await tester.pumpAndSettle();
     expect(c.event!.games.first.outcome, Outcome.whiteForfeit);
-    expect(find.text('Withdraw from future rounds'), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('withdraw-${game.id}-${game.black}')),
+      findsOneWidget,
+    );
     expect(find.byType(SnackBar), findsNothing);
     Future<void> capture(String name) async {
       expect(tester.takeException(), isNull);
@@ -79,13 +82,28 @@ void main() {
     dark.value = true;
     await tester.binding.setSurfaceSize(const Size(960, 700));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Withdraw from future rounds'));
+    await tester.ensureVisible(
+      find.byKey(ValueKey('withdraw-${game.id}-${game.black}')),
+    );
     await tester.pumpAndSettle();
     await capture('inline-forfeit-dark-200');
-    await tester.tap(find.text('Withdraw from future rounds'));
+    await tester.tap(find.byKey(ValueKey('withdraw-${game.id}-${game.black}')));
     await tester.pumpAndSettle();
     expect(c.event!.player(game.black).withdrawn, true);
-    expect(find.text('Withdrawn'), findsOneWidget);
+    // The forfeited board says so in place of the button, and so do the
+    // quad's two later boards the withdrawn player was scheduled for.
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('game-${game.id}')),
+        matching: find.text('Withdrawn'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Withdrawn'), findsNWidgets(3));
+    expect(
+      find.byKey(ValueKey('withdraw-${game.id}-${game.black}')),
+      findsNothing,
+    );
     await tester.tap(find.byKey(const ValueKey('undo')));
     await tester.pumpAndSettle();
     expect(c.event!.player(game.black).withdrawn, false);

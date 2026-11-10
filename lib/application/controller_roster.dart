@@ -16,7 +16,10 @@ mixin _RosterCommands on _CommandContext {
               p.id != player.id &&
               (p.personId ?? p.id) != (player.personId ?? player.id) &&
               isMemberId(player.memberId) &&
-              p.memberId == player.memberId,
+              p.memberId == player.memberId &&
+              // Rule 28S: a re-entry is the same member as the entry it
+              // replaced.
+              !sameReentryChain(e, p, player),
         )
         .firstOrNull;
     if (duplicate != null) {
@@ -191,6 +194,10 @@ mixin _RosterCommands on _CommandContext {
   /// zero-point byes are always allowed. [irrevocable] true declares the
   /// bye irrevocable (22C4), false withdraws the declaration, null keeps
   /// it, so a cancelled irrevocable bye still counts under 22C5.
+  ///
+  /// For a round already posted in which the player has no game (a late
+  /// entrant's missed round), [points] 0 or 1 sets that round's bye to
+  /// zero or half a point; see [_setMissedRoundBye].
   void reserveBye(String playerId, int round, int points, {bool? irrevocable}) {
     // Points 0, 1 and 2 are zero, half and full point; the file stores them.
     if (round < 1) {
@@ -204,9 +211,8 @@ mixin _RosterCommands on _CommandContext {
     final e = event!;
     final s = e.sectionOf(playerId);
     if (s != null && round <= s.rounds.length) {
-      throw const TournamentException(
-        'That round is posted. Correct the existing game or replace the unstarted pairing.',
-      );
+      _setMissedRoundBye(s, playerId, round, points);
+      return;
     }
     final player = e.player(playerId);
     final byes = {...player.byes};
@@ -225,6 +231,71 @@ mixin _RosterCommands on _CommandContext {
       byes[round] = points;
     }
     savePlayer(player.copy(byes: byes, irrevocableByes: declared));
+  }
+
+  /// The bye of a player who sat out posted [round] of [s] (a late entrant,
+  /// a requested bye, a player who joined from another section): zero or
+  /// half a point, changed in the round itself so standings, wall charts
+  /// and the rating report follow. A round the player played, and a bye the
+  /// pairing allocated, stay as they are.
+  void _setMissedRoundBye(Section s, String playerId, int round, int points) {
+    final e = event!, player = e.player(playerId);
+    final posted = s.rounds[round - 1];
+    if (posted.games.any((g) => g.white == playerId || g.black == playerId)) {
+      throw TournamentException(
+        'Round $round is posted and ${player.name} has a game in it. Correct that game\'s result instead.',
+      );
+    }
+    final old = posted.byes.where((b) => b.player == playerId).firstOrNull;
+    if (old != null && old.allocated) {
+      throw TournamentException(
+        '${player.name}\'s round $round bye was given by the pairing and stays a full point.',
+      );
+    }
+    if (points < 0 || points > 1) {
+      throw const TournamentException(
+        'A missed round scores zero or half a point.',
+      );
+    }
+    if (points == 1) {
+      final problem = ByePolicy.fromJson(
+        s.byeRules,
+      ).halfByeProblem(player, round, declared: true);
+      if (problem != null) throw TournamentException(problem);
+    }
+    final bye = ByeAward(
+      playerId,
+      points,
+      old == null || old.reason == 'Withdrawn' ? 'Missed round' : old.reason,
+    );
+    change(
+      '${player.name}: ${points == 1 ? 'half-point' : 'zero-point'} bye for round $round',
+      e.copy(
+        players: [
+          for (final p in e.players)
+            p.id == playerId ? p.copy(byes: {...p.byes, round: points}) : p,
+        ],
+        sections: [
+          for (final x in e.sections)
+            x.id == s.id
+                ? x.copy(
+                    rounds: [
+                      for (final r in x.rounds)
+                        r.number == round
+                            ? r.copy(
+                                byes: [
+                                  for (final b in r.byes)
+                                    if (b.player != playerId) b,
+                                  bye,
+                                ],
+                              )
+                            : r,
+                    ],
+                  )
+                : x,
+        ],
+      ),
+    );
   }
 
   /// Withdraws or reinstates several players as one undoable change.

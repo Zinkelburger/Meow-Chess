@@ -25,10 +25,11 @@ List<int> quadGroupSizes(int n) {
       : [...List.filled((n - 4 - remainder) ~/ 4, 4), 4 + remainder];
 }
 
-/// Quad seeding order: rating high to low, then name (ignoring case and
-/// accents), then id.
+/// Quad seeding order: pairing rating high to low (an assigned rating
+/// seeds its player, rule 28A TIP), then name (ignoring case and accents),
+/// then id.
 int quadOrder(Player a, Player b) {
-  final c = b.rating.compareTo(a.rating);
+  final c = b.effectivePairingRating.compareTo(a.effectivePairingRating);
   if (c != 0) return c;
   final n = compareNames(a.name, b.name);
   return n != 0 ? n : a.id.compareTo(b.id);
@@ -129,7 +130,9 @@ typedef GameIdFor = String Function(int round, String white, String black);
 }
 
 /// Round [n] of a fixed (quad or round-robin) schedule, refused exactly as
-/// posting refuses it: an absence or a do-not-pair request cannot be skipped.
+/// posting refuses it: a requested bye or a do-not-pair request cannot be
+/// skipped. A withdrawn player's game stays on the schedule as a forfeit
+/// win for the opponent, so the player need not be reinstated to post it.
 Round scheduledRound(Event event, Section section, int n, GameIdFor id) {
   final (available, byes) = roundAvailability(event, section, n);
   final schedule = sectionSchedule(section);
@@ -148,6 +151,7 @@ Round scheduledRound(Event event, Section section, int n, GameIdFor id) {
     }
   }
   final pairs = <(String, String)>[];
+  final left = <String>{};
   for (final (a, b) in schedule[n - 1]) {
     if (a == null || b == null) {
       final pid = a ?? b;
@@ -162,13 +166,41 @@ Round scheduledRound(Event event, Section section, int n, GameIdFor id) {
       final absent = byes.firstWhere(
         (bye) => bye.player == a || bye.player == b,
       );
-      throw TournamentException(
-        'Round $n pairs ${event.player(a).name} with ${event.player(b).name}, but ${event.player(absent.player).name} is unavailable (${absent.reason.toLowerCase()}). '
-        'Make them available and record a forfeit if they do not play, or combine into Swiss.',
-      );
+      if (!event.player(absent.player).withdrawn) {
+        throw TournamentException(
+          'Round $n pairs ${event.player(a).name} with ${event.player(b).name}, but ${event.player(absent.player).name} is unavailable (${absent.reason.toLowerCase()}). '
+          'Make them available and record a forfeit if they do not play, or combine into Swiss.',
+        );
+      }
+      // The game takes the place of the withdrawal's zero-point bye.
+      byes.remove(absent);
+      left.add(absent.player);
+      pairs.add((a, b));
     }
   }
-  return _round(section, n, pairs, byes, id);
+  final round = _round(section, n, pairs, byes, id);
+  if (left.isEmpty) return round;
+  return round.copy(
+    games: [
+      for (final g in round.games)
+        left.contains(g.white) || left.contains(g.black)
+            ? g.copy(
+                outcome: left.contains(g.white)
+                    ? Outcome.blackForfeit
+                    : Outcome.whiteForfeit,
+                note:
+                    '${event.player(left.contains(g.white) ? g.white : g.black).name} withdrew: unplayed, a forfeit win for the opponent.',
+              )
+            : g,
+    ],
+    explanations: [
+      ...round.explanations,
+      for (final g in round.games.where(
+        (g) => g.leg == 1 && (left.contains(g.white) || left.contains(g.black)),
+      ))
+        'Board ${g.board}: ${event.player(left.contains(g.white) ? g.white : g.black).name} has withdrawn, so ${event.player(left.contains(g.white) ? g.black : g.white).name} wins by forfeit; the game is not rated (22A).',
+    ],
+  );
 }
 
 /// Round [n] of a fixed schedule as printed on paper: everyone listed, with
@@ -256,7 +288,7 @@ Round proposeRound(Event event, Section section, String Function() id) {
   final proposal = section.fideRated
       ? pairFideDutch(event, section, n, byes)
       : pairSwiss(event, section, n, available, byes);
-  return _round(
+  final round = _round(
     section,
     n,
     proposal.games,
@@ -269,6 +301,30 @@ Round proposeRound(Event event, Section section, String Function() id) {
         if (p.fixedBoard > 0) p.id: p.fixedBoard,
     },
   );
+  return round.copy(
+    explanations: _withRematchBoards(event, proposal, round.games),
+  );
+}
+
+/// [proposal]'s explanations with its repeat games (27A1) named by the
+/// boards they were given in [games].
+List<String> _withRematchBoards(
+  Event event,
+  SwissProposal proposal,
+  List<Game> games,
+) {
+  if (proposal.rematches.isEmpty) return proposal.explanations;
+  final plain = rematchExplanation(event, proposal.rematches);
+  final boarded = rematchExplanation(
+    event,
+    proposal.rematches,
+    boards: {
+      for (final g in games) ...{g.white: g.board, g.black: g.board},
+    },
+  );
+  return [
+    for (final line in proposal.explanations) line == plain ? boarded : line,
+  ];
 }
 
 /// Rule 29G3 selective re-pairing: the latest round of a Swiss [section]
@@ -410,7 +466,7 @@ Round repairUnstartedRound(
     explanations: [
       'Selective re-pairing (29G3): ${keptGames.length} game${keptGames.length == 1 ? '' : 's'} kept; ${available.length} waiting player${available.length == 1 ? '' : 's'} re-paired as a separate group.',
       ...again,
-      ...proposal.explanations,
+      ..._withRematchBoards(event, proposal, games),
     ],
   );
 }

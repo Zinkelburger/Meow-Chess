@@ -106,7 +106,7 @@ void main() {
       expect(c.event!.player('p2').state, 'NH');
       expect(c.event!.player('p1').state, isEmpty);
       expect(draft.foundCount, 2);
-      expect(draft.problem(c.event!.player('p1')), contains('No USCF ID'));
+      expect(draft.problem(c.event!.player('p1')), contains('No US Chess ID'));
       expect(
         draft.problem(c.event!.player('p2')),
         contains('No Regular rating'),
@@ -293,7 +293,10 @@ void main() {
     c.savePlayer(c.event!.player('p0').copy(rating: 1234));
     c.savePlayer(c.event!.player('p1').copy(memberId: '99887766'));
     expect(draft.problem(c.event!.player('p0')), 'Your edit is kept.');
-    expect(draft.problem(c.event!.player('p1')), startsWith('USCF ID changed'));
+    expect(
+      draft.problem(c.event!.player('p1')),
+      startsWith('US Chess ID changed'),
+    );
     expect(draft.apply(), 2);
     expect(c.event!.player('p0').rating, 1234);
   });

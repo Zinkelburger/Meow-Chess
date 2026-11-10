@@ -38,6 +38,10 @@ SectionPlan importSectionPlan(Event event, List<ImportRow> rows) {
   });
 }
 
+/// A row the TD should glance at before importing: it names nobody, or a
+/// field of it could not be kept.
+bool _needsLook(ImportRow r) => r.error != null || r.warnings.isNotEmpty;
+
 /// Commits the same interpreted rows that were reviewed in the preview.
 /// [newSectionRounds] is the planned rounds of any section the Section
 /// column starts.
@@ -61,7 +65,10 @@ String importRosterRows(
     'Imported ${valid.length - skipped} players',
     if (inEvent.isNotEmpty) '${inEvent.length} already in the event',
     if (repeated.isNotEmpty) '${repeated.length} repeated in the file',
-    if (bad.isNotEmpty) '${bad.length} unreadable (line ${bad.join(', ')})',
+    if (bad.isNotEmpty)
+      '${bad.length} ${bad.length == 1 ? 'row' : 'rows'} without a name left out (line ${bad.join(', ')})',
+    if (importWarningSummary(valid) case final warned when warned.isNotEmpty)
+      warned,
   ].join(' · ');
 }
 
@@ -138,7 +145,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   Set<int> existingLines = {}, repeatedLines = {};
   late SectionPlan plan;
   String? importError;
-  bool skipInvalid = false, onlyProblems = false;
+  bool onlyProblems = false;
 
   @override
   void initState() {
@@ -201,12 +208,11 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
     existingLines = skipped.inEvent;
     repeatedLines = skipped.repeated;
     plan = importSectionPlan(widget.controller.event!, rows);
-    if (!rows.any((r) => r.error != null)) onlyProblems = false;
+    if (!rows.any(_needsLook)) onlyProblems = false;
   }
 
   void settings(VoidCallback change) => setState(() {
     change();
-    skipInvalid = false;
     decode();
   });
 
@@ -266,11 +272,13 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
     final colors = Theme.of(context).colorScheme;
     final size = MediaQuery.sizeOf(context);
     final invalid = rows.where((r) => r.error != null).length;
+    final noted = rows.where((r) => r.warnings.isNotEmpty).length;
     final ready =
         rows.length - invalid - existingLines.length - repeatedLines.length;
     final problem = mappingError;
-    final canImport =
-        problem == null && ready > 0 && (invalid == 0 || skipInvalid);
+    // A row without a name is nobody, so it is left out and said so; every
+    // other row imports, with a note where a field could not be kept.
+    final canImport = problem == null && ready > 0;
     final muted = TextStyle(fontSize: 13, color: colors.onSurfaceVariant);
     return Dialog(
       key: const ValueKey('roster-import'),
@@ -334,7 +342,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
                       'Columns set to Don’t import are left out',
                       style: muted,
                     ),
-                    if (invalid > 0)
+                    if (invalid + noted > 0)
                       SegmentedButton<bool>(
                         key: const ValueKey('import-row-filter'),
                         showSelectedIcon: false,
@@ -345,7 +353,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
                           ),
                           ButtonSegment(
                             value: true,
-                            label: Text('Need attention $invalid'),
+                            label: Text('Worth a look ${invalid + noted}'),
                           ),
                         ],
                         selected: {onlyProblems},
@@ -361,7 +369,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: _grid(context),
             ),
-            footer: _footer(context, ready, invalid, problem, canImport),
+            footer: _footer(context, ready, invalid, noted, problem, canImport),
           ),
         ),
       ),
@@ -524,7 +532,6 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
                 (v) => setState(() {
                   hasHeader = v;
                   headerChosen = true;
-                  skipInvalid = false;
                   columnsChosen ? interpret() : suggestColumns();
                 }),
               ),
@@ -625,7 +632,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
     final byLine = {for (final r in rows) r.line: r};
     final lines = [
       for (final r in rows)
-        if (!onlyProblems || r.error != null) r.line,
+        if (!onlyProblems || _needsLook(r)) r.line,
     ];
     final border = BorderSide(color: colors.outlineVariant);
     final mono = const TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
@@ -661,6 +668,27 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
           ? 'Repeats an earlier row'
           : null;
       final placed = skipped == null ? placement(r) : null;
+      if (skipped == null && r.warnings.isNotEmpty) {
+        // The player comes in; what could not be kept is said beside them.
+        final note = r.warnings.join(' ');
+        return Tooltip(
+          message: note,
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 16, color: attentionColor(colors)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  ['New player', ?placed?.text, note].join(' · '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, color: attentionColor(colors)),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
       final text = Text(
         [skipped ?? 'New player', ?placed?.text].join(' · '),
         maxLines: 2,
@@ -849,6 +877,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
     BuildContext context,
     int ready,
     int invalid,
+    int noted,
     String? problem,
     bool canImport,
   ) {
@@ -859,8 +888,10 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
       '$ready new ${ready == 1 ? 'player' : 'players'}',
       if (existing > 0) '$existing already in the event',
       if (repeated > 0) '$repeated repeated in the file',
+      if (noted > 0) '$noted imported with a note',
       if (invalid > 0)
-        '$invalid ${invalid == 1 ? 'row needs' : 'rows need'} attention',
+        '$invalid ${invalid == 1 ? 'row has' : 'rows have'} no name and '
+            '${invalid == 1 ? 'is' : 'are'} left out',
     ].join(' · ');
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
@@ -886,13 +917,6 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
                   ),
                 ),
               ),
-              if (invalid > 0 && message == null)
-                _check(
-                  'import-skip-invalid',
-                  'Leave out ${invalid == 1 ? 'that row' : 'those $invalid rows'}',
-                  skipInvalid,
-                  (v) => setState(() => skipInvalid = v),
-                ),
             ],
           ),
           Wrap(

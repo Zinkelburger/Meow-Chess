@@ -273,7 +273,6 @@ List<String> describeChanges(
     ('notes', 'Event notes'),
     ('submission', 'Submission notes'),
     ('policy', 'Event policy'),
-    ('backupFolder', 'Backup folder'),
   ]) {
     if (a[key] != b[key]) {
       out.add('$label: ${value(_short('${a[key]}'), _short('${b[key]}'))}');
@@ -591,9 +590,9 @@ List<String> describeChanges(
     out.add('Section order changed');
   }
   // A future persisted field must never make a restore look unchanged merely
-  // because it has not yet acquired a specialized description above.
-  if (out.isEmpty &&
-      before.copy(revision: 0).encode() != after.copy(revision: 0).encode()) {
+  // because it has not yet acquired a specialized description above. Where
+  // backups go is not part of the tournament, and no history move changes it.
+  if (out.isEmpty && tournamentContent(before) != tournamentContent(after)) {
     out.add('Other event details changed');
   }
   return out;

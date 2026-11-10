@@ -223,7 +223,7 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
           key: const ValueKey('import-refresh-ratings'),
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
-          title: const Text('Fetch ratings from USCF'),
+          title: const Text('Fetch ratings from US Chess'),
           value: refreshRatings,
           onChanged: busy
               ? null
@@ -318,7 +318,7 @@ class _WebRosterPanelState extends State<WebRosterPanel> {
               subtitle: Text(
                 item.problem ??
                     '${selected.contains(item.key) ? sectionLine(plan!, item) ?? '' : ''}'
-                        '${item.incoming.memberId.isEmpty ? 'No USCF ID' : item.incoming.memberId}\n${item.existing == null ? '' : 'Local: ${item.existing!.name}, ${item.existing!.rating}\n'}Website rating: ${item.incoming.rating == 0 ? 'UNR' : item.incoming.rating}\nWebsite note: ${item.incoming.registrationNote.isEmpty ? '—' : item.incoming.registrationNote}${item.existing != null && item.existing!.registrationNote != item.incoming.registrationNote ? '\nLocal note: ${item.existing!.registrationNote.isEmpty ? '—' : item.existing!.registrationNote}' : ''}${item.existing?.ratingEvidence['supplementDate'] != null ? '\nVerified supplement rating will be kept.' : ''}${item.existing != null && (c.event!.sectionOf(item.existing!.id)?.rounds.isNotEmpty ?? false) ? '\nPosted section: only the website note can be updated.' : ''}',
+                        '${item.incoming.memberId.isEmpty ? 'No US Chess ID' : item.incoming.memberId}\n${item.existing == null ? '' : 'Local: ${item.existing!.name}, ${item.existing!.rating}\n'}Website rating: ${item.incoming.rating == 0 ? 'UNR' : item.incoming.rating}\nWebsite note: ${item.incoming.registrationNote.isEmpty ? '—' : item.incoming.registrationNote}${item.existing != null && item.existing!.registrationNote != item.incoming.registrationNote ? '\nLocal note: ${item.existing!.registrationNote.isEmpty ? '—' : item.existing!.registrationNote}' : ''}${item.existing?.ratingEvidence['supplementDate'] != null ? '\nVerified supplement rating will be kept.' : ''}${item.existing != null && (c.event!.sectionOf(item.existing!.id)?.rounds.isNotEmpty ?? false) ? '\nPosted section: only the website note can be updated.' : ''}',
               ),
             ),
         ],

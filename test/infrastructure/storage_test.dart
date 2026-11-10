@@ -188,7 +188,10 @@ void main() {
       expect(File(path).readAsBytesSync(), original);
       final check = sqlite3.open(path);
       try {
-        expect(check.select('PRAGMA user_version').single.values.single, 2);
+        expect(
+          check.select('PRAGMA user_version').single.values.single,
+          SqliteEventRepository.schemaVersion,
+        );
         expect(
           check.select('PRAGMA journal_mode').single.values.single,
           'delete',
@@ -222,9 +225,13 @@ void main() {
       final before = c.event!;
       c.dispose();
       final inject = sqlite3.open(path);
-      inject.execute(
-        r"CREATE TRIGGER fail_result BEFORE INSERT ON game WHEN json_extract(NEW.data, '$.outcome') = 'whiteWin' BEGIN SELECT RAISE(ABORT, 'injected write failure'); END",
-      );
+      // A result is saved by updating its game's row; a whole-event rewrite
+      // inserts it.
+      for (final write in ['INSERT', 'UPDATE']) {
+        inject.execute(
+          "CREATE TRIGGER fail_$write BEFORE $write ON game WHEN json_extract(NEW.data, '\$.outcome') = 'whiteWin' BEGIN SELECT RAISE(ABORT, 'injected write failure'); END",
+        );
+      }
       inject.close();
       final repository = SqliteEventRepository(path);
       try {
@@ -286,9 +293,11 @@ void main() {
       c.dispose();
       final inject = sqlite3.open(path);
       // RAISE(ROLLBACK) ends the transaction inside SQLite, as a full disk can.
-      inject.execute(
-        r"CREATE TRIGGER lose_txn BEFORE INSERT ON game WHEN json_extract(NEW.data, '$.outcome') = 'draw' BEGIN SELECT RAISE(ROLLBACK, 'injected rollback'); END",
-      );
+      for (final write in ['INSERT', 'UPDATE']) {
+        inject.execute(
+          "CREATE TRIGGER lose_$write BEFORE $write ON game WHEN json_extract(NEW.data, '\$.outcome') = 'draw' BEGIN SELECT RAISE(ROLLBACK, 'injected rollback'); END",
+        );
+      }
       inject.close();
       final reopened = TournamentController(SqliteEventRepository(path));
       addTearDown(reopened.dispose);
@@ -574,8 +583,8 @@ void main() {
   test(
     'what is on disk mid-session opens with every result and all history',
     () async {
-      // Power goes out: no close, no checkpoint. The event file and its WAL
-      // as they lie on disk must be the whole event.
+      // Power goes out: no close. The event file and its WAL as they lie on
+      // disk must be the whole event, and after a save the WAL is empty.
       final path = p.join(directory.path, 'live.meow');
       final c = fixture(path: path, format: Format.swiss);
       addTearDown(c.dispose);
@@ -584,7 +593,7 @@ void main() {
         c.recordResult(g.id, Outcome.whiteWin);
       }
       final expected = c.event!.encode(), nodes = c.graph.nodes.length;
-      expect(File('$path-wal').lengthSync(), greaterThan(0));
+      expect(File('$path-wal').lengthSync(), 0);
       final copy = Directory(p.join(directory.path, 'copy'))..createSync();
       for (final suffix in ['', '-wal', '-shm']) {
         final file = File('$path$suffix');

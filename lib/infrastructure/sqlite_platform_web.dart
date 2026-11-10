@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:typed_data';
 
@@ -24,8 +25,33 @@ Future<void> initializeWebStorage() async {
   } catch (_) {}
 }
 
-/// Waits until every change so far is written to IndexedDB.
-Future<void> flushWebStorage() => _files.flush();
+/// Waits until every change so far is written to IndexedDB. The file system
+/// writes in batches and one wait covers only the batch in progress, so a
+/// second wait covers the changes queued behind it.
+Future<void> flushWebStorage() async {
+  await _files.flush();
+  await _files.flush();
+}
+
+var _unwritten = 0;
+
+/// Whether a saved change has not reached IndexedDB yet. SQLite's file system
+/// in the browser answers at once and writes just afterwards, so for a few
+/// milliseconds after each save closing the tab could lose it.
+bool get webStoragePending => _unwritten > 0;
+
+/// Called after every save: starts writing it to IndexedDB now and keeps
+/// [webStoragePending] true until it is there.
+void eventStorageChanged() {
+  _unwritten++;
+  unawaited(
+    flushWebStorage()
+        .catchError((Object _) {
+          // The next save retries; the browser reports a full quota itself.
+        })
+        .whenComplete(() => _unwritten--),
+  );
+}
 
 bool eventFileExists(String path) => _files.xAccess(path, 0) != 0;
 
@@ -38,6 +64,17 @@ void deleteEventFile(String path) {
 String? resolveEventPath(String path) => eventFileExists(path) ? path : null;
 
 bool sameEventFile(String a, String b) => a == b;
+
+/// Stored events cannot be moved from under the app; clearing site data
+/// removes them, which a later save reports.
+String? eventFileIdentity(String path) =>
+    eventFileExists(path) ? 'stored' : null;
+
+bool eventFolderReachable(String path) => true;
+
+/// Opens a stored event to look at it without changing it.
+CommonDatabase openEventForReading(String path) =>
+    _sqlite3.open(path, mode: OpenMode.readOnly);
 
 /// A name for a short-lived copy, such as a snapshot being downloaded.
 String scratchEventPath() =>

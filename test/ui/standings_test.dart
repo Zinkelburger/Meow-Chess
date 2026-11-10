@@ -44,7 +44,8 @@ void main() {
       c.recordResult(g.id, Outcome.draw);
     }
     await mountPlayers(tester, c);
-    expect(find.text('Rank'), findsNothing);
+    // Place and pairing number are separate columns once play starts.
+    expect(find.text('Rank'), findsOneWidget);
     expect(find.text('#'), findsOneWidget);
     expect(find.text('BH'), findsNothing);
     expect(find.text('SB'), findsNothing);
@@ -139,7 +140,7 @@ void main() {
       await mountPlayers(tester, c);
       expect(find.byKey(const ValueKey('prize-classes')), findsNothing);
       expect(find.text('Show rating estimates'), findsNothing);
-      expect(find.text('USCF expires'), findsNothing);
+      expect(find.text('US Chess expires'), findsNothing);
       expect(find.text('1 / W win · 0 / L loss · D draw'), findsNothing);
       expect(find.byTooltip('1 / W win · 0 / L loss · D draw'), findsNothing);
       for (var i = 0; i < 6; i++) {
@@ -168,7 +169,7 @@ void main() {
     // Quad 2's top seed is number 1, not 5.
     expect(
       find.descendant(
-        of: find.byKey(ValueKey('player-$first')),
+        of: find.byKey(ValueKey('number-$first')),
         matching: find.text('1'),
       ),
       findsOneWidget,

@@ -61,7 +61,7 @@ List<ImportRow> parseWebRoster(String source) {
   }
   if (candidates.length != 1) {
     throw const TournamentException(
-      'Expected one player table with Name and Rating columns (USCF ID is optional). '
+      'Expected one player table with Name and Rating columns (US Chess ID is optional). '
       'For other club websites, paste the page containing the table. '
       'Use a CSV for multiple player tables or tables loaded by JavaScript.',
     );

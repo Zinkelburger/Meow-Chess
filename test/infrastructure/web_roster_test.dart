@@ -286,7 +286,9 @@ void main() {
       expect(() => parseWebRoster(source), throwsA(isA<TournamentException>()));
     }
     expect(
-      parseWebRoster(table(row('123', 'Bad ID', '1500'))).single.error,
+      parseWebRoster(
+        table(row('123', 'Bad ID', '1500')),
+      ).single.warnings.single,
       contains('eight'),
     );
   });

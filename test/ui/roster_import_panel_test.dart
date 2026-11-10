@@ -118,31 +118,59 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('invalid rows need an explicit skip; Cancel changes nothing', (
-    tester,
-  ) async {
+  testWidgets(
+    'an odd field never keeps a player out; a nameless row is left out',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 850);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      final result = await open(
+        tester,
+        c,
+        'Name,Rating\nAda,1500\nBo,bad\nCy,1500P12\n,1200',
+      );
+      expect(
+        summary(tester),
+        '3 new players · 1 imported with a note · '
+        '1 row has no name and is left out',
+      );
+      // Nothing to tick first: the rows that name someone import.
+      expect(find.byKey(const ValueKey('import-skip-invalid')), findsNothing);
+      expect(enabled(tester), true);
+      // What could not be kept is said on the row.
+      expect(find.textContaining('Rating'), findsWidgets);
+      await tester.tap(find.text('Worth a look 2'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ada'), findsNothing);
+      expect(find.text('Bo'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('confirm-roster-import')));
+      await tester.pumpAndSettle();
+      expect(result.single, contains('Imported 3 players'));
+      expect(result.single, contains('Bo'));
+      expect(result.single, contains('without a name left out'));
+      final added = {for (final p in c.event!.players) p.name: p.rating};
+      expect(added['Bo'], 0);
+      expect(added['Cy'], 1500);
+      expect(c.event!.players.length, 7);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('Cancel changes nothing', (tester) async {
     tester.view.physicalSize = const Size(1280, 850);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final c = fixture(count: 4);
     addTearDown(c.dispose);
-    final result = await open(tester, c, 'Name,Rating\nAda,1500\nBo,bad');
-    expect(summary(tester), '1 new player · 1 row needs attention');
-    expect(enabled(tester), false);
-    // The problem is shown on its row.
-    expect(find.textContaining('Rating must be'), findsOneWidget);
-    await tester.tap(find.text('Need attention 1'));
-    await tester.pumpAndSettle();
-    expect(find.text('Ada'), findsNothing);
-    await tester.tap(find.byKey(const ValueKey('import-skip-invalid')));
-    await tester.pump();
-    expect(enabled(tester), true);
+    final result = await open(tester, c, 'Name,Rating\nAda,1500');
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(result.single, isNull);
     expect(c.event!.players.length, 4);
-    expect(tester.takeException(), isNull);
   });
 
   testWidgets('any typed separator, and repeated spaces as one', (

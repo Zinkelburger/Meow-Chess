@@ -894,9 +894,11 @@ class _Calculator {
 
   int _rating(String id) => event.player(id).effectivePairingRating;
 
+  /// 34E10: each opponent's performance, averaged. The performances keep
+  /// their fractions, so the result is rounded once.
   int _opponentsPerformance(String id, List<String> group) {
     final tied = group.toSet();
-    final performances = <int>[];
+    final performances = <double>[];
     for (final g in played(id)) {
       final opponent = g.opponent;
       final credits = <int>[];
@@ -906,9 +908,13 @@ class _Calculator {
         if (rating <= 0) continue;
         credits.add(rating + const [-400, 0, 400][game.result]);
       }
-      if (credits.isNotEmpty) performances.add(_average(credits));
+      if (credits.isNotEmpty) {
+        performances.add(credits.fold(0, (sum, v) => sum + v) / credits.length);
+      }
     }
-    return _average(performances);
+    if (performances.isEmpty) return 0;
+    return (performances.fold(0.0, (sum, v) => sum + v) / performances.length)
+        .round();
   }
 
   int _average(Iterable<int> values) {

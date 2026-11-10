@@ -60,7 +60,10 @@ void main() {
       postState(c.event!, null).label,
       'Create pairings · Round 1 · 2 sections',
     );
-    expect(postState(c.event!, q1).label, 'Create pairings · Round 1');
+    expect(
+      postState(c.event!, q1).label,
+      'Create pairings · ${q1.name} · Round 1',
+    );
     c.post(await c.propose());
     // One section's results are in, the other's are not.
     for (final g in c.event!.sections.first.rounds.last.games) {
@@ -82,7 +85,7 @@ void main() {
   });
 
   testWidgets(
-    'creating pairings from one section creates every ready section once',
+    'creating pairings from one section pairs that section only, once',
     (tester) async {
       final c = fixture(format: Format.swiss);
       addTearDown(c.dispose);
@@ -91,9 +94,14 @@ void main() {
       await tester.tap(find.byKey(ValueKey('section-chip-$first')));
       await tester.pumpAndSettle();
       await post(tester, c);
-      expect(c.event!.sections.map((s) => s.rounds.length), [1, 1]);
+      // The other section was ready too, and is left for its own tab.
+      expect(c.event!.sections.map((s) => s.rounds.length), [1, 0]);
       expect(find.byKey(const ValueKey('pair-next-round')), findsNothing);
       expect(find.byKey(const ValueKey('post-notes')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('section-chip-all')));
+      await tester.pumpAndSettle();
+      await post(tester, c);
+      expect(c.event!.sections.map((s) => s.rounds.length), [1, 1]);
       final waitingRevision = c.event!.sections.last.rounds.single.revision;
       for (final g in c.event!.sections.first.rounds.single.games) {
         c.recordResult(g.id, Outcome.draw);

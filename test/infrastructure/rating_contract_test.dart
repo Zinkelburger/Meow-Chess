@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/domain/model.dart';
@@ -8,6 +7,8 @@ import 'package:meow_chess/domain/pairing.dart';
 import 'package:meow_chess/domain/us_chess.dart';
 import 'package:meow_chess/infrastructure/dbf_export.dart';
 import 'package:path/path.dart' as p;
+
+import '../dbf_reader.dart';
 
 /// Export checks compare dates against this day, not the machine clock.
 final today = DateTime(2024, 3, 15);
@@ -156,34 +157,6 @@ Event doubleBlitz() {
       ),
     ],
   );
-}
-
-/// A minimal independent reader: field layout and trimmed values per record.
-(List<(String, String, int)>, List<Map<String, String>>) readDbf(
-  Uint8List bytes,
-) {
-  final view = ByteData.sublistView(bytes);
-  final count = view.getUint32(4, Endian.little),
-      header = view.getUint16(8, Endian.little),
-      size = view.getUint16(10, Endian.little);
-  final fields = <(String, String, int)>[];
-  for (var at = 32; bytes[at] != 13; at += 32) {
-    final name = ascii.decode(
-      bytes.sublist(at, at + 11).takeWhile((b) => b != 0).toList(),
-    );
-    fields.add((name, String.fromCharCode(bytes[at + 11]), bytes[at + 16]));
-  }
-  final rows = <Map<String, String>>[];
-  for (var r = 0; r < count; r++) {
-    var at = header + r * size + 1;
-    final row = <String, String>{};
-    for (final (name, _, width) in fields) {
-      row[name] = ascii.decode(bytes.sublist(at, at + width)).trimRight();
-      at += width;
-    }
-    rows.add(row);
-  }
-  return (fields, rows);
 }
 
 Event withPlayer(Event e, int index, Player Function(Player) change) => e.copy(
@@ -355,18 +328,33 @@ void main() {
       'G/61 d/5': RatingCategory.regular,
       'G/26 d/3': RatingCategory.quick,
       // Boundaries.
-      'G/66': RatingCategory.regular,
-      'G/65': RatingCategory.dual,
-      'G/30': RatingCategory.dual,
-      'G/29': RatingCategory.quick,
-      'G/11': RatingCategory.quick,
-      'G/10': RatingCategory.blitz,
+      'G/66 d0': RatingCategory.regular,
+      'G/65 d0': RatingCategory.dual,
+      'G/30 d0': RatingCategory.dual,
+      'G/29 d0': RatingCategory.quick,
+      'G/11 d0': RatingCategory.quick,
+      'G/10 d0': RatingCategory.blitz,
+      'G/5 d0': RatingCategory.blitz,
+      // Rule 5E2: with no delay stated the standard delay applies and
+      // counts (d5 from G/30, d3 above G/10, d2 at G/10 or less).
+      'G/65': RatingCategory.regular,
+      'G/60': RatingCategory.dual,
+      'G/29': RatingCategory.dual,
+      'G/25': RatingCategory.quick,
+      'G/10': RatingCategory.quick,
       'G/5': RatingCategory.blitz,
+      'G/3': RatingCategory.blitz,
     };
     for (final MapEntry(:key, :value) in examples.entries) {
       expect(TimeControl.parse(key).category, value, reason: key);
     }
-    for (final unratable in ['G/4', 'G/2 inc/2', 'G/4 inc/10', '40/2, SD/1']) {
+    for (final unratable in [
+      'G/4 d0',
+      'G/2',
+      'G/2 inc/2',
+      'G/4 inc/10',
+      '40/2, SD/1',
+    ]) {
       expect(TimeControl.parse(unratable).category, isNull, reason: unratable);
     }
     expect(RatingCategory.blitz.code, isNull);
@@ -416,8 +404,12 @@ void main() {
       'G90;+5': 'G/90;+5',
       'G/65; d10': 'G/65;d10',
       'G/5;d0': 'G/5;d0',
-      'G/5': 'G/5;d0',
-      'Game/45': 'G/45;d0',
+      // No delay stated: the rule 5E2 standard delay is what was played.
+      'G/5': 'G/5;d2',
+      'G/10': 'G/10;d2',
+      'G/25': 'G/25;d3',
+      'Game/45': 'G/45;d5',
+      '40/90, SD/30': '40/90,SD/30;d5',
       'G/90 inc/30': 'G/90;+30',
       '40/90, SD/30 d/5': '40/90,SD/30;d5',
       '40/80, SD/30 inc/30': '40/80,SD/30;+30',
@@ -514,7 +506,7 @@ void main() {
       'bad ZIP': (event.copy(zip: '0211'), 'ZIP'),
       'zero ZIP': (event.copy(zip: '00000'), 'ZIP'),
       'bad level': (event.copy(level: 'X'), 'event type'),
-      'unratable': (event.copy(timeControl: 'G/3'), 'not ratable'),
+      'unratable': (event.copy(timeControl: 'G/2'), 'not ratable'),
       'unparseable': (event.copy(timeControl: 'Game in 60'), 'Time control'),
       'long section': (section0((s) => s.copy(name: 'x' * 31)), 'Section name'),
       'unfinished': (
@@ -615,15 +607,24 @@ void main() {
           ),
       ],
     );
-    expect(
-      ratingPreflight(
-        event.copy(
-          sections: [forfeitOnly(event.sections.first), event.sections.last],
-        ),
-        today: today,
-      ),
-      contains('Section Section 0 has no played games to rate.'),
+    // The other section is still reported: this one is left out, with
+    // advice, and the remaining section becomes section 1.
+    final partial = event.copy(
+      sections: [forfeitOnly(event.sections.first), event.sections.last],
     );
+    expect(ratingPreflight(partial, today: today), isEmpty);
+    expect(
+      ratingIssues(partial, today: today).map((i) => i.message),
+      contains(
+        'Section Section 0 has no played games, so it is left out of the report.',
+      ),
+    );
+    final sent = readDbf(
+      ratingPackage(partial, today: today)['TSEXPORT.DBF']!,
+    ).$2;
+    expect(sent.map((r) => (r['S_SEC_NUM'], r['S_SEC_NAME'])), [
+      ('1', 'Section 1'),
+    ]);
   });
 
   test('accepted inputs in other spellings are exported the same way', () {
@@ -811,13 +812,13 @@ void main() {
       expect(messages, hasLength(1));
       final override = event.copy(
         sections: [
-          event.sections.first.copy(timeControl: 'G/3'),
+          event.sections.first.copy(timeControl: 'G/2'),
           event.sections.last,
         ],
       );
       expect(
         ratingPreflight(override, today: today).join('\n'),
-        contains('G/3 (Section 0) is not ratable'),
+        contains('G/2 (Section 0) is not ratable'),
       );
     });
   });

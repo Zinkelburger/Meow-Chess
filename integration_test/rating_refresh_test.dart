@@ -64,7 +64,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
     }
     await tester.pumpAndSettle();
-    expect(find.text('2 of 4 players have USCF ratings.'), findsOneWidget);
+    expect(find.text('2 of 4 players have US Chess ratings.'), findsOneWidget);
     expect(find.byKey(const ValueKey('rating-review')), findsOneWidget);
     // Unrated at USCF reads as a number; a missing ID stands out.
     expect(

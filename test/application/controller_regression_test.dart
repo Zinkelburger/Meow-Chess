@@ -448,7 +448,7 @@ void main() {
       final batch = await c.propose();
       c.recordResult(c.event!.games.first.id, Outcome.draw);
       final before = c.event!.encode();
-      expect(() => c.post(batch), refuses('Generate a fresh proposal'));
+      expect(() => c.post(batch), refuses('Create pairings again'));
       expect(c.event!.encode(), before);
     });
 
@@ -458,7 +458,7 @@ void main() {
       c.savePlayer(c.event!.players.first.copy(rating: 2100));
       final batch = await c.propose();
       c.undo();
-      expect(() => c.post(batch), refuses('Generate a fresh proposal'));
+      expect(() => c.post(batch), refuses('Create pairings again'));
       expect(c.event!.sections.every((s) => s.rounds.isEmpty), true);
     });
 
@@ -468,7 +468,7 @@ void main() {
       final first = await c.propose(), second = await c.propose();
       c.post(first);
       final before = c.event!.encode();
-      expect(() => c.post(second), refuses('Generate a fresh proposal'));
+      expect(() => c.post(second), refuses('Create pairings again'));
       expect(c.event!.encode(), before);
       expect(c.event!.sections.every((s) => s.rounds.length == 1), true);
     });
@@ -483,7 +483,7 @@ void main() {
     final revision = c.event!.revision;
     expect(
       () => c.startRounds([q1.id, q2.id, q3.id]),
-      refuses('Post a round before starting it.'),
+      refuses('Create pairings for the round before starting it.'),
     );
     expect(c.event!.revision, revision);
     expect(() => c.startRounds([]), refuses('No round is waiting'));
@@ -505,7 +505,7 @@ void main() {
     c.post(await c.propose(sectionId: q1.id));
     expect(
       () => c.removeSection(q1.id),
-      refuses('Sections with posted rounds cannot be deleted.'),
+      refuses('A section that has been paired cannot be deleted'),
     );
     c.removeSection(q2.id);
     expect(c.event!.sections.map((s) => s.id), [q1.id]);

@@ -99,21 +99,13 @@ List<Standing> standings(
       section.players.length >= 2 &&
       hasFixedSchedule(section)) {
     // Count actual opponents in the planned schedule; odd fields have sit-outs.
-    final scheduled = <String, int>{for (final id in section.players) id: 0};
-    for (final round in sectionSchedule(section).take(section.plannedRounds)) {
-      for (final (white, black) in round) {
-        if (white == null || black == null) continue;
-        final games = section.doubleGames ? 2 : 1;
-        scheduled[white] = scheduled[white]! + games;
-        scheduled[black] = scheduled[black]! + games;
-      }
-    }
+    final scheduled = scheduledGames(section);
     for (final id in section.players) {
       final played = section.rounds
           .expand((r) => r.games)
           .where((g) => g.outcome.played && (g.white == id || g.black == id))
           .length;
-      if (event.player(id).withdrawn && played * 2 < scheduled[id]!) {
+      if (event.player(id).withdrawn && played * 2 < (scheduled[id] ?? 0)) {
         excluded.add(id);
       }
     }

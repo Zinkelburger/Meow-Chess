@@ -3,6 +3,7 @@ import 'rating_settings.dart';
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 
+import '../application/diagnostics.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
@@ -25,6 +26,7 @@ import 'player_format.dart';
 import 'rating_refresh.dart';
 import 'rating_review_panel.dart';
 import 'select.dart';
+import 'workspace_status.dart' show showUndoNotice;
 import '../domain/pairing.dart';
 
 class PlayerPanel extends StatefulWidget {
@@ -49,7 +51,7 @@ class PlayerPanel extends StatefulWidget {
   final ActionDone? onRemoved;
   final String? focusField;
 
-  /// An open USCF rating review. The player stays fully editable; this
+  /// An open US Chess rating review. The player stays fully editable; this
   /// player's proposal shows under the Rating field.
   final RatingRefresh? ratingReview;
   final VoidCallback? onBackToReview;
@@ -99,6 +101,7 @@ class PlayerPanelState extends State<PlayerPanel> {
   /// Collapsible groups below the identity fields. Adding a player keeps
   /// the extras under one "More details" group so a walk-up stays quick.
   static const _groups = [
+    'missed',
     'byes',
     'uschess',
     'fide',
@@ -149,6 +152,8 @@ class PlayerPanelState extends State<PlayerPanel> {
     final s = p == null ? null : e.sectionOf(p.id);
     bool byDefault(String group) => switch (group) {
       'byes' => s == null || s.format == Format.swiss,
+      // Rounds missed are there to be seen: closed, they would hide a score.
+      'missed' => true,
       'uschess' =>
         p != null &&
             MembershipSummary(p, eventDate: e.lastDate).severity !=
@@ -261,6 +266,10 @@ class PlayerPanelState extends State<PlayerPanel> {
   /// The section a new player joins; null leaves them unsectioned.
   late String? joinSection = widget.sectionId;
 
+  /// A late entry's byes for the rounds already paired, in half points:
+  /// null gives a half point wherever the section's bye rules allow one.
+  int? lateByePoints;
+
   TournamentController get c => widget.controller;
   Map<String, String> get values => text.map((k, v) => MapEntry(k, v.text));
   bool get dirty => !mapEquals(values, stored(widget.player));
@@ -365,6 +374,7 @@ class PlayerPanelState extends State<PlayerPanel> {
       invalidateLookup();
     }
     if (old.player?.id != widget.player?.id) {
+      applyAfterFrame(old.player);
       draft.dispose();
       notice = null;
       moving = false;
@@ -383,7 +393,14 @@ class PlayerPanelState extends State<PlayerPanel> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    window = Scaffold.maybeOf(context);
+  }
+
+  @override
   void dispose() {
+    applyAfterFrame(widget.player);
     draft.dispose();
     for (final node in [...fieldFocus.values, ...groupFocus.values]) {
       node.dispose();
@@ -412,6 +429,148 @@ class PlayerPanelState extends State<PlayerPanel> {
     }
   }
 
+  /// Called by the view holding this card before it closes it or shows
+  /// another player: applies a pending valid edit of an existing player as
+  /// one change and says so with Undo. Returns false, with the reason shown
+  /// in the card, when the edit cannot be saved, so the view keeps the card
+  /// open. A half-typed new player is never registered this way; it stays a
+  /// draft.
+  bool applyEdits() {
+    final p = widget.player;
+    if (p == null || !c.event!.players.any((x) => x.id == p.id)) return true;
+    final head = c.graph.head;
+    if (!commit()) return false;
+    if (c.graph.head != head) showUndoNotice(context, c, savedNotice(fresh));
+    return true;
+  }
+
+  static String savedNotice(Player p) => 'Saved ${p.name}’s changes';
+
+  /// The window this card is in, where a notice can still be shown once
+  /// the card itself is gone.
+  ScaffoldState? window;
+
+  /// The valid edit of [p] waiting in the fields, as the player it would
+  /// save. Null when nothing is edited, or the edit cannot be saved as it
+  /// stands. Reads only, so it is safe while widgets are being rebuilt.
+  Player? waitingEdit(Player? p) {
+    final e = c.event;
+    if (p == null || e == null || !e.players.any((x) => x.id == p.id)) {
+      return null;
+    }
+    final now = e.player(p.id), current = stored(now);
+    if (draft.conflicts(current).isNotEmpty) return null;
+    final v = {
+      for (final (key, _, _) in _fields)
+        key: draft.isEdited(key) ? text[key]!.text : current[key]!,
+    };
+    if (_fields.every((f) => v[f.$1] == current[f.$1])) return null;
+    try {
+      return editedPlayer(v, now);
+    } on TournamentException {
+      return null;
+    }
+  }
+
+  /// Saves [p]'s valid pending edit when the card goes away without its
+  /// view asking first: another tool takes the panel, or the page changes.
+  /// That happens while widgets are being rebuilt, so the save waits for the
+  /// frame to end. An edit that cannot be saved stays a draft on the player.
+  void applyAfterFrame(Player? p) {
+    final saved = waitingEdit(p);
+    if (saved == null) return;
+    final controller = c, key = draft.key, scaffold = window;
+    final id = controller.event!.id, revision = controller.event!.revision;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final e = controller.event;
+        if (e == null || e.id != id || e.revision != revision) return;
+        controller.savePlayer(saved);
+        controller.workspaceState.write(key, '');
+        if (scaffold != null && scaffold.mounted) {
+          showUndoNotice(scaffold.context, controller, savedNotice(saved));
+        }
+      } on TournamentException {
+        // Refused, as when the event has closed: the draft stays.
+      } catch (error, stack) {
+        Diagnostics.record(
+          'apply player edit',
+          'failed',
+          context: {'player': saved.id},
+          error: error,
+          stack: stack,
+        );
+      }
+    });
+  }
+
+  /// The player the field values [v] describe: [existing] with them applied,
+  /// or a new player. Throws why they cannot be saved.
+  Player editedPlayer(Map<String, String> v, Player? existing) {
+    final rating = parseRating(v['rating']!);
+    if (v['name']!.trim().isEmpty) {
+      throw const TournamentException('Enter the player\'s name.');
+    }
+    if (rating == null) {
+      throw const TournamentException('Enter a rating number, or UNR.');
+    }
+    final state = v['state']!.trim().toUpperCase();
+    if (state.isNotEmpty && !isStateCode(state)) {
+      throw const TournamentException(
+        'Enter the state as two letters, like MA.',
+      );
+    }
+    int assigned(String key, String label) {
+      final value = v[key]!.trim();
+      if (value.isEmpty) return 0;
+      final n = int.tryParse(value);
+      if (n == null || n < 0 || n > 4000) {
+        throw TournamentException(
+          'Enter the $label as a number, or leave it blank.',
+        );
+      }
+      return n;
+    }
+
+    // Paired FIDE sections rank by the FIDE ratings: they stay, like the
+    // rating.
+    final fixed = existing != null && fideRatingsLocked(c.event!, existing)
+        ? existing
+        : null;
+    final saved = (existing ?? Player(id: c.newId(), name: '')).copy(
+      name: v['name']!.trim(),
+      memberId: v['memberId']!.trim(),
+      // A locked rating keeps its value, whatever a restored draft says.
+      rating: existing != null && ratingLockedFor(existing)
+          ? existing.rating
+          : rating,
+      state: state,
+      reportName: v['reportName']!.trim(),
+      team: v['team']!.trim(),
+      notes: v['notes']!,
+      pairingRating: assigned('pairingRating', 'pairing rating'),
+      prizeRating: assigned('prizeRating', 'prize rating'),
+      ratingNote: v['ratingNote']!.trim(),
+      foreignRating: assigned('foreignRating', 'foreign rating'),
+      foreignFederation: v['foreignFederation']!.trim(),
+      fixedBoard: assigned('fixedBoard', 'fixed board number'),
+      fideId: v['fideId']!.trim(),
+      fideStandard:
+          fixed?.fideStandard ??
+          assigned('fideStandard', 'FIDE standard rating'),
+      fideRapid: fixed?.fideRapid ?? assigned('fideRapid', 'FIDE rapid rating'),
+      fideBlitz: fixed?.fideBlitz ?? assigned('fideBlitz', 'FIDE blitz rating'),
+      title: v['title']!.trim(),
+      federation: v['federation']!.trim().toUpperCase(),
+      birthDate: v['birthDate']!.trim(),
+      sex: v['sex']!.trim(),
+    );
+    if (fideFieldsProblem(saved) case final problem?) {
+      throw TournamentException(problem);
+    }
+    return saved;
+  }
+
   /// Saves pending field edits. Returns false and shows why if invalid.
   bool commit() {
     final adding = widget.player == null;
@@ -428,71 +587,12 @@ class PlayerPanelState extends State<PlayerPanel> {
     if (!_fields.any((field) => draft.isEdited(field.$1))) return true;
     ({String? into, String? problem}) joined = (into: null, problem: null);
     final ok = attempt(() {
-      final rating = parseRating(v['rating']!);
-      if (v['name']!.trim().isEmpty) {
-        throw const TournamentException('Enter the player\'s name.');
-      }
-      if (rating == null) {
-        throw const TournamentException('Enter a rating number, or UNR.');
-      }
-      final state = v['state']!.trim().toUpperCase();
-      if (state.isNotEmpty && !isStateCode(state)) {
-        throw const TournamentException(
-          'Enter the state as two letters, like MA.',
-        );
-      }
-      int assigned(String key, String label) {
-        final value = v[key]!.trim();
-        if (value.isEmpty) return 0;
-        final n = int.tryParse(value);
-        if (n == null || n < 0 || n > 4000) {
-          throw TournamentException(
-            'Enter the $label as a number, or leave it blank.',
-          );
-        }
-        return n;
-      }
-
-      final fideLocked = !adding && fideRatingsLocked(c.event!, fresh);
-      final saved = (adding ? Player(id: c.newId(), name: '') : fresh).copy(
-        name: v['name']!.trim(),
-        memberId: v['memberId']!.trim(),
-        // A locked rating keeps its value, whatever a restored draft says.
-        rating: ratingLocked ? fresh.rating : rating,
-        state: state,
-        reportName: v['reportName']!.trim(),
-        team: v['team']!.trim(),
-        notes: v['notes']!,
-        pairingRating: assigned('pairingRating', 'pairing rating'),
-        prizeRating: assigned('prizeRating', 'prize rating'),
-        ratingNote: v['ratingNote']!.trim(),
-        foreignRating: assigned('foreignRating', 'foreign rating'),
-        foreignFederation: v['foreignFederation']!.trim(),
-        fixedBoard: assigned('fixedBoard', 'fixed board number'),
-        fideId: v['fideId']!.trim(),
-        // Paired FIDE sections rank by these: they stay, like the rating.
-        fideStandard: fideLocked
-            ? fresh.fideStandard
-            : assigned('fideStandard', 'FIDE standard rating'),
-        fideRapid: fideLocked
-            ? fresh.fideRapid
-            : assigned('fideRapid', 'FIDE rapid rating'),
-        fideBlitz: fideLocked
-            ? fresh.fideBlitz
-            : assigned('fideBlitz', 'FIDE blitz rating'),
-        title: v['title']!.trim(),
-        federation: v['federation']!.trim().toUpperCase(),
-        birthDate: v['birthDate']!.trim(),
-        sex: v['sex']!.trim(),
-      );
-      if (fideFieldsProblem(saved) case final problem?) {
-        throw TournamentException(problem);
-      }
+      final saved = editedPlayer(v, adding ? null : fresh);
       c.savePlayer(saved);
       notice = c.playerNotice;
       if (adding) joined = joinNew(saved);
       // Show the saved capitals rather than leaving the panel looking unsaved.
-      if (!adding) text['state']!.text = state;
+      if (!adding) text['state']!.text = saved.state;
       draft.reset({
         ...stored(adding ? null : saved),
         'join': joinSection ?? '',
@@ -520,7 +620,14 @@ class PlayerPanelState extends State<PlayerPanel> {
     final s = c.event!.sections.where((s) => s.id == joinSection).firstOrNull;
     if (s == null) return (into: null, problem: null);
     try {
-      c.movePlayers([p.id], s.id, reason: s.rounds.isEmpty ? '' : 'Late entry');
+      c.movePlayers(
+        [p.id],
+        s.id,
+        lateByes: {
+          if (lateByePoints == 0)
+            for (var r = 1; r <= s.rounds.length; r++) r: 0,
+        },
+      );
       return (into: s.name, problem: null);
     } catch (error) {
       return (
@@ -650,20 +757,32 @@ class PlayerPanelState extends State<PlayerPanel> {
       });
       return;
     }
+    final before = c.event!, target = moveTo!, other = swapWith;
     if (attempt(
-      () => swapWith != null
+      () => other != null
           ? c.swapPlayers(
               widget.player!.id,
-              swapWith!,
-              moveRevision ?? c.event!.revision,
+              other,
+              moveRevision ?? before.revision,
             )
           : c.movePlayers(
               [widget.player!.id],
-              moveTo!,
+              target,
               reason: reason.text.trim(),
             ),
     )) {
       cancelMove();
+      showUndoNotice(
+        context,
+        c,
+        moveNotice(
+          before,
+          c.event!,
+          widget.player!.id,
+          target: target,
+          swapWith: other,
+        ),
+      );
     }
   }
 
@@ -724,8 +843,11 @@ class PlayerPanelState extends State<PlayerPanel> {
   /// with the US Chess rating chips.
   bool get ratingLocked {
     final p = widget.player;
-    return p != null && (c.event!.sectionOf(p.id)?.rounds.isNotEmpty ?? false);
+    return p != null && ratingLockedFor(p);
   }
+
+  bool ratingLockedFor(Player p) =>
+      c.event!.sectionOf(p.id)?.rounds.isNotEmpty ?? false;
 
   Widget field(String key) {
     final (_, label, lines) = _fields.firstWhere((f) => f.$1 == key);
@@ -790,6 +912,8 @@ class PlayerPanelState extends State<PlayerPanel> {
             decoration: InputDecoration(
               labelText: label,
               helperText: locked && key == 'rating' ? ratingLockedNote : null,
+              // Notes under a field wrap in the narrow card, never clip.
+              helperMaxLines: 8,
               alignLabelWithHint: lines > 1,
               // Three FIDE ratings share one row of the 360px panel.
               contentPadding: _narrow.contains(key)
@@ -934,7 +1058,10 @@ class PlayerPanelState extends State<PlayerPanel> {
               ),
             ),
           );
-    void close() => widget.onClose();
+    // Closing saves a player's pending edit; a problem keeps the card open.
+    void close() {
+      if (applyEdits()) widget.onClose();
+    }
 
     final player = widget.player;
     if (player == null) {
@@ -969,6 +1096,51 @@ class PlayerPanelState extends State<PlayerPanel> {
                 }),
               ),
             ),
+            // A section already paired: the entry starts next round, and
+            // the rounds missed are byes the TD chooses here.
+            if (c.event!.sections.where((s) => s.id == joinSection).firstOrNull
+                case final s? when s.rounds.isNotEmpty)
+              Padding(
+                key: const ValueKey('panel-late-entry'),
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      s.rounds.length == 1
+                          ? '${s.name} has paired round 1. They are paired '
+                                'from round 2 and take a bye for round 1.'
+                          : '${s.name} has paired rounds 1–${s.rounds.length}. '
+                                'They are paired from round '
+                                '${s.rounds.length + 1} and take a bye for '
+                                'each round missed.',
+                      style: muted,
+                    ),
+                    const SizedBox(height: 8),
+                    SegmentedButton<int>(
+                      key: const ValueKey('panel-late-byes'),
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(value: 1, label: Text('½-point byes')),
+                        ButtonSegment(value: 0, label: Text('0-point byes')),
+                      ],
+                      selected: {lateByePoints ?? 1},
+                      onSelectionChanged: (v) =>
+                          setState(() => lateByePoints = v.first),
+                    ),
+                    if ((lateByePoints ?? 1) == 1)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Half a point where the section\'s bye rules allow '
+                          'it, otherwise zero. Change any round afterwards on '
+                          'their card.',
+                          style: muted,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             if (c.event!.sections.where((s) => s.id == joinSection).firstOrNull
                 case final s? when walkUpRangeProblem(s) != null)
               Padding(
@@ -1040,6 +1212,18 @@ class PlayerPanelState extends State<PlayerPanel> {
         : null;
     final checked = checkedAt != null && p.memberId.isNotEmpty;
     final open = openRounds(e, p);
+    // Posted rounds the player sat out with a bye that is theirs to set (a
+    // late entry's, or a round before they moved in): round and half points.
+    final missed = [
+      if (s != null)
+        for (final round in s.rounds)
+          if (!round.games.any((g) => g.white == p.id || g.black == p.id))
+            for (final bye in round.byes)
+              if (bye.player == p.id &&
+                  !bye.allocated &&
+                  const ['Late entry', 'Missed round'].contains(bye.reason))
+                (round.number, bye.points),
+    ];
     final avoided = [
       for (final other in e.players)
         if (other.id != p.id &&
@@ -1188,6 +1372,30 @@ class PlayerPanelState extends State<PlayerPanel> {
           ),
         field('state'),
         const SizedBox(height: 8),
+        if (missed.isNotEmpty)
+          group(
+            'missed',
+            'Rounds missed',
+            [
+              Text(
+                'Paired before ${p.name} was in the section. Each counts as '
+                'a bye of the points chosen.',
+                style: muted,
+              ),
+              const SizedBox(height: 8),
+              ByeGrid(
+                key: const ValueKey('missed-bye-grid'),
+                rounds: [for (final (r, _) in missed) r],
+                byes: {for (final (r, points) in missed) r: points},
+                rows: const [(0, '0'), (1, '½')],
+                onToggle: (r, points) =>
+                    attempt(() => c.reserveBye(p.id, r, points)),
+              ),
+            ],
+            summary: [
+              for (final (r, points) in missed) 'R$r ${halves(points)}',
+            ].join(', '),
+          ),
         // Withdrawn players take zero-point byes; the pill already says so.
         if (open.isNotEmpty && !p.withdrawn)
           group('byes', 'Byes', [
@@ -1492,15 +1700,18 @@ class PlayerPanelState extends State<PlayerPanel> {
             },
           ),
           const SizedBox(height: 8),
-          // Rule 36: computers never meet each other and take only prizes
-          // designated for computers.
           CheckboxListTile(
             key: const ValueKey('panel-computer'),
             contentPadding: EdgeInsets.zero,
             dense: true,
             visualDensity: VisualDensity.compact,
             controlAffinity: ListTileControlAffinity.leading,
-            title: const Text('Computer entrant (rule 36)'),
+            title: const Text('Computer entrant'),
+            subtitle: Text(
+              'Computers never play each other and take only prizes '
+              'designated for computers (rule 36).',
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            ),
             value: p.computer,
             onChanged: (v) =>
                 attempt(() => c.savePlayer(fresh.copy(computer: v ?? false))),
@@ -1528,8 +1739,19 @@ class PlayerPanelState extends State<PlayerPanel> {
                 ))
                   SelectOption(other.id, '${other.name} (withdrawn)'),
               ],
-              onChanged: (v) =>
-                  attempt(() => c.savePlayer(fresh.copy(reentryOf: v))),
+              // The same person: a re-entry without an ID of its own takes
+              // the earlier entry's, so the report shows one player.
+              onChanged: (v) => attempt(() {
+                final earlier = v.isEmpty ? null : c.event!.player(v);
+                c.savePlayer(
+                  fresh.copy(
+                    reentryOf: v,
+                    memberId: fresh.memberId.isEmpty && earlier != null
+                        ? earlier.memberId
+                        : fresh.memberId,
+                  ),
+                );
+              }),
             ),
             const SizedBox(height: 8),
             for (final other in avoided)
@@ -1604,6 +1826,7 @@ class ByeGrid extends StatelessWidget {
     required this.rounds,
     required this.byes,
     required this.onToggle,
+    this.rows = allRows,
     super.key,
   });
   final List<int> rounds;
@@ -1613,7 +1836,10 @@ class ByeGrid extends StatelessWidget {
   final void Function(int round, int points) onToggle;
 
   /// Rows in reading order; points are stored in halves.
-  static const rows = [(0, '0'), (1, '½'), (2, '1')];
+  static const allRows = [(0, '0'), (1, '½'), (2, '1')];
+
+  /// The points offered: every kind of bye, or fewer where only some apply.
+  final List<(int, String)> rows;
 
   @override
   Widget build(BuildContext context) {

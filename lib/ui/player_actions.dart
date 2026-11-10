@@ -11,6 +11,7 @@ import 'panels.dart';
 import 'player_format.dart';
 import 'side_panel.dart';
 import 'select.dart';
+import 'workspace_status.dart' show showUndoNotice;
 
 /// What a player's status button does. Before their section is paired a
 /// player is removed from the event; once it is paired they withdraw.
@@ -65,28 +66,33 @@ String statusLabel(Event e, StatusAction action, List<String> ids) {
         title: one ? 'Player removed' : 'Players removed',
         message: [
           'Removed $who from the event.',
-          ?rosterNote(c.event!, sections),
+          ?rosterNote(c.event!, sections, before: e),
         ].join(' '),
       );
     case StatusAction.withdraw:
       c.setWithdrawn(ids, true);
       return (
         title: one ? 'Player withdrawn' : 'Players withdrawn',
-        message: 'Withdrew $who.',
+        message: ['Withdrew $who.', ?pairingsResetNote(e, c.event!)].join(' '),
       );
     case StatusAction.reinstate:
       c.setWithdrawn(ids, false);
       return (
         title: one ? 'Player reinstated' : 'Players reinstated',
-        message: 'Reinstated $who.',
+        message: [
+          'Reinstated $who.',
+          ?pairingsResetNote(e, c.event!),
+        ].join(' '),
       );
   }
 }
 
-/// Unpaired quads among [sectionIds] that no longer have four players, so
-/// the TD reads it beside the change that caused it.
-String? rosterNote(Event e, Set<String> sectionIds) {
-  final notes = [
+/// What a roster change did to the sections it touched, so the TD reads it
+/// beside the change that caused it: unpaired quads among [sectionIds] that
+/// no longer have four players and, given the event [before] the change,
+/// hand-edited quad pairings it reset.
+String? rosterNote(Event e, Set<String> sectionIds, {Event? before}) {
+  final sizes = [
     for (final s in e.sections)
       if (sectionIds.contains(s.id) &&
           s.format == Format.quad &&
@@ -96,7 +102,52 @@ String? rosterNote(Event e, Set<String> sectionIds) {
         '${s.name} now has ${s.players.length} '
             '${s.players.length == 1 ? 'player' : 'players'}.',
   ];
-  return notes.isEmpty ? null : [...notes, 'A quad needs four.'].join(' ');
+  final notes = [
+    ...sizes,
+    if (sizes.isNotEmpty) 'A quad needs four.',
+    if (before != null) ?pairingsResetNote(before, e),
+  ];
+  return notes.isEmpty ? null : notes.join(' ');
+}
+
+/// Names the sections whose hand-edited quad pairings a change cleared:
+/// they had some [before] it and have none [after]. A manual quad schedule
+/// names roster slots, so a change of roster starts it over.
+String? pairingsResetNote(Event before, Event after) {
+  final names = [
+    for (final was in before.sections)
+      if (was.quadPairings.isNotEmpty)
+        for (final now in after.sections)
+          if (now.id == was.id && now.quadPairings.isEmpty) now.name,
+  ];
+  if (names.isEmpty) return null;
+  final listed = names.length == 1
+      ? names.single
+      : '${names.take(names.length - 1).join(', ')} and ${names.last}';
+  return 'The hand-edited pairings for $listed were reset.';
+}
+
+/// What moving [playerId] did, for the notice that offers Undo: where they
+/// went or whom they changed places with, then [rosterNote] for the sections
+/// involved. [before] is the event as it was.
+String moveNotice(
+  Event before,
+  Event after,
+  String playerId, {
+  required String target,
+  String? swapWith,
+}) {
+  final name = after.player(playerId).name;
+  final to = after.sections.where((s) => s.id == target).firstOrNull;
+  return [
+    swapWith != null
+        ? '$name and ${after.player(swapWith).name} changed places.'
+        : 'Moved $name to ${to?.name ?? 'the section'}.',
+    ?rosterNote(after, {
+      ?before.sectionOf(playerId)?.id,
+      target,
+    }, before: before),
+  ].join(' ');
 }
 
 /// A swap keeps a quad or round robin at full size. Between two Swiss
@@ -317,9 +368,21 @@ class _MovePlayerPanelState extends State<MovePlayerPanel> {
         });
         return;
       }
+      final before = c.event!;
       swapWith != null
           ? c.swapPlayers(player!, swapWith!, revision)
           : c.movePlayers([player!], target!, reason: reason.text.trim());
+      showUndoNotice(
+        context,
+        c,
+        moveNotice(
+          before,
+          c.event!,
+          player!,
+          target: target!,
+          swapWith: swapWith,
+        ),
+      );
       widget.onClose();
     } catch (e) {
       setState(() => error = plainMessage(e));

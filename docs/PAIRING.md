@@ -21,6 +21,14 @@ last-round exceptions; reentries; and impossible constraints. The baseline rule
 does not mean repeats can never occur under every exceptional tournament condition.
 Require an explicit diagnosed exception instead of a hidden fallback.
 
+When a repeat cannot be avoided the engine pairs the fewest boards that must
+repeat, lowest in the standings first, and names them in the round's
+explanations. Team-mates kept apart are a preference, not a restriction: a
+section mostly from one school still pairs, with the fewest team-mate games.
+Every search in the engine is bounded (a maximum matching decides whether a
+group can be paired at all), and the controller stops and refuses a proposal
+that runs past its time limit instead of waiting.
+
 Proposed engine contract: input = immutable entrants/history/policies/revision;
 output = a complete proposal with explanations or a failure with constraints that
 prevent completion. Keep the engine version and any random decisions. The TD can
@@ -74,6 +82,11 @@ leaves before completing half the scheduled RR games. Preserve all actual played
 results and derive the applicable standings projection. Never delete those games
 to make the wall chart look right. Requested bye restrictions do not justify
 crashing or inventing results when a person actually leaves.
+
+A quad or round robin keeps a withdrawn player's remaining games on its
+schedule as forfeit wins for the opponents, so its rounds post while the
+player stays withdrawn; a requested bye is still refused, since the player is
+expected back.
 
 Swiss withdrawal, allocated bye, requested half-bye, zero-bye, forfeit and unreported
 result need separate states. Scoring two halves is not sufficient information to

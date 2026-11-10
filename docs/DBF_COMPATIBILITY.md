@@ -40,6 +40,39 @@ exports are now implemented and covered by the replays above. Missing required
 metadata and inconsistent source results still block the relevant reports;
 acceptance of a newly generated Meow package by MUIR remains unverified.
 
+## What the report holds when the event did not go to plan
+
+`_report` in `lib/infrastructure/dbf_export.dart` builds the rows once for the
+preflight, the files and the manifest. None of the cases below has been
+uploaded to MUIR; they follow the 2C text and the accepted SwissSys files
+(which include all-`U0` players and the same member in two sections).
+
+- **Late entries** get a bye on each round they missed (`H0` or `U0`), like any
+  other bye, and no longer count as a section move.
+- **Moves and combined sections after play started.** A game is reported in the
+  section where it was played. A player who left keeps a detail row there (the
+  rounds played, then `U0`) and has a row in the new section (`U0`, or the bye
+  recorded, for the earlier rounds). When every player of a game has since
+  moved together into a section with the same time control and games per
+  round, as when sections are combined, the game is reported in that section in
+  the same round, so a combined section sends one set of rounds and the emptied
+  section is not sent. An emptied section whose games cannot move (another
+  time control) is still sent, with its former players.
+- **Players with no played game and no US Chess ID** in a finished section are
+  left out, with advice; pairing numbers stay contiguous. Anyone who played a
+  game still needs an ID.
+- **Sections with no played game** (and none waiting for a result) are left
+  out, with advice, once another section has games; section numbers close up.
+- **Re-entries** (rule 28S) that share a US Chess ID with the entry they
+  replace merge into one detail row; if both entries played in the same round,
+  both rows are sent and advice explains the duplicate ID.
+- **Time controls with no delay stated** are sent with the rule 5E2 standard
+  delay (`G/10` → `G/10;d2`, Quick), never an invented `;d0`.
+- **Knockout tie-break games** are not sent (another time control, or time
+  odds under rule 5C1); advice counts them. Every match game is sent.
+- **Memberships** that the last check found expired before the event's last
+  day are listed as advice.
+
 ## Run the complete check
 
 On the configured Linux workstation:

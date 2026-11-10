@@ -68,10 +68,10 @@ void main() {
     final zip = ZipDecoder().decodeBytes(
       ratingPackageZip(event, now: () => today),
     );
-    expect(
-      zip.files.map((f) => f.name).toSet(),
-      {...files.keys, 'manifest.json'},
-    );
+    expect(zip.files.map((f) => f.name).toSet(), {
+      ...files.keys,
+      'manifest.json',
+    });
     for (final entry in files.entries) {
       expect(zip.findFile(entry.key)!.content, entry.value);
     }

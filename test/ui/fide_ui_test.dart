@@ -269,8 +269,8 @@ void main() {
     );
     await mountWorkspace(tester, c);
     expect(find.text('FIDE ID'), findsOneWidget);
-    expect(find.text('USCF expires'), findsNothing);
-    expect(find.text('USCF ID'), findsNothing);
+    expect(find.text('US Chess expires'), findsNothing);
+    expect(find.text('US Chess ID'), findsNothing);
     expect(find.byKey(const ValueKey('refresh-fide')), findsOneWidget);
     expect(find.byKey(const ValueKey('refresh-uscf')), findsNothing);
   });

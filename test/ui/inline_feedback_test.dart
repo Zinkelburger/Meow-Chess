@@ -53,7 +53,9 @@ void main() {
       await tester.tap(withdraw);
       await tester.pumpAndSettle();
       expect(c.event!.player(game.black).withdrawn, true);
-      expect(find.text('Withdrawn'), findsOneWidget);
+      // Marked on this board and on the player's two later quad games, which
+      // now stand as forfeits.
+      expect(find.text('Withdrawn'), findsNWidgets(3));
       expect(withdraw, findsNothing);
       c.undo();
       await tester.pumpAndSettle();
@@ -61,10 +63,10 @@ void main() {
       expect(withdraw, findsOneWidget);
       c.recordResult(game.id, Outcome.doubleForfeit);
       await tester.pumpAndSettle();
-      expect(find.text('Withdraw from future rounds'), findsNWidgets(2));
+      expect(find.text('Withdraw after round 1'), findsNWidgets(2));
       c.recordResult(game.id, Outcome.draw);
       await tester.pumpAndSettle();
-      expect(find.text('Withdraw from future rounds'), findsNothing);
+      expect(find.text('Withdraw after round 1'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

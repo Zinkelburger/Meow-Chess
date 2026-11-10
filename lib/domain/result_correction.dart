@@ -1,3 +1,4 @@
+import 'knockout.dart';
 import 'model.dart';
 
 /// A review is tied to one immutable event revision and stable game identity.
@@ -68,8 +69,55 @@ class ResultCorrection {
         for (final r in s.rounds)
           if (r.number > round.number) (s, r),
   ];
+
+  /// Later rounds were made from this result: a Swiss or bughouse pairing
+  /// read the scores, and a knockout round holds whoever advanced.
   bool get hasDependencies =>
-      (section.format == Format.swiss && later.isNotEmpty) || hasTransfers;
+      (const [
+            Format.swiss,
+            Format.bughouse,
+            Format.knockout,
+          ].contains(section.format) &&
+          later.isNotEmpty) ||
+      hasTransfers;
+
+  /// Knockout: the posted bracket round that correcting this game to
+  /// [outcome] would leave paired with a player who no longer advances
+  /// into it, as its name and first round number; null when the bracket
+  /// stays whole.
+  ({String name, int round})? replacedStage(Outcome outcome) {
+    if (section.format != Format.knockout) return null;
+    final corrected = _corrected(outcome);
+    final stage = knockoutBracket(
+      corrected,
+      corrected.sections.firstWhere((s) => s.id == section.id),
+    ).stages.where((s) => s.replaced.isNotEmpty).firstOrNull;
+    return stage == null
+        ? null
+        : (name: stage.name, round: stage.rounds.first.number);
+  }
+
+  /// The event with only the game's outcome changed.
+  Event _corrected(Outcome outcome) => event.copy(
+    sections: [
+      for (final s in event.sections)
+        s.id != section.id
+            ? s
+            : s.copy(
+                rounds: [
+                  for (final r in s.rounds)
+                    r.number != round.number
+                        ? r
+                        : r.copy(
+                            games: [
+                              for (final g in r.games)
+                                g.id != gameId ? g : g.copy(outcome: outcome),
+                            ],
+                          ),
+                ],
+              ),
+    ],
+  );
 
   bool canReopenFrom(int number) =>
       !hasTransfers &&
@@ -90,7 +138,20 @@ class ResultCorrection {
         'Only later rounds without recorded play or section transfers can be reopened. Confirm that none of their games have started.',
       );
     }
-    return event.copy(
+    // A knockout round paired with a player this correction puts out cannot
+    // be played as posted. While none of it has started it is unpaired with
+    // the correction; once it has, the correction stands and the bracket
+    // asks for that round to be paired again.
+    if (replacedStage(outcome) case (:final name, round: final first)
+        when first > round.number &&
+            canReopenFrom(first) &&
+            (reopenFrom == null || reopenFrom > first)) {
+      throw TournamentException(
+        'This result changes who advances, and the $name (round $first) is already paired with the player it puts out. '
+        'Choose "Unpair from round $first" so the $name can be paired again.',
+      );
+    }
+    final next = event.copy(
       sections: [
         for (final s in event.sections)
           s.id != section.id
@@ -136,6 +197,14 @@ class ResultCorrection {
                               ),
                   ],
                 ),
+      ],
+    );
+    if (section.format != Format.knockout || reopenFrom == null) return next;
+    // Unpairing bracket rounds takes their record and decisions with them.
+    return next.copy(
+      sections: [
+        for (final s in next.sections)
+          s.id == section.id ? knockoutAfterPost(next, s) : s,
       ],
     );
   }

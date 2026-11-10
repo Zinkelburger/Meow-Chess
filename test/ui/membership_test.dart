@@ -44,14 +44,14 @@ void main() {
         ),
       ),
     );
-    expect(find.text('USCF expires'), findsOneWidget);
+    expect(find.text('US Chess expires'), findsOneWidget);
     expect(find.text('Registration note'), findsOneWidget);
     expect(find.text('Arriving late'), findsOneWidget);
     expect(find.byTooltip('Arriving late'), findsOneWidget);
     expect(find.text('Private TD note'), findsNothing);
     expect(
       tester.getTopLeft(find.text('Registration note')).dx,
-      greaterThan(tester.getTopLeft(find.text('USCF expires')).dx),
+      greaterThan(tester.getTopLeft(find.text('US Chess expires')).dx),
     );
     // Date and warning share one line so the row height never changes.
     final expired = find.text('2020-01-31  Expired');
@@ -128,7 +128,7 @@ void main() {
           expect(dateRect.left, normalRect.left);
           expect(
             dateRect.left,
-            tester.getTopLeft(find.text('USCF expires')).dx,
+            tester.getTopLeft(find.text('US Chess expires')).dx,
           );
           expect(dateRect.height, normalRect.height);
           expect(dateRect.right, lessThanOrEqualTo(noteRect.left - 12));

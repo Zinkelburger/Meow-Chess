@@ -401,21 +401,22 @@ void main() {
     });
 
     test('32C6: an uneven remainder is shared without losing a cent', () {
-      // Four tie for $400; the unrated takes $99.95 and the other $0.05
-      // is split 2 + 2 + 1 cents among the three rated players.
+      // Four tie for $500, $125 each; the unrated takes $99.94 and the
+      // other $25.06 is split 8.36 + 8.35 + 8.35 among the three rated
+      // players, each still under the $200 they could win alone.
       final e = fixture(
         [('u', 0, 10), ('a', 2000, 10), ('b', 2000, 10), ('c', 2000, 10)],
-        [place(1, 100), place(2, 100), place(3, 100), place(4, 100)],
-        unratedCapCents: 9995,
+        [place(1, 200), place(2, 100), place(3, 100), place(4, 100)],
+        unratedCapCents: 9994,
       );
       final a = run(e);
-      expect(a.paidCents, 40000);
+      expect(a.paidCents, 50000);
       final cents = {for (final w in a.awards) w.player.id: w.cents};
-      expect(cents['u'], 9995);
+      expect(cents['u'], 9994);
       expect([cents['a'], cents['b'], cents['c']]..sort(), [
-        10001,
-        10002,
-        10002,
+        13335,
+        13335,
+        13336,
       ]);
     });
 

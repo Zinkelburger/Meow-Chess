@@ -8,7 +8,7 @@ class MembershipSummary {
   MembershipSummary(Player player, {required String eventDate, DateTime? now}) {
     final evidence = player.membershipEvidence;
     if (!isMemberId(player.memberId)) {
-      label = 'No USCF ID';
+      label = 'No US Chess ID';
       detail = 'Enter a US Chess ID, then check membership.';
       return;
     }
@@ -34,7 +34,7 @@ class MembershipSummary {
         !expired &&
         !past &&
         expiration.substring(0, 7) == today.substring(0, 7);
-    final inactive = status != null && status.toLowerCase() != 'active';
+    final inactive = membershipStatusStopsPlay(status);
     severity = expired || inactive
         ? MembershipSeverity.error
         : expiringThisMonth || expiresBeforeEvent
@@ -74,3 +74,45 @@ class MembershipSummary {
 }
 
 enum MembershipSeverity { normal, warning, error }
+
+/// US Chess member statuses under which a member cannot play rated games.
+/// Every other status (`Active`, `RevokedButCanPlay`, a record just created
+/// as `NewFromLogin` or `NewFromImport`, or one this version does not know)
+/// is left to the expiration date.
+const _stoppingStatuses = {
+  'expired',
+  'deceased',
+  'duplicateid',
+  'suspended',
+  'revoked',
+  'inactive',
+};
+
+/// Whether [status], as US Chess reports it, means the member cannot play.
+bool membershipStatusStopsPlay(String? status) =>
+    status != null && _stoppingStatuses.contains(status.trim().toLowerCase());
+
+/// Why US Chess would not accept [player] in an event ending on [eventDate],
+/// from the last membership check of their current ID: the expiration date
+/// that fell before the event ended, or a status that stops play. Null when
+/// the membership was good, or was never checked.
+String? membershipLapse(Player player, String eventDate) {
+  final evidence = player.membershipEvidence;
+  if (!isMemberId(player.memberId) ||
+      evidence['id'] != player.memberId ||
+      evidence['retrievedAt'] == null) {
+    return null;
+  }
+  final expiration = evidence['expiration'];
+  if (expiration is String &&
+      isEventDate(expiration) &&
+      isEventDate(eventDate) &&
+      expiration.compareTo(eventDate) < 0) {
+    return 'expired $expiration';
+  }
+  final status = evidence['status'];
+  if (status is String && membershipStatusStopsPlay(status)) {
+    return 'status $status';
+  }
+  return null;
+}

@@ -17,11 +17,12 @@ import 'drafts.dart';
 import 'event_panel.dart' show eventPanelFocusKey;
 import 'format_extensions.dart';
 import 'membership_style.dart' show attentionColor;
-import 'panels.dart' show Dock;
+import 'panels.dart' show Dock, DockController;
 import 'prize_panel.dart' show PrizeTableEditor;
 import 'select.dart';
 import 'side_panel.dart';
 import 'theme.dart';
+import 'workspace_status.dart' show showUndoNotice;
 
 /// One section, described the way it was announced: format, rounds, time
 /// control, games per round, then the announced rules in four closed
@@ -707,26 +708,55 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
 
   // ---- Pieces ----------------------------------------------------------
 
+  /// [problemBelow] is for a field too narrow to hold its problem: the
+  /// field only turns red, and the caller writes the sentence under it with
+  /// [problemLine].
   Widget textField(
     String key,
     String label, {
     String? helper,
     bool autofocus = false,
     int helperLines = 2,
-  }) => TextField(
-    key: k(key),
-    controller: text[key],
-    autofocus: autofocus,
-    decoration: InputDecoration(
-      labelText: label,
-      helperText: helper,
-      helperMaxLines: helperLines,
-      errorText: widget.problems[key],
-      errorMaxLines: 4,
-    ),
-    onChanged: (_) => widget.onChanged(),
-    onSubmitted: (_) => widget.onSubmit(),
-  );
+    bool problemBelow = false,
+  }) {
+    final problem = widget.problems[key];
+    return TextField(
+      key: k(key),
+      controller: text[key],
+      autofocus: autofocus,
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: helper,
+        helperMaxLines: helperLines,
+        errorText: problemBelow ? null : problem,
+        error: problemBelow && problem != null ? const SizedBox.shrink() : null,
+        errorMaxLines: 6,
+      ),
+      onChanged: (_) => widget.onChanged(),
+      onSubmitted: (_) => widget.onSubmit(),
+    );
+  }
+
+  /// The problem with [key]'s field as a whole sentence, the width of the
+  /// panel; nothing when the field has none.
+  Widget? problemLine(String key) {
+    final problem = widget.problems[key];
+    if (problem == null) return null;
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Semantics(
+        liveRegion: true,
+        child: Text(
+          problem,
+          key: k('$key-problem'),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.error,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget checkbox(String key, String label, {bool? on, VoidCallback? toggle}) {
     final checked = on ?? flag(key);
@@ -1005,7 +1035,7 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              'A small Swiss with this many rounds can be run as a round robin; change the format before posting round 1.',
+              'A small Swiss with this many rounds can be run as a round robin; change the format before pairing round 1.',
               style: muted.copyWith(color: colors.onSurfaceVariant),
             ),
           ),
@@ -1042,10 +1072,18 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
     }
     final hint = delayHint(control);
     final stacked = MediaQuery.textScalerOf(context).scale(1) >= 1.5;
+    // Side by side, the fields are too narrow for a sentence: a problem
+    // with either is written under the pair, the width of the panel.
+    final paired = hasRoundsField(format) && !holland && !stacked;
     final rounds = hasRoundsField(format) && !holland
-        ? textField('rounds', 'Rounds', helper: roundsHelper)
+        ? textField(
+            'rounds',
+            'Rounds',
+            helper: roundsHelper,
+            problemBelow: paired,
+          )
         : null;
-    final time = textField('timeControl', 'Time control');
+    final time = textField('timeControl', 'Time control', problemBelow: paired);
     final showDouble = supportsDoubleGames(format) && !holland;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1056,7 +1094,7 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
           rounds,
           const SizedBox(height: 12),
           time,
-        ] else
+        ] else ...[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1065,6 +1103,9 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
               Expanded(flex: 2, child: time),
             ],
           ),
+          ?problemLine('rounds'),
+          ?problemLine('timeControl'),
+        ],
         if (category != null || hint != null)
           Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -1750,7 +1791,10 @@ BuildContext? _findKey(Key key) {
   return found;
 }
 
-/// Section settings: the same form, saved as one undoable edit.
+/// Section settings: the same form, saved as one undoable edit. Closing the
+/// panel, or opening something in its place, saves an edit too and says so
+/// with Undo; an edit that cannot be saved keeps the panel open on its
+/// problem. Discard draft is the way to throw an edit away.
 class SectionSettingsPanel extends StatefulWidget {
   const SectionSettingsPanel({
     required this.controller,
@@ -1771,6 +1815,10 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
   late final FormDraft draft;
   final problems = <String, String>{};
   String? error;
+
+  /// Set when the panel was asked to close with an edit it could not save.
+  bool heldOpen = false;
+  DockController? dock;
 
   TournamentController get c => widget.controller;
   Section? get section =>
@@ -1798,12 +1846,35 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = Dock.maybeOf(context);
+    if (!identical(next, dock)) dock?.clearLeaveGuard(this);
+    dock = next?..setLeaveGuard(this, applyOnLeave);
+  }
+
+  @override
   void dispose() {
+    dock?.clearLeaveGuard(this);
     draft.dispose();
     for (final t in text.values) {
       t.dispose();
     }
     super.dispose();
+  }
+
+  /// Saves an edit as the panel is closed or replaced. False keeps the
+  /// panel open on the problem.
+  bool applyOnLeave() {
+    if (!mounted || section == null || !draft.dirty) return true;
+    final saved = apply();
+    if (!saved) setState(() => heldOpen = true);
+    return saved;
+  }
+
+  /// The close button and Esc: save first, and stay open on a problem.
+  void close() {
+    if (applyOnLeave()) widget.onClose();
   }
 
   Section currentSection() {
@@ -1814,7 +1885,15 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
     return s;
   }
 
+  /// Save: apply the edit and close.
   void save() {
+    if (apply()) widget.onClose();
+  }
+
+  /// Applies the edit as one step and says so with Undo. False, with the
+  /// problem shown beside its field or above the buttons, when it cannot
+  /// be saved.
+  bool apply() {
     try {
       final current = currentSection();
       final v = draft.prepareSave(
@@ -1832,15 +1911,17 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
               next.rrTable != current.rrTable ||
               next.doubleCycle != current.doubleCycle)) {
         throw const TournamentException(
-          'Pairing format cannot change after rounds are posted.',
+          'The pairing format cannot change once a round is paired.',
         );
       }
       if (next.plannedRounds < current.rounds.length) {
+        final paired = current.rounds.length;
         throw SectionFieldProblem(
           'rounds',
-          '${current.rounds.length} rounds are already posted, so the section needs at least that many.',
+          '$paired ${paired == 1 ? 'round is' : 'rounds are'} already paired, so the section needs at least that many.',
         );
       }
+      final revision = c.event!.revision;
       c.change(
         'Edit section ${current.name}',
         c.event!.copy(
@@ -1850,7 +1931,18 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
         ),
       );
       draft.reset(sectionValues(next));
-      widget.onClose();
+      if (mounted) {
+        setState(() {
+          heldOpen = false;
+          error = null;
+          problems.clear();
+        });
+        // An edit that changed nothing is not a step to undo.
+        if (c.event!.revision != revision) {
+          showUndoNotice(context, c, 'Saved ${next.name}’s settings.');
+        }
+      }
+      return true;
     } on SectionFieldProblem catch (e) {
       setState(() {
         error = null;
@@ -1859,11 +1951,13 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
           ..[e.field] = e.message;
       });
       revealSectionField(c, 'field-', e.field);
+      return false;
     } catch (e) {
       setState(() {
         problems.clear();
         error = plainMessage(e);
       });
+      return false;
     }
   }
 
@@ -1871,6 +1965,7 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
     try {
       draft.reset(sectionValues(currentSection()));
       setState(() {
+        heldOpen = false;
         error = null;
         problems.clear();
       });
@@ -1894,7 +1989,7 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
     return SidePanel(
       key: ValueKey('section-settings-${widget.sectionId}'),
       title: '${s.name} settings',
-      onClose: widget.onClose,
+      onClose: close,
       footer: [
         if (error != null)
           Padding(
@@ -1903,6 +1998,19 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
               error!,
               key: const ValueKey('section-settings-error'),
               style: TextStyle(color: colors.error),
+            ),
+          ),
+        if (heldOpen)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                'These changes are not saved yet. Fix the problem, or choose '
+                'Discard draft to close without them.',
+                key: const ValueKey('section-settings-held'),
+                style: TextStyle(fontSize: 13, color: colors.onSurfaceVariant),
+              ),
             ),
           ),
         Wrap(
@@ -1919,7 +2027,10 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
         ),
       ],
       children: [
-        DraftStatus(draft: draft),
+        DraftStatus(
+          draft: draft,
+          pending: 'Not saved yet · saves when this panel closes',
+        ),
         SectionFormFields(
           controller: c,
           current: s,
@@ -1929,6 +2040,7 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
           playerCount: s.players.length,
           nameAutofocus: true,
           onChanged: () => setState(() {
+            heldOpen = false;
             error = null;
             problems.clear();
           }),

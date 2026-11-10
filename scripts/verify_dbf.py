@@ -201,10 +201,14 @@ def verify(folder, reciprocity_only=False):
             entrants = sum(1 for r in details if r['D_SEC_NUM'] == str(index))
             check(entrants == len(section['players']), ('Entrant count', section['name'], entrants, len(section['players'])))
             # Same numbers in the same order as the TD entered, in 2C notation.
-            # Same numbers in the same order; US Chess appends d0 when none.
+            # Same numbers in the same order. With no delay stated, rule 5E2
+            # applies the standard one: d5 for several controls or G/30 and
+            # slower, d3 above G/10, d2 at G/10 or faster.
             source = re.findall(r'\d+', section.get('timeControl') or event['timeControl'])
             written = re.findall(r'\d+', exported['S_TIMECTL'])
-            check(written in (source, source + ['0']), (written, source))
+            base = int(source[0])
+            standard = '5' if len(source) > 1 or base >= 30 else '3' if base > 10 else '2'
+            check(written in (source, source + [standard]), (written, source))
             check(exported['S_SCH_LVL'] == event.get('level', 'N'))
             round_robin = section.get('format', 'swiss') != 'swiss' and not section.get('doubleGames')
             check(exported['S_TRN_TYPE'] == ('R' if round_robin else 'S'))

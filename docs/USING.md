@@ -11,18 +11,39 @@ views keep the selected section.
 
 ## Results
 
-Click a score cell in either view, then type **1**/**W** for a win, **0**/**L**
-for a loss, or **D** for a draw. Results display as **1**, **0** and **½**.
-Typing saves and advances; mouse clicks only focus cells. Historical corrections
-retain their review step. The full contract is in
+On **Pairings**, click a score box on a board, or a round cell in the
+crosstable beside the boards, then type **1**/**W** for a win, **0**/**L** for a
+loss, or **D** for a draw. Results display as **1**, **0** and **½**. Typing
+saves and advances; mouse clicks only focus cells. A key that replaces a result
+already recorded still applies at once, and a notice at the bottom of the window
+names the board and the change ("Board 7 was 1–0, now ½–½") with **Undo**.
+Historical corrections retain their review step. The full contract is in
 [keyboard results entry](RESULT_ENTRY.md).
 
-**Create pairings** pairs every ready section with one click; sections waiting
-for results are left alone. There is no separate start-round step.
+**Create pairings** names what it will pair. With a section tab selected it
+pairs that section only ("Create pairings · Open · Round 2"); with **All
+sections** selected it pairs every ready section with one click. Sections
+waiting for results are left alone. There is no separate start-round step.
+
+After a withdrawal once pairings are up, **Re-pair unstarted boards** (beside
+**Edit pairings** on a section's Pairings page) keeps the boards that have a
+result and pairs the rest again without the withdrawn players. It asks for the
+reason; reprint the sheets afterwards.
+
+## Player cards and section settings
+
+Changes typed into a player's card or a section's settings are saved when the
+panel closes or another player or section is opened, as one step that **Undo**
+takes back. A change that cannot be saved keeps the panel open on the problem;
+**Discard draft** throws the change away. The **Add player** form is different:
+a half-typed new player is kept as a draft and never registered by closing.
 
 ## Moving, swapping and withdrawing
 
-Right-click a player or section tab for **Move**, **Swap** and **Withdraw**.
+Right-click a player for **Move**, **Byes** and **Withdraw** (or press
+Shift+F10 on the focused row). The selected section tab has a **Section
+actions** button for printing, **Rename / section settings**, **Combine
+sections** and **Delete section**; right-clicking any tab opens the same menu.
 
 Choose **Edit quad pairings** beside **New section** to change opponents or flip
 colors within a quad. Select players in each round, then **Save pairings**.
@@ -82,7 +103,7 @@ also fill missing states automatically; existing states are preserved.
 ## Correcting a result
 
 On **Pairings**, choose a round number or **All rounds** to find an earlier
-game. Choose **Correct a result**, or click a result cell in **Players**, and the
+game. Choose **Correct a result**, or type in that round's cell of the crosstable, and the
 correction opens beside the table. Pick who won, see each player's score change,
 and decide what happens to later rounds: keep their pairings, or unpair an
 unstarted round and all rounds after it. Recorded play and section transfers

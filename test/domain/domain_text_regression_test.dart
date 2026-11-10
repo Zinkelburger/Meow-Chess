@@ -131,7 +131,10 @@ void main() {
 
     test('the placeholder ID reads as no ID', () {
       final p = Player(id: 'p', name: 'Player', memberId: '00000000');
-      expect(MembershipSummary(p, eventDate: '2026-10-09').label, 'No USCF ID');
+      expect(
+        MembershipSummary(p, eventDate: '2026-10-09').label,
+        'No US Chess ID',
+      );
     });
   });
 

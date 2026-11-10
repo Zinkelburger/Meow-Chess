@@ -32,6 +32,21 @@ static std::vector<std::string> file_arguments(gchar** arguments) {
   return paths;
 }
 
+// Whether the command line asks for the FIDE tools (`-check file.trf`,
+// `-generate …`): the words lib/infrastructure/fide_cli.dart answers to, with
+// any leading dashes.
+static gboolean is_fide_tools_command(gchar** arguments) {
+  if (arguments == nullptr || arguments[0] == nullptr) return FALSE;
+  const gchar* word = arguments[0];
+  while (*word == '-') ++word;
+  static const gchar* const kCommands[] = {"check", "generate", "pair",
+                                           "values", "help"};
+  for (const gchar* command : kCommands) {
+    if (g_strcmp0(word, command) == 0) return TRUE;
+  }
+  return FALSE;
+}
+
 // Raises the existing window, if there is one. A second launch — from the
 // menu, or a double-clicked .meow — reaches the running instance through
 // GApplication and should bring it forward rather than open a second copy.
@@ -126,7 +141,19 @@ static gboolean my_application_local_command_line(GApplication* application,
   MyApplication* self = MY_APPLICATION(application);
   // Strip out the first argument as it is the binary name.
   self->dart_entrypoint_arguments = g_strdupv(*arguments + 1);
-  std::vector<std::string> paths = file_arguments(*arguments + 1);
+  // The FIDE tools print their answer and exit with its status, so they run
+  // here even when a window is open: handed to that window, the file they
+  // name would be opened as an event and this process would report success
+  // without checking anything.
+  const gboolean fide_tools = is_fide_tools_command(*arguments + 1);
+  if (fide_tools) {
+    g_application_set_flags(
+        application,
+        static_cast<GApplicationFlags>(g_application_get_flags(application) |
+                                       G_APPLICATION_NON_UNIQUE));
+  }
+  std::vector<std::string> paths;
+  if (!fide_tools) paths = file_arguments(*arguments + 1);
 
   g_autoptr(GError) error = nullptr;
   if (!g_application_register(application, nullptr, &error)) {

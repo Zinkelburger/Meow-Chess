@@ -54,7 +54,7 @@ void main() {
       headerBefore.top,
     );
     expect(find.text('Rating'), findsNothing);
-    expect(find.text('USCF ID'), findsNothing);
+    expect(find.text('US Chess ID'), findsNothing);
     Finder score(String side) => find.byKey(ValueKey('score-${game.id}-$side'));
     Finder standing(String player) =>
         find.byKey(ValueKey('standing-score-${game.id}-$player'));
@@ -227,32 +227,33 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('roster shows USCF ID, rating and expiry in adjacent columns', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1600, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final c = fixture(count: 4);
-    addTearDown(c.dispose);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: PlayersView(controller: c)),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      tester.getRect(find.text('USCF ID')).left,
-      lessThan(tester.getRect(find.text('Rating')).left),
-    );
-    expect(
-      tester.getRect(find.text('Rating')).left,
-      lessThan(tester.getRect(find.text('USCF expires')).left),
-    );
-    expect(find.text(c.event!.players.first.memberId), findsOneWidget);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
+  testWidgets(
+    'roster shows US Chess ID, rating and expiry in adjacent columns',
+    (tester) async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = fixture(count: 4);
+      addTearDown(c.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PlayersView(controller: c)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(find.text('US Chess ID')).left,
+        lessThan(tester.getRect(find.text('Rating')).left),
+      );
+      expect(
+        tester.getRect(find.text('Rating')).left,
+        lessThan(tester.getRect(find.text('US Chess expires')).left),
+      );
+      expect(find.text(c.event!.players.first.memberId), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('an earlier round keeps both tables on one line', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);

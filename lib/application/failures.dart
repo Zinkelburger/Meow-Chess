@@ -42,6 +42,9 @@ String plainMessage(Object error) {
   if (text.contains('disk is full') || text.contains('SQLITE_FULL')) {
     return 'The disk is full, so the change was not saved. Free some space, then try again.';
   }
+  if (text.contains('disk I/O error') || text.contains('SQLITE_IOERR')) {
+    return 'The drive or folder holding this event can no longer be reached. Reconnect it and reopen the event, or save a copy somewhere else and carry on in the copy.';
+  }
   if (text.contains('readonly') || text.contains('SQLITE_READONLY')) {
     return 'The event file is read-only, so the change was not saved.';
   }

@@ -6,6 +6,29 @@ version at https://chessautoprep.com/meow-chess/ follows the latest release.
 
 ## Unreleased
 
+- **Events saved by this version cannot be opened by 1.4.0 or earlier**, which
+  now say the event is from a newer version. An older copy that opened a newer
+  file used to drop whatever it did not know about at its first save. Update
+  every computer that shares event files; events from older versions open as
+  before.
+- Copying a backup over an event file after a crash is safe: nothing is left
+  beside the event file between saves for SQLite to replay over the copy.
+- If the open event file is moved, renamed, deleted or replaced, or its drive
+  is unplugged, the status bar stops saying "Event saved", a banner says what
+  happened, and **Save a copy…** carries on in a new file with nothing lost.
+- The backup folder belongs to the computer: Undo and going back in History no
+  longer change or switch it off, an event opened on another computer says it
+  has no backup folder there, and a folder from another system is never written
+  to. Backup copies are named for the event.
+- Entering a result on a 300-player event saves in about two thirds of the time.
+- "New event like…" only reads the event it copies from. It no longer rewrites
+  it, or creates an empty file where a recent event had been deleted.
+- `meow_chess -check file.trf` and the other FIDE tools run even while the app
+  is open, instead of handing the file to the open window.
+- On Windows the first window fits a small or scaled screen.
+- In the browser, deleting an event asks in its row; saves are finished when the
+  page is hidden or left.
+
 - **Save PDF** in every print panel, and **Copies and options…** for the
   computer's own print window: copies, two-sided printing and trays.
 - Each sheet is laid out for the paper it prints on: the printer's tray on

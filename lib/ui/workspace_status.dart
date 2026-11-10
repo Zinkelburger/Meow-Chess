@@ -1,5 +1,59 @@
 import 'package:flutter/material.dart';
 
+import '../application/tournament_controller.dart';
+import '../domain/model.dart' show TournamentException;
+import 'dialogs.dart' show showFailure;
+
+/// Says what just changed, with Undo, without stopping the work: a bar at
+/// the bottom of the window that leaves by itself. Undo takes back that
+/// change only while it is still the latest one; after another change it
+/// points at History instead of undoing something else. Does nothing where
+/// there is no window to show it in, as in a panel mounted on its own.
+void showUndoNotice(
+  BuildContext context,
+  TournamentController controller,
+  String message,
+) {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+  final head = controller.graph.head;
+  final colors = Theme.of(context).colorScheme;
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        key: const ValueKey('undo-notice'),
+        content: Text(
+          message,
+          style: TextStyle(color: colors.onInverseSurface),
+        ),
+        backgroundColor: colors.inverseSurface,
+        duration: const Duration(seconds: 10),
+        showCloseIcon: true,
+        closeIconColor: colors.onInverseSurface,
+        action: SnackBarAction(
+          label: 'Undo',
+          textColor: colors.inversePrimary,
+          onPressed: () {
+            final context = messenger.context;
+            try {
+              if (controller.graph.head != head) {
+                throw const TournamentException(
+                  'Later changes were made, so Undo here would take back '
+                  'something else. Use History to go back.',
+                );
+              }
+              controller.undo();
+            } catch (error) {
+              if (context.mounted) showFailure(context, error);
+            }
+          },
+        ),
+      ),
+      snackBarAnimationStyle: AnimationStyle.noAnimation,
+    );
+}
+
 /// A practice copy looks different at a glance, so nobody runs the real
 /// event in it by mistake.
 class PracticeBanner extends StatelessWidget {
@@ -36,7 +90,8 @@ class PracticeBanner extends StatelessWidget {
   }
 }
 
-/// What the last post wants the director to check, kept until dismissed.
+/// What the pairings just created want the director to check, kept until
+/// dismissed.
 class PostNotes extends StatelessWidget {
   const PostNotes({required this.notes, required this.onDismiss, super.key});
   final List<String> notes;
@@ -90,7 +145,8 @@ class PostNotes extends StatelessWidget {
 }
 
 /// What is safe: when the file was last saved, when it was last backed up,
-/// and where it lives. Backups open from here.
+/// and where it lives. Backups open from here. A direct print says here
+/// where it is going and when it has gone.
 class WorkspaceStatusBar extends StatelessWidget {
   const WorkspaceStatusBar({
     required this.savedAt,
@@ -102,8 +158,22 @@ class WorkspaceStatusBar extends StatelessWidget {
     this.moved,
     this.moveBack,
     this.onMoveBack,
+    this.fileProblem,
+    this.printing,
+    this.printingNow = false,
     super.key,
   });
+
+  /// Set when the event's file has gone from where it was opened: shown in
+  /// place of "Event saved", which would no longer be true.
+  final String? fileProblem;
+
+  /// A direct print's progress, such as "Sending to Club printer…", read
+  /// out as it changes; null when there is nothing to say.
+  final String? printing;
+
+  /// Whether that print is still on its way.
+  final bool printingNow;
 
   /// After Undo, Redo or Restore: what it did, in the director's words.
   final String? moved;
@@ -140,12 +210,49 @@ class WorkspaceStatusBar extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            Icon(Icons.check, size: 14, color: colors.onSurfaceVariant),
+            // Always here, so a screen reader hears each change; it takes
+            // no room while there is nothing to say.
+            Semantics(
+              key: const ValueKey('status-print'),
+              container: true,
+              liveRegion: true,
+              child: printing == null
+                  ? const SizedBox.shrink()
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          printingNow ? Icons.print_outlined : Icons.check,
+                          size: 14,
+                          color: colors.onSurface,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          printing!,
+                          style: style.copyWith(
+                            color: colors.onSurface,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        ExcludeSemantics(child: Text('  ·  ', style: style)),
+                      ],
+                    ),
+            ),
+            Icon(
+              fileProblem == null ? Icons.check : Icons.warning_amber,
+              size: 14,
+              color: fileProblem == null
+                  ? colors.onSurfaceVariant
+                  : colors.error,
+            ),
             const SizedBox(width: 4),
             Text(
-              savedAt == null ? 'Event saved' : 'Event saved $savedAt',
+              fileProblem ??
+                  (savedAt == null ? 'Event saved' : 'Event saved $savedAt'),
               key: const ValueKey('status-saved'),
-              style: style,
+              style: fileProblem == null
+                  ? style
+                  : style.copyWith(color: colors.error),
             ),
             if (moved != null) ...[
               ExcludeSemantics(child: Text('  ·  ', style: style)),

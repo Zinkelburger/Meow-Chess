@@ -140,6 +140,29 @@ At first allow one writable owner per event; a second app instance opens read-on
 or clearly refuses the write lock. Do not place a live database on a network share
 and promise concurrent TD editing.
 
+### File format version
+
+An event file's format version is SQLite's `user_version`
+(`SqliteEventRepository.schemaVersion`, now 3). Every build refuses a file whose
+version is higher than its own, before reading or writing anything, and says
+that the event was created by a newer version of Meow Chess and to update this
+copy. Lower versions are migrated when the event is opened to work in; looking
+at a file (a "New event like…" template) reads it without migrating it.
+
+**Raise the version in the same change as anything an older build would lose or
+misread.** A save rewrites rows from the fields the running build knows, so an
+older build that opened a newer file would silently drop what it does not
+know. That means bumping for: a new or renamed table or column; a new field on
+the event, a player, section, round, game or bye that must survive a save; a new
+value of a stored enum (a format, an outcome); a changed meaning or unit of an
+existing field. It does not mean bumping for a new preference key, a new report
+or anything computed from the stored event. Add the migration from the previous
+version (often only the number changes), a line in the version's history beside
+`schemaVersion`, and a test that builds a file of the previous version and opens
+it (`test/infrastructure/event_file_safety_test.dart`). Version 3 changed no
+table: it exists so releases up to 1.4.0, which had this defect, refuse later
+files.
+
 Use foreign keys, schema versions, migration fixtures, transactions and explicit
 constraints. Store original source values alongside normalized ones when needed.
 Round numbers, board numbers and export pairing numbers have explicit scopes.
@@ -169,7 +192,10 @@ already-posted rounds. Do not automatically rerun the whole tournament.
 Use relational state plus an audit log; **full event sourcing is not required**.
 Every command stores a compressed snapshot as a node in a history tree, so any
 earlier state can be reviewed and restored, and a restore never discards the
-state it leaves (that becomes a branch). Rolling back recorded play is allowed
+state it leaves (that becomes a branch). A save writes only the rows that
+changed (one game for a result) plus that snapshot. Where backups go is a
+setting of the computer, not part of the tournament: choosing a folder is logged
+but adds no node, and no history move changes it. Rolling back recorded play is allowed
 only after the TD confirms what it removes.
 
 The fuller target contract is specified in [History and recovery](HISTORY_AND_RECOVERY.md).
@@ -208,6 +234,31 @@ for durable TD data; never trade acknowledged saves for an unmeasured speed gain
 Use [SQLite's backup API](https://sqlite.org/backup.html) or a proven consistent
 snapshot mechanism. Copying only the main DB file while WAL is active is not a
 safe portable backup strategy.
+
+Every save ends by moving its pages from SQLite's recovery file (the WAL) into
+the event file and emptying the recovery file (`wal_checkpoint(TRUNCATE)`), so
+between saves the `.meow` alone is the whole event and nothing beside it can be
+replayed over a different file later given the same name, such as a backup
+copied over the event after a crash. `scripts/verify_recovery.py` kills a writer
+and restores an earlier copy beside what it left to check exactly that. It also
+kills a writer partway through a save, several times, and checks that every
+acknowledged save comes back whole: a kill between a commit and its checkpoint
+leaves pages in the WAL, which SQLite replays when the event is opened. A
+checkpoint SQLite cannot finish is noted in Diagnostics.
+
+While an event is open the app looks, before every save, every ten seconds and
+when its window is returned to, whether the file is still the one at that name
+(device and inode on Linux and macOS; Windows does not let an open file be
+moved). If it was moved, renamed, deleted or replaced, or its drive has gone,
+the status bar stops saying "Event saved", a banner says what happened, and
+**Save a copy…** writes the event elsewhere and carries on there. When the
+original can no longer be read the copy holds the event as last saved, without
+its earlier history.
+
+A backup folder and the record of the last copy belong to the computer that
+chose them. Opened on another computer, an event shows no backup folder and
+says so; a folder that is not a full path on this system is never written to.
+The first computer finds its folder again when the file returns.
 
 Keep automatic timestamped backups before migration, section repartition, rollback
 and final reporting. Verify restoring one. Report disk-full, permissions, database

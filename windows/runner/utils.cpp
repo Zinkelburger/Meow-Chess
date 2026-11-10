@@ -105,6 +105,16 @@ std::vector<std::string> FileArguments(
   return paths;
 }
 
+bool IsFideToolsCommand(const std::vector<std::string>& arguments) {
+  if (arguments.empty()) return false;
+  std::string word = arguments.front();
+  word.erase(0, word.find_first_not_of('-'));
+  for (const char* command : {"check", "generate", "pair", "values", "help"}) {
+    if (word == command) return true;
+  }
+  return false;
+}
+
 std::string Utf8FromUtf16(const wchar_t* utf16_string) {
   if (utf16_string == nullptr) {
     return std::string();

@@ -48,12 +48,48 @@ String effectiveColorToss(Event event) => event.colorToss.isNotEmpty
     : 'higherBlack';
 
 class SwissProposal {
-  const SwissProposal(this.games, this.byes, this.explanations);
+  const SwissProposal(
+    this.games,
+    this.byes,
+    this.explanations, {
+    this.rematches = const [],
+  });
 
   /// White and black, in board order (before any fixed boards apply).
   final List<(String, String)> games;
   final List<ByeAward> byes;
   final List<String> explanations;
+
+  /// 27A1: the pairings that repeat an earlier game, each with the number
+  /// of times the two have now been paired to play (2 for a second meeting).
+  /// [explanations] names them through [rematchExplanation].
+  final List<Rematch> rematches;
+}
+
+/// Two players paired again, and which meeting this is.
+typedef Rematch = ({String a, String b, int meeting});
+
+/// 27A1: the line that tells the director which games are repeats. [boards]
+/// gives each player's board once boards are assigned.
+String rematchExplanation(
+  Event event,
+  List<Rematch> rematches, {
+  Map<String, int> boards = const {},
+}) {
+  final further = rematches.any((r) => r.meeting > 2);
+  String ordinal(int n) => switch (n) {
+    2 => 'second',
+    3 => 'third',
+    4 => 'fourth',
+    _ => '${n}th',
+  };
+  final named = [
+    for (final r in rematches)
+      '${boards[r.a] == null ? '' : 'board ${boards[r.a]}, '}'
+          '${event.player(r.a).name} – ${event.player(r.b).name}'
+          '${further ? ' (${ordinal(r.meeting)} meeting)' : ''}',
+  ];
+  return 'No pairing without repeat games exists; a ${further ? 'further' : 'second'} meeting is allowed where unavoidable (27A1), on the fewest boards possible: ${named.join('; ')}.';
 }
 
 /// Everything the engine knows about one entrant. Scores are half points.
@@ -209,35 +245,72 @@ SwissProposal pairSwiss(
   }
 
   _Failure? lastFailure;
-  for (var maxMeetings = 0; maxMeetings <= 3; maxMeetings++) {
-    final tries = <(_Card?, String)>[
-      if (playing.length.isOdd) ...byeCandidates.take(6) else (null, ''),
-    ];
-    for (final candidate in tries) {
-      final bye = candidate.$1;
+  final tries = <(_Card?, String)>[
+    if (playing.length.isOdd) ...byeCandidates.take(6) else (null, ''),
+  ];
+  // Level 0 allows no repeat game. Each later level lets a pair meet once
+  // more than the level before, on as few boards as possible (27A1); the
+  // bye candidate that needs the fewest such boards is tried first.
+  for (var level = 0; level <= 3; level++) {
+    final options = <(_Card?, String, _Rematches)>[];
+    for (final (bye, reason) in tries) {
       final rest = playing.where((c) => c != bye).toList();
+      final plan = level == 0
+          ? const _Rematches([])
+          : _rematches(rules, rest, level);
+      if (plan != null) options.add((bye, reason, plan));
+    }
+    final order = [for (var i = 0; i < options.length; i++) i]
+      ..sort((x, y) {
+        final c = options[x].$3.count.compareTo(options[y].$3.count);
+        return c != 0 ? c : x.compareTo(y);
+      });
+    for (final (bye, reason, plan) in order.map((i) => options[i])) {
+      final forced = {
+        for (final (a, b) in plan.pairs) ...[a, b],
+      };
+      final rest = playing
+          .where((c) => c != bye && !forced.contains(c))
+          .toList();
       final attempt = <String>[];
       try {
-        final boards = _pairRest(rules, rest, maxMeetings, attempt);
-        if (maxMeetings > 0) {
-          attempt.insert(
-            0,
-            'No pairing without repeat games exists; a ${maxMeetings == 1 ? 'second' : 'further'} meeting is allowed where unavoidable (27A1).',
-          );
+        final boards = _pairRest(
+          rules,
+          rest,
+          plan.all ? level : (level == 0 ? 0 : level - 1),
+          attempt,
+        );
+        for (final (a, b) in plan.pairs) {
+          _insertByRank(boards, _Board(a, b));
+        }
+        final again = <Rematch>[
+          for (final b in boards)
+            if ((b.upper.meetings[b.lower.id] ?? 0) > 0)
+              (
+                a: b.upper.id,
+                b: b.lower.id,
+                meeting: b.upper.meetings[b.lower.id]! + 1,
+              ),
+        ];
+        if (again.isNotEmpty) {
+          attempt.insert(0, rematchExplanation(event, again));
         }
         if (bye != null) {
           awards.add(
             ByeAward(
               bye.id,
               section.doubleGames ? 4 : 2,
-              candidate.$2,
+              reason,
               allocated: true,
             ),
           );
-          attempt.insert(0, 'Full-point bye: ${bye.name}. ${candidate.$2}.');
+          attempt.insert(0, 'Full-point bye: ${bye.name}. $reason.');
         }
         final games = _assignColors(event, rules, boards, attempt);
-        return SwissProposal(games, awards, [...explanations, ...attempt]);
+        return SwissProposal(games, awards, [
+          ...explanations,
+          ...attempt,
+        ], rematches: again);
       } on _Failure catch (f) {
         lastFailure = f;
       }
@@ -246,6 +319,101 @@ SwissProposal pairSwiss(
   throw TournamentException(
     'No pairing satisfies the opponent requests and bye limits: ${lastFailure?.message ?? 'unknown'}. Review player requests or adjust the sections.',
   );
+}
+
+/// 27A1: the repeat games a round cannot avoid.
+class _Rematches {
+  const _Rematches(this.pairs) : all = false;
+  const _Rematches.unrestricted() : pairs = const [], all = true;
+
+  /// The pairs that play each other again; everyone else meets a new
+  /// opponent.
+  final List<(_Card, _Card)> pairs;
+
+  /// The fewest repeats could not be worked out pair by pair (a request or
+  /// an earlier repeat stands in the way), so any pair may meet again.
+  final bool all;
+  int get count => all ? 1 << 20 : pairs.length;
+}
+
+/// The fewest pairs of [field] that must meet once more than [level] - 1
+/// times for the field to be paired at all, or null when even that many
+/// meetings pair nobody. Repeats go to the players lowest in the standings,
+/// and between equally low players to the closest scores.
+_Rematches? _rematches(_Rules rules, List<_Card> field, int level) {
+  final sorted = [...field]..sort(_byRank);
+  final now = _GroupContext(rules, level, sorted, const []);
+  final before = _GroupContext(rules, level - 1, sorted, const []);
+  bool any(_Card a, _Card b) => now.legal(a, b, teamsBlocked: false);
+  bool fresh(_Card a, _Card b) => before.legal(a, b, teamsBlocked: false);
+  if (_unmatched(sorted, any) > 0) return null;
+  var missing = _unmatched(sorted, fresh);
+  final pairs = <(_Card, _Card)>[];
+  if (missing == 0) return _Rematches(pairs);
+  var left = sorted;
+  if (sorted.length <= _rematchSearchLimit) {
+    // Every pair that could meet again, the lowest in the standings first.
+    final candidates = <(int, int)>[
+      for (var i = 0; i < sorted.length; i++)
+        for (var j = i + 1; j < sorted.length; j++)
+          if (any(sorted[i], sorted[j]) && !fresh(sorted[i], sorted[j])) (i, j),
+    ];
+    candidates.sort((x, y) {
+      final ax = sorted[x.$1], bx = sorted[x.$2];
+      final ay = sorted[y.$1], by = sorted[y.$2];
+      for (final c in [
+        ax.score.compareTo(ay.score),
+        (ax.score - bx.score).compareTo(ay.score - by.score),
+        y.$1.compareTo(x.$1),
+        y.$2.compareTo(x.$2),
+      ]) {
+        if (c != 0) return c;
+      }
+      return 0;
+    });
+    for (final (i, j) in candidates) {
+      if (missing == 0) break;
+      final a = sorted[i], b = sorted[j];
+      if (!left.contains(a) || !left.contains(b)) continue;
+      // A repeat is worth making only when it leaves two fewer players
+      // without a new opponent.
+      final rest = left.where((c) => c != a && c != b).toList();
+      if (_unmatched(rest, fresh) != missing - 2) continue;
+      pairs.add((a, b));
+      left = rest;
+      missing -= 2;
+    }
+  } else {
+    // A large field: the highest-ranked players take the new opponents,
+    // and those left over meet again, nearest in rank first.
+    final match = _maximumMatching(_adjacency(sorted, fresh));
+    final over = [
+      for (final (i, c) in sorted.indexed)
+        if (match[i] == -1) c,
+    ];
+    final again = _guidedPairing(over, any, (a, left) => left.skip(1).toList());
+    if (again != null) {
+      pairs.addAll(again);
+      missing = 0;
+    }
+  }
+  return missing > 0 ? const _Rematches.unrestricted() : _Rematches(pairs);
+}
+
+/// Above this many players the repeat games are chosen without comparing
+/// every possible pair.
+const _rematchSearchLimit = 40;
+
+/// Puts [board] where its higher-ranked player belongs in board order.
+void _insertByRank(List<_Board> boards, _Board board) {
+  _Card better(_Board b) => _byRank(b.upper, b.lower) <= 0 ? b.upper : b.lower;
+  if (_byRank(board.upper, board.lower) > 0) {
+    final t = board.upper;
+    board.upper = board.lower;
+    board.lower = t;
+  }
+  final at = boards.indexWhere((b) => _byRank(better(board), better(b)) < 0);
+  boards.insert(at < 0 ? boards.length : at, board);
 }
 
 List<_Card> _cards(
@@ -392,18 +560,32 @@ void _acceleration(_Rules rules, List<_Card> playing, List<String> out) {
     return;
   }
   if (method != 'addedScore' || rules.round > 2) return;
-  final List<_Card> field;
+  final Set<_Card> upper;
   if (rules.round == 1) {
-    field = [...playing]..sort(_byRank);
+    final field = [...playing]..sort(_byRank);
     if (field.length.isOdd) field.removeLast();
+    upper = field.take(field.length ~/ 2).toSet();
   } else {
-    final first = rules.section.rounds.firstOrNull;
-    final ids = {
-      for (final g in first?.games ?? const <Game>[]) ...[g.white, g.black],
+    // The halves were cut before round 1 and stand for round 2 whatever
+    // the results: the round-1 field in rating order. An entrant who was
+    // not in it joins the half its rating falls in.
+    final field = _roundOneField(rules);
+    final half = field.length ~/ 2;
+    final top = field.take(half).map((p) => p.id).toSet();
+    final all = field.map((p) => p.id).toSet();
+    final cut = half < field.length ? field[half] : null;
+    final number = rules.section.players.indexOf(cut?.id ?? '');
+    upper = {
+      for (final c in playing)
+        if (top.contains(c.id) ||
+            (!all.contains(c.id) &&
+                cut != null &&
+                (c.baseRating > cut.effectivePairingRating ||
+                    (c.baseRating == cut.effectivePairingRating &&
+                        c.number < number))))
+          c,
     };
-    field = playing.where((c) => ids.contains(c.id)).toList()..sort(_byRank);
   }
-  final upper = field.take(field.length ~/ 2).toSet();
   for (final c in upper) {
     c.score += 2;
   }
@@ -412,6 +594,22 @@ void _acceleration(_Rules rules, List<_Card> playing, List<String> out) {
       'Accelerated pairings (28R1): one point added for pairing only to the top ${upper.length} players of the round-1 field.',
     );
   }
+}
+
+/// Everyone who played in round 1, highest-rated first (the pairing number
+/// ranks equal ratings): the field the 28R halves were cut from.
+List<Player> _roundOneField(_Rules rules) {
+  final first = rules.section.rounds.firstOrNull;
+  final number = {for (final (i, id) in rules.section.players.indexed) id: i};
+  final ids = <String>{
+    for (final g in first?.games ?? const <Game>[]) ...[g.white, g.black],
+  };
+  return [for (final id in ids) rules.event.player(id)]..sort((a, b) {
+    final r = b.effectivePairingRating.compareTo(a.effectivePairingRating);
+    if (r != 0) return r;
+    final n = (number[a.id] ?? 1 << 20).compareTo(number[b.id] ?? 1 << 20);
+    return n != 0 ? n : a.id.compareTo(b.id);
+  });
 }
 
 /// 28R2 / 28R3: the tier sizes of a round-1 field of [n] players (even,
@@ -977,6 +1175,9 @@ int _byRating(_Card a, _Card b) {
   return n != 0 ? n : a.id.compareTo(b.id);
 }
 
+/// A player's rating as the director reads it in an explanation.
+String _ratingText(_Card c) => c.unrated ? 'unrated' : '${c.rating}';
+
 /// Lowest rank first: the lowest rating, then the highest pairing number,
 /// the exact reverse of [_byRating] (28A: the pairing number ranks equal
 /// ratings).
@@ -1157,7 +1358,26 @@ List<_Board> _pairField(
     // allowing a repeat, look for any legal pairing that keeps players as
     // close to their score groups as possible (29D), and say so.
     final ctx = _GroupContext(rules, maxMeetings, field, const []);
-    final fallback = ctx.globalMatching(field);
+    var fallback = ctx.globalMatching(field);
+    String? teams;
+    if (fallback == null && rules.section.avoidTeammates) {
+      // Team-mates must meet somewhere: on the fewest boards possible.
+      final meet = ctx._teamPairsNeeded([...field]..sort(_byRank));
+      if (meet != null) {
+        ctx._teamPairs = meet.map((p) => _pairKey(p.$1, p.$2)).toSet();
+        fallback = ctx.globalMatching(field);
+        teams = meet.map((p) => '${p.$1.name} – ${p.$2.name}').join(', ');
+      }
+      if (fallback == null) {
+        fallback = ctx.globalMatching(field, teamsBlocked: false);
+        teams = null;
+      }
+      if (fallback != null) {
+        out.add(
+          'Team-mates meet${teams == null ? '' : ' ($teams)'}: the field cannot be paired otherwise (28N1).',
+        );
+      }
+    }
     if (fallback == null) rethrow;
     out.add(
       'The score groups could not be paired in order (${f.message}); this round uses the closest legal pairing found by search, without color switches (29D2, 29E5).',
@@ -1210,8 +1430,10 @@ class _GroupContext {
   /// Every player in the lower score groups, in rank order.
   final List<_Card> below;
   final List<_Card>? next, after;
-  final _failed = <String>{};
-  var _nodes = 0;
+
+  /// 28N1: the team-mate pairings this group cannot avoid, as [_pairKey]s;
+  /// these and no others pass [legal] while team-mates are kept apart.
+  var _teamPairs = const <String>{};
 
   String get label => name ?? '${scoreText(members.first.score)}-point group';
 
@@ -1233,89 +1455,91 @@ class _GroupContext {
       return false;
     }
     if (a.player.computer && b.player.computer) return false; // Rule 36.
-    if (teamsBlocked && teammates(a, b)) return false;
+    if (teamsBlocked &&
+        teammates(a, b) &&
+        !_teamPairs.contains(_pairKey(a, b))) {
+      return false;
+    }
     return true;
   }
 
-  /// Whether [cards] can be perfectly matched legally, leaving at most
-  /// [spare] players over.
-  bool matchable(List<_Card> cards, {int spare = 0, bool teamsBlocked = true}) {
-    _nodes = 0;
-    bool go(List<_Card> left, int spare) {
-      if (left.isEmpty) return true;
-      if (left.length == 1) return spare >= 1;
-      // A bounded search: when the budget runs out, assume a matching
-      // exists and let a later step report any real impossibility.
-      if (++_nodes > 20000) return true;
-      final key = '$spare/$teamsBlocked/${left.map((c) => c.id).join(',')}';
-      if (_failed.contains(key)) return false;
-      final a = left.first;
-      if (spare > 0 && go(left.sublist(1), spare - 1)) return true;
-      for (var i = 1; i < left.length; i++) {
-        if (legal(a, left[i], teamsBlocked: teamsBlocked) &&
-            go([...left.sublist(1, i), ...left.sublist(i + 1)], spare)) {
-          return true;
-        }
-      }
-      _failed.add(key);
-      return false;
-    }
-
-    return go(cards, spare);
+  /// 28N1: the fewest pairs of team-mates that must meet for [cards] to be
+  /// paired among themselves, chosen so that the players first in [cards]
+  /// keep their other opponents; empty when nobody has to, null when these
+  /// pairs alone do not make a pairing possible.
+  List<(_Card, _Card)>? _teamPairsNeeded(List<_Card> cards) {
+    bool apart(_Card a, _Card b) => legal(a, b);
+    if (_unmatched(cards, apart) <= cards.length % 2) return const [];
+    final match = _maximumMatching(_adjacency(cards, apart));
+    final over = [
+      for (final (i, c) in cards.indexed)
+        if (match[i] == -1) c,
+    ];
+    if (over.length.isOdd) over.removeLast();
+    // Those left over meet upper half against lower half.
+    return _guidedPairing(over, (a, b) => legal(a, b, teamsBlocked: false), (
+      a,
+      left,
+    ) {
+      final half = left.length ~/ 2;
+      return [...left.skip(half), ...left.skip(1).take(half - 1)];
+    });
   }
 
-  /// A legal pairing of the whole field by search: each player in rank
-  /// order takes the legal partner with the smallest score difference,
-  /// then the one closest to the natural half-split position.
-  List<_Board>? globalMatching(List<_Card> field) {
+  /// Whether [cards] can be paired legally, leaving at most [spare] players
+  /// over.
+  bool matchable(
+    List<_Card> cards, {
+    int spare = 0,
+    bool teamsBlocked = true,
+  }) =>
+      _unmatched(cards, (a, b) => legal(a, b, teamsBlocked: teamsBlocked)) <=
+      spare;
+
+  /// A legal pairing of the whole field without the group-by-group steps:
+  /// each player in rank order takes the upper-half-against-lower-half
+  /// opponent of its own score group (29C1) when that leaves the rest
+  /// pairable, else the nearest one; a player alone on its score meets the
+  /// highest-ranked player it can of the nearest score (29D1a). Null when
+  /// the field has no legal pairing.
+  List<_Board>? globalMatching(List<_Card> field, {bool teamsBlocked = true}) {
     final sorted = [...field]..sort(_byRank);
-    var nodes = 0;
-    List<_Board>? go(List<_Card> left) {
-      if (left.isEmpty) return [];
-      if (++nodes > 200000) return null;
-      final a = left.first;
-      final target = left.length ~/ 2;
-      final position = {for (final (i, c) in left.indexed) c.id: i};
-      final choices = left.skip(1).where((b) => legal(a, b)).toList()
-        ..sort((b, c) {
+    final pairs = _guidedPairing(
+      sorted,
+      (a, b) => legal(a, b, teamsBlocked: teamsBlocked),
+      (a, left) {
+        final group = left.takeWhile((c) => c.score == a.score).toList();
+        final half = group.length ~/ 2;
+        final position = {for (final (i, c) in group.indexed) c: i};
+        return left.skip(1).toList()..sort((b, c) {
           final db = (a.score - b.score).abs(), dc = (a.score - c.score).abs();
           if (db != dc) return db.compareTo(dc);
-          final pb = (position[b.id]! - target).abs();
-          final pc = (position[c.id]! - target).abs();
-          return pb != pc ? pb.compareTo(pc) : _byRank(b, c);
+          if (db == 0) {
+            final pb = (position[b]! - half).abs();
+            final pc = (position[c]! - half).abs();
+            if (pb != pc) return pb.compareTo(pc);
+          }
+          return _byRank(b, c);
         });
-      for (final b in choices) {
-        final rest = go(left.where((c) => c != a && c != b).toList());
-        if (rest != null) return [_Board(a, b), ...rest];
-      }
-      return null;
-    }
-
-    return go(sorted);
+      },
+    );
+    return pairs == null ? null : [for (final (a, b) in pairs) _Board(a, b)];
   }
 
   /// Pairs [cards] (even, in rank order) upper half against lower half,
   /// with the nearest legal partner where that meets a repeat; null when no
   /// legal pairing exists.
   List<_Board>? _matchInOrder(List<_Card> cards) {
-    final half = cards.length ~/ 2;
-    List<_Board>? go(List<_Card> left) {
-      if (left.isEmpty) return [];
-      final a = left.first;
+    if (cards.length < 2) return null;
+    final pairs = _guidedPairing(cards, legal, (a, left) {
       final target = left.length ~/ 2;
-      final choices = [
-        for (final (i, b) in left.indexed)
-          if (i > 0 && legal(a, b)) (i, b),
-      ]..sort((x, y) => (x.$1 - target).abs().compareTo((y.$1 - target).abs()));
-      for (final (_, b) in choices) {
-        final rest = go(left.where((c) => c != a && c != b).toList());
-        if (rest != null) return [_Board(a, b), ...rest];
-      }
-      return null;
-    }
-
-    if (half == 0) return null;
-    return go(cards);
+      final at = {for (final (i, c) in left.indexed) c: i};
+      return left.skip(1).toList()..sort((x, y) {
+        final c = (at[x]! - target).abs().compareTo((at[y]! - target).abs());
+        return c != 0 ? c : at[x]!.compareTo(at[y]!);
+      });
+    });
+    return pairs == null ? null : [for (final (a, b) in pairs) _Board(a, b)];
   }
 
   _Plan pair(List<_Card> floaters, List<String> out, {int extraDrops = 0}) {
@@ -1449,13 +1673,15 @@ class _GroupContext {
     final leftover = <_Card>[];
     final naturalOpponents = <String, _Card>{};
     var cost = 0;
+    _teamPairs = const {};
 
     // 29D1a: each odd player meets the highest-rated opponent it can play;
     // 29D1b allows a lower opponent within the color-switch limits.
     for (final f in floaters) {
+      // 28N1a: a team-mate is no opponent while anyone else is available.
       final candidates = [...pool]
         ..sort(_byRating)
-        ..retainWhere((m) => legal(f, m, teamsBlocked: belowPlusTwo));
+        ..retainWhere((m) => legal(f, m));
       // The rest of the field, including floaters still to be placed and
       // those that already dropped further, must stay pairable.
       final others = floaters.skip(floaters.indexOf(f) + 1).toList();
@@ -1471,6 +1697,23 @@ class _GroupContext {
         chosen = m;
         break;
       }
+      // Only team-mates are left here. Below plus-two the player moves on
+      // while someone else waits lower down (28N1b); otherwise the
+      // team-mates meet (28N1c).
+      var mate = false;
+      if (chosen == null &&
+          rules.section.avoidTeammates &&
+          !(belowPlusTwo && below.any((m) => legal(f, m)))) {
+        chosen = ([...pool]..sort(_byRating))
+            .where(
+              (m) =>
+                  teammates(f, m) &&
+                  legal(f, m, teamsBlocked: false) &&
+                  completes(m),
+            )
+            .firstOrNull;
+        mate = chosen != null;
+      }
       if (chosen == null) {
         notes.add(
           '${f.name} (${scoreText(f.score)}) has no available opponent in the $label and drops further (29D2).',
@@ -1480,9 +1723,10 @@ class _GroupContext {
       }
       naturalOpponents[f.id] = chosen;
       var opponent = chosen;
-      var note =
-          '${f.name} (${scoreText(f.score)}, ${f.rating}) drops to the $label as the odd player and plays ${chosen.name} (${chosen.rating}), the highest-rated available opponent (29D1a).';
-      if (f.due != 0 && f.due == chosen.due) {
+      var note = mate
+          ? '${f.name} (${scoreText(f.score)}, ${f.rating}) drops to the $label as the odd player and plays team-mate ${chosen.name} (${chosen.rating}): no other opponent is available (28N1).'
+          : '${f.name} (${scoreText(f.score)}, ${f.rating}) drops to the $label as the odd player and plays ${chosen.name} (${chosen.rating}), the highest-rated available opponent (29D1a).';
+      if (!mate && f.due != 0 && f.due == chosen.due) {
         final strength = f.penalty(-f.due) > chosen.penalty(-chosen.due)
             ? f.penalty(-f.due)
             : chosen.penalty(-chosen.due);
@@ -1507,22 +1751,29 @@ class _GroupContext {
       pool.remove(opponent);
     }
 
-    // 28N1b: below plus-two, move a team-mate out rather than pair them.
-    if (belowPlusTwo && !matchable(pool, spare: pool.length.isOdd ? 1 : 0)) {
-      final movable =
-          pool.where((c) => pool.any((d) => d != c && teammates(c, d))).toList()
-            ..sort(_lowestFirst);
-      for (final c in movable) {
-        final rest = pool.where((x) => x != c).toList();
-        if (matchable(rest, spare: rest.length.isOdd ? 1 : 0) &&
-            (next != null)) {
-          notes.add(
-            '${c.name} moves down from the $label so team-mates do not meet (28N1b).',
-          );
-          leftover.add(c);
-          pool = rest;
-          break;
-        }
+    // 28N1b: below plus-two, team-mates who could only meet each other
+    // move down instead, the lowest-rated first, for as long as the groups
+    // below have other opponents for them.
+    if (belowPlusTwo && rules.section.avoidTeammates && next != null) {
+      int apart(List<_Card> cards) => _unmatched(cards, legal);
+      int together(List<_Card> cards) =>
+          _unmatched(cards, (a, b) => legal(a, b, teamsBlocked: false));
+      while (apart(pool) > together(pool)) {
+        final short = apart(pool);
+        final move = _dropOrder(pool).where((c) {
+          if (c == forcedOdd || !below.any((m) => legal(c, m))) return false;
+          if (!pool.any((d) => d != c && teammates(c, d))) return false;
+          final rest = pool.where((x) => x != c).toList();
+          final lower = [...leftover, c, ...below];
+          return apart(rest) < short &&
+              matchable(lower, spare: lower.length % 2, teamsBlocked: false);
+        }).firstOrNull;
+        if (move == null) break;
+        notes.add(
+          '${move.name} moves down from the $label so team-mates do not meet (28N1b).',
+        );
+        leftover.add(move);
+        pool.remove(move);
       }
     }
 
@@ -1587,27 +1838,48 @@ class _GroupContext {
       }
       final ratedFirst = _dropOrder(forcedOdd != null ? [forcedOdd] : pool);
       _Card? odd;
+      var deeper = false;
+      // Why each player ahead of the odd player in drop order could not be
+      // it, for the director's review.
+      final passed = <_Card, String>{};
       // 29D1a: the odd player must have an opponent in the next group;
       // 29D2: failing that, in a lower one. Either way the rest of the
-      // field must still be pairable.
-      for (final tryDeeper in [false, true]) {
+      // field must still be pairable. 28N1b: below plus-two, an odd player
+      // who leaves the others free of team-mate games comes first.
+      final apart = belowPlusTwo && rules.section.avoidTeammates;
+      for (final (keepApart, tryDeeper) in [
+        if (apart) ...[(true, false), (true, true)],
+        (false, false),
+        (false, true),
+      ]) {
         for (final c in ratedFirst) {
           if (!pool.contains(c)) continue;
           final rest = pool.where((x) => x != c).toList();
-          if (!matchable(rest, teamsBlocked: belowPlusTwo) &&
-              !matchable(rest, teamsBlocked: false)) {
+          if (!matchable(rest, teamsBlocked: false)) {
+            passed[c] = 'leaves the rest of the group without a pairing';
+            continue;
+          }
+          if (keepApart && !matchable(rest)) {
+            passed[c] = 'leaves team-mates of the group to meet (28N1b)';
             continue;
           }
           final reach = tryDeeper ? below : next!;
-          if (!reach.any((m) => legal(c, m, teamsBlocked: false))) continue;
+          if (!reach.any((m) => legal(c, m, teamsBlocked: false))) {
+            passed[c] = tryDeeper
+                ? 'has no opponent left in any lower group'
+                : 'has already played everyone in the next group';
+            continue;
+          }
           if (!matchable(
             [c, ...below],
             spare: below.length.isEven ? 1 : 0,
             teamsBlocked: false,
           )) {
+            passed[c] = 'cannot drop without leaving the lower groups unpaired';
             continue;
           }
           odd = c;
+          deeper = tryDeeper;
           break;
         }
         if (odd != null) break;
@@ -1616,12 +1888,61 @@ class _GroupContext {
         throw _Failure('no odd player of the $label can be paired below');
       }
       if (forcedOdd == null) {
-        notes.add(
-          '${odd.name} (${odd.rating}) is the odd player of the $label: the lowest-rated ${odd.unrated ? 'player, as the group is unrated (29D1c)' : 'rated player (29D1a)'}.',
-        );
+        final ahead = ratedFirst.takeWhile((c) => c != odd).toList();
+        final further = deeper
+            ? ' ${odd.name} has no opponent in the next group and drops further (29D2).'
+            : '';
+        if (ahead.isEmpty) {
+          notes.add(
+            '${odd.name} (${_ratingText(odd)}) is the odd player of the $label: the lowest-rated ${odd.unrated ? 'player, as the group is unrated (29D1c)' : 'rated player (29D1a)'}.$further',
+          );
+        } else {
+          notes.add(
+            '${odd.name} (${_ratingText(odd)}) is the odd player of the $label, passing over ${ahead.map((c) => '${c.name} (${_ratingText(c)}), who ${passed[c]}').join('; ')}: ${odd.unrated ? 'no rated player of the group can drop' : 'the next lowest-rated player who can drop'} (29D1b).$further',
+          );
+        }
       }
       pool.remove(odd);
       leftover.add(odd);
+    }
+
+    // 28N1b, for the group below: when its team-mates could only meet each
+    // other, two players from here who can play them move down, the
+    // lowest-rated first, provided the rest of this group still pairs.
+    final lower = next;
+    if (belowPlusTwo && rules.section.avoidTeammates && lower != null) {
+      int short(List<_Card> extra, {bool together = false}) => _unmatched([
+        ...leftover,
+        ...extra,
+        ...lower,
+      ], (a, b) => legal(a, b, teamsBlocked: !together));
+      while (pool.length >= 2 &&
+          matchable(pool) &&
+          short(const []) >= short(const [], together: true) + 2) {
+        final now = short(const []);
+        _Card? first, second;
+        for (final c in _dropOrder(pool)) {
+          if (c == forcedOdd) continue;
+          if (first == null) {
+            final rest = pool.where((x) => x != c).toList();
+            if (short([c]) < now && matchable(rest, spare: 1)) first = c;
+          } else {
+            final rest = pool.where((x) => x != c && x != first).toList();
+            if (short([first, c]) < now - 1 && matchable(rest)) {
+              second = c;
+              break;
+            }
+          }
+        }
+        if (first == null || second == null) break;
+        for (final c in [first, second]) {
+          notes.add(
+            '${c.name} moves down from the $label so team-mates in the ${scoreText(lower.first.score)}-point group do not meet (28N1b).',
+          );
+          pool.remove(c);
+          leftover.add(c);
+        }
+      }
     }
 
     // 29J: unrateds on plus scores in this group may be paired together.
@@ -1653,17 +1974,28 @@ class _GroupContext {
     final group = <_Board>[
       for (var i = 0; i < half; i++) _Board(pool[i], pool[half + i]),
     ];
-    var teamsBlocked = belowPlusTwo || rules.section.avoidTeammates;
-    if (!_fixIllegal(group, teamsBlocked: teamsBlocked, notes: notes)) {
-      if (teamsBlocked &&
-          _fixIllegal(group, teamsBlocked: false, notes: notes)) {
+    // 28N1: team-mates stay apart; when the group cannot be paired that
+    // way, only as many of them meet as must.
+    var teamsBlocked = true;
+    if (rules.section.avoidTeammates && !matchable(pool)) {
+      final meet = _teamPairsNeeded(pool);
+      if (meet != null) {
+        _teamPairs = {for (final (a, b) in meet) _pairKey(a, b)};
+      }
+      if (meet != null && matchable(pool)) {
+        notes.add(
+          'Team-mates meet in the $label (${meet.map((p) => '${p.$1.name} – ${p.$2.name}').join('; ')}): no pairing of the group keeps more of them apart (28N1${belowPlusTwo ? 'a' : 'c'}).',
+        );
+      } else if (matchable(pool, teamsBlocked: false)) {
+        _teamPairs = const {};
         teamsBlocked = false;
         notes.add(
           'Team-mates meet in the $label: no other pairing was possible (28N1${belowPlusTwo ? 'a' : 'c'}).',
         );
-      } else {
-        throw _Failure('the $label cannot be paired without a repeat');
       }
+    }
+    if (!_fixIllegal(group, teamsBlocked: teamsBlocked, notes: notes)) {
+      throw _Failure('the $label cannot be paired without a repeat');
     }
     cost = _improveColors(
       group,
@@ -1701,15 +2033,24 @@ class _GroupContext {
 
   /// 27A1 / 29C2: removes repeat and restricted pairings with the
   /// smallest switches; there is no rating limit for keeping a score group
-  /// intact (29D1b).
+  /// intact (29D1b). False, with [group] untouched, when its players have
+  /// no legal pairing among themselves.
   bool _fixIllegal(
     List<_Board> group, {
     required bool teamsBlocked,
     required List<String> notes,
   }) {
-    for (var guard = 0; guard < group.length * 2; guard++) {
+    bool settled() => !group.any((b) => _illegal(b, teamsBlocked));
+    if (settled()) return true;
+    final side = upperSide;
+    bool ok(_Card a, _Card b) =>
+        legal(a, b, teamsBlocked: teamsBlocked) &&
+        (side == null || side.contains(a) != side.contains(b));
+    final cards = group.expand((b) => [b.upper, b.lower]).toList()
+      ..sort(_byRating);
+    if (_unmatched(cards, ok) > 0) return false;
+    for (var guard = 0; guard < group.length * 2 && !settled(); guard++) {
       final bad = group.indexWhere((b) => _illegal(b, teamsBlocked));
-      if (bad < 0) return true;
       var illegalCount = group.where((b) => _illegal(b, teamsBlocked)).length;
       (int cost, void Function() apply, String note)? best;
       for (var j = 0; j < group.length; j++) {
@@ -1733,44 +2074,27 @@ class _GroupContext {
       best.$2();
       notes.add(best.$3);
     }
+    if (settled()) return true;
     // Local switches were not enough: rebuild the group legally, staying as
     // close to the natural order as possible.
-    final cards = group.expand((b) => [b.upper, b.lower]).toList()
-      ..sort(_byRating);
     final half = cards.length ~/ 2;
     final natural = {
       for (var i = 0; i < half; i++) cards[i].id: cards[half + i],
     };
-    List<_Board>? solve(List<_Card> left) {
-      if (left.isEmpty) return [];
-      final a = left.first;
-      final side = upperSide;
-      final choices =
-          left
-              .skip(1)
-              .where(
-                (b) =>
-                    legal(a, b, teamsBlocked: teamsBlocked) &&
-                    (side == null || side.contains(a) != side.contains(b)),
-              )
-              .toList()
-            ..sort((x, y) {
-              final tx = (x.rating - (natural[a.id]?.rating ?? x.rating)).abs();
-              final ty = (y.rating - (natural[a.id]?.rating ?? y.rating)).abs();
-              return tx != ty ? tx.compareTo(ty) : _byRating(x, y);
-            });
-      for (final b in choices) {
-        final rest = solve(left.where((c) => c != a && c != b).toList());
-        if (rest != null) return [_Board(a, b), ...rest];
-      }
-      return null;
-    }
-
-    final rebuilt = solve(cards);
+    final rebuilt = _guidedPairing(
+      cards,
+      ok,
+      (a, left) => left.skip(1).toList()
+        ..sort((x, y) {
+          final tx = (x.rating - (natural[a.id]?.rating ?? x.rating)).abs();
+          final ty = (y.rating - (natural[a.id]?.rating ?? y.rating)).abs();
+          return tx != ty ? tx.compareTo(ty) : _byRating(x, y);
+        }),
+    );
     if (rebuilt == null) return false;
     group
       ..clear()
-      ..addAll(rebuilt);
+      ..addAll([for (final (a, b) in rebuilt) _Board(a, b)]);
     notes.add(
       'The $label was re-paired from the top to avoid repeat or restricted pairings (27A1, 29C2).',
     );
@@ -1914,6 +2238,168 @@ class _GroupContext {
 
 int _min(int a, int b) => a < b ? a : b;
 int _max(int a, int b) => a > b ? a : b;
+
+/// Names an unordered pair of players.
+String _pairKey(_Card a, _Card b) =>
+    a.id.compareTo(b.id) < 0 ? '${a.id}/${b.id}' : '${b.id}/${a.id}';
+
+/// The fewest players of [cards] left without a partner when as many as
+/// possible are paired under [ok]: zero means everyone can be paired.
+int _unmatched(List<_Card> cards, bool Function(_Card, _Card) ok) {
+  final n = cards.length;
+  // Most fields pair off in order; only the rest needs the full search.
+  final match = List.filled(n, -1);
+  var free = 0;
+  for (var i = 0; i < n; i++) {
+    if (match[i] != -1) continue;
+    var j = i + 1;
+    while (j < n && (match[j] != -1 || !ok(cards[i], cards[j]))) {
+      j++;
+    }
+    if (j < n) {
+      match[i] = j;
+      match[j] = i;
+    } else {
+      free++;
+    }
+  }
+  if (free <= n % 2) return free;
+  _maximumMatching(_adjacency(cards, ok), match);
+  return match.where((m) => m == -1).length;
+}
+
+/// Which of [cards] may be paired with which under [ok], by position.
+List<List<bool>> _adjacency(List<_Card> cards, bool Function(_Card, _Card) ok) {
+  final n = cards.length;
+  final adjacent = [for (var i = 0; i < n; i++) List.filled(n, false)];
+  for (var i = 0; i < n; i++) {
+    for (var j = i + 1; j < n; j++) {
+      adjacent[i][j] = adjacent[j][i] = ok(cards[i], cards[j]);
+    }
+  }
+  return adjacent;
+}
+
+/// A pairing of as many vertices as possible (Edmonds' blossom algorithm),
+/// as each vertex's partner or -1, grown from [match] when given. Vertices
+/// are served in index order: one is left out only when no pairing covers
+/// it together with everyone already paired, so the lowest indexes have
+/// first claim on a partner.
+List<int> _maximumMatching(List<List<bool>> adjacent, [List<int>? from]) {
+  final n = adjacent.length;
+  final match = from ?? List.filled(n, -1);
+  final parent = List.filled(n, -1);
+  final base = List.filled(n, 0);
+  final seen = List.filled(n, false);
+  final inBlossom = List.filled(n, false);
+  final queue = <int>[];
+
+  int commonBase(int a, int b) {
+    final onPath = List.filled(n, false);
+    while (true) {
+      a = base[a];
+      onPath[a] = true;
+      if (match[a] == -1) break;
+      a = parent[match[a]];
+    }
+    while (true) {
+      b = base[b];
+      if (onPath[b]) return b;
+      b = parent[match[b]];
+    }
+  }
+
+  void markPath(int v, int root, int child) {
+    while (base[v] != root) {
+      inBlossom[base[v]] = true;
+      inBlossom[base[match[v]]] = true;
+      parent[v] = child;
+      child = match[v];
+      v = parent[match[v]];
+    }
+  }
+
+  // An augmenting path from [root], as its far end; -1 when there is none.
+  int pathFrom(int root) {
+    seen.fillRange(0, n, false);
+    parent.fillRange(0, n, -1);
+    for (var i = 0; i < n; i++) {
+      base[i] = i;
+    }
+    queue
+      ..clear()
+      ..add(root);
+    seen[root] = true;
+    for (var head = 0; head < queue.length; head++) {
+      final v = queue[head];
+      final row = adjacent[v];
+      for (var to = 0; to < n; to++) {
+        if (!row[to] || base[v] == base[to] || match[v] == to) continue;
+        if (to == root || (match[to] != -1 && parent[match[to]] != -1)) {
+          final root2 = commonBase(v, to);
+          inBlossom.fillRange(0, n, false);
+          markPath(v, root2, to);
+          markPath(to, root2, v);
+          for (var i = 0; i < n; i++) {
+            if (!inBlossom[base[i]]) continue;
+            base[i] = root2;
+            if (!seen[i]) {
+              seen[i] = true;
+              queue.add(i);
+            }
+          }
+        } else if (parent[to] == -1) {
+          parent[to] = v;
+          if (match[to] == -1) return to;
+          seen[match[to]] = true;
+          queue.add(match[to]);
+        }
+      }
+    }
+    return -1;
+  }
+
+  for (var v = 0; v < n; v++) {
+    if (match[v] != -1) continue;
+    var end = pathFrom(v);
+    while (end != -1) {
+      final before = parent[end], next = match[before];
+      match[end] = before;
+      match[before] = end;
+      end = next;
+    }
+  }
+  return match;
+}
+
+/// Pairs all of [cards] under [ok] without backtracking: the first player
+/// takes the first partner [choices] offers that leaves everyone else
+/// pairable, then the next player does the same. Null when [cards] cannot
+/// all be paired.
+List<(_Card, _Card)>? _guidedPairing(
+  List<_Card> cards,
+  bool Function(_Card, _Card) ok,
+  List<_Card> Function(_Card a, List<_Card> left) choices,
+) {
+  if (_unmatched(cards, ok) > 0) return null;
+  final pairs = <(_Card, _Card)>[];
+  var left = cards;
+  while (left.isNotEmpty) {
+    final a = left.first;
+    List<_Card>? rest;
+    for (final b in choices(a, left)) {
+      if (!ok(a, b)) continue;
+      final without = left.where((c) => c != a && c != b).toList();
+      if (_unmatched(without, ok) > 0) continue;
+      pairs.add((a, b));
+      rest = without;
+      break;
+    }
+    if (rest == null) return null;
+    left = rest;
+  }
+  return pairs;
+}
 
 class _Move {
   _Move({

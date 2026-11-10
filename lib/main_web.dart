@@ -43,6 +43,7 @@ Future<void> main() async {
       return;
     }
     await initializeWebStorage();
+    _keepSavesThroughLeaving();
     LicenseRegistry.addLicense(() async* {
       for (final font in ['Inter', 'SourceCodePro']) {
         yield LicenseEntryWithLineBreaks([
@@ -52,6 +53,28 @@ Future<void> main() async {
     });
     runApp(const MeowWebApp());
   }, () => ProxyClient(BrowserClient(), Uri.base.resolve('fetch')));
+}
+
+/// A save reaches IndexedDB a moment after it is made. Hiding or leaving the
+/// page finishes any write still on its way, and the browser's own "leave
+/// site?" question appears only if one is still unwritten at that instant.
+void _keepSavesThroughLeaving() {
+  void finish(web.Event _) => unawaited(flushWebStorage());
+  web.document.addEventListener(
+    'visibilitychange',
+    ((web.Event event) {
+      if (web.document.visibilityState == 'hidden') finish(event);
+    }).toJS,
+  );
+  web.window.addEventListener('pagehide', finish.toJS);
+  web.window.addEventListener(
+    'beforeunload',
+    ((web.Event event) {
+      if (!webStoragePending) return;
+      finish(event);
+      event.preventDefault();
+    }).toJS,
+  );
 }
 
 /// Holds a Web Lock for as long as this tab is open; false when another tab
@@ -292,25 +315,31 @@ class _MeowWebAppState extends State<MeowWebApp> {
   bool templating = false;
   String? templatePath;
 
+  /// What a template would copy, read once when it is chosen and only read.
   Event? templateSource(String path) {
     if (path == this.path) return controller?.event;
-    try {
-      final repository = SqliteEventRepository(path);
+    if (_templateRead != path) {
+      _templateRead = path;
       try {
-        return repository.load();
-      } finally {
-        repository.close();
+        _template = SqliteEventRepository.peek(path);
+      } catch (e, stack) {
+        _template = null;
+        Diagnostics.record(
+          'read event template',
+          'failed',
+          error: e,
+          stack: stack,
+        );
       }
-    } catch (e, stack) {
-      Diagnostics.record(
-        'read event template',
-        'failed',
-        error: e,
-        stack: stack,
-      );
-      return null;
     }
+    return _template;
   }
+
+  Event? _template;
+  String? _templateRead;
+
+  /// The stored event whose row is asking "Delete?", if one is.
+  String? deleting;
 
   void create(BuildContext context) {
     final name = newName.text.trim();
@@ -324,6 +353,7 @@ class _MeowWebAppState extends State<MeowWebApp> {
         setState(() => error = 'Choose the event to copy the set-up from.');
         return;
       }
+      _templateRead = null;
       source = templateSource(templatePath!);
       if (source == null) {
         setState(
@@ -464,31 +494,15 @@ class _MeowWebAppState extends State<MeowWebApp> {
     }
   }
 
-  Future<void> delete(BuildContext context, StoredEvent stored) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Delete ${stored.name}?'),
-        content: const Text(
-          'This removes the event from this browser. Download a copy first if you may need it again.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+  /// Removes a stored event, once its row's own Delete has confirmed it.
+  void delete(BuildContext context, StoredEvent stored) {
     try {
       _closeRetiring();
       _deleteDatabase(stored.path);
-      setState(() => events.removeWhere((e) => e.path == stored.path));
+      setState(() {
+        deleting = null;
+        events.removeWhere((e) => e.path == stored.path);
+      });
       _saveLibrary();
     } catch (e, stack) {
       Diagnostics.record('delete event', 'failed', error: e, stack: stack);
@@ -578,6 +592,7 @@ class _MeowWebAppState extends State<MeowWebApp> {
                             naming = true;
                             templating = true;
                             templatePath ??= events.first.path;
+                            _templateRead = null;
                             error = null;
                           }),
                           icon: const Icon(Icons.copy_outlined),
@@ -688,30 +703,64 @@ class _MeowWebAppState extends State<MeowWebApp> {
                   if (events.isEmpty) Text('None yet.', style: muted),
                   for (final stored in events)
                     Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.description_outlined),
-                        title: Text(stored.name),
-                        subtitle: Text(_changed(stored.changed)),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: 'Download a copy',
-                              icon: const Icon(
-                                Icons.download_outlined,
-                                size: 18,
+                      child: deleting == stored.path
+                          // The row asks in place; nothing opens over the list.
+                          ? ListTile(
+                              key: ValueKey('confirm-delete-${stored.path}'),
+                              leading: const Icon(Icons.delete_outline),
+                              title: Text('Delete ${stored.name}?'),
+                              subtitle: const Text(
+                                'This removes the event from this browser. Download a copy first if you may need it again.',
                               ),
-                              onPressed: () => download(context, stored),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  TextButton(
+                                    onPressed: () => delete(context, stored),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
+                                    child: const Text('Delete'),
+                                  ),
+                                  TextButton(
+                                    autofocus: true,
+                                    onPressed: () =>
+                                        setState(() => deleting = null),
+                                    child: const Text('Keep'),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListTile(
+                              leading: const Icon(Icons.description_outlined),
+                              title: Text(stored.name),
+                              subtitle: Text(_changed(stored.changed)),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Download a copy',
+                                    icon: const Icon(
+                                      Icons.download_outlined,
+                                      size: 18,
+                                    ),
+                                    onPressed: () => download(context, stored),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Delete from this browser',
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                    ),
+                                    onPressed: () =>
+                                        setState(() => deleting = stored.path),
+                                  ),
+                                ],
+                              ),
+                              onTap: () => open(stored.path),
                             ),
-                            IconButton(
-                              tooltip: 'Delete from this browser',
-                              icon: const Icon(Icons.delete_outline, size: 18),
-                              onPressed: () => delete(context, stored),
-                            ),
-                          ],
-                        ),
-                        onTap: () => open(stored.path),
-                      ),
                     ),
                 ],
               ),

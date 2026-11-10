@@ -79,13 +79,13 @@ void main() {
           // The review opens at the right; nothing is inserted above the table.
           expect(find.byKey(const ValueKey('rating-review')), findsOneWidget);
           expect(
-            find.text('5 of 6 players have USCF ratings.'),
+            find.text('5 of 6 players have US Chess ratings.'),
             findsOneWidget,
           );
-          expect(find.text('No USCF ID (1)'), findsOneWidget);
+          expect(find.text('No US Chess ID (1)'), findsOneWidget);
           expect(find.text('Rating on 2026-10-01'), findsOneWidget);
           expect(find.text('Entered'), findsOneWidget);
-          expect(find.text('USCF name'), findsOneWidget);
+          expect(find.text('US Chess name'), findsOneWidget);
           expect(c.event!.players.first.rating, 2000);
           await tester.drag(find.byType(ListView).first, const Offset(0, -650));
           await tester.pumpAndSettle();
@@ -145,12 +145,12 @@ void main() {
           expect(find.text('Rating on 2026-10-01'), findsNothing);
           expect(find.byType(SnackBar), findsNothing);
           await tester.pump(const Duration(seconds: 20));
-          expect(find.text('Updated 4 USCF ratings.'), findsOneWidget);
+          expect(find.text('Updated 4 US Chess ratings.'), findsOneWidget);
           await tester.tap(find.byKey(const ValueKey('done-undo')));
           await tester.pumpAndSettle();
           expect(c.event!.player('p0').rating, 1700);
           expect(c.event!.player('p1').rating, 1950);
-          expect(find.text('Updated 4 USCF ratings.'), findsNothing);
+          expect(find.text('Updated 4 US Chess ratings.'), findsNothing);
         }
         expect(tester.takeException(), isNull);
       },

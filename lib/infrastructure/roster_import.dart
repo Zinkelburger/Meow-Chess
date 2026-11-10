@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:csv/csv.dart';
 import 'package:uuid/uuid.dart';
 import '../domain/model.dart';
+import '../domain/us_chess.dart';
 
 class ImportRow {
   const ImportRow(
@@ -11,11 +12,18 @@ class ImportRow {
     this.player,
     this.error, {
     this.section = '',
+    this.warnings = const [],
   });
   final int line;
   final String raw;
+
+  /// Null only when the row names nobody ([error] says so).
   final Player? player;
   final String? error;
+
+  /// What the row said that could not be kept, such as an ID that is not
+  /// eight digits. The player is imported without that field.
+  final List<String> warnings;
 
   /// The section the registration names, as written; empty for none.
   final String section;
@@ -162,23 +170,26 @@ class RosterTable {
           ? value(RosterField.name)
           : '${value(RosterField.firstName)} ${value(RosterField.lastName)}'
                 .trim();
-      final member = value(RosterField.memberId);
-      final rawRating = value(RosterField.rating);
-      final rating =
-          rawRating.isEmpty ||
-              ['unrated', 'unr'].contains(rawRating.toLowerCase())
-          ? 0
-          : int.tryParse(rawRating);
-      final state = value(RosterField.state).toUpperCase();
-      final error = name.isEmpty
-          ? 'Missing name'
-          : member.isNotEmpty && !RegExp(r'^\d{8}$').hasMatch(member)
-          ? 'US Chess ID must be eight digits'
-          : rating == null || rating < 0 || rating > 4000
-          ? 'Rating must be 0–4000; assign provisional values explicitly'
-          : state.isNotEmpty && !RegExp(r'^[A-Z]{2}$').hasMatch(state)
-          ? 'State must be two letters'
-          : null;
+      final warnings = <String>[];
+      final rating = rosterRating(value(RosterField.rating));
+      if (rating == null) {
+        warnings.add(
+          'Rating "${value(RosterField.rating)}" is not a number; imported as unrated',
+        );
+      }
+      final member = rosterMemberId(value(RosterField.memberId));
+      if (member == null) {
+        warnings.add(
+          'US Chess ID "${value(RosterField.memberId)}" is not eight digits; imported without an ID',
+        );
+      }
+      final stated = value(RosterField.state);
+      final state = stated.isEmpty ? '' : stateCodeOf(stated);
+      if (state == null) {
+        warnings.add('State "$stated" is not a state; left blank');
+      }
+      // Only a row that names nobody cannot be imported.
+      final error = name.isEmpty ? 'Missing name' : null;
       final raw = Csv().encode([row]);
       result.add(
         ImportRow(
@@ -189,21 +200,89 @@ class RosterTable {
               : Player(
                   id: const Uuid().v4(),
                   name: name,
-                  memberId: member,
-                  rating: rating!,
+                  memberId: member ?? '',
+                  rating: rating ?? 0,
                   club: value(RosterField.club),
                   team: value(RosterField.team),
-                  state: state,
+                  state: state ?? '',
                   registrationNote: value(RosterField.registrationNote),
                   source: raw,
                 ),
           error,
           section: value(RosterField.section),
+          warnings: error == null ? warnings : const [],
         ),
       );
     }
     return result;
   }
+}
+
+const _noValue = {
+  '',
+  '-',
+  '--',
+  '—',
+  '?',
+  'n/a',
+  'na',
+  'none',
+  'new',
+  'pending',
+  'tbd',
+  'unknown',
+};
+
+/// The rating a registration list states, without its decoration: `1500P12`,
+/// `1500P`, `1234/5`, `1500.0` and `1500*` are 1500-odd; `Unr.`, `UNR`,
+/// `NR`, `New`, `-`, `n/a` and blank are unrated (0). Null when the text is
+/// not a rating at all.
+int? rosterRating(String text) {
+  final t = text.trim().toLowerCase();
+  if (_noValue.contains(t) ||
+      const {'unr', 'unr.', 'unrated', 'nr', 'u', 'un'}.contains(t)) {
+    return 0;
+  }
+  // The number, then a provisional game count (P12, /5), decimals, a
+  // star, or a provisional or unofficial marker.
+  final m = RegExp(
+    r'^\(?(\d{1,4})(?:\.\d*)?\)?\s*(?:p\s*\d*|/\s*\d+|\*+|\?)?$',
+  ).firstMatch(t);
+  final rating = m == null ? null : int.parse(m[1]!);
+  return rating == null || rating > 4000 ? null : rating;
+}
+
+/// The US Chess ID a registration list states: eight digits (a spreadsheet
+/// may have added `.0`), or empty for none (`NEW`, `pending`, `none`, `-`,
+/// `0`). Null when the text is something else, such as seven digits.
+String? rosterMemberId(String text) {
+  final t = text.trim().toLowerCase().replaceAll(RegExp(r'\s'), '');
+  if (_noValue.contains(t) || RegExp(r'^0+(\.0+)?$').hasMatch(t)) return '';
+  final m = RegExp(r'^#?(\d{8})(?:\.0+)?$').firstMatch(t);
+  return m?[1];
+}
+
+/// Who was imported with something left out, by name, for the import
+/// summary: "without a US Chess ID: Ann Lee, Bo Diaz · as unrated: Cy Park".
+/// Empty when every row was read whole.
+String importWarningSummary(Iterable<ImportRow> rows) {
+  final groups = <String, List<String>>{};
+  for (final r in rows) {
+    final p = r.player;
+    if (p == null) continue;
+    for (final w in r.warnings) {
+      final label = w.startsWith('US Chess ID')
+          ? 'without a US Chess ID (not eight digits)'
+          : w.startsWith('Rating')
+          ? 'as unrated (rating not a number)'
+          : 'without a state';
+      (groups[label] ??= []).add(p.name);
+    }
+  }
+  return [
+    for (final MapEntry(key: label, value: names) in groups.entries)
+      'imported $label: ${names.join(', ')}',
+  ].join(' · ');
 }
 
 List<ImportRow> parseRoster(

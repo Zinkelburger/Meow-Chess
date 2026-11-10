@@ -62,16 +62,16 @@ class RatingRefresh extends ChangeNotifier {
       return 'Event changed. Refresh again.';
     }
     if (old.memberId != p.memberId) {
-      return 'USCF ID changed. Refresh again to check it.';
+      return 'US Chess ID changed. Refresh again to check it.';
     }
     if (old.rating != p.rating) return 'Your edit is kept.';
     if (p.memberId.trim().isEmpty) {
-      return 'No USCF ID. Click the player to add one, or keep this rating.';
+      return 'No US Chess ID. Click the player to add one, or keep this rating.';
     }
     if (failures[p.id] case final message?) return message;
     final m = observations[p.id];
     if (m == null) {
-      return busy ? 'Waiting for USCF…' : 'Not checked. Retry refresh.';
+      return busy ? 'Waiting for US Chess…' : 'Not checked. Retry refresh.';
     }
     return ratingUpdateProblem(
       current: controller.event!,
@@ -177,7 +177,7 @@ class RatingRefresh extends ChangeNotifier {
     failures.clear();
     selected.clear();
     Diagnostics.record(
-      'refresh USCF ratings',
+      'refresh US Chess ratings',
       'started',
       context: {'players': event.players.length, 'category': category},
     );
@@ -199,7 +199,7 @@ class RatingRefresh extends ChangeNotifier {
         },
         onFailure: (player, error, stack) {
           Diagnostics.record(
-            'lookup USCF rating',
+            'lookup US Chess rating',
             'failed',
             context: {'playerId': player.id},
             error: error,
@@ -213,7 +213,7 @@ class RatingRefresh extends ChangeNotifier {
       if (!current()) return;
       if (outcome == MemberBatchOutcome.providerStopped) {
         notice =
-            'USCF stopped responding. Review completed lookups, retry later, or keep current ratings.';
+            'US Chess stopped responding. Review completed lookups, retry later, or keep current ratings.';
       } else if (outcome == MemberBatchOutcome.cancelled) {
         notice = 'Event changed. Refresh again for the current roster.';
       }
@@ -224,7 +224,7 @@ class RatingRefresh extends ChangeNotifier {
         return;
       }
       Diagnostics.record(
-        'refresh USCF ratings',
+        'refresh US Chess ratings',
         'completed',
         context: {
           'found': foundCount,
@@ -234,7 +234,7 @@ class RatingRefresh extends ChangeNotifier {
       );
       if (event.players.every((p) => p.memberId.trim().isEmpty)) {
         notice =
-            'No USCF IDs to look up. Nothing changed. Add IDs in player details if you want ratings later.';
+            'No US Chess IDs to look up. Nothing changed. Add IDs in player details if you want ratings later.';
       }
     } catch (error, stack) {
       if (current()) {
@@ -242,7 +242,7 @@ class RatingRefresh extends ChangeNotifier {
             'Lookup stopped. ${plainMessage(error)} '
             'Review completed lookups, retry later, or keep current ratings.';
         Diagnostics.record(
-          'refresh USCF ratings',
+          'refresh US Chess ratings',
           'failed',
           error: error,
           stack: stack,

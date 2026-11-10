@@ -9,7 +9,8 @@ import 'package:meow_chess/infrastructure/dbf_export.dart';
 import 'package:path/path.dart' as p;
 
 import 'dbf_importer_test.dart' show saveFixture;
-import 'rating_contract_test.dart' show doubleBlitz, readDbf, today;
+import '../dbf_reader.dart';
+import 'rating_contract_test.dart' show doubleBlitz, today;
 
 /// Byte-for-byte 2C contract: the dBASE III framing every DBF reader relies
 /// on, golden records for a minimal event, and one package per section shape

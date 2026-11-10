@@ -180,14 +180,28 @@ void main() {
       );
     });
 
-    test('withdrawals and do-not-pair requests stop the projection', () {
+    test('a withdrawal forfeits its games; a do-not-pair request stops the '
+        'projection', () {
       final c = fixture(count: 4);
       addTearDown(c.dispose);
       c.savePlayer(c.event!.player('p3').copy(withdrawn: true));
-      expect(projected(c), isEmpty);
-      expect(c.quadScheduleIssues[quad(c).id], contains('withdrawn'));
+      expect(projected(c), hasLength(3));
+      expect(c.quadScheduleIssues, isEmpty);
+      for (final r in projected(c)) {
+        final g = r.games.singleWhere(
+          (g) => g.white == 'p3' || g.black == 'p3',
+        );
+        expect(
+          g.outcome,
+          g.white == 'p3' ? Outcome.blackForfeit : Outcome.whiteForfeit,
+        );
+      }
       c.savePlayer(c.event!.player('p3').copy(withdrawn: false));
       expect(projected(c), hasLength(3));
+      expect(
+        projected(c).expand((r) => r.games).map((g) => g.outcome).toSet(),
+        {Outcome.unreported},
+      );
       expect(c.quadScheduleIssues, isEmpty);
       c.avoidPair('p0', 'p1', true);
       expect(projected(c), isEmpty);

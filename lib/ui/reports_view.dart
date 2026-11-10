@@ -229,7 +229,7 @@ class _ReportsViewState extends State<ReportsView> {
       final remaining = current() ? _stateless(c.event!).length : 0;
       stateNotice = current()
           ? 'Saved $filled missing ${filled == 1 ? 'state' : 'states'}. '
-                '${remaining == 0 ? 'All player states are filled.' : '$remaining still missing; add a USCF ID, retry the lookup, or enter the state manually.'}'
+                '${remaining == 0 ? 'All player states are filled.' : '$remaining still missing; add a US Chess ID, retry the lookup, or enter the state manually.'}'
                 '${failures.isEmpty ? '' : '\n${failures.join('\n')}'}'
           : 'Event changed. Fetch again for the current roster.';
     } catch (error) {
@@ -638,10 +638,12 @@ class _ReportsViewState extends State<ReportsView> {
                         bool ratable = true;
                         try {
                           final tc = TimeControl.parse(control);
-                          shown = tc.reportText;
+                          // As it goes into the report: a control with no
+                          // delay stated carries the standard delay.
+                          shown = tc.uscfText;
                           ratable = tc.category != null;
                           rated = ratable
-                              ? '${tc.category!.label} · ${tc.totalMinutes} min'
+                              ? '${tc.category!.label} · ${tc.reported.totalMinutes} min'
                               : 'Not ratable';
                         } on TournamentException {
                           ratable = false;

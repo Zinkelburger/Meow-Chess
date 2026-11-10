@@ -18,7 +18,7 @@ void main() {
       await mountPlayers(tester, c, standingsOnly: false);
       expect(find.text('R1'), findsNothing);
       expect(find.text('Pts'), findsNothing);
-      expect(find.text('USCF expires'), findsOneWidget);
+      expect(find.text('US Chess expires'), findsOneWidget);
       final cell = ValueKey('rating-preview-${game.white}');
       expect(find.byKey(cell), findsNothing);
       await tester.tap(find.byKey(const ValueKey('player-tools')));

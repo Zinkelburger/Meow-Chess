@@ -179,3 +179,23 @@ List<List<(int, int)>> _bergerTable(int n) {
       }(),
   ];
 }
+
+/// The games each player of a fixed-schedule [section] is scheduled to play
+/// over its planned rounds, a double round counting two. A sit-out in an odd
+/// field is no game, and a player missing from the schedule has none. Empty
+/// when the section has no fixed schedule.
+Map<String, int> scheduledGames(Section section) {
+  final scheduled = <String, int>{};
+  if (!hasFixedSchedule(section) || section.players.length < 2) {
+    return scheduled;
+  }
+  final games = section.doubleGames ? 2 : 1;
+  for (final round in sectionSchedule(section).take(section.plannedRounds)) {
+    for (final (white, black) in round) {
+      if (white == null || black == null) continue;
+      scheduled[white] = (scheduled[white] ?? 0) + games;
+      scheduled[black] = (scheduled[black] ?? 0) + games;
+    }
+  }
+  return scheduled;
+}

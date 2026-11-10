@@ -331,9 +331,9 @@ String prizeReport(Event e, {String? sectionId}) {
     lines.add('');
     for (final w in a.awards) {
       lines.add(
-        '${reportName(w.player.name).padRight(28)} ${scoreText(w.points).padLeft(4)}  '
+        '${reportName(w.name).padRight(28)} ${scoreText(w.points).padLeft(4)}  '
         '${w.cents > 0 ? dollars(w.cents).padLeft(9) : ''.padLeft(9)}'
-        '${w.trophies.isEmpty ? '' : '  ${w.trophies.map((t) => '${t.title} ${t.award.toLowerCase()}').join(', ')}'}',
+        '${w.trophies.isEmpty ? '' : '  ${w.trophies.map((t) => t.awardTitle).join(', ')}'}',
       );
     }
     lines.add('Total paid: ${dollars(a.paidCents)}');
@@ -382,8 +382,11 @@ String _prizeAmount(PrizeLine line) => [
 ].join(' + ');
 
 String _prizeOutcome(Event e, PrizeLine line) {
-  String name(String id) =>
-      reportName(e.players.where((p) => p.id == id).firstOrNull?.name ?? id);
+  String name(String id) => reportName(
+    line.names[id] ??
+        e.players.where((p) => p.id == id).firstOrNull?.name ??
+        id,
+  );
   final cash = line.cash.entries.toList();
   final parts = <String>[
     if (cash.length == 1 && line.pooledWith.isEmpty)
@@ -1248,7 +1251,7 @@ Future<Uint8List> reportPdf(
           [
             for (final w in a.awards)
               [
-                reportName(w.player.name),
+                reportName(w.name),
                 _halves(w.points),
                 w.cents > 0 ? dollars(w.cents) : '',
                 w.trophies.map((t) => t.title).join(', '),

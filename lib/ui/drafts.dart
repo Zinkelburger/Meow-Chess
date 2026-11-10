@@ -106,9 +106,19 @@ class FormDraft {
   }
 }
 
+/// Says that a form holds input that is not applied yet, or that the draft
+/// could not be written to disk.
 class DraftStatus extends StatelessWidget {
-  const DraftStatus({required this.draft, super.key});
+  const DraftStatus({
+    required this.draft,
+    this.pending = 'Draft saved · not applied',
+    super.key,
+  });
   final FormDraft draft;
+
+  /// What an edited form says about itself: a form that applies its edit
+  /// as it closes says so instead of calling it a draft.
+  final String pending;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: draft.store,
@@ -124,9 +134,7 @@ class DraftStatus extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text(
-                error == null
-                    ? 'Draft saved · not applied'
-                    : 'Draft not saved to disk. $error',
+                error == null ? pending : 'Draft not saved to disk. $error',
                 style: TextStyle(
                   color: error == null
                       ? Theme.of(context).colorScheme.onSurfaceVariant

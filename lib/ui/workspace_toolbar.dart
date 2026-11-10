@@ -15,6 +15,10 @@ String shortcutLabel(String key, {bool shift = false}) => macShortcuts
 /// browsers.
 String get historyShortcut => shortcutLabel(macShortcuts ? 'Y' : 'H');
 
+/// The keyboard-shortcut list's own shortcut, beside F1 for Help. The same
+/// key on every keyboard layout, which a punctuation key is not.
+String get keyboardHelpShortcut => macShortcuts ? '⇧F1' : 'Shift+F1';
+
 /// The top bar: the event name (which opens event details) on the left,
 /// help, history and app tools pinned to the right. Below 640 logical
 /// pixels the tools wrap under the name.
@@ -105,9 +109,10 @@ class WorkspaceTopBar extends StatelessWidget {
               _barIcon(
                 colors,
                 Icons.help_outline,
-                'Help articles',
+                'Help (F1)',
                 onHelp,
                 selected: helpOpen,
+                key: const ValueKey('help'),
               ),
               _barIcon(
                 colors,
@@ -120,14 +125,15 @@ class WorkspaceTopBar extends StatelessWidget {
               _barIcon(
                 colors,
                 Icons.keyboard_outlined,
-                'Keyboard shortcuts (F1)',
+                'Keyboard shortcuts ($keyboardHelpShortcut)',
                 onKeyboardHelp,
                 selected: keyboardHelpOpen,
+                key: const ValueKey('keyboard-help'),
               ),
               _divider(colors),
               _barIcon(
                 colors,
-                Icons.arrow_back,
+                Icons.undo,
                 onUndo != null
                     ? 'Undo $undoLabel (${shortcutLabel('Z')})'
                     : 'Nothing to undo',
@@ -136,11 +142,12 @@ class WorkspaceTopBar extends StatelessWidget {
               ),
               _barIcon(
                 colors,
-                Icons.arrow_forward,
+                Icons.redo,
                 onRedo != null
                     ? 'Redo $redoLabel (${shortcutLabel('Z', shift: true)})'
                     : 'Nothing to redo',
                 onRedo,
+                key: const ValueKey('redo'),
               ),
               _barIcon(
                 colors,
@@ -158,7 +165,14 @@ class WorkspaceTopBar extends StatelessWidget {
                 dark ? 'Light mode' : 'Dark mode',
                 onTheme,
               ),
-              _barIcon(colors, Icons.home_outlined, 'Close event', onClose),
+              // A way out, unlike the × that closes a panel.
+              _barIcon(
+                colors,
+                Icons.logout,
+                'Close event',
+                onClose,
+                key: const ValueKey('close-event'),
+              ),
             ],
           );
           if (constraints.maxWidth / MediaQuery.textScalerOf(context).scale(1) <

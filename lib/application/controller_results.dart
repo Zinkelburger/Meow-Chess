@@ -129,8 +129,15 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
         'Explain the correction: later posted rounds will be retained and need review.',
       );
     }
+    final section = e.sections.firstWhere(
+      (s) => s.rounds.any((r) => r.games.any((g) => g.id == gameId)),
+    );
     change(
-      'Result, board ${game.board}',
+      // Quads share board numbers across rounds, so the step is named by
+      // section, round and players as well.
+      'Result, ${section.name} round ${_roundOf(e, gameId).number} board ${game.board}'
+      '${game.leg > 1 ? ' game ${game.leg}' : ''}: '
+      '${e.player(game.white).name} – ${e.player(game.black).name}',
       _withIrrevocableByeRule(
         _withGame(
           e,
@@ -296,12 +303,19 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
         }
       }
       players = [for (final p in players) held[p.id] ?? p];
+      // The players sit the next round out, so it can be paired without
+      // their result: until it arrives the game stands as a draw for
+      // pairing purposes, like any other temporary treatment.
       games = [
         for (final g in games)
           unreported.contains(g)
               ? g.copy(
                   note:
                       'Rule 29H4: result not reported by pairing time; both players hold half-point byes for round $next.',
+                  pairingAssumption: g.pairingAssumption ?? Outcome.draw,
+                  pairingReason: g.pairingReason.trim().isNotEmpty
+                      ? g.pairingReason
+                      : 'Rule 29H4: held out of round $next with half-point byes until the result is reported.',
                 )
               : g,
       ];

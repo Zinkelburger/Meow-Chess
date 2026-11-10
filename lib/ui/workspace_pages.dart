@@ -14,13 +14,20 @@ class WorkspacePageRow extends StatelessWidget {
     required this.view,
     required this.onGo,
     required this.action,
+    this.reserveAction = true,
     super.key,
   });
   final TaskView view;
   final ValueChanged<TaskView> onGo;
 
-  /// Shown on Pairings only: [PostControl].
+  /// Shown on Pairings only: [PairingControl].
   final Widget action;
+
+  /// Whether some section of the event has something to show in [action]:
+  /// its line is then kept on Pairings whichever section is chosen, so
+  /// changing section never shifts the page. With nothing to show anywhere
+  /// a narrow window keeps no empty line for it.
+  final bool reserveAction;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -57,8 +64,8 @@ class WorkspacePageRow extends StatelessWidget {
         final shown = view != TaskView.results
             ? const SizedBox.shrink()
             : action;
-        // One control tall whether or not Create pairings is offered, so
-        // changing section never shifts the page.
+        // One control tall whether or not Create pairings is offered for
+        // the section chosen, so changing section never shifts the page.
         final reserved = BoxConstraints(
           minHeight: MediaQuery.textScalerOf(context).scale(controlHeight),
         );
@@ -68,12 +75,12 @@ class WorkspacePageRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               pages,
-              ConstrainedBox(
-                constraints: view == TaskView.results
-                    ? reserved
-                    : const BoxConstraints(),
-                child: Align(alignment: Alignment.centerRight, child: shown),
-              ),
+              if (view == TaskView.results && reserveAction)
+                ConstrainedBox(
+                  key: const ValueKey('page-action-line'),
+                  constraints: reserved,
+                  child: Align(alignment: Alignment.centerRight, child: shown),
+                ),
             ],
           );
         }
@@ -94,11 +101,90 @@ class WorkspacePageRow extends StatelessWidget {
   );
 }
 
-/// The post button, labelled with what it will post. When nothing can be
-/// posted it says why beside it, and once every round is played it gives
-/// way to the event-complete state.
-class PostControl extends StatelessWidget {
-  const PostControl({
+/// What [PairingControl] shows for one choice of section.
+enum PairingOffer {
+  /// Nothing: a fixed quad schedule, a ladder, or All sections with nothing
+  /// to pair and nothing to explain.
+  none,
+
+  /// "Pair a side game" for a side-games section.
+  sideGame,
+
+  /// Every round of the event is played: "Finish & export".
+  eventComplete,
+
+  /// The chosen section has played all its rounds; others have not.
+  sectionComplete,
+
+  /// The Create pairings button, why it is held back, or both.
+  pairings,
+}
+
+/// What the Pairings page offers for [section] (null for every section), and
+/// the [postState] behind a [PairingOffer.pairings] or
+/// [PairingOffer.sectionComplete] answer. [pairingEvent] is [event] as the
+/// pairer sees it, with any temporary pairing assumptions applied.
+({PairingOffer offer, ({String? label, String? why, bool complete})? state})
+pairingOffer(Event event, Event pairingEvent, Section? section) {
+  if (section?.sideGames == true) {
+    return (offer: PairingOffer.sideGame, state: null);
+  }
+  // Completion includes fixed quad schedules even though they need no
+  // button. A finished Swiss must not hide an unfinished quad in this event.
+  final overall = postState(pairingEvent, null);
+  if (overall.complete) return (offer: PairingOffer.eventComplete, state: null);
+  if (section != null) {
+    if (hasFixedQuadSchedule(section) || section.format == Format.ladder) {
+      return (offer: PairingOffer.none, state: null);
+    }
+    final state = postState(event, section);
+    return (
+      offer: state.complete
+          ? PairingOffer.sectionComplete
+          : state.label == null && state.why == null
+          ? PairingOffer.none
+          : PairingOffer.pairings,
+      state: state,
+    );
+  }
+  final needingPairings = event.sections
+      .where((s) => !hasFixedQuadSchedule(s))
+      .toList();
+  if (needingPairings.isEmpty) return (offer: PairingOffer.none, state: null);
+  final state = postState(event.copy(sections: needingPairings), null);
+  // With every section chosen, why nothing can be paired is said only while
+  // no section has players; after that each section's page says it.
+  final explained =
+      state.why != null &&
+      (state.label != null ||
+          event.sections.isEmpty ||
+          event.sections.every((s) => s.players.isEmpty));
+  if (state.complete || (state.label == null && !explained)) {
+    return (offer: PairingOffer.none, state: null);
+  }
+  return (
+    offer: PairingOffer.pairings,
+    state: (
+      label: state.label,
+      why: explained ? state.why : null,
+      complete: false,
+    ),
+  );
+}
+
+/// Whether All sections or any one section has something to show in
+/// [PairingControl]: the Pairings page keeps a line for it then.
+bool offersPairingControl(Event event, Event pairingEvent) => [
+  null,
+  ...event.sections,
+].any((s) => pairingOffer(event, pairingEvent, s).offer != PairingOffer.none);
+
+/// The Create pairings button, labelled with what it will pair: the chosen
+/// section's next round, or every ready section's with All sections chosen.
+/// When nothing can be paired it says why, and once every round is played
+/// it gives way to the event-complete state.
+class PairingControl extends StatelessWidget {
+  const PairingControl({
     required this.event,
     required this.pairingEvent,
     required this.section,
@@ -123,97 +209,143 @@ class PostControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final e = event, section = this.section;
+    final section = this.section;
     final colors = Theme.of(context).colorScheme;
-    if (section?.sideGames == true) {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: FilledButton.icon(
-          key: const ValueKey('pair-side-game'),
-          onPressed: () => onPairSideGame(section!.id),
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Pair a side game'),
+    final (:offer, :state) = pairingOffer(event, pairingEvent, section);
+    final muted = TextStyle(color: colors.onSurfaceVariant);
+    switch (offer) {
+      case PairingOffer.none:
+        return const SizedBox.shrink();
+      case PairingOffer.sideGame:
+        return Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            key: const ValueKey('pair-side-game'),
+            onPressed: () => onPairSideGame(section!.id),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Pair a side game'),
+          ),
+        );
+      case PairingOffer.eventComplete:
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle_outline, size: 18, color: colors.onSurface),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                key: const ValueKey('event-complete'),
+                'All rounds played',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 16),
+            OutlinedButton(
+              onPressed: onFinish,
+              child: const Text('Finish & export'),
+            ),
+          ],
+        );
+      case PairingOffer.sectionComplete:
+        return Text(
+          '${section!.name} has played all its rounds',
+          key: const ValueKey('section-complete'),
+          style: muted,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
+          textAlign: TextAlign.right,
+        );
+      case PairingOffer.pairings:
+        final label = state!.label;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (state.why != null)
+              Flexible(
+                child: Padding(
+                  padding: EdgeInsets.only(right: label == null ? 0 : 12),
+                  child: Text(
+                    state.why!,
+                    key: const ValueKey('post-blocked'),
+                    style: muted,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              ),
+            if (label != null)
+              Flexible(
+                // Never squeezed out by the note beside it.
+                flex: 2,
+                child: FilledButton.icon(
+                  key: const ValueKey('pair-next-round'),
+                  onPressed: pairing ? null : onPair,
+                  icon: const Icon(Icons.arrow_forward, size: 18),
+                  iconAlignment: IconAlignment.end,
+                  label: pairing
+                      ? const Text(
+                          'Creating pairings…',
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : section == null
+                      ? Text(label, overflow: TextOverflow.ellipsis)
+                      : _sectionLabel(label, section),
+                ),
+              ),
+          ],
+        );
+    }
+  }
+
+  /// "Create pairings · Open · Round 2" with a long section name cut short
+  /// in the middle of the label, so the round is always in view.
+  Widget _sectionLabel(String label, Section section) => LayoutBuilder(
+    builder: (context, box) {
+      const start = 'Create pairings · ';
+      final end = ' · Round ${section.rounds.length + 1}';
+      final style = DefaultTextStyle.of(context).style;
+      double width(String text) {
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: style),
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          maxLines: 1,
+        )..layout();
+        final width = painter.width;
+        painter.dispose();
+        return width;
+      }
+
+      // Too narrow even for the words around the name: one line, cut at
+      // the end like any other label.
+      if (box.maxWidth < width('$start…$end')) {
+        return Text(label, softWrap: false, overflow: TextOverflow.ellipsis);
+      }
+      return Semantics(
+        label: label,
+        excludeSemantics: true,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(start, softWrap: false),
+            Flexible(
+              child: Text(
+                section.name,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(end, softWrap: false),
+          ],
         ),
       );
-    }
-    // Completion includes fixed quad schedules even though they need no post
-    // button. A finished Swiss must not hide an unfinished quad in this event.
-    final overall = postState(pairingEvent, null);
-    if (!overall.complete && section != null && hasFixedQuadSchedule(section)) {
-      return const SizedBox.shrink();
-    }
-    final needingPairings = e.sections
-        .where((s) => !hasFixedQuadSchedule(s))
-        .toList();
-    if (!overall.complete && needingPairings.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final state = overall.complete
-        ? overall
-        : postState(e.copy(sections: needingPairings), null);
-    if (state.complete && !overall.complete) return const SizedBox.shrink();
-    final muted = TextStyle(color: colors.onSurfaceVariant);
-    if (state.complete) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.check_circle_outline, size: 18, color: colors.onSurface),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              key: const ValueKey('event-complete'),
-              'All rounds played',
-              style: const TextStyle(fontWeight: FontWeight.w600),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 16),
-          OutlinedButton(
-            onPressed: onFinish,
-            child: const Text('Finish & export'),
-          ),
-        ],
-      );
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (state.why != null &&
-            (state.label != null ||
-                e.sections.isEmpty ||
-                e.sections.every((s) => s.players.isEmpty)))
-          Flexible(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Text(
-                state.why!,
-                key: const ValueKey('post-blocked'),
-                style: muted,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-                textAlign: TextAlign.right,
-              ),
-            ),
-          ),
-        if (state.label != null)
-          Flexible(
-            child: FilledButton.icon(
-              key: const ValueKey('pair-next-round'),
-              onPressed: pairing || state.label == null ? null : onPair,
-              icon: const Icon(Icons.arrow_forward, size: 18),
-              iconAlignment: IconAlignment.end,
-              label: Text(
-                pairing ? 'Creating pairings…' : state.label!,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
+    },
+  );
 }
 
-/// What the post button would do for [section] (null for every section):
+/// What Create pairings would do for [section] (null for every section):
 /// its label, why it is held back, or that every round has been played.
 ({String? label, String? why, bool complete}) postState(
   Event e,
@@ -285,10 +417,17 @@ class PostControl extends StatelessWidget {
     ].join(' ');
   }
   final numbers = ready.map((s) => s.rounds.length + 1).toSet();
+  if (section != null) {
+    return (
+      label: 'Create pairings · ${section.name} · Round ${numbers.single}',
+      why: why,
+      complete: false,
+    );
+  }
   final round = numbers.length == 1
       ? 'Create pairings · Round ${numbers.single}'
       : 'Create pairings';
-  final label = section == null && (ready.length > 1 || e.sections.length > 1)
+  final label = ready.length > 1 || e.sections.length > 1
       ? '$round · ${ready.length} ${ready.length == 1 ? 'section' : 'sections'}'
       : round;
   return (label: label, why: why, complete: false);

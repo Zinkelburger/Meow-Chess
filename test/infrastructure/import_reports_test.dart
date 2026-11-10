@@ -33,8 +33,10 @@ void main() {
     );
     expect(rows[0].player!.state, 'MA');
     expect(rows[1].player!.state, '');
-    expect(rows[2].player, isNull);
-    expect(rows[2].error, contains('State'));
+    // An unknown state never drops the player: it imports blank, flagged.
+    expect(rows[2].player!.state, '');
+    expect(rows[2].error, isNull);
+    expect(rows[2].warnings.single, contains('State'));
   });
   test(
     'quoted CSV, BOM, leading-zero IDs and rejected rows preserve originals',
@@ -45,7 +47,10 @@ void main() {
       expect(rows.length, 3);
       expect(rows.first.player!.name, 'Lee, Morgan');
       expect(rows.first.player!.memberId, '00123456');
-      expect(rows[1].error, isNotNull);
+      // An ID that is not eight digits imports the player without one.
+      expect(rows[1].error, isNull);
+      expect(rows[1].player!.memberId, '');
+      expect(rows[1].warnings.single, contains('eight digits'));
       expect(rows.last.player!.name, 'Multi\nLine');
     },
   );

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -19,8 +20,19 @@ import 'dialogs.dart' show FieldSpec, showFailure;
 import 'drafts.dart';
 import 'side_panel.dart';
 import 'select.dart';
+import 'theme.dart' show noChipAnimation;
+import 'workspace_status.dart' show showUndoNotice;
 
 export 'section_panel.dart' show sectionSettingsPanel;
+
+/// What a direct print is doing, for the workspace's status line.
+class PrintStatus {
+  const PrintStatus(this.message, {this.sending = false});
+  final String message;
+
+  /// Whether the job is still on its way: another print waits for it.
+  final bool sending;
+}
 
 /// The tool docked at the right of the workspace: one at a time, beside
 /// the table it acts on, never over it.
@@ -29,10 +41,54 @@ class DockController extends ChangeNotifier {
   final TournamentController? tournament;
   FocusNode? _returnFocus;
 
-  /// Claims the same panel slot for a view's embedded player editor.
-  void claim(Object owner) {
-    if (id == owner) return;
-    show(owner, null);
+  /// The direct print in flight or just sent, or null: one at a time, shown
+  /// in the workspace's status line.
+  final printStatus = ValueNotifier<PrintStatus?>(null);
+  bool _disposed = false;
+
+  /// A print may finish after the workspace it started in has closed.
+  void reportPrint(PrintStatus? status) {
+    if (!_disposed) printStatus.value = status;
+  }
+
+  Object? _guardOwner;
+  bool Function()? _leaveGuard;
+
+  /// Lets the panel showing now have its say before it is closed or
+  /// replaced: [canLeave] saves what the panel holds and answers true, or
+  /// answers false to stay open on a problem it now shows. [owner] is the
+  /// panel's state, which calls [clearLeaveGuard] as it is disposed.
+  void setLeaveGuard(Object owner, bool Function() canLeave) {
+    _guardOwner = owner;
+    _leaveGuard = canLeave;
+  }
+
+  /// Withdraws [owner]'s guard; one set since by another panel stays.
+  void clearLeaveGuard(Object owner) {
+    if (!identical(_guardOwner, owner)) return;
+    _guardOwner = null;
+    _leaveGuard = null;
+  }
+
+  /// Asks the panel showing now to save and go. False means it stays open,
+  /// and whatever was about to replace it must not.
+  bool canLeave() {
+    final guard = _leaveGuard;
+    if (guard == null) return true;
+    // A panel can neither save nor show a problem while the tree is being
+    // built; what it holds stays its draft.
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      return true;
+    }
+    return guard();
+  }
+
+  /// Claims the same panel slot for a view's embedded player editor. False
+  /// when the panel showing now would not leave.
+  bool claim(Object owner) {
+    if (id == owner) return true;
+    return show(owner, null);
   }
 
   /// Opens [owner] from inside the panel showing now, as a step away
@@ -42,7 +98,9 @@ class DockController extends ChangeNotifier {
   void detour(Object owner, {required String backLabel, VoidCallback? onBack}) {
     if (id == owner) return;
     final from = (id: id, panel: panel, label: backLabel, onBack: onBack);
-    show(owner, null);
+    // The panel left behind comes back with its draft, so it is not asked
+    // to save first.
+    _replace(owner, null);
     if (from.id != null) _back = from;
   }
 
@@ -56,7 +114,15 @@ class DockController extends ChangeNotifier {
   /// What [panel] is for, so asking for it again toggles it closed.
   Object? id;
 
-  void show(Object id, Widget? panel) {
+  /// Shows [panel] in place of the one showing now. False, changing nothing,
+  /// when that one would not leave (see [setLeaveGuard]).
+  bool show(Object id, Widget? panel) {
+    if (!canLeave()) return false;
+    _replace(id, panel);
+    return true;
+  }
+
+  void _replace(Object id, Widget? panel) {
     if (this.id == null) _returnFocus = FocusManager.instance.primaryFocus;
     _back = null;
     this.id = id;
@@ -66,16 +132,19 @@ class DockController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void close() {
+  /// Closes the panel showing now. False, changing nothing, when it would
+  /// not leave (see [setLeaveGuard]).
+  bool close() {
+    if (!canLeave()) return false;
     if (_back case final back?) {
       _back = null;
       back.onBack?.call();
       id = back.id;
       panel = back.panel;
       notifyListeners();
-      return;
+      return true;
     }
-    if (id == null) return;
+    if (id == null) return true;
     id = panel = null;
     notifyListeners();
     final focus = _returnFocus;
@@ -85,6 +154,14 @@ class DockController extends ChangeNotifier {
         focus.requestFocus();
       }
     });
+    return true;
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    printStatus.dispose();
+    super.dispose();
   }
 }
 
@@ -369,17 +446,24 @@ class _FieldsPanelState extends State<FieldsPanel> {
   }
 }
 
-/// Moves every player of one section into another.
+/// Moves every player of one section into another. A section that has not
+/// been paired goes with them; one with played rounds keeps those rounds
+/// and stays, empty.
 class CombinePanel extends StatefulWidget {
   const CombinePanel({
     required this.controller,
     required this.sectionId,
     required this.onClose,
+    this.onCombined,
     super.key,
   });
   final TournamentController controller;
   final String sectionId;
   final VoidCallback onClose;
+
+  /// Closes the panel after combining, given the section the players went
+  /// to; [onClose] when null.
+  final ValueChanged<String>? onCombined;
   @override
   State<CombinePanel> createState() => _CombinePanelState();
 }
@@ -427,16 +511,63 @@ class _CombinePanelState extends State<CombinePanel> {
       if (source == null) {
         throw const TournamentException('This section no longer exists.');
       }
-      widget.controller.movePlayers(
-        source.players,
-        target!,
-        reason: reason.text.trim(),
-      );
+      final c = widget.controller, into = target!;
+      final destination = c.event!.sections
+          .where((s) => s.id == into)
+          .firstOrNull
+          ?.name;
+      c.movePlayers(source.players, into, reason: reason.text.trim());
+      // With no rounds of its own the emptied section has nothing left to
+      // show. Its removal is a second step in History.
+      var removed = false;
+      if (source.rounds.isEmpty) {
+        try {
+          c.removeSection(source.id);
+          removed = true;
+        } on TournamentException {
+          // The players have moved; the empty tab can still be deleted.
+        }
+      }
       draft.reset({"target": "", "reason": ""});
-      widget.onClose();
+      final where = destination ?? 'the other section';
+      showUndoNotice(
+        context,
+        c,
+        removed
+            ? 'Combined ${source.name} into $where and removed the empty '
+                  '${source.name} tab. Undo brings the tab back; undo again '
+                  'to move the players back.'
+            : 'Combined ${source.name} into $where.',
+      );
+      (widget.onCombined ?? (_) => widget.onClose())(into);
     } catch (e) {
       setState(() => error = plainMessage(e));
     }
+  }
+
+  /// What Combine will do, in the words of the sections chosen.
+  List<String> preview(Section source, Section? into) {
+    final n = source.players.length;
+    final players = n == 1 ? 'the 1 player' : 'all $n players';
+    final to = into?.name ?? 'the section you choose';
+    if (source.rounds.isEmpty) {
+      return [
+        'Moves $players of ${source.name} into $to and removes the '
+            '${source.name} tab, which would be left empty.',
+        'Both sections must be unpaired, or have played the same number of '
+            'rounds.',
+      ];
+    }
+    return [
+      'Moves $players of ${source.name} into $to, which pairs as a Swiss '
+          'from the next round. Games and points already played are kept.',
+      '${source.name} keeps its played rounds and stays as an empty tab.',
+      'After this the US Chess rating report cannot be made from this '
+          'event: it cannot yet report players who changed section once '
+          'play had started.',
+      'Both sections must have played the same number of rounds, with '
+          'every result in.',
+    ];
   }
 
   @override
@@ -447,16 +578,27 @@ class _CombinePanelState extends State<CombinePanel> {
         .firstOrNull;
     if (source == null) return const SizedBox.shrink();
     final others = e.sections.where((s) => s.id != source.id).toList();
+    final into = others.where((s) => s.id == target).firstOrNull;
     return SidePanel(
       title: 'Combine ${source.name}',
       onClose: widget.onClose,
       children: [
         DraftStatus(draft: draft),
-        Text(
-          'Moves all ${source.players.length} players into the section you choose, which then pairs as a Swiss. Games and points already played are kept. Both sections must have played the same number of rounds.',
-          style: TextStyle(color: colors.onSurfaceVariant),
+        Column(
+          key: const ValueKey('combine-preview'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final line in preview(source, into))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  line,
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                ),
+              ),
+          ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
         if (others.isEmpty)
           const Text('There is no other section to combine into.')
         else
@@ -909,36 +1051,38 @@ class _PrintPanelState extends State<PrintPanel> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (ranking) ...[
-                          SegmentedButton<ReportKind>(
+                          // Each sheet is a whole word on its own chip, and
+                          // the chips wrap: equal segments in one row broke
+                          // "Crosstable" across two lines in this column.
+                          Wrap(
                             key: const ValueKey('print-ranking-kind'),
-                            showSelectedIcon: false,
-                            segments: const [
-                              ButtonSegment(
-                                value: ReportKind.standings,
-                                label: Text('Standings'),
-                              ),
-                              ButtonSegment(
-                                value: ReportKind.crosstable,
-                                label: Text('Crosstable'),
-                              ),
-                              ButtonSegment(
-                                value: ReportKind.wallChart,
-                                label: Text('Wall chart'),
-                              ),
-                              ButtonSegment(
-                                value: ReportKind.prizes,
-                                label: Text('Prizes'),
-                              ),
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              for (final (kind, label) in const [
+                                (ReportKind.standings, 'Standings'),
+                                (ReportKind.crosstable, 'Crosstable'),
+                                (ReportKind.wallChart, 'Wall chart'),
+                                (ReportKind.prizes, 'Prizes'),
+                              ])
+                                ChoiceChip(
+                                  key: ValueKey('print-kind-${kind.name}'),
+                                  chipAnimationStyle: noChipAnimation,
+                                  label: Text(label, softWrap: false),
+                                  selected: widget.kind == kind,
+                                  onSelected: (_) {
+                                    if (kind == widget.kind) return;
+                                    showPrint(
+                                      context,
+                                      widget.controller?.event ?? snapshot,
+                                      sectionId: widget.sectionId,
+                                      ceiling: widget.ceiling,
+                                      forPrizes: widget.forPrizes,
+                                      kind: kind,
+                                    );
+                                  },
+                                ),
                             ],
-                            selected: {widget.kind},
-                            onSelectionChanged: (kind) => showPrint(
-                              context,
-                              widget.controller?.event ?? snapshot,
-                              sectionId: widget.sectionId,
-                              ceiling: widget.ceiling,
-                              forPrizes: widget.forPrizes,
-                              kind: kind.single,
-                            ),
                           ),
                           const SizedBox(height: 8),
                         ],
@@ -1183,6 +1327,7 @@ void showPrint(
   ReportKind kind = ReportKind.packet,
   bool printNow = false,
   DockController? dock,
+  RememberedPrinting? printing,
 }) {
   dock ??= Dock.maybeOf(context);
   if (dock == null) return;
@@ -1213,6 +1358,7 @@ void showPrint(
       ceiling: ceiling,
       forPrizes: forPrizes,
       printNow: printNow,
+      printing: printing,
       onClose: dock.close,
     ),
   );
@@ -1408,8 +1554,8 @@ class _LookupPanelState extends State<LookupPanel> {
 }
 
 /// First print chooses a device, through [choose]; subsequent prints use
-/// it directly.
-Future<void> sendToPrinter(
+/// it directly. True once the job has gone to a printer.
+Future<bool> sendToPrinter(
   BuildContext context,
   Uint8List bytes,
   String name, {
@@ -1439,8 +1585,12 @@ Future<void> sendToPrinter(
       ),
     );
   }
+  return success;
 }
 
+/// Prints straight to the remembered printer, saying so in the workspace's
+/// status line from the first press until the job has gone: a job can take
+/// minutes, and a second press meanwhile is answered there, not printed.
 Future<void> printSheets(
   BuildContext context,
   Event event, {
@@ -1453,7 +1603,33 @@ Future<void> printSheets(
   DockController? dock,
   RememberedPrinting? printing,
 }) async {
+  final service = printing ?? RememberedPrinting.shared;
+  final panels = dock ?? Dock.maybeOf(context);
+  // The printer's name, once known, for "Sending to …" and "Sent to …".
+  String? printer;
+  String sending() =>
+      printer == null ? 'Sending to the printer…' : 'Sending to $printer…';
+  if (panels?.printStatus.value?.sending ?? false) {
+    final now = panels!.printStatus.value!.message;
+    panels.reportPrint(
+      PrintStatus(
+        now.startsWith('Already printing') ? now : 'Already printing · $now',
+        sending: true,
+      ),
+    );
+    return;
+  }
+  panels?.reportPrint(PrintStatus(sending(), sending: true));
+  var sent = false;
   try {
+    try {
+      printer = (await service.preference.read())?.name;
+    } catch (_) {
+      // The print itself reports a preference it cannot read.
+    }
+    if (printer != null && (panels?.printStatus.value?.sending ?? false)) {
+      panels?.reportPrint(PrintStatus(sending(), sending: true));
+    }
     final font = pw.Font.ttf(
       await rootBundle.load('assets/fonts/Inter-Regular.ttf'),
     );
@@ -1472,10 +1648,10 @@ Future<void> printSheets(
       font: font,
       bold: bold,
     );
-    final a4 = (printing ?? RememberedPrinting.shared).a4;
+    final a4 = service.a4;
     final bytes = await sheet(a4);
     if (!context.mounted) return;
-    await sendToPrinter(
+    sent = await sendToPrinter(
       context,
       bytes,
       event.name,
@@ -1485,6 +1661,8 @@ Future<void> printSheets(
       // No printer remembered yet: choose one in the print panel, which
       // prints as soon as it opens.
       choose: (_) async {
+        // The panel takes over from the status line.
+        panels?.reportPrint(null);
         if (context.mounted) {
           showPrint(
             context,
@@ -1496,6 +1674,7 @@ Future<void> printSheets(
             kind: kind,
             printNow: true,
             dock: dock,
+            printing: printing,
           );
         }
         return null;
@@ -1503,5 +1682,9 @@ Future<void> printSheets(
     );
   } catch (e) {
     if (context.mounted) showFailure(context, e);
+  } finally {
+    panels?.reportPrint(
+      sent ? PrintStatus('Sent to ${printer ?? 'the printer'}') : null,
+    );
   }
 }

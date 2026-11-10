@@ -222,8 +222,9 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Combine'));
     await tester.pumpAndSettle();
-    expect(c.event!.sections.first.players, isEmpty);
-    expect(c.event!.sections.last.players, hasLength(8));
+    // The unpaired section goes with its players.
+    expect(c.event!.sections.single.id, q2.id);
+    expect(c.event!.sections.single.players, hasLength(8));
   });
 
   testWidgets('Edit pairings swaps two clicked players as a new revision', (

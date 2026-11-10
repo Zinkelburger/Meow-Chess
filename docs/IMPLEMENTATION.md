@@ -16,7 +16,7 @@ Linux runners. The tested scope and remaining gates below must accompany any dem
 - `lib/infrastructure`: relational SQLite persistence, import parser, PDF/CSV/text
   renderers, strict 2C DBF encoder and injectable authenticated ratings adapter.
 - `lib/ui`: event library/workspace, player roster by section with standings
-  and reviewable round results, Rounds page score boxes, reports, event side panel, identity review and reusable form/confirmation controls.
+  and reviewable round results, Pairings page score boxes, reports, event side panel, identity review and reusable form/confirmation controls.
 
 Each event is a `.meow` SQLite database. Event metadata, entrants, membership,
 sections, rounds, games and byes have separate tables. One writer holds the file;
@@ -82,8 +82,8 @@ copies; CSV/TSV file import or paste with preview and rejected-row repair;
 walk-up editing and checkbox moves between sections; private notes, byes, withdrawal/reinstatement; deterministic quad
 partition and individual Swiss/RR sections; score-Swiss proposals in a background
 isolate; batch posting with revision guards; separate actual round start with
-explicitly assumed finish estimates; manual unstarted pairing edits; Swiss-Sys style per-player score boxes on the Rounds page (1/0/5, W/L/D aliases,
-+/− forfeits; the opponent's box fills in) with repeat suppression and advance after commit; forfeit shortcuts and optional withdrawal; historical
+explicitly assumed finish estimates; manual unstarted pairing edits; Swiss-Sys style per-player score boxes on the Pairings page (1/0/D, W/L aliases,
+F for a no-show; the opponent's box fills in) with repeat suppression and advance after commit; forfeit shortcuts and optional withdrawal; historical
 corrections with optional notes and a later-round impact review in the docked panel; all-round browsing;
 entry-cell correction and selective history result undo; atomic reopening of an
 explicitly confirmed unstarted round suffix, guarded against recorded play and
@@ -121,7 +121,7 @@ record what the TD reports; the app does not verify federation acceptance.
 
 ### Clearer tournament-day workspace
 
-Players and Rounds have a permanent section sidebar. Search names without needing
+Players and Pairings share the section tabs. Search names without needing
 spaces (`quad12`), or use the section's ordinal (`section2`). Ctrl+J focuses this
 search; Enter opens the first match. The sidebar shows player counts before play
 and current-round missing-result counts during play. Reports have their own
@@ -136,10 +136,10 @@ optional under **View**, alongside the advanced standings filters. Imports and
 spreadsheet paste live in the menu beside **+ Add player**. Ticking players opens their
 bulk actions in the right-hand column, so the table never shifts.
 
-Rounds opens a single section by default. Its full-width table has larger names
+Pairings opens a single section by default. Its full-width table has larger names
 and score boxes, without ratings. Search by player or exact board number. The
 row menu provides mouse entry and **Still playing / clear result**, which returns
-both boxes to blank. Keyboard 1/0/5 entry and Delete continue to work. The player
+both boxes to blank. Keyboard 1/0/D entry and Delete continue to work. The player
 details header and close button stay visible while its contents scroll.
 
 Select partners and choose **Assign team** to record a shared team name (for

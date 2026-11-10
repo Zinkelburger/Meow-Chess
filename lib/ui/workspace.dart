@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../application/event_repository.dart';
 import '../application/member_lookup.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../infrastructure/member_directory.dart';
+import '../infrastructure/remembered_printing.dart';
 import '../infrastructure/reports.dart' show ReportKind;
 import '../infrastructure/roster_import.dart' show ImportRow;
 import '../infrastructure/sqlite_event_repository.dart';
@@ -28,6 +30,7 @@ import 'selection_keys.dart';
 import 'side_game_panel.dart';
 import 'side_panel.dart';
 import 'update_panels.dart';
+import 'workspace_actions.dart';
 import 'workspace_pages.dart';
 import 'workspace_status.dart';
 import 'workspace_toolbar.dart';
@@ -40,15 +43,23 @@ class Workspace extends StatefulWidget {
     required this.path,
     required this.onClose,
     required this.onTheme,
+    this.onOpenCopy,
     this.ratingLookup,
     this.rosterLoader,
+    this.printing,
     super.key,
   });
   final TournamentController controller;
   final String path;
   final VoidCallback onClose, onTheme;
+
+  /// Carries on in a copy just saved, when the event's own file has gone.
+  final ValueChanged<String>? onOpenCopy;
   final MemberLookup? ratingLookup;
   final Future<List<ImportRow>> Function(String)? rosterLoader;
+
+  /// The printing service for direct prints; tests pass their own.
+  final RememberedPrinting? printing;
   @override
   State<Workspace> createState() => _WorkspaceState();
 }
@@ -78,14 +89,23 @@ class _WorkspaceState extends State<Workspace> {
     lookup: widget.ratingLookup ?? fetchMember,
   );
   Timer? clock;
+
+  /// Whether a draft or workspace setting could not be written. Drafts are
+  /// written on every keystroke and scroll, so the workspace listens for
+  /// this one fact rather than rebuilding on each write.
+  late final stateFailed = ValueNotifier(c.workspaceState.failures.isNotEmpty);
+
+  /// Takes "Sent to …" off the status line a while after the print.
+  Timer? printNoticeTimer;
   TournamentController get c => widget.controller;
   @override
   void initState() {
     super.initState();
-    c.addListener(refresh);
+    c.addListener(eventChanged);
     ratingRefresh.addListener(refresh);
-    c.workspaceState.addListener(refresh);
+    c.workspaceState.addListener(stateChanged);
     dock.addListener(dockChanged);
+    dock.printStatus.addListener(printStatusChanged);
     final saved = c.workspaceState.read('view');
     if (saved != null) {
       final fields = saved.split('|');
@@ -106,16 +126,19 @@ class _WorkspaceState extends State<Workspace> {
   @override
   void dispose() {
     clock?.cancel();
+    printNoticeTimer?.cancel();
     ratingRefresh
       ..removeListener(refresh)
       ..dispose();
     sectionScroll.dispose();
     workspaceFocus.dispose();
-    c.removeListener(refresh);
-    c.workspaceState.removeListener(refresh);
+    c.removeListener(eventChanged);
+    c.workspaceState.removeListener(stateChanged);
+    dock.printStatus.removeListener(printStatusChanged);
     dock
       ..removeListener(dockChanged)
       ..dispose();
+    stateFailed.dispose();
     super.dispose();
   }
 
@@ -123,9 +146,27 @@ class _WorkspaceState extends State<Workspace> {
     if (mounted) setState(() {});
   }
 
+  /// The event changed, or a backup ran or failed.
+  void eventChanged() {
+    _backupRead = false;
+    refresh();
+  }
+
+  void stateChanged() =>
+      stateFailed.value = c.workspaceState.failures.isNotEmpty;
+
+  void printStatusChanged() {
+    printNoticeTimer?.cancel();
+    final status = dock.printStatus.value;
+    if (status == null || status.sending) return;
+    printNoticeTimer = Timer(const Duration(seconds: 10), () {
+      if (identical(dock.printStatus.value, status)) dock.reportPrint(null);
+    });
+  }
+
   Future<void> startRatingRefresh() async {
-    dock.close();
-    pickSection(null, next: TaskView.players);
+    if (!dock.close()) return;
+    if (!pickSection(null, next: TaskView.players)) return;
     if (ratingRefresh.active) return;
     if (c.event!.players.isEmpty) return;
     final category = await readRatingCategory();
@@ -133,22 +174,30 @@ class _WorkspaceState extends State<Workspace> {
     await ratingRefresh.fetch(ratingCategory: category);
   }
 
-  void go(TaskView next) {
-    if (view != next) dock.close();
+  /// Shows another page. False, staying put, when the open panel holds an
+  /// edit it could not save and so stays open on the problem.
+  bool go(TaskView next) {
+    if (view != next && !dock.close()) return false;
     setState(() {
       view = next;
     });
     remember();
+    return true;
   }
 
-  void pickSection(String? id, {TaskView? next}) {
-    if (id != sectionId || (next != null && next != view)) dock.close();
+  /// Shows another section (null for all), and [next]'s page if given.
+  /// False, staying put, when the open panel would not close; see [go].
+  bool pickSection(String? id, {TaskView? next}) {
+    if ((id != sectionId || (next != null && next != view)) && !dock.close()) {
+      return false;
+    }
     setState(() {
       sectionId = id;
       if (next != null) view = next;
     });
     remember();
     revealSection();
+    return true;
   }
 
   void revealSection() {
@@ -176,7 +225,7 @@ class _WorkspaceState extends State<Workspace> {
   bool newSectionRequested = false;
 
   void newSection() {
-    if (view != TaskView.players) go(TaskView.players);
+    if (view != TaskView.players && !go(TaskView.players)) return;
     setState(() => newSectionRequested = true);
   }
 
@@ -224,35 +273,42 @@ class _WorkspaceState extends State<Workspace> {
 
   void removeSection(String id) {
     try {
+      final name = c.event!.sections.where((s) => s.id == id).firstOrNull?.name;
       c.removeSection(id);
       if (sectionId == id) pickSection(null);
+      if (name != null) showUndoNotice(context, c, 'Deleted $name.');
     } catch (e) {
       showFailure(context, e);
     }
   }
 
-  /// Pairs and posts the next round in [sectionId], or in every section
-  /// that is ready. Anything worth checking stays on screen until dismissed.
+  /// Creates the next round's pairings for the section chosen, or for every
+  /// section that is ready with All sections chosen. Anything worth
+  /// checking stays on screen until dismissed.
   Future<void> pair() async {
     if (pairing) return;
+    final only = c.event!.sections.where((s) => s.id == sectionId).firstOrNull;
     setState(() => pairing = true);
     try {
-      final batch = await c.propose(onlyReady: true);
+      final batch = await c.propose(sectionId: only?.id, onlyReady: true);
       if (!mounted) return;
       if (batch.rounds.isEmpty) {
         throw TournamentException(
-          batch.issues.values.join('\n').isEmpty
+          batch.issues.values.join('\n').isNotEmpty
+              ? batch.issues.values.join('\n')
+              : only == null
               ? 'No section is ready for another round.'
-              : batch.issues.values.join('\n'),
+              : '${only.name} is not ready for another round.',
         );
       }
-      // Post straight away; anything worth checking is fixed afterwards
-      // with Edit pairings or Undo post. If the event changed while
-      // pairing, post says so.
+      // The pairings go up straight away; anything worth checking is fixed
+      // afterwards with Edit pairings or Undo. If the event changed while
+      // pairing, the controller says so.
       c.post(batch);
       if (!mounted) return;
       setState(() => postNotes = postReviewNotes(c.event!, batch));
       if (sectionId == null || batch.rounds.containsKey(sectionId)) {
+        // The section just paired stays chosen.
         go(TaskView.results);
       } else {
         pickSection(null, next: TaskView.results);
@@ -264,7 +320,7 @@ class _WorkspaceState extends State<Workspace> {
     }
   }
 
-  /// Notes from the last post, kept until the TD dismisses them.
+  /// Notes on the pairings just created, kept until the TD dismisses them.
   List<String> postNotes = const [];
 
   void sectionSettings() => dock.show(
@@ -278,6 +334,11 @@ class _WorkspaceState extends State<Workspace> {
       controller: c,
       sectionId: sectionId!,
       onClose: dock.close,
+      // The players' new section is the one to look at next.
+      onCombined: (into) {
+        dock.close();
+        pickSection(into);
+      },
     ),
   );
 
@@ -361,7 +422,13 @@ class _WorkspaceState extends State<Workspace> {
       sectionId: scope.sectionId,
       kind: scope.kind,
       dock: dock,
+      printing: widget.printing,
     );
+  }
+
+  /// Close event, after the open panel has saved what it holds.
+  void closeEvent() {
+    if (dock.close()) widget.onClose();
   }
 
   void keyboardHelp() => dock.id == 'keyboard-help'
@@ -400,8 +467,14 @@ class _WorkspaceState extends State<Workspace> {
                   'Redo',
                 ),
                 (historyShortcut, 'History'),
-                ('Esc', 'Close the panel; keep its draft'),
-                ('F1', 'This reference'),
+                ('Shift+F10 / Menu key', 'Menu for the focused row or tab'),
+                (
+                  'Esc',
+                  'Close the panel. Section settings and player cards save '
+                      'their changes as they close; other forms keep a draft',
+                ),
+                ('F1', 'Help'),
+                (keyboardHelpShortcut, 'This list'),
               ])
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -434,6 +507,8 @@ class _WorkspaceState extends State<Workspace> {
         ),
         controller: c,
         sectionId: section?.id,
+        onAddPlayers: () => go(TaskView.players),
+        onNewSection: newSection,
       ),
       TaskView.reports => PlayerDetailsLayout(
         child: ReportsView(
@@ -464,7 +539,10 @@ class _WorkspaceState extends State<Workspace> {
         ),
         command(LogicalKeyboardKey.keyL): _KeyIntent(lookup),
         command(LogicalKeyboardKey.keyP): _KeyIntent(printCurrent),
-        const SingleActivator(LogicalKeyboardKey.f1): _KeyIntent(keyboardHelp),
+        const SingleActivator(LogicalKeyboardKey.f1): _KeyIntent(help),
+        const SingleActivator(LogicalKeyboardKey.f1, shift: true): _KeyIntent(
+          keyboardHelp,
+        ),
         // In a text field these keys belong to the field.
         command(LogicalKeyboardKey.keyZ): _KeyIntent(undo, inText: false),
         command(LogicalKeyboardKey.keyZ, shift: true): _KeyIntent(
@@ -513,13 +591,17 @@ class _WorkspaceState extends State<Workspace> {
                           historyOpen: historyOpen,
                           onToggleHistory: toggleHistory,
                           onTheme: widget.onTheme,
-                          onClose: widget.onClose,
+                          onClose: closeEvent,
                         ),
                         if (e.practice) const PracticeBanner(),
                         WorkspacePageRow(
                           view: view,
                           onGo: go,
-                          action: PostControl(
+                          reserveAction: offersPairingControl(
+                            e,
+                            c.pairingEvent,
+                          ),
+                          action: PairingControl(
                             event: e,
                             pairingEvent: c.pairingEvent,
                             section: section,
@@ -557,6 +639,28 @@ class _WorkspaceState extends State<Workspace> {
                                           TextButton(
                                             onPressed: c.secondaryBackup,
                                             child: const Text('Retry'),
+                                          ),
+                                        ],
+                                      ),
+                                    if (c.fileWarning case final warning?)
+                                      MaterialBanner(
+                                        key: const ValueKey(
+                                          'event-file-problem',
+                                        ),
+                                        content: Text(warning),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () async {
+                                              final copy =
+                                                  await WorkspaceActions(
+                                                    context,
+                                                    c,
+                                                  ).saveCopy();
+                                              if (copy != null) {
+                                                widget.onOpenCopy?.call(copy);
+                                              }
+                                            },
+                                            child: const Text('Save a copy…'),
                                           ),
                                         ],
                                       ),
@@ -669,7 +773,7 @@ class _WorkspaceState extends State<Workspace> {
     }
   }
 
-  /// A choice from a section tab's right-click menu; [context] is the tab's.
+  /// A choice from a section tab's menu; [context] is the tab's.
   void sectionMenu(BuildContext context, SectionMenuAction action, String? id) {
     if (!mounted) return;
     final section = c.event!.sections.where((s) => s.id == id).firstOrNull;
@@ -681,6 +785,7 @@ class _WorkspaceState extends State<Workspace> {
           sectionId: id,
           kind: ReportKind.sections,
           dock: dock,
+          printing: widget.printing,
         );
       case SectionMenuAction.preview:
         showPrint(
@@ -697,16 +802,14 @@ class _WorkspaceState extends State<Workspace> {
           sectionId: id,
           kind: ReportKind.wallChart,
           dock: dock,
+          printing: widget.printing,
         );
       case SectionMenuAction.settings:
-        pickSection(id);
-        sectionSettings();
+        if (pickSection(id)) sectionSettings();
       case SectionMenuAction.sideGame:
-        pickSection(id);
-        pairSideGame(id!);
+        if (pickSection(id)) pairSideGame(id!);
       case SectionMenuAction.combine:
-        pickSection(id);
-        combine();
+        if (pickSection(id)) combine();
       case SectionMenuAction.help:
         // The section may have gone while its menu was open.
         if (section == null) return;
@@ -746,6 +849,11 @@ class _WorkspaceState extends State<Workspace> {
   // newest save time is read once per revision, not on every redraw.
   Object? _savedFor;
   String? _saved;
+  // The last backup's time is read from the event file once after each
+  // change the controller announces: an edit, a history move, or a backup
+  // that ran or failed.
+  bool _backupRead = false;
+  String? _backedUp;
 
   Widget statusBar(Event e) {
     if (_savedFor != (c, e.revision)) {
@@ -765,14 +873,37 @@ class _WorkspaceState extends State<Workspace> {
                 'Went to the version from ${historyTime(c.graph.nodes[move.to]!.timestamp)}',
             };
     }
-    final backup = c.repository.readPreference('lastBackup')?.split('|');
-    final backedUp = backup != null && backup.length > 2
-        ? historyTime(backup[2])
-        : null;
+    if (!_backupRead) {
+      _backupRead = true;
+      final backup = c.repository.readPreference('lastBackup')?.split('|');
+      _backedUp = backup != null && backup.length > 2 ? backup[2] : null;
+    }
+    final backedUp = _backedUp == null ? null : historyTime(_backedUp!);
+    // Rebuilt by itself for a print's progress or a failed draft write.
+    return ListenableBuilder(
+      listenable: Listenable.merge([dock.printStatus, stateFailed]),
+      builder: (context, _) => statusLine(e, saved, move, backedUp),
+    );
+  }
+
+  Widget statusLine(
+    Event e,
+    String? saved,
+    ({String verb, int from, int to})? move,
+    String? backedUp,
+  ) {
+    final printing = dock.printStatus.value;
     return WorkspaceStatusBar(
+      printing: printing?.message,
+      printingNow: printing?.sending ?? false,
       // A history move saves too, so this is the newest audit, not the
       // time of the version the event is on.
       savedAt: saved == null ? null : historyTime(saved),
+      fileProblem: switch (c.fileProblem) {
+        null => null,
+        EventFileProblem.moved => 'Event file moved or deleted',
+        EventFileProblem.unreachable => 'Event file cannot be reached',
+      },
       moved: _moved,
       moveBack: switch (move?.verb) {
         'Undid' => 'Redo',
@@ -804,7 +935,7 @@ class _WorkspaceState extends State<Workspace> {
       summary:
           '${e.players.length} players · ${e.sections.length} sections · ${widget.path}',
       onBackups: showBackups,
-      workspaceStateFailed: c.workspaceState.failures.isNotEmpty,
+      workspaceStateFailed: stateFailed.value,
       onRetryWorkspaceState: c.workspaceState.retry,
     );
   }

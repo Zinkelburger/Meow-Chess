@@ -25,7 +25,7 @@ String? ratingChange(RatingRefresh draft, Player p) {
 String proposedHeading(RatingRefresh draft) {
   final date = draft.supplementDate;
   final what = draft.category == 'R' ? 'Rating' : _system(draft.category);
-  return date == null ? '$what at USCF' : '$what on $date';
+  return date == null ? '$what at US Chess' : '$what on $date';
 }
 
 /// The USCF rating review, docked at the right while the roster stays put.
@@ -60,7 +60,7 @@ class RatingReviewPanel extends StatelessWidget {
       return KeyedSubtree(
         key: const ValueKey('rating-review'),
         child: SidePanel(
-          title: 'Review USCF ratings',
+          title: 'Review US Chess ratings',
           onClose: onClose,
           footer: [
             FilledButton(
@@ -82,8 +82,8 @@ class RatingReviewPanel extends StatelessWidget {
               liveRegion: true,
               child: Text(
                 draft.busy
-                    ? 'Looking up USCF… ${draft.checkedCount} of $lookups checked'
-                    : '${draft.foundCount} of ${players.length} players have USCF ratings.',
+                    ? 'Looking up US Chess… ${draft.checkedCount} of $lookups checked'
+                    : '${draft.foundCount} of ${players.length} players have US Chess ratings.',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
@@ -133,7 +133,7 @@ class RatingReviewPanel extends StatelessWidget {
             ),
             if (noIds.isNotEmpty) ...[
               const SizedBox(height: 20),
-              _Heading('No USCF ID (${noIds.length})'),
+              _Heading('No US Chess ID (${noIds.length})'),
               for (final p in noIds)
                 _PlayerLink(
                   key: ValueKey('no-id-${p.id}'),
@@ -149,7 +149,7 @@ class RatingReviewPanel extends StatelessWidget {
                   key: ValueKey('name-check-${p.id}'),
                   name: p.name,
                   detail:
-                      'USCF: ${draft.observations[p.id]!.name} · ${p.memberId}',
+                      'US Chess: ${draft.observations[p.id]!.name} · ${p.memberId}',
                   onOpen: () => onOpenPlayer(p.id),
                 ),
             ],
@@ -282,7 +282,7 @@ class PlayerRatingReview extends StatelessWidget {
           children: [
             Text(
               [
-                'USCF ${_system(draft.category).toLowerCase()} rating',
+                'US Chess ${_system(draft.category).toLowerCase()} rating',
                 if (m?.supplementDate case final date?) '$date supplement',
               ].join(' · '),
               style: muted.copyWith(fontSize: 12),
@@ -352,7 +352,7 @@ class PlayerRatingReview extends StatelessWidget {
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              'USCF name is ${m.name}. Check the ID.',
+                              'US Chess name is ${m.name}. Check the ID.',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: attentionColor(colors),
@@ -362,7 +362,7 @@ class PlayerRatingReview extends StatelessWidget {
                           ),
                         ],
                       )
-                    : Text('USCF name: ${m.name}', style: muted),
+                    : Text('US Chess name: ${m.name}', style: muted),
               ),
             Align(
               alignment: Alignment.centerLeft,

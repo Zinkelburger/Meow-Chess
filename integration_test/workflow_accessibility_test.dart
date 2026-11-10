@@ -12,6 +12,7 @@ import 'package:meow_chess/ui/player_panel.dart';
 import 'package:meow_chess/ui/results_view.dart';
 import 'package:meow_chess/ui/theme.dart';
 import 'package:meow_chess/ui/workspace.dart';
+import 'package:meow_chess/ui/workspace_toolbar.dart' show keyboardHelpShortcut;
 import '../test/support.dart';
 
 void main() {
@@ -90,7 +91,7 @@ void main() {
       expect(c.event!.name, 'Saturday Quads');
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
-      await click(find.byTooltip('Keyboard shortcuts (F1)'));
+      await click(find.byTooltip('Keyboard shortcuts ($keyboardHelpShortcut)'));
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
       expect(find.text('Keyboard shortcuts'), findsNothing);
@@ -102,8 +103,14 @@ void main() {
       );
       await tester.pumpAndSettle();
       await capture('workflow-player-draft-200');
+      // Closing the card keeps what was typed, as one step that Undo takes
+      // back.
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
+      expect(find.byType(PlayerPanel), findsNothing);
+      expect(c.event!.players.first.name, 'An unfinished edit');
+      expect(find.text('Saved An unfinished edit’s changes'), findsOneWidget);
+      await click(find.widgetWithText(SnackBarAction, 'Undo'));
       expect(c.event!.players.first.name, 'Player 00');
       await click(find.text('Pairings').first);
       final game = c.event!.games.first;

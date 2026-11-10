@@ -174,7 +174,8 @@ void main() {
       await tester.tap(find.text('Combine'));
       await tester.pumpAndSettle();
       final sections = {for (final s in c.event!.sections) s.id: s};
-      expect(sections[q1.id]!.players, isEmpty);
+      // The emptied, unpaired section is removed with the move.
+      expect(sections.containsKey(q1.id), false);
       expect(sections[q2.id]!.players, hasLength(8));
       expect(sections[q3.id]!.players, q3.players);
     });
@@ -271,7 +272,9 @@ void main() {
           modifier: LogicalKeyboardKey.metaLeft,
         );
         expect(find.byType(HistoryPanel), findsOneWidget);
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
         await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
         await tester.pumpAndSettle();
         expect(find.text('⌘Z — Undo'), findsOneWidget);
         expect(find.text('⌘⇧Z — Redo'), findsOneWidget);

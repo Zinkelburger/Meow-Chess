@@ -13,6 +13,23 @@ String scoreMark(Outcome o, {required bool white}) => switch (o) {
   _ => const ['0', '½', '1'][white ? o.whiteScore : o.blackScore],
 };
 
+/// A game's result as a TD writes it, White first: 1–0, ½–½, 0–1, with F
+/// for a side that forfeited (1–F, F–1, F–F), and words while there is none.
+String resultText(Outcome o) => switch (o) {
+  Outcome.unreported => 'no result',
+  Outcome.unfinished => 'still playing',
+  Outcome.disputed => 'disputed',
+  _ => '${scoreMark(o, white: true)}–${scoreMark(o, white: false)}'.replaceAll(
+    'X',
+    '1',
+  ),
+};
+
+/// What replacing a recorded result did, for the notice that offers Undo:
+/// "Board 7 was 1–0, now ½–½".
+String resultChangeText(int board, Outcome before, Outcome now) =>
+    'Board $board was ${resultText(before)}, now ${resultText(now)}';
+
 /// A bye as US Chess crosstables print it: B full point, H half point,
 /// U zero (unpaired), with dashes where an opponent number would be.
 String byeMark(int points) => switch (points) {

@@ -221,7 +221,7 @@ void main() {
       );
       expect(
         MembershipSummary(p.copy(memberId: ''), eventDate: '2026-10-03').label,
-        'No USCF ID',
+        'No US Chess ID',
       );
       expect(
         MembershipSummary(

@@ -12,12 +12,15 @@ import 'theme.dart';
 
 /// Opens the correction for [gameId] in the docked panel beside the table.
 /// [outcome] preselects a result, as when it was typed into a locked score
-/// box. [onDone] runs when the panel closes, after saving or not.
+/// box. [white] says whose box that was, so the result keys keep scoring
+/// that player in the panel. [onDone] runs when the panel closes, after
+/// saving or not.
 void openResultCorrection(
   BuildContext context,
   TournamentController controller,
   String gameId, {
   Outcome? outcome,
+  bool white = true,
   VoidCallback? onSaved,
   VoidCallback? onDone,
 }) {
@@ -31,10 +34,11 @@ void openResultCorrection(
   dock.show(
     'correction',
     ResultCorrectionPanel(
-      key: ValueKey('correction-$gameId-${outcome?.name}'),
+      key: ValueKey('correction-$gameId-${outcome?.name}-$white'),
       controller: controller,
       gameId: gameId,
       outcome: outcome,
+      white: white,
       onSaved: onSaved,
       onClose: close,
     ),
@@ -49,12 +53,17 @@ class ResultCorrectionPanel extends StatefulWidget {
     required this.gameId,
     required this.onClose,
     this.outcome,
+    this.white = true,
     this.onSaved,
     super.key,
   });
   final TournamentController controller;
   final String gameId;
   final Outcome? outcome;
+
+  /// Whose result the keys enter: White's, or Black's when the panel was
+  /// opened from Black's score box.
+  final bool white;
   final VoidCallback onClose;
   final VoidCallback? onSaved;
   @override
@@ -279,7 +288,11 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
       case LogicalKeyboardKey.enter || LogicalKeyboardKey.numpadEnter:
         save();
       default:
-        final next = resultFromKey(event, white: true, current: current);
+        final next = resultFromKey(
+          event,
+          white: widget.white,
+          current: current,
+        );
         if (next == null) return KeyEventResult.ignored;
         pick(next);
     }
@@ -325,12 +338,17 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
       Outcome.blackHalf => '$white 0, $black ½',
       Outcome.bothLose => 'Both scored 0',
     };
+    // The keys score the player whose box the panel was opened from: 1 is
+    // that player's win, 0 their loss, F their no-show.
+    final keysWin = widget.white ? Outcome.whiteWin : Outcome.blackWin;
+    final keysNoShow = widget.white
+        ? Outcome.blackForfeit
+        : Outcome.whiteForfeit;
     String keys(Outcome o) => switch (o) {
-      Outcome.whiteWin => '1',
-      Outcome.blackWin => '0',
+      Outcome.whiteWin || Outcome.blackWin => o == keysWin ? '1' : '0',
       Outcome.draw => 'D',
-      Outcome.whiteForfeit => 'X',
-      Outcome.blackForfeit => 'F',
+      Outcome.whiteForfeit ||
+      Outcome.blackForfeit => o == keysNoShow ? 'F' : '',
       Outcome.doubleForfeit => '',
       Outcome.unfinished => 'P',
       Outcome.disputed => '?',
@@ -388,6 +406,14 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
             ),
             const SizedBox(height: 4),
             Text('White – Black', style: muted),
+            if (!widget.white) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Keys score $black',
+                key: const ValueKey('correction-perspective'),
+                style: muted,
+              ),
+            ],
             const SizedBox(height: 16),
             Focus(
               focusNode: choices,
@@ -504,8 +530,9 @@ class _ResultCorrectionPanelState extends State<ResultCorrectionPanel> {
             _Confirm(
               key: const ValueKey('result-adjudicated'),
               value: adjudicated,
-              label:
-                  'Adjudicated by the director (rule 18G, emergency only; shown as ADJ)',
+              label: 'Adjudicated by the director',
+              detail:
+                  'Emergency only (rule 18G). The result is shown as ADJ on the chart.',
               onChanged: (v) => setState(() {
                 adjudicated = v;
                 remember();
@@ -812,10 +839,14 @@ class _Confirm extends StatelessWidget {
     required this.value,
     required this.label,
     required this.onChanged,
+    this.detail,
     super.key,
   });
   final bool value;
   final String label;
+
+  /// Explains the choice under its label, in muted text.
+  final String? detail;
   final ValueChanged<bool> onChanged;
   @override
   Widget build(BuildContext context) => InkWell(
@@ -833,7 +864,20 @@ class _Confirm extends StatelessWidget {
         Expanded(
           child: Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Text(label),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label),
+                if (detail != null)
+                  Text(
+                    detail!,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ],

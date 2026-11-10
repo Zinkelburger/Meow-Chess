@@ -4,6 +4,11 @@ import 'model.dart';
 import 'rating_system.dart';
 import 'us_chess.dart';
 
+/// The multiplier B in the bonus threshold B·√max(games, 4). US Chess has
+/// raised it over the years; this value is unconfirmed against the current
+/// specification. A larger B would make bonus-earning estimates smaller.
+const ratingPreviewBonusMultiplier = 10;
+
 /// A display-only, single-pass Regular rating estimate. Never a pairing input.
 class RatingPreview {
   const RatingPreview({this.rating, this.change, this.games = 0, this.reason});
@@ -18,6 +23,10 @@ class RatingPreview {
 ///
 /// We do not have lifetime game counts or personal floors. Assume 50 prior
 /// games and use starting opponent ratings, not the official second pass.
+/// The bonus threshold multiplier below is [ratingPreviewBonusMultiplier];
+/// it has not been checked against the current specification, which is not
+/// held with this project, so a bonus-earning result is the least reliable
+/// part of the estimate.
 /// Recompute from all completed games in this section, never from a previous
 /// preview. Unrated opponents make the entire estimate unavailable.
 RatingPreview previewRating(Event event, Section? section, Player player) {
@@ -86,7 +95,12 @@ RatingPreview previewRating(Event event, Section? section, Player player) {
       games.length >= 3 &&
       opponents.values.every((n) => n <= (games.length == 3 ? 1 : 2));
   final bonus = bonusEligible
-      ? math.max(0.0, baseChange - 10 * math.sqrt(math.max(games.length, 4)))
+      ? math.max(
+          0.0,
+          baseChange -
+              ratingPreviewBonusMultiplier *
+                  math.sqrt(math.max(games.length, 4)),
+        )
       : 0.0;
   final rating = math.max(100, (prior + baseChange + bonus).round());
   return RatingPreview(

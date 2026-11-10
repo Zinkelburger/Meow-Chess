@@ -119,40 +119,34 @@ void main() {
     );
   });
 
-  test(
-    'projected quad mutations respect byes, withdrawals and opponent requests',
-    () {
-      for (final restriction in ['bye', 'withdrawal', 'opponent']) {
-        final c = fixture(count: 4);
-        try {
-          final game = c.pairingEvent.games.first;
-          switch (restriction) {
-            case 'bye':
-              c.reserveBye(game.white, 1, 1);
-            case 'withdrawal':
-              c.savePlayer(c.event!.player(game.white).copy(withdrawn: true));
-            case 'opponent':
-              c.avoidPair(game.white, game.black, true);
-          }
-          final before = c.event!.encode();
-          expect(c.quadScheduleIssues, isNotEmpty);
-          expect(
-            () => c.recordResult(game.id, Outcome.whiteWin),
-            throwsA(isA<TournamentException>()),
-          );
-          expect(
-            () => c.setPairingAssumption(
-              game.id,
-              Outcome.draw,
-              'Pending decision',
-            ),
-            throwsA(isA<TournamentException>()),
-          );
-          expect(c.event!.encode(), before);
-        } finally {
-          c.dispose();
+  test('projected quad mutations respect byes and opponent requests', () {
+    // A withdrawal no longer blocks the schedule: its games are forfeits
+    // (pairing_fixes_test.dart).
+    for (final restriction in ['bye', 'opponent']) {
+      final c = fixture(count: 4);
+      try {
+        final game = c.pairingEvent.games.first;
+        switch (restriction) {
+          case 'bye':
+            c.reserveBye(game.white, 1, 1);
+          case 'opponent':
+            c.avoidPair(game.white, game.black, true);
         }
+        final before = c.event!.encode();
+        expect(c.quadScheduleIssues, isNotEmpty);
+        expect(
+          () => c.recordResult(game.id, Outcome.whiteWin),
+          throwsA(isA<TournamentException>()),
+        );
+        expect(
+          () =>
+              c.setPairingAssumption(game.id, Outcome.draw, 'Pending decision'),
+          throwsA(isA<TournamentException>()),
+        );
+        expect(c.event!.encode(), before);
+      } finally {
+        c.dispose();
       }
-    },
-  );
+    }
+  });
 }

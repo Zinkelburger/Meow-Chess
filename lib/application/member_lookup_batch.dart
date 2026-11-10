@@ -44,7 +44,7 @@ class MemberLookupBatch {
           if (!isCurrent()) return MemberBatchOutcome.cancelled;
           if (found == null || found.id != id) {
             throw const TournamentException(
-              'No matching USCF member. Check the ID or keep the local record.',
+              'No matching US Chess member. Check the ID or keep the local record.',
             );
           }
           results[id] = found;

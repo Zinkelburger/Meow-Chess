@@ -5,8 +5,8 @@ import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/domain/pairing.dart';
 import 'package:meow_chess/infrastructure/dbf_export.dart';
 
-import 'rating_contract_test.dart'
-    show doubleBlitz, exportFixture, readDbf, today;
+import '../dbf_reader.dart';
+import 'rating_contract_test.dart' show doubleBlitz, exportFixture, today;
 
 void saveFixture(String name, Event event) {
   if (Platform.environment['MEOW_EXPORT_FIXTURES'] != '1') return;

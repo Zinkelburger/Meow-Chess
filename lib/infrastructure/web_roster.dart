@@ -134,8 +134,19 @@ class RosterReview {
       fetchedAt = DateTime.now().toUtc().toIso8601String() {
     final players = rows.map((r) => r.player).whereType<Player>().toList();
     for (final p in players) {
+      // Rule 28S: a re-entry shares its ID with the entry it replaced; the
+      // list row is the person's latest entry.
       final matches = event.players
-          .where((old) => isMemberId(p.memberId) && old.memberId == p.memberId)
+          .where(
+            (old) =>
+                isMemberId(p.memberId) &&
+                old.memberId == p.memberId &&
+                !event.players.any(
+                  (later) =>
+                      later.reentryOf == old.id &&
+                      later.memberId == old.memberId,
+                ),
+          )
           .toList();
       final duplicate =
           players

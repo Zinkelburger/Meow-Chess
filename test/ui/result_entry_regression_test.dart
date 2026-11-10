@@ -171,6 +171,10 @@ void main() {
       await press(tester, LogicalKeyboardKey.digit5);
       expect(c.event!.encode(), before);
       expect(focused(), box(row.game.id, white: false));
+      // 5 is how "0.5" ends: the legend leads with the draw key.
+      expect(tester.widget<Text>(legend).data, startsWith('Draw is D'));
+      await press(tester, LogicalKeyboardKey.keyX);
+      expect(c.event!.encode(), before);
       expect(tester.widget<Text>(legend).data, startsWith('Not a result key'));
       expect(tester.widget<Text>(legend).data, contains('P playing'));
       await press(tester, LogicalKeyboardKey.keyL);

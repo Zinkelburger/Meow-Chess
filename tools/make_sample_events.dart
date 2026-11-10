@@ -57,9 +57,11 @@ class _Writer {
 
   void post(String sectionId) {
     final s = section(sectionId);
-    final round = proposeRound(event, s, _id).copy(
-      postedAt: DateTime.now().toUtc().toIso8601String(),
-    );
+    final round = proposeRound(
+      event,
+      s,
+      _id,
+    ).copy(postedAt: DateTime.now().toUtc().toIso8601String());
     replaceSection(
       'Post ${s.name} round ${round.number}',
       s.copy(format: pairingFormat(s), rounds: [...s.rounds, round]),
@@ -91,7 +93,8 @@ class _Writer {
         event.player(g.black).rating,
       );
       replaceSection(
-        'Result, board ${g.board}',
+        'Result, ${s.name} round ${s.rounds.length} board ${g.board}: '
+        '${event.player(g.white).name} – ${event.player(g.black).name}',
         s.copy(
           rounds: [
             ...s.rounds.take(s.rounds.length - 1),

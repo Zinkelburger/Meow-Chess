@@ -67,8 +67,10 @@ void main() {
       expect(rows.length, 4);
       expect(rows.first.line, 3);
       expect(rows[1].player!.rating, 0);
-      expect(rows[2].error, contains('Rating'));
-      expect(rows[3].error, contains('eight digits'));
+      expect(rows[2].warnings.single, contains('Rating'));
+      expect(rows[2].player!.rating, 0);
+      expect(rows[3].warnings.single, contains('eight digits'));
+      expect(rows[3].player!.memberId, '');
     },
   );
 

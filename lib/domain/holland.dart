@@ -153,8 +153,12 @@ typedef HollandFinal = ({Section section, List<Player> entries});
 /// [hollandQualifiers] by standings, ties broken by the event's tie-breaks
 /// (rule 34F order unless the event posts its own). Under rule 30I every
 /// plus score in Prelim 1 qualifies, the top two from Prelim 2 and the
-/// winner of each other prelim. A tie on every tie-break at the cut is
-/// broken by lot (34E13) with [seed], or refused when no seed is given.
+/// winner of each other prelim. A plus score is more than half the points
+/// a player's scheduled games offer (34E1), so a forfeit win counts as a
+/// scheduled game, not as a game less to score from. A player who withdrew
+/// before playing half their games is scored as not having competed (30B).
+/// A tie on every tie-break at the cut is broken by lot (34E13) with
+/// [seed], or refused when no seed is given.
 List<Player> hollandQualifiersOf(
   Event event,
   Section prelim,
@@ -165,11 +169,17 @@ List<Player> hollandQualifiersOf(
     event,
     prelim,
     forPairing: true,
+    forPrizes: true,
   ).where((row) => !row.player.withdrawn).toList();
   int count;
   if (hollandUnbalanced(prelim)) {
     if (index == 0) {
-      final plus = rows.where((row) => row.points > row.played).length;
+      // Games each player is scheduled for; an odd field's sit-out is none.
+      final scheduled = scheduledGames(prelim);
+      // In half-points, half the maximum is the number of games.
+      final plus = rows
+          .where((row) => row.points > (scheduled[row.player.id] ?? row.played))
+          .length;
       count = plus == 0 ? 1 : plus;
     } else {
       count = index == 1 ? 2 : 1;

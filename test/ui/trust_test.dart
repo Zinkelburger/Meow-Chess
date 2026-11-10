@@ -96,11 +96,13 @@ void main() {
       final g = c.event!.games.first;
       c.recordResult(g.id, Outcome.draw);
       await mount(tester, c);
-      expect(find.text('Undo Result, board ${g.board}'), findsNothing);
-      expect(
-        find.byTooltip('Undo Result, board ${g.board} (Ctrl+Z)'),
-        findsOneWidget,
-      );
+      // The step names its section, round and players as well as the board.
+      final e = c.event!;
+      final step =
+          'Result, ${e.sections.first.name} round 1 board ${g.board}: '
+          '${e.player(g.white).name} – ${e.player(g.black).name}';
+      expect(find.text('Undo $step'), findsNothing);
+      expect(find.byTooltip('Undo $step (Ctrl+Z)'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('undo')));
       await tester.pumpAndSettle();
       expect(c.event!.games.first.outcome, Outcome.unreported);

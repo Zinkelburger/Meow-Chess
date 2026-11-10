@@ -174,7 +174,7 @@ mixin _SectionCommands on _CommandContext {
     final section = _section(id);
     if (section.rounds.isNotEmpty) {
       throw const TournamentException(
-        'Sections with posted rounds cannot be deleted.',
+        'A section that has been paired cannot be deleted: its games are part of the record.',
       );
     }
     change(
@@ -224,12 +224,174 @@ mixin _SectionCommands on _CommandContext {
     );
   }
 
-  void movePlayers(List<String> ids, String targetId, {String reason = ''}) {
+  /// The points a late entrant's bye for posted [round] of [section] scores
+  /// when the director does not choose: half a point where the section's
+  /// announced bye rules still allow a half-point bye for that round and
+  /// the player has not used them up, otherwise zero.
+  int lateEntryByePoints(Section section, Player player, int round) =>
+      ByePolicy.fromJson(
+            section.byeRules,
+          ).halfByeProblem(player, round, declared: true) ==
+          null
+      ? 1
+      : 0;
+
+  /// Enters players who are in no section into [sectionId] after it has
+  /// been paired, even while its current round is being played. Each gets a
+  /// bye recorded on every round already posted: [byes] (round → 0 or 1
+  /// half-points) chooses them, and a round it leaves out takes
+  /// [lateEntryByePoints]. The next round pairs them like anyone else. This
+  /// is an entry, not a move between sections, so it needs no reason and
+  /// records no transition.
+  void enterLate(
+    List<String> ids,
+    String sectionId, {
+    Map<int, int> byes = const {},
+  }) {
+    final e = event!, target = _section(sectionId);
+    final entering = ids.toSet();
+    if (entering.isEmpty) return;
+    if (target.rounds.isEmpty) {
+      throw TournamentException(
+        '${target.name} has not been paired; add the players to it directly.',
+      );
+    }
+    // A fixed schedule or bracket has no place for another player, and
+    // turning the section into a Swiss would change the event announced.
+    final format = pairingFormat(target);
+    if (const [
+      Format.quad,
+      Format.roundRobin,
+      Format.knockout,
+      Format.scheveningen,
+    ].contains(format)) {
+      throw TournamentException(
+        '${target.name} is a ${format == Format.quad ? 'quad' : format.label.toLowerCase()} that has started, and its schedule has no place for another player. Enter them in a Swiss section instead.',
+      );
+    }
+    for (final MapEntry(key: round, value: points) in byes.entries) {
+      if (round < 1 || round > target.rounds.length) {
+        throw TournamentException(
+          '${target.name} has posted ${target.rounds.length} ${target.rounds.length == 1 ? 'round' : 'rounds'}; a missed-round bye is for one of those.',
+        );
+      }
+      if (points != 0 && points != 1) {
+        throw const TournamentException(
+          'A missed round scores zero or half a point.',
+        );
+      }
+    }
+    final people = {
+      for (final id in target.players) e.player(id).personId ?? id: id,
+    };
+    final awards = <String, Map<int, int>>{};
+    for (final id in entering) {
+      final p = e.player(id), from = e.sectionOf(id);
+      if (from != null) {
+        throw TournamentException(
+          '${p.name} is in ${from.name}. Move them from there instead.',
+        );
+      }
+      if (p.withdrawn) {
+        throw TournamentException(
+          '${p.name} has withdrawn. Reinstate them first.',
+        );
+      }
+      final person = p.personId ?? id;
+      if (people[person] case final other?) {
+        throw TournamentException(
+          '${p.name} already has an entry in ${target.name} (${e.player(other).name}).',
+        );
+      }
+      people[person] = id;
+      // A ladder has no rounds to miss: batches of challenge games.
+      if (target.format == Format.ladder) continue;
+      final mine = <int, int>{};
+      for (final r in target.rounds) {
+        final chosen = byes[r.number];
+        final entrant = p.copy(byes: {...p.byes, ...mine});
+        if (chosen == 1) {
+          final problem = ByePolicy.fromJson(
+            target.byeRules,
+          ).halfByeProblem(entrant, r.number, declared: true);
+          if (problem != null) throw TournamentException(problem);
+        }
+        mine[r.number] =
+            chosen ?? lateEntryByePoints(target, entrant, r.number);
+      }
+      awards[id] = mine;
+    }
+    String describe(Map<int, int> mine) => [
+      for (final MapEntry(key: round, value: points) in mine.entries)
+        'round $round ${points == 1 ? '½' : '0'}',
+    ].join(', ');
+    final names = [for (final id in entering) e.player(id).name];
+    // One list when every entrant has the same byes; otherwise each by name,
+    // since the half-point bye limit can give one walk-up ½ and another 0.
+    final described = {
+      for (final MapEntry(key: id, value: mine) in awards.entries)
+        if (mine.isNotEmpty) id: describe(mine),
+    };
+    final byeNote = described.isEmpty
+        ? ''
+        : described.values.toSet().length == 1 &&
+              described.length == awards.length
+        ? ' (byes: ${described.values.first})'
+        : ' (byes: ${[for (final MapEntry(key: id, value: text) in described.entries) '${e.player(id).name} $text'].join('; ')})';
+    final grown = target.copy(
+      players: [...target.players, ...entering],
+      rounds: [
+        for (final r in target.rounds)
+          r.copy(
+            byes: [
+              ...r.byes,
+              for (final MapEntry(key: id, value: mine) in awards.entries)
+                ByeAward(id, mine[r.number]!, 'Late entry'),
+            ],
+          ),
+      ],
+    );
+    change(
+      '${names.length == 1 ? 'Enter ${names.single}' : 'Enter ${names.length} players'} late in ${target.name}$byeNote',
+      e.copy(
+        // The byes stay on the player too, so a round posted again gives
+        // the same bye and the half-point bye limit counts them.
+        players: [
+          for (final p in e.players)
+            awards[p.id] == null
+                ? p
+                : p.copy(byes: {...p.byes, ...awards[p.id]!}),
+        ],
+        sections: keepBoardRanges(
+          e.sections,
+          [for (final s in e.sections) s.id == target.id ? grown : s],
+          {target.id},
+        ),
+      ),
+    );
+  }
+
+  /// Moves entries into [targetId]. Players who are in no section and join
+  /// a section that has been paired are late entries ([enterLate], with the
+  /// missed-round byes of [lateByes]); everything else is a move or a
+  /// combination of sections, which after play started needs a [reason].
+  void movePlayers(
+    List<String> ids,
+    String targetId, {
+    String reason = '',
+    Map<int, int> lateByes = const {},
+  }) {
     final e = event!;
     final target = _section(targetId);
     final unknown = ids.where((id) => !e.players.any((p) => p.id == id));
     if (unknown.isNotEmpty) {
       throw const TournamentException('A selected player no longer exists.');
+    }
+    if (ids.isNotEmpty &&
+        target.rounds.isNotEmpty &&
+        ids.every((id) => e.sectionOf(id) == null)) {
+      enterLate(ids, targetId, byes: lateByes);
+      return;
     }
     final sources = e.sections
         .where((s) => s.id != targetId && s.players.any(ids.contains))
@@ -259,17 +421,17 @@ mixin _SectionCommands on _CommandContext {
     final affected = {...sources, target};
     if (affected.any((s) => s.rounds.any((r) => !r.complete))) {
       throw const TournamentException(
-        'Complete the current games before a section transition.',
+        'Enter the results of the round being played before moving players between sections.',
       );
     }
     if (affected.any((s) => s.rounds.length != target.rounds.length)) {
       throw const TournamentException(
-        'These sections have different round progress. Resolve the schedule before combining.',
+        'These sections have played different numbers of rounds, so players cannot move between them.',
       );
     }
     if (affected.any((s) => s.rounds.isNotEmpty) && reason.trim().isEmpty) {
       throw const TournamentException(
-        'Record the transition reason. Original games remain attributed to their source section; rating export needs a validated mapping.',
+        'Say why the players are moving. Games already played stay with the section they were played in, on the wall chart and in the rating report.',
       );
     }
     // Side-game entries and re-entries are the same person as another entry;

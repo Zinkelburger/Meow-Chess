@@ -83,6 +83,15 @@ final report generation. Name them in TD terms, including section, round and tim
 The underlying per-command history preserves edits between these larger milestones.
 A checkpoint is not a claim that an external backup was made.
 
+**Backup settings are not history (November 10, 2026).** The backup folder and
+the record of the last copy are settings of the computer the event is open on.
+Choosing or stopping a folder is logged but is not a version, so there is
+nothing to undo, and Undo, Redo and going to an earlier version leave the folder
+and the last-copy record as they are: going back before the folder was chosen
+no longer turns backups off. Copies are named for the event
+(`spring-open-r57-20261110-143205-3f2b9c1a.meow`: name, revision, local date and
+time, start of the event ID).
+
 **Implemented (November 5, 2026).** History lists recovery points above the
 changes: before each round was paired or unpaired, before each import of more than
 one new person (another entry for someone already registered, such as a side game

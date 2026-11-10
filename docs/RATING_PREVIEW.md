@@ -10,8 +10,10 @@ with these explicit approximations:
 
 - Assume 50 prior rated games; calculate the rating-dependent effective game count.
 - Use starting opponent ratings in one pass, without the official second pass.
-- Include eligible bonus points (threshold 10), and the Regular K reduction for
-  players above 2200 in Dual events.
+- Include eligible bonus points, and the Regular K reduction for players above
+  2200 in Dual events. The bonus threshold multiplier is 10; that figure has not
+  been confirmed against the current specification (US Chess has raised it
+  before), so an estimate that includes a bonus may run several points high.
 - Apply the absolute floor of 100; personal floors and provisional formulas are
   unavailable.
 

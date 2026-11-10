@@ -1,172 +1,110 @@
 # A tournament day, in order
 
-The other documents are organized by feature. This one is organized by the clock,
-because that is how a TD experiences the product. Every moment names what the TD
-is trying to do, what the screen must offer without hunting, the target speed, and
-the requirement IDs that own it (see [Requirements](REQUIREMENTS.md), section
-“Tournament-day usability gates”). It is a design proposal to be rehearsed with
-working TDs, not a measured result. See IMPLEMENTATION.md for the current pilot and measured evidence.
+What to do in Meow-Chess from an empty event to the rating report, in the order
+the day happens. The example is a one-day club Swiss with one TD, one laptop
+and one printer; quads differ only where noted. The [workspace guide](USING.md)
+describes each screen in more detail, and [keyboard results entry](RESULT_ENTRY.md)
+has the full key list.
 
-The example is a Saturday quads event with a public pre-registration list, one TD,
-one laptop and one printer, with a Tuesday-night weekly Swiss noted where it differs.
+Everything saves as you go. **Undo** (Ctrl+Z) takes back the last step and
+**History** (Ctrl+H) lists every step of the day.
 
-## T‑60 min · Before players arrive
+## Before players arrive
 
-**Goal:** the roster is in, obvious problems are known, nothing else.
+1. **New tournament**, type the event's name and choose where to keep its file.
+2. Click the event's name at the top left to open **Event details**: date, time
+   control, venue, city, state and ZIP, the chief TD's US Chess ID and the
+   affiliate ID. The rating report needs all of these, so enter them now rather
+   than at 11 pm.
+3. Click **No backup folder** at the bottom of the window and pick a folder on
+   another drive (a USB stick is fine). A copy is written there after every
+   round.
+4. On **Players**, bring in the advance entries: **Add from URL** for a club
+   registration page, **Import file…** for a CSV, or **Paste** for rows copied
+   from a spreadsheet. The import window shows every row. Each row that names
+   someone comes in; if a rating, ID or state could not be read, the row says so
+   and the player comes in without that field.
+5. **Refresh from US Chess** checks IDs and brings in current ratings and
+   membership expiry dates, when the network allows.
+6. **New section**: choose who goes in, the format (Quads, Swiss, Round robin,
+   or another under **Other format…**), the number of rounds and, if it differs
+   from the event's, the time control. Byes, pairing rules and prizes can be
+   set here or later from the section's **Section actions** button.
 
-- Open the event from the library, or create one from the Quads template with a
-  name and date only. Time control, rounds, rating basis and board numbering come
-  from the template and are shown as one plain sentence (E04, K05).
-- Paste the registration table. The review shows ready / needs review / excluded
-  counts; valid rows import now, rejected rows stay repairable (I01–I03).
-- Run Check players once. Membership-expired and name-mismatch flags are visible in
-  the roster; nothing blocks yet (R01–R05).
-- Choose a practice copy if this is the TD's first event with the app (K16).
+## At the door
 
-Target: roster imported and checked in under five minutes with no documentation.
+There is no check-in step: everyone entered is paired, and a player who never
+arrives is forfeited when the round is under way.
 
-## T‑30 min · The door
+- A walk-up: **Add player**, type the name, the US Chess ID (or **Find by
+  name**), the rating and the section.
+- A bye request: right-click the player, **Byes…**, and tick the round in the
+  ½ pt row. The section's bye rules are shown beside the choice.
+- Someone in the wrong section: right-click, **Move…**.
 
-**Goal:** mark who is here, register walk-ups, resolve door-side problems, never
-lose the queue.
+## Round 1
 
-- Press the check-in shortcut. Type a few letters of a name; Enter marks present.
-  The list is keyboard-first and legible from standing height (K01).
-- A name that is not in the roster becomes a walk-up: name, ID if known, rating or
-  “assign”, section. Saving returns to the check-in prompt (K01).
-- A membership or ID flag on a checked-in player shows its door-side resolution:
-  renewed on site, TD exception with a note, or leave open. The choice is recorded
-  and carried into preflight and export preflight (K02).
-- A player registering above a section's rating ceiling, or below a floor, is
-  flagged here with a move-up option and a reason field (K03).
-- Private notes typed at the door (“must leave by 3”, “wants a bye in round 4 if
-  it runs late”) appear later in the inspector and the pairing draft (K18).
-- “Not yet here” is one filter and one printable list (K01).
+1. Go to **Pairings**. **Create pairings** names what it will pair: the selected
+   section, or every ready section when **All sections** is selected.
+2. The round appears at once. Any note the pairing needs, such as who has the
+   bye and why, is listed with the round.
+3. Print the pairing sheet with the printer button above the boards. The first
+   print asks for a printer; later prints go straight to it.
 
-Target: 40 pre-registered check-ins and 3 walk-ups in under five minutes,
-keyboard only.
+Quads show their whole schedule as soon as the section exists, so there is
+nothing to create: print the sheet and start.
 
-## T‑5 min · Preflight
+## During a round
 
-**Goal:** know in one glance whether round one can be posted, and fix what can't.
+- **Where am I playing?** Ctrl+L finds a player and shows their board, color and
+  opponent.
+- **A late entry.** **Add player** and choose the section. They get a bye for
+  each round already paired (a half point where the section's bye rules allow
+  it, otherwise zero; you can change it on their card) and are paired from the
+  next round.
+- **A no-show.** Click the absent player's score box and press **F**. The
+  opponent wins by forfeit, and **Withdraw from future rounds** appears on the
+  board for the absent player.
+- **A player has to leave.** Right-click, **Withdraw after round N**.
+- **A withdrawal after pairings are up but before play.** **Re-pair unstarted
+  boards** keeps the boards that have results and pairs the rest again.
+- **Two players paired wrongly.** **Edit pairings** swaps players on boards
+  that have no result yet.
 
-The Event tab shows a round-one preflight list. Each row opens the record or action
-that resolves it (K04):
+## Results
 
-```
-Checked in 22 of 25        3 not here → exclude / include / bye for round 1
-Identity issues 1          open review
-Membership blocks 0
-Sections: not created      Make quads (22 → 4 quads + 6-player Swiss)
-Announced minimum 8        Bottom Swiss (6) is below the announced merge minimum → keep / combine
-Pairings: none posted
-```
+Click a score box and type: **1** or **W** for a win, **0** or **L** for a
+loss, **D** for a draw, **F** for a no-show. The opponent's box fills in and the
+cursor moves to the next board. **Delete** clears a result. **Missing only**
+hides the boards that are done.
 
-- Make quads shows the whole partition, the bottom Swiss and why (Q01–Q04, CAP-X01).
-- Unchecked pre-registrations are resolved once for the round, not per person (K01).
-- On the Tuesday Swiss, an under-minimum section proposes the announced merge from
-  the event conditions rather than waiting for the TD to remember (J02, K21).
+Typing over a result that is already there changes it at once and says so at
+the bottom of the window, with **Undo**. For a result from an earlier round,
+choose the round and **Correct a result**: the panel shows each player's new
+score and asks what should happen to later rounds.
 
-Target: preflight clean in under two minutes after the last check-in.
+## Between rounds
 
-## T‑0 · Post and print
+When the last result is in, **Create pairings** offers the next round. Print the
+new pairing sheet, and standings or the wall chart from the printer button
+above the crosstable.
 
-**Goal:** everyone at a board with a clock running, in three actions.
+## End of the day
 
-- Post round 1 for all ready sections. Quads have a fixed schedule; nothing opens
-  for review unless there is a warning (K05).
-- The bye recipient and reason for any odd section sits at the top of the posted
-  round, because that is the first question asked (K20).
-- Print the round packet: board-order pairings with a result column, alphabetical
-  pairings, and current standings if a round has been played. Boards are numbered
-  globally across sections; the printed order matches the entry grid exactly (K09, K10).
-- After players are seated, Start round records the actual start separately from
-  posting. Show scheduled/actual start and any estimated finish with its move-count
-  assumption; never claim a hard finish time from delay/increment alone (K06).
+Open **Export**.
 
-Target: make quads → post → print in three actions; under sixty seconds from a
-clean preflight to paper on the wall.
+1. **Awards** lists each prize, who won it and what decided a tie. Print the
+   prize report from the same page.
+2. The **US Chess rating report** lists anything that would stop the report,
+   each with a link that opens the place to fix it: a missing result, a player
+   who played but has no US Chess ID, a missing TD or affiliate ID.
+3. **Generate DBF files** writes the three files US Chess asks for into a new
+   folder. Upload them from the TD/Affiliate area of the US Chess site, then
+   record the confirmation under **Submission notes**.
+4. Check the status bar for the time of the last backup before closing the
+   laptop.
 
-## During the round · Questions, changes, one correction
-
-**Goal:** answer players without changing anything by accident; make the one
-inevitable change safely.
-
-- “Where am I playing?” Player lookup by name or pairing number shows board,
-  color, opponent, score and next-round bye status in a large panel that can face
-  the player. It never enters a result (K11).
-- “Can I have a half-point bye in round 3?” Right-click the name → Byes…, then
-  round 3 in the ½ pt row. The event's announced bye deadline is shown at the
-  decision (D01, D02, J02).
-- “I have to leave now.” The player card's Withdraw names when it takes effect
-  (“Withdraw after round 2”). Leaving after a later round is zero-point byes for
-  the rounds they will miss (D03).
-- Two players were paired wrong. Edit the posted round, swap, post the replacement
-  revision, reprint only that section (P02, P03, K09).
-- A no-show at board 7 after the default wait. Forfeit keystroke, then the offer to
-  withdraw the absent player from the remaining rounds (K08).
-- The TD is interrupted mid-form. Whatever was half-typed is still there on return
-  and after a restart (K14).
-
-Target: any lookup in under five seconds; a pairing swap posted and reprinted in
-under sixty seconds.
-
-## Results · Collecting from the wall or the room
-
-**Goal:** twenty results, two unknown, one correction, no mouse.
-
-- Open the event-wide results grid in global board order, or the section's grid.
-  The keystrokes are identical (K07, G01, [Results entry](RESULT_ENTRY.md)).
-- The round number and the result perspective are always visible; entering into
-  the wrong round is the mistake the layout is designed against.
-- Missing-only filter, board jump, Undo naming its action (K13).
-- A long game is still running when the next round is due: the TD-approved
-  temporary pairing treatment, separate from the result (J01).
-
-Target: 20 results, two blanks and one corrected typo in under sixty seconds once
-familiar, all correct.
-
-## Between rounds · Repeat
-
-Preflight for round N shows only what changed: results missing, players withdrawn,
-byes requested, a section finished. Post, print the packet, start the clock. The
-Event tab is the home screen between rounds; the current section's results grid
-is the home screen during one.
-
-## End of day · Finish and leave with proof
-
-**Goal:** prizes right, report produced, backup somewhere safe, nothing forgotten.
-
-The Event tab switches to an end-of-day list (K04):
-
-```
-All results entered        Quad 3 has 1 missing → open
-Sections complete 5 of 5
-Prize classes              standings by class → print
-Rulings pending 0
-Rating report              preflight → export package
-Backup                     copied to the secondary folder at 14:52
-Submission                 not recorded → record reference
-```
-
-- Standings filtered by prize class make manual prize distribution a reading task,
-  even before automated allocation exists (K17).
-- Export produces the three DBFs and a manifest from one revision; exported,
-  submitted and accepted remain distinct states (U01–U03, J05).
-- The secondary backup folder has already received a copy at every posted round;
-  the last copy is confirmed here. Continuing tomorrow on a different laptop from
-  that folder is a rehearsed scenario, not a recovery adventure (K15).
-
-Target: export preflight clean and backup confirmed within five minutes of the last
-result.
-
-## What this order changes in the build
-
-1. Check-in, preflight and event-wide results are screens, not columns and counters.
-2. Batch post-and-print is the default; per-section review is the exception.
-3. Time is on screen. A TD should never need a separate clock to answer “when?”
-4. The wall sheet is designed as the result-collection instrument.
-5. The vocabulary is a TD's: post, wall sheet, pairing number, house player, bye.
-6. Every rehearsal scenario in [TD duties](../research/notes/TD_DUTIES.md) maps to
-   a moment above; anything that cannot be placed on this timeline is not a
-   first-release priority.
+Meow-Chess checks its rating reports against reports US Chess has accepted from
+other software, but no report made by this app has been uploaded yet; see
+[DBF compatibility](DBF_COMPATIBILITY.md). Read the file list US Chess shows
+after the upload before you confirm it.

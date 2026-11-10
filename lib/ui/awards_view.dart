@@ -69,7 +69,7 @@ class AwardRow {
 
 /// [section]'s awards in announced order: team prizes, then individual.
 List<AwardRow> awardRows(Event event, Section section) {
-  String name(String id) =>
+  String player(String id) =>
       event.players.where((p) => p.id == id).firstOrNull?.name ?? id;
   final rows = <AwardRow>[];
   final teams = allocateTeamPrizes(event, section);
@@ -93,13 +93,19 @@ List<AwardRow> awardRows(Event event, Section section) {
     );
   }
   final a = allocatePrizes(event, section);
-  final points = {for (final w in a.awards) w.player.id: w.points};
+  final awards = {for (final w in a.awards) w.player.id: w};
   for (final l in a.lines) {
+    // A bughouse partnership wins as one and is named as a pair.
+    String name(String id) => l.names[id] ?? player(id);
     final cash = l.cash.entries.toList();
     final winner =
         l.trophyWinner ??
         (cash.length == 1 && l.pooledWith.isEmpty ? cash.single.key : null);
     final shared = winner == null && cash.isNotEmpty;
+    final holder = awards[winner ?? (shared ? cash.first.key : null)];
+    // A knockout or a ladder places by the bracket or the ladder, not by
+    // points, so the row says the placing instead of a score.
+    final placing = holder?.placing ?? '';
     rows.add(
       AwardRow(
         key: '${section.id}|${l.prize.id}|${winner ?? ''}',
@@ -110,12 +116,9 @@ List<AwardRow> awardRows(Event event, Section section) {
             : shared
             ? 'Shared: ${cash.map((c) => reportName(name(c.key))).join(', ')}'
             : '',
-        points: winner != null
-            ? points[winner]
-            : shared
-            ? points[cash.first.key]
-            : null,
+        points: placing.isEmpty ? holder?.points : null,
         detail: [
+          if (placing.isNotEmpty) placing,
           if (l.trophyNote.isNotEmpty) l.trophyNote,
           // The cash of a trophy prize can go to a tie the trophy did not.
           if (cash.length > 1 || (cash.isNotEmpty && winner != cash.first.key))
@@ -149,6 +152,20 @@ class _AwardsBoardState extends State<AwardsBoard> {
   TournamentController get c => widget.controller;
 
   Map<String, dynamic> get handed => c.workspaceState.readMap(_handed);
+
+  /// The awards of each section, worked out once per saved event: the board
+  /// rebuilds for ticks, scrolling and panel changes that leave them alone.
+  Event? _source;
+  final _rows = <String, List<AwardRow>>{};
+  List<AwardRow> rowsOf(Event e, Section s) {
+    if (!identical(_source, e)) {
+      _source = e;
+      _rows.clear();
+    }
+    return _rows[s.id] ??= PrizeTable.fromJson(s.prizes).list.isEmpty
+        ? const []
+        : awardRows(e, s);
+  }
 
   void tick(String key, bool on) => setState(() {
     final next = Map<String, dynamic>.of(handed)..remove(key);
@@ -228,9 +245,7 @@ class _AwardsBoardState extends State<AwardsBoard> {
     final colors = Theme.of(context).colorScheme;
     final muted = TextStyle(fontSize: 13, color: colors.onSurfaceVariant);
     final e = c.event!;
-    final rows = PrizeTable.fromJson(s.prizes).list.isEmpty
-        ? const <AwardRow>[]
-        : awardRows(e, s);
+    final rows = rowsOf(e, s);
     final progress = awardsProgress(s);
     final heading = Wrap(
       spacing: 12,

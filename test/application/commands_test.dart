@@ -206,7 +206,7 @@ void main() {
       ];
       expect(
         () => c.replacePairing(s.id, 1, swapped, ' '),
-        refuses('Record why'),
+        refuses('Say why the pairings are changing'),
       );
       expect(
         () => c.replacePairing(s.id, 1, [
@@ -327,12 +327,12 @@ void main() {
       final rr = c.event!.sections.first, swiss = c.event!.sections.last;
       expect(
         () => c.movePlayers(rr.players, swiss.id, reason: 'x'),
-        refuses('different round progress'),
+        refuses('different numbers of rounds'),
       );
       await playRound(c, sectionId: rr.id);
       expect(
         () => c.movePlayers(rr.players, swiss.id),
-        refuses('transition reason'),
+        refuses('Say why the players are moving'),
       );
     });
   });

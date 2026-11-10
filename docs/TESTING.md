@@ -90,6 +90,27 @@ foreach ($target in Get-ChildItem integration_test/*_test.dart) {
 }
 ```
 
+`scripts/verify_recovery.py` kills a writer after five acknowledged saves and
+checks the event file. It also puts a copy taken at the third save back under
+the event's name beside the recovery file the killed writer left, and checks
+that it opens as the third save: every save empties the recovery file, so
+nothing can be replayed over a restored copy. Then it runs a writer that saves
+without pausing and kills it at a random moment, six times: each event must
+reopen intact with every acknowledged save, and its event, players, audit trail
+and history all at one revision. The PASS line says how many kills left pages
+in the recovery file for SQLite to replay.
+`test/infrastructure/event_file_safety_test.dart` covers the same restore
+in-process, the file format version (a version 2 file migrates; a newer one is
+refused unchanged; looking at a file neither changes nor creates one), an event
+file moved, replaced or on a folder that has gone, and a copy made when the
+event file can no longer be read. `test/application/backup_settings_test.dart`
+covers the backup folder staying put through Undo and restore, another
+computer's folder not being used, and backup names.
+`test/infrastructure/event_scale_test.dart` enters every result of a 300-player,
+five-round Swiss and prints the save time and file size (`SCALE:` in the log).
+None of these pull a real drive or cut real power; do that by hand before a
+release, with the event on a USB stick.
+
 Linux and Windows CI build and test the MCP server. Linux additionally replays
 real club reports:
 
