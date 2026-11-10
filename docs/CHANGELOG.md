@@ -4,7 +4,7 @@ Downloads for each version are on
 [Releases](https://github.com/Zinkelburger/Meow-Chess/releases); the browser
 version at https://chessautoprep.com/meow-chess/ follows the latest release.
 
-## Unreleased
+## 1.5.0 — November 10, 2026
 
 - **Events saved by this version cannot be opened by 1.4.0 or earlier**, which
   now say the event is from a newer version. An older copy that opened a newer
