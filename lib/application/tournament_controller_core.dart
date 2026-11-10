@@ -4,6 +4,7 @@ import 'dart:io' show File, Platform;
 import 'dart:isolate';
 import 'dart:math' show Random;
 
+import 'full_path.dart';
 import 'headless_foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
@@ -212,7 +213,7 @@ class TournamentControllerCore extends ChangeNotifier
     final here = thisComputer();
     final owner = repository.readPreference('backupComputer');
     final last = repository.readPreference('lastBackup');
-    final usable = e.backupFolder.isEmpty || p.isAbsolute(e.backupFolder);
+    final usable = e.backupFolder.isEmpty || isFullPathHere(e.backupFolder);
     if (owner == here && usable) return;
     if (owner == null && usable) {
       // Saved before backups were tied to a computer: take the folder as
@@ -233,7 +234,7 @@ class TournamentControllerCore extends ChangeNotifier
     }
     if (last != null) repository.writePreference('lastBackup@$other', last);
     var mine = repository.readPreference('backupFolder@$here') ?? '';
-    if (!p.isAbsolute(mine)) mine = '';
+    if (!isFullPathHere(mine)) mine = '';
     final mineLast = repository.readPreference('lastBackup@$here');
     if (mineLast == null) {
       repository.deletePreference('lastBackup');
@@ -440,7 +441,7 @@ class TournamentControllerCore extends ChangeNotifier
     try {
       // A folder from another kind of computer is not a full path here and
       // would otherwise be created wherever the app was started.
-      if (!p.isAbsolute(e.backupFolder)) {
+      if (!isFullPathHere(e.backupFolder)) {
         throw TournamentException(
           '${e.backupFolder} is not a folder on this computer. Choose a '
           'backup folder here in Backups.',

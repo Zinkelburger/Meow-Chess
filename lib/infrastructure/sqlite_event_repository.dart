@@ -4,6 +4,7 @@ import 'package:sqlite3/common.dart';
 import 'package:path/path.dart' as p;
 import '../application/diagnostics.dart';
 import '../application/event_repository.dart';
+import '../application/full_path.dart';
 import '../domain/history.dart';
 import '../domain/model.dart';
 import 'publish_file.dart';
@@ -1038,7 +1039,7 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
   static void validateBackupDestination(String destination) {
     // A name that is not a full path here, such as a folder chosen on another
     // kind of computer, would land wherever the app happened to be started.
-    if (!p.isAbsolute(destination)) {
+    if (!isFullPathHere(destination)) {
       throw const TournamentException('Choose a full path for the copy.');
     }
     final name = p.basename(destination).toLowerCase();
