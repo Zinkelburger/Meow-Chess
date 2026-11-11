@@ -105,16 +105,17 @@ void main() {
         c.event!.copy(
           sections: [
             s.copy(
-              prizes: {
+              prizes: PrizeTable.fromJson({
                 'list': [
                   {
+                    'id': 'u1800',
                     'label': 'U1800',
                     'kind': 'under',
                     'max': 1800,
                     'cents': 5000,
                   },
                 ],
-              },
+              }),
             ),
           ],
         ),

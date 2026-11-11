@@ -67,7 +67,7 @@ class _KnockoutBracketViewState extends State<KnockoutBracketView> {
     String name(String? id) => id == null ? '—' : e.player(id).name;
     String seeded(String? id, int seed) =>
         id == null ? '—' : '#$seed ${name(id)}';
-    final directorDecides = bracket.tiebreak == 'none';
+    final directorDecides = bracket.tiebreak == KnockoutTiebreak.none;
 
     Widget cell(double width, Widget child) => SizedBox(
       width: width,

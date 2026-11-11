@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
-import '../domain/bye_policy.dart';
 import '../domain/eligibility.dart';
 import '../domain/fide.dart';
 import '../domain/fixed_schedule.dart';
@@ -65,7 +64,7 @@ const hollandChoice = 'holland';
 /// the rulebook defaults, stored blank so an untouched form is not a draft.
 Map<String, String> sectionValues(Section? section) {
   final s = section;
-  final policy = s == null ? null : ByePolicy.fromJson(s.byeRules);
+  final policy = s?.byeRules;
   final values = <String, String>{
     'name': s?.name ?? '',
     'format': (s?.format ?? Format.swiss).name,
@@ -80,14 +79,14 @@ Map<String, String> sectionValues(Section? section) {
     'sideGames': '${s?.sideGames ?? false}',
     'rrTable': s?.rrTable ?? '',
     'doubleCycle': '${s?.doubleCycle ?? false}',
-    'accelerated': s?.accelerated ?? '',
+    'accelerated': s?.accelerated.code ?? '',
     'ratedBy': s == null
         ? (fideModeDefault ? RatedBy.fide.name : '')
         : RatedBy.of(s).name,
     'fideRanking': s?.fideRanking ?? '',
     'pabPoints': '${s?.pabPoints ?? 2}',
     'avoidTeammates': '${s?.avoidTeammates ?? false}',
-    'variations': ((s?.variations ?? const {}).toList()..sort()).join(', '),
+    'variations': Variation.codes(s?.variations ?? const {}).join(', '),
     'lastHalfByeRound': policy == null ? '' : '${policy.lastHalfByeRound}',
     'maxHalfByes': policy == null ? '' : '${policy.maxHalfByes}',
     'byeDeadline': policy == null ? '' : '${policy.deadlineMinutes}',
@@ -159,15 +158,15 @@ Map<String, String> sectionLabels() => {
   bool doubleGames,
   String rrTable,
   bool doubleCycle,
-  String accelerated,
+  Acceleration accelerated,
   bool avoidTeammates,
-  Set<String> variations,
+  Set<Variation> variations,
   int rounds,
   int? board,
   int ratingCeiling,
   int ratingFloor,
   String timeControl,
-  Json byeRules,
+  ByePolicy byeRules,
 })
 readSection(
   Map<String, String> v, {
@@ -232,16 +231,13 @@ readSection(
     return n;
   }
 
-  final variations = {
-    for (final code in (v['variations'] ?? '').split(RegExp(r'[,\s]+')))
-      if (code.trim().isNotEmpty) code.trim(),
-  };
-  for (final code in variations) {
-    if (!swissVariations.contains(code)) {
-      throw SectionFieldProblem(
-        'variations',
-        'Unknown pairing variation "$code". Use ${swissVariations.join(', ')}.',
-      );
+  final variations = <Variation>{};
+  for (final code in (v['variations'] ?? '').split(RegExp(r'[,\s]+'))) {
+    if (code.trim().isEmpty) continue;
+    try {
+      variations.add(Variation.parse(code.trim()));
+    } on TournamentException catch (e) {
+      throw SectionFieldProblem('variations', e.message);
     }
   }
   final policy = ByePolicy(
@@ -279,7 +275,7 @@ readSection(
     doubleGames: v['doubleGames'] == 'true' && supportsDoubleGames(format),
     rrTable: v['rrTable'] ?? '',
     doubleCycle: v['doubleCycle'] == 'true',
-    accelerated: v['accelerated'] ?? '',
+    accelerated: Acceleration.parse(v['accelerated'] ?? ''),
     avoidTeammates: v['avoidTeammates'] == 'true',
     variations: variations,
     rounds: rounds,
@@ -287,7 +283,7 @@ readSection(
     ratingCeiling: cap,
     ratingFloor: floor,
     timeControl: control,
-    byeRules: policy.toJson(),
+    byeRules: policy,
   );
 }
 
@@ -372,16 +368,16 @@ Section applySectionValues(
     );
   }
   if (next.fideRated &&
-      next.accelerated.isNotEmpty &&
-      next.accelerated != 'baku') {
+      next.accelerated != Acceleration.none &&
+      next.accelerated != Acceleration.baku) {
     throw const SectionFieldProblem(
       'ratedBy',
       'US Chess accelerated pairings (28R) do not apply to a FIDE-rated section; its only acceleration is the Baku method. Set Accelerated pairings to Off first.',
     );
   }
-  if (next.accelerated == 'baku' &&
+  if (next.accelerated == Acceleration.baku &&
       !(next.fideRated && next.format == Format.swiss)) {
-    next = next.copy(accelerated: '');
+    next = next.copy(accelerated: Acceleration.none);
   }
   if (fideSettingsChangeProblem(section, next) case final problem?) {
     throw SectionFieldProblem(
@@ -656,9 +652,8 @@ class _SectionFormFieldsState extends State<SectionFormFields> {
 
   String get prizesSummary {
     final s = widget.current;
-    if (s == null || s.prizes.isEmpty) return 'None';
-    final table = PrizeTable.fromJson(s.prizes);
-    if (table.isEmpty) return 'None';
+    final table = s?.prizes;
+    if (table == null || table.isEmpty) return 'None';
     final count =
         '${table.list.length} ${table.list.length == 1 ? 'prize' : 'prizes'}';
     return table.announcedCents == 0

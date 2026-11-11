@@ -69,8 +69,8 @@ void main() {
       final groups = prelims.map(hollandGroup).toSet();
       expect(groups, hasLength(1));
       expect(prelims.every(isHollandPrelim), isTrue);
-      expect(prelims.map(hollandQualifiers), everyElement(2));
-      expect(prelims.map(hollandUnbalanced), everyElement(isFalse));
+      expect(prelims.map((s) => s.holland.qualifiers), everyElement(2));
+      expect(prelims.map((s) => s.holland.unbalanced), everyElement(isFalse));
     });
 
     test('30I: the top-rated fill Prelim 1, the next Prelim 2', () {
@@ -87,7 +87,7 @@ void main() {
       expect(prelims[1].players, ['p4', 'p5', 'p6', 'p7']);
       expect(prelims[2].players, ['p8', 'p9', 'p10']);
       expect(prelims.map((s) => s.plannedRounds), [3, 3, 3]);
-      expect(prelims.map(hollandUnbalanced), everyElement(isTrue));
+      expect(prelims.map((s) => s.holland.unbalanced), everyElement(isTrue));
     });
 
     test('names skip existing sections and withdrawn players stay out', () {
@@ -190,7 +190,7 @@ void main() {
       final (:section, :entries) = finalsFor(event, group, nextId);
       expect(section.name, 'Final');
       expect(section.format, Format.roundRobin);
-      expect(hollandRole(section), 'final');
+      expect(section.holland.role.code, 'final');
       expect(hollandGroup(section), group);
       expect(section.plannedRounds, 3);
       expect(section.boardStart, 5);

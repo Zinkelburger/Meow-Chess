@@ -9,7 +9,6 @@ import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/membership.dart';
 import 'membership_style.dart';
-import '../domain/bye_policy.dart';
 import '../domain/eligibility.dart';
 import '../domain/fide.dart';
 import '../domain/us_chess.dart';
@@ -1421,7 +1420,7 @@ class PlayerPanelState extends State<PlayerPanel> {
             if (s != null) ...[
               const SizedBox(height: 8),
               Text(
-                'Section rules: ${ByePolicy.fromJson(s.byeRules).describe()}.',
+                'Section rules: ${s.byeRules.describe()}.',
                 key: const ValueKey('bye-policy'),
                 style: muted,
               ),

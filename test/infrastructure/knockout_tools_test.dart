@@ -74,13 +74,16 @@ void main() {
     'an eight-player knockout through the tools, director decides a tie',
     () async {
       await enter({'gamesPerMatch': 2, 'tiebreak': 'none'});
-      expect(section().bracket, {'gamesPerMatch': 2, 'tiebreak': 'none'});
+      expect(section().bracket.toJson(), {
+        'gamesPerMatch': 2,
+        'tiebreak': 'none',
+      });
 
       final r1 = await playRound(drawnBoard: 1);
       final round = r1['rounds'][sectionId] as Map;
       expect(round['policy'], 'knockout-v1');
       expect((round['games'] as List).length, 8);
-      expect(section().bracket['seeds'], ids);
+      expect(section().bracket.toJson()['seeds'], ids);
       expect(section().plannedRounds, 3);
 
       // Board 1 is drawn: the next round waits for the director.
@@ -102,7 +105,7 @@ void main() {
         'reason': 'Coin toss',
       });
       expect(decided['bracket'], contains('Quarterfinals'));
-      expect(section().bracket['rounds'][0]['decisions'], [
+      expect(section().bracket.toJson()['rounds'][0]['decisions'], [
         {'board': 1, 'advanced': ids[7], 'reason': 'Coin toss'},
       ]);
       final history = tools.controller.graph;
@@ -116,8 +119,8 @@ void main() {
         'sectionId': sectionId,
         'bracket': {'tiebreak': 'blitz'},
       });
-      expect(section().bracket['tiebreak'], 'blitz');
-      expect(section().bracket['rounds'], isNotEmpty);
+      expect(section().bracket.toJson()['tiebreak'], 'blitz');
+      expect(section().bracket.toJson()['rounds'], isNotEmpty);
       await expectLater(
         write('update_section', {
           'sectionId': sectionId,

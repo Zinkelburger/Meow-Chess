@@ -8,7 +8,6 @@ import '../application/failures.dart';
 import '../application/member_lookup_batch.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
-import '../domain/prizes.dart' show PrizeTable;
 import '../domain/us_chess.dart';
 import '../domain/fide.dart';
 import '../domain/fixed_schedule.dart';
@@ -262,8 +261,7 @@ class _ReportsViewState extends State<ReportsView> {
     final fide = hasFideSection(e);
     final usChess = !fide || reportedSections(e).isNotEmpty;
     final awardsFirst = e.sections.any(
-      (s) =>
-          s.rounds.isNotEmpty && PrizeTable.fromJson(s.prizes).list.isNotEmpty,
+      (s) => s.rounds.isNotEmpty && s.prizes.list.isNotEmpty,
     );
     final issues = [
           for (final i in all)

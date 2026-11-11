@@ -26,12 +26,12 @@ void main() {
           players: const ['a', 'b', 'c', 'd'],
           format: Format.roundRobin,
           plannedRounds: 3,
-          holland: const {
+          holland: Holland.fromJson({
             'group': 'g',
             'role': 'prelim',
             'qualifiers': 1,
             'unbalanced': true,
-          },
+          }),
           rounds: [
             Round(
               number: 1,

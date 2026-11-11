@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
-import 'package:meow_chess/domain/prizes.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/ui/new_section_panel.dart';
 import 'package:meow_chess/ui/section_panel.dart';
@@ -109,9 +108,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('save-section')));
     await tester.pumpAndSettle();
     final saved = c.event!.sections.first;
-    expect(saved.byeRules, {'lastHalfByeRound': 2, 'maxHalfByes': 1});
+    expect(saved.byeRules.toJson(), {'lastHalfByeRound': 2, 'maxHalfByes': 1});
     expect(saved.avoidTeammates, isTrue);
-    expect(saved.variations, {'29E4a'});
+    expect(Variation.codes(saved.variations), ['29E4a']);
     expect(find.byKey(ValueKey('section-settings-${q1.id}')), findsNothing);
   });
 
@@ -145,7 +144,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(Dialog), findsNothing);
-    expect(c.event!.sections.first.byeRules, isEmpty);
+    expect(c.event!.sections.first.byeRules.toJson(), isEmpty);
   });
 
   testWidgets('after round 1 the format is locked, byes and prizes are not', (
@@ -175,7 +174,7 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('save-section')));
     await tester.tap(find.byKey(const ValueKey('save-section')));
     await tester.pumpAndSettle();
-    expect(c.event!.sections.first.byeRules, {'maxHalfByes': 2});
+    expect(c.event!.sections.first.byeRules.toJson(), {'maxHalfByes': 2});
     expect(c.event!.sections.first.rounds, hasLength(1));
   });
 
@@ -189,9 +188,7 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('add-prize')));
     await tester.tap(find.byKey(const ValueKey('add-prize')));
     await tester.pumpAndSettle();
-    final id = PrizeTable.fromJson(
-      c.event!.sections.first.prizes,
-    ).list.single.id;
+    final id = c.event!.sections.first.prizes.list.single.id;
     await tester.enterText(find.byKey(ValueKey('prize-cents-$id')), '100');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
@@ -323,7 +320,7 @@ void main() {
       expect(s.timeControl, 'G/25');
       expect(s.doubleGames, isTrue);
       expect(s.ratingCeiling, 1900);
-      expect(s.byeRules, {'maxHalfByes': 1});
+      expect(s.byeRules.toJson(), {'maxHalfByes': 1});
       expect(s.players, hasLength(6));
       // Group state is remembered across panels.
       expect(c.workspaceState.read(sectionGroupPref('byes')), 'open');

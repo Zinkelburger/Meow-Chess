@@ -33,7 +33,7 @@ Event _event(int count, {String accelerated = '', int rounds = 9}) {
         plannedRounds: rounds,
         fideRated: true,
         unrated: true,
-        accelerated: accelerated,
+        accelerated: Acceleration.parse(accelerated),
       ),
     ],
   );

@@ -147,7 +147,9 @@ void main() {
       final s = e.sections.single;
       final reduced = e.copy(
         sections: [
-          s.copy(prizes: {...s.prizes, 'basedOn': 30}),
+          s.copy(
+            prizes: PrizeTable.fromJson({...s.prizes.toJson(), 'basedOn': 30}),
+          ),
         ],
       );
       // 10 of 30 of $100.

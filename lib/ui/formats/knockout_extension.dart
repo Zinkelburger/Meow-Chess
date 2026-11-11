@@ -19,18 +19,17 @@ final knockoutFormatExtension = FormatExtension(
   ],
   values: (section) => {
     'gamesPerMatch': '${knockoutGamesPerMatch(section)}',
-    'tiebreak': knockoutTiebreak(section),
+    'tiebreak': knockoutTiebreak(section).code,
   },
   apply: (section, values) {
     final games =
         int.tryParse(values['gamesPerMatch'] ?? '') ??
         knockoutGamesPerMatch(section);
-    final bracket = {
-      ...section.bracket,
+    final bracket = section.bracket.withSettings({
       'gamesPerMatch': games,
-      'tiebreak': values['tiebreak'] ?? knockoutTiebreak(section),
-    };
-    if (knockoutSettingsProblem(bracket) case final problem?) {
+      'tiebreak': values['tiebreak'] ?? knockoutTiebreak(section).code,
+    });
+    if (bracket.problem case final problem?) {
       throw TournamentException(problem);
     }
     return section.copy(

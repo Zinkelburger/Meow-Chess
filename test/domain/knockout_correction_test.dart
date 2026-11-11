@@ -23,7 +23,7 @@ Event _event(int n) => Event(
       players: [for (var i = 0; i < n; i++) 'p$i'],
       format: Format.knockout,
       plannedRounds: 1,
-      bracket: const {'gamesPerMatch': 1, 'tiebreak': 'none'},
+      bracket: Bracket.fromJson({'gamesPerMatch': 1, 'tiebreak': 'none'}),
     ),
   ],
 );
@@ -138,7 +138,9 @@ void main() {
     validateEvent(e);
     expect(_s(e).rounds, hasLength(1));
     expect(_s(e).plannedRounds, 2);
-    expect((_s(e).bracket['rounds'] as List).map((r) => r['stage']), [1]);
+    expect((_s(e).bracket.toJson()['rounds'] as List).map((r) => r['stage']), [
+      1,
+    ]);
     // The final is paired again with the player who now advances.
     final r = proposeRound(e, _s(e), _id);
     expect({r.games.single.white, r.games.single.black}, {'p3', 'p1'});

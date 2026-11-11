@@ -85,7 +85,7 @@ void main() {
     final section = e.sections.firstWhere((s) => s.id == finalId);
     expect(section.name, 'Final');
     expect(section.players, hasLength(4));
-    expect(hollandRole(section), 'final');
+    expect(section.holland.role.code, 'final');
     expect(e.players, hasLength(12));
     expect(section.players.map((id) => e.player(id).personId), [
       'p0',

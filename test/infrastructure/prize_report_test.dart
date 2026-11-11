@@ -38,7 +38,7 @@ Event event() {
             byes: const [ByeAward('c', 0, 'none')],
           ),
         ],
-        prizes: {
+        prizes: PrizeTable.fromJson({
           'list': [
             {'id': '1', 'kind': 'place', 'place': 1, 'cents': 20000},
             {'id': '2', 'kind': 'place', 'place': 2, 'cents': 10000},
@@ -51,7 +51,7 @@ Event event() {
               'trophy': true,
             },
           ],
-        },
+        }),
       ),
     ],
   );
@@ -84,7 +84,7 @@ void main() {
   test('history describes a changed prize table', () {
     final before = event();
     final after = before.copy(
-      sections: [before.sections.single.copy(prizes: const {})],
+      sections: [before.sections.single.copy(prizes: PrizeTable.fromJson({}))],
     );
     expect(describeChanges(before, after), ['Open: prize table changed']);
   });
@@ -145,7 +145,7 @@ void main() {
       },
       'expectedRevision': tools.event.revision,
     });
-    expect(tools.event.sections.single.prizes['basedOn'], 4);
+    expect(tools.event.sections.single.prizes.toJson()['basedOn'], 4);
     final report = await tools.call('prize_report', {'sectionId': sectionId});
     final section = (report['sections'] as List).single;
     expect(section['entries'], 2);

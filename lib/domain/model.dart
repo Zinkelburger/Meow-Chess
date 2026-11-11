@@ -1,8 +1,15 @@
 import 'dart:convert';
 
+import 'bye_policy.dart';
 import 'fide.dart';
+import 'prizes.dart';
+import 'section_settings.dart';
 import 'tiebreaks.dart' show tiebreakMethod;
 import 'us_chess.dart';
+
+export 'bye_policy.dart' show ByePolicy;
+export 'prizes.dart' show Prize, PrizeKind, PrizeTable;
+export 'section_settings.dart';
 
 /// Scores are stored as integer half-points. IDs never depend on list order.
 String scoreText(int halves) =>
@@ -620,16 +627,16 @@ class Section {
     this.timeControl = '',
     this.sideGames = false,
     List<List<int>> quadPairings = const [],
-    this.accelerated = '',
+    this.accelerated = Acceleration.none,
     this.avoidTeammates = false,
-    Set<String> variations = const {},
-    Json byeRules = const {},
-    Json prizes = const {},
+    Set<Variation> variations = const {},
+    this.byeRules = const ByePolicy(),
+    PrizeTable? prizes,
     this.rrTable = '',
     this.doubleCycle = false,
     this.homeTeam = '',
-    Json holland = const {},
-    Json bracket = const {},
+    this.holland = const Holland(),
+    this.bracket = const Bracket(),
     List<List<String>> partners = const [],
     this.unrated = false,
     this.fideRated = false,
@@ -640,8 +647,6 @@ class Section {
   }) : fideOrder = List.unmodifiable(fideOrder),
        rangeExceptions = Map.unmodifiable(rangeExceptions),
        players = List.unmodifiable(players),
-       holland = Map.unmodifiable(holland),
-       bracket = Map.unmodifiable(bracket),
        partners = List.unmodifiable(
          partners.map((p) => List<String>.unmodifiable(p)),
        ),
@@ -649,35 +654,26 @@ class Section {
          quadPairings.map((r) => List<int>.unmodifiable(r)),
        ),
        variations = Set.unmodifiable(variations),
-       byeRules = Map.unmodifiable(byeRules),
-       prizes = Map.unmodifiable(prizes),
+       prizes = prizes ?? PrizeTable.none,
        rounds = List.unmodifiable(rounds);
   final String id, name;
 
-  /// Rule 28R: accelerated pairings. Empty for none, `addedScore` (28R1),
-  /// `adjustedRating` (28R2) or `sixths` (28R3). A FIDE-rated Swiss may use
-  /// only `baku`, the Baku Acceleration Method (C.04.7 1). Announced before
-  /// round 1.
-  final String accelerated;
+  /// Rule 28R: accelerated pairings. A FIDE-rated Swiss may use only
+  /// [Acceleration.baku] (C.04.7 1). Announced before round 1.
+  final Acceleration accelerated;
 
   /// Rule 28N: avoid pairing team-mates using the plus-two method.
   final bool avoidTeammates;
 
-  /// Announced pairing variations by rule number, such as `29E4a`, `29E5h`,
-  /// `29I` (full-class pairings), `29I2`, `29J`, `28L2a` and `28S5latest`
-  /// (re-entries carry the latest score); see `swissVariations`.
-  final Set<String> variations;
+  /// Announced pairing variations, stored by rule number.
+  final Set<Variation> variations;
 
-  /// Rule 22C: announced bye availability. Keys: `lastHalfByeRound` (the
-  /// last round a half-point bye may be requested for; 0 = any round),
-  /// `maxHalfByes` (0 = unlimited), `deadlineMinutes` (before the round;
-  /// default 60), `irrevocableFromRound` (byes for this round and later
-  /// must be declared irrevocable; 0 = never).
-  final Json byeRules;
+  /// Rule 22C: announced half-point bye availability.
+  final ByePolicy byeRules;
 
   /// Rules 32–33: the announced prize table and payout terms. See
   /// `prizes.dart` for the schema.
-  final Json prizes;
+  final PrizeTable prizes;
 
   /// Rule 30A: the round-robin table. Empty keeps the circle method
   /// (`circle-rr-v1`); `crenshaw` uses the Crenshaw-Berger tables.
@@ -690,15 +686,11 @@ class Section {
   /// Scheveningen: the team label of side A; every other player is side B.
   final String homeTeam;
 
-  /// Rule 30H / 30I Holland system. Keys: `group` (shared by the prelims and
-  /// their final), `role` (`prelim` or `final`), `qualifiers` (how many
-  /// advance from each prelim), `unbalanced` (30I).
-  final Json holland;
+  /// Rule 30H / 30I: the section's place in a Holland system.
+  final Holland holland;
 
-  /// Knockout bracket. Keys: `gamesPerMatch` (default 2), `tiebreak`
-  /// (`none`, `rapid`, `blitz`, `armageddon`; default `none`), `seeds`
-  /// (player IDs in seeding order), `rounds` (the bracket as played).
-  final Json bracket;
+  /// The knockout bracket: match rules, seeds and the rounds as played.
+  final Bracket bracket;
 
   /// Bughouse partnerships: two player IDs each.
   final List<List<String>> partners;
@@ -779,16 +771,16 @@ class Section {
     String? timeControl,
     bool? sideGames,
     List<List<int>>? quadPairings,
-    String? accelerated,
+    Acceleration? accelerated,
     bool? avoidTeammates,
-    Set<String>? variations,
-    Json? byeRules,
-    Json? prizes,
+    Set<Variation>? variations,
+    ByePolicy? byeRules,
+    PrizeTable? prizes,
     String? rrTable,
     bool? doubleCycle,
     String? homeTeam,
-    Json? holland,
-    Json? bracket,
+    Holland? holland,
+    Bracket? bracket,
     List<List<String>>? partners,
     bool? unrated,
     bool? fideRated,
@@ -844,16 +836,16 @@ class Section {
     'timeControl': timeControl,
     'sideGames': sideGames,
     if (quadPairings.isNotEmpty) 'quadPairings': quadPairings,
-    if (accelerated.isNotEmpty) 'accelerated': accelerated,
+    if (accelerated != Acceleration.none) 'accelerated': accelerated.code,
     if (avoidTeammates) 'avoidTeammates': avoidTeammates,
-    if (variations.isNotEmpty) 'variations': variations.toList()..sort(),
-    if (byeRules.isNotEmpty) 'byeRules': byeRules,
-    if (prizes.isNotEmpty) 'prizes': prizes,
+    if (variations.isNotEmpty) 'variations': Variation.codes(variations),
+    if (byeRules.toJson().isNotEmpty) 'byeRules': byeRules.toJson(),
+    if (prizes.toJson().isNotEmpty) 'prizes': prizes.toJson(),
     if (rrTable.isNotEmpty) 'rrTable': rrTable,
     if (doubleCycle) 'doubleCycle': doubleCycle,
     if (homeTeam.isNotEmpty) 'homeTeam': homeTeam,
-    if (holland.isNotEmpty) 'holland': holland,
-    if (bracket.isNotEmpty) 'bracket': bracket,
+    if (holland.toJson().isNotEmpty) 'holland': holland.toJson(),
+    if (bracket.toJson().isNotEmpty) 'bracket': bracket.toJson(),
     if (partners.isNotEmpty) 'partners': partners,
     if (unrated) 'unrated': unrated,
     if (fideRated) 'fideRated': fideRated,
@@ -884,16 +876,27 @@ class Section {
       for (final r in j['quadPairings'] as List? ?? const [])
         List<int>.from(r as Iterable),
     ],
-    accelerated: (j['accelerated'] ?? '') as String,
+    accelerated: Acceleration.parse((j['accelerated'] ?? '') as String),
     avoidTeammates: (j['avoidTeammates'] ?? false) as bool,
-    variations: Set<String>.from(j['variations'] as Iterable? ?? const []),
-    byeRules: Map<String, dynamic>.from(j['byeRules'] as Map? ?? const {}),
-    prizes: Map<String, dynamic>.from(j['prizes'] as Map? ?? const {}),
+    variations: {
+      for (final code in j['variations'] as Iterable? ?? const [])
+        Variation.parse(code as String),
+    },
+    byeRules: ByePolicy.fromJson(
+      Map<String, dynamic>.from(j['byeRules'] as Map? ?? const {}),
+    ),
+    prizes: PrizeTable.fromJson(
+      Map<String, dynamic>.from(j['prizes'] as Map? ?? const {}),
+    ),
     rrTable: (j['rrTable'] ?? '') as String,
     doubleCycle: (j['doubleCycle'] ?? false) as bool,
     homeTeam: (j['homeTeam'] ?? '') as String,
-    holland: Map<String, dynamic>.from(j['holland'] as Map? ?? const {}),
-    bracket: Map<String, dynamic>.from(j['bracket'] as Map? ?? const {}),
+    holland: Holland.fromJson(
+      Map<String, dynamic>.from(j['holland'] as Map? ?? const {}),
+    ),
+    bracket: Bracket.fromJson(
+      Map<String, dynamic>.from(j['bracket'] as Map? ?? const {}),
+    ),
     partners: [
       for (final p in j['partners'] as List? ?? const [])
         List<String>.from(p as Iterable),
@@ -1037,7 +1040,7 @@ class Event {
     this.useTiebreaks = false,
     this.policy =
         'Requested byes: ½ point before the round is posted. Equal scores share a place unless tie-break rankings are enabled.',
-    this.colorToss = '',
+    this.colorToss = ColorToss.none,
     List<String> tiebreaks = const [],
     this.online = false,
     List<Json> rulings = const [],
@@ -1055,9 +1058,9 @@ class Event {
          transitions.map((t) => Map<String, dynamic>.unmodifiable(t)),
        );
 
-  /// Rule 29E2 / 28J: the round-1 coin toss, shared by every section.
-  /// `higherWhite` or `higherBlack` once tossed; empty before round 1.
-  final String colorToss;
+  /// Rule 29E2 / 28J: the round-1 coin toss, shared by every section;
+  /// [ColorToss.none] before round 1.
+  final ColorToss colorToss;
 
   /// Rule 34B: the announced tie-break order, by method code (see
   /// `tiebreaks.dart`). Empty means the US Chess default order.
@@ -1142,7 +1145,7 @@ class Event {
     String? zip,
     String? level,
     bool? useTiebreaks,
-    String? colorToss,
+    ColorToss? colorToss,
     List<String>? tiebreaks,
     bool? online,
     List<Json>? rulings,
@@ -1211,7 +1214,7 @@ class Event {
     'zip': zip,
     'level': level,
     'useTiebreaks': useTiebreaks,
-    if (colorToss.isNotEmpty) 'colorToss': colorToss,
+    if (colorToss != ColorToss.none) 'colorToss': colorToss.code,
     if (tiebreaks.isNotEmpty) 'tiebreaks': tiebreaks,
     if (online) 'online': online,
     if (rulings.isNotEmpty) 'rulings': rulings,
@@ -1249,7 +1252,7 @@ class Event {
     state: (j['state'] ?? '') as String,
     zip: (j['zip'] ?? '') as String,
     level: (j['level'] ?? 'N') as String,
-    colorToss: (j['colorToss'] ?? '') as String,
+    colorToss: ColorToss.parse((j['colorToss'] ?? '') as String),
     tiebreaks: List<String>.from(j['tiebreaks'] as Iterable? ?? const []),
     online: (j['online'] ?? false) as bool,
     rulings: List<Json>.from(
@@ -1485,10 +1488,6 @@ void validateEvent(Event e) {
       'Invalid irrevocable bye round.',
     );
   }
-  require(
-    ['', 'higherWhite', 'higherBlack'].contains(e.colorToss),
-    'Invalid round-1 color toss.',
-  );
   final liveBoards = <int>{};
   final livePeople = <String>{};
   require(
@@ -1515,11 +1514,13 @@ void validateEvent(Event e) {
       !s.fideRated ||
           s.format != Format.swiss ||
           (!s.doubleGames &&
-              (s.accelerated.isEmpty || s.accelerated == 'baku')),
+              (s.accelerated == Acceleration.none ||
+                  s.accelerated == Acceleration.baku)),
       'A FIDE-rated Swiss plays one game per round; its only acceleration is the Baku method.',
     );
     require(
-      s.accelerated != 'baku' || (s.fideRated && s.format == Format.swiss),
+      s.accelerated != Acceleration.baku ||
+          (s.fideRated && s.format == Format.swiss),
       'The Baku acceleration is for FIDE-rated Swiss sections.',
     );
     require(
@@ -1556,16 +1557,6 @@ void validateEvent(Event e) {
     require(
       s.name.trim().isNotEmpty && s.plannedRounds > 0 && s.boardStart > 0,
       'Invalid section settings.',
-    );
-    require(
-      [
-        '',
-        'addedScore',
-        'adjustedRating',
-        'sixths',
-        'baku',
-      ].contains(s.accelerated),
-      'Invalid accelerated pairing method.',
     );
     require(['', 'crenshaw'].contains(s.rrTable), 'Invalid round-robin table.');
     final partnered = <String>{};

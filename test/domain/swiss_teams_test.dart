@@ -28,7 +28,7 @@ Event section(int n, String Function(int i) team, {int rounds = 5}) {
     id: 'teams',
     name: 'Scholastic',
     date: '2026-11-10',
-    colorToss: 'higherWhite',
+    colorToss: ColorToss.higherWhite,
     players: players,
     sections: [
       Section(

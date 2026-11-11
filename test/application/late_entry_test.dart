@@ -116,7 +116,7 @@ void main() {
         'Announce byes',
         c.event!.copy(
           sections: [
-            open(c).copy(byeRules: const {'lastHalfByeRound': 1}),
+            open(c).copy(byeRules: ByePolicy.fromJson({'lastHalfByeRound': 1})),
           ],
         ),
       );
@@ -163,7 +163,7 @@ void main() {
       'Announce byes',
       c.event!.copy(
         sections: [
-          open(c).copy(byeRules: const {'maxHalfByes': 1}),
+          open(c).copy(byeRules: ByePolicy.fromJson({'maxHalfByes': 1})),
         ],
       ),
     );

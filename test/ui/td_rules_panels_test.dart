@@ -74,7 +74,7 @@ void main() {
           for (final s in c.event!.sections)
             s.copy(
               plannedRounds: 3,
-              byeRules: const {'irrevocableFromRound': 3},
+              byeRules: ByePolicy.fromJson({'irrevocableFromRound': 3}),
             ),
         ],
       ),

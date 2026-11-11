@@ -24,7 +24,7 @@ Event _event(int n, {int games = 2, String tiebreak = 'none'}) => Event(
       format: Format.knockout,
       plannedRounds: 1,
       doubleGames: games == 2,
-      bracket: {'gamesPerMatch': games, 'tiebreak': tiebreak},
+      bracket: Bracket.fromJson({'gamesPerMatch': games, 'tiebreak': tiebreak}),
     ),
   ],
 );
@@ -97,7 +97,9 @@ void main() {
       ]);
       expect(r1.byes, isEmpty);
       e = _post(e, _betterWins);
-      expect(_section(e).bracket['seeds'], [for (var i = 0; i < 8; i++) 'p$i']);
+      expect(_section(e).bracket.toJson()['seeds'], [
+        for (var i = 0; i < 8; i++) 'p$i',
+      ]);
       expect(_section(e).plannedRounds, 3);
       final r2 = proposeRound(e, _section(e), _id);
       expect(r2.note, startsWith('Semifinals'));
@@ -204,7 +206,7 @@ void main() {
       throwsA(isA<TournamentException>()),
     );
     final decided = knockoutDecided(e, _section(e), 1, 'p7', 'Coin toss');
-    expect(decided.bracket['rounds'], [
+    expect(decided.bracket.toJson()['rounds'], [
       {
         'stage': 1,
         'name': 'Quarterfinals',
@@ -256,7 +258,7 @@ void main() {
     final s = _section(e);
     expect(s.rounds.length, 2);
     expect(s.plannedRounds, 4);
-    expect(s.bracket['rounds'], [
+    expect(s.bracket.toJson()['rounds'], [
       {
         'stage': 1,
         'name': 'Quarterfinals',
@@ -351,10 +353,10 @@ void main() {
     expect(knockoutSeeds(e, _section(e)), ['p1', 'p2', 'p3', 'p4']);
     // Stored seeds win over ratings.
     final seeded = _section(e).copy(
-      bracket: {
-        ..._section(e).bracket,
+      bracket: Bracket.fromJson({
+        ..._section(e).bracket.toJson(),
         'seeds': ['p4', 'p3'],
-      },
+      }),
     );
     expect(knockoutSeeds(e, seeded), ['p4', 'p3', 'p1', 'p2']);
     expect(knockoutBracketOrder(8), [1, 8, 4, 5, 2, 7, 3, 6]);

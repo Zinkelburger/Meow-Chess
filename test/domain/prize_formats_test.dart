@@ -62,8 +62,8 @@ Event _knockout(int n, {int games = 2}) => Event(
       format: Format.knockout,
       plannedRounds: 1,
       doubleGames: games == 2,
-      bracket: {'gamesPerMatch': games, 'tiebreak': 'none'},
-      prizes: _prizes,
+      bracket: Bracket.fromJson({'gamesPerMatch': games, 'tiebreak': 'none'}),
+      prizes: PrizeTable.fromJson(_prizes),
     ),
   ],
 );
@@ -135,7 +135,7 @@ void main() {
           players: const ['c', 'a', 'b'],
           format: Format.ladder,
           unrated: true,
-          prizes: _prizes,
+          prizes: PrizeTable.fromJson(_prizes),
         ),
       ],
     );
@@ -188,7 +188,7 @@ void main() {
             Round(number: 1, games: [match(1, 0, 1), match(2, 2, 3)]),
             Round(number: 2, games: [match(3, 0, 2), match(4, 1, 3)]),
           ],
-          prizes: _prizes,
+          prizes: PrizeTable.fromJson(_prizes),
         ),
       ],
     );

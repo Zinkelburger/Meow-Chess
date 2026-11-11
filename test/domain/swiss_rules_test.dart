@@ -94,7 +94,7 @@ Event scenario(
     id: 'fixture',
     name: 'Fixture',
     date: '2026-10-09',
-    colorToss: colorToss,
+    colorToss: ColorToss.parse(colorToss),
     players: [for (final p in players) adjust[p.id]?.call(p) ?? p, ...fillers],
     sections: [
       Section(
@@ -103,7 +103,7 @@ Event scenario(
         players: [for (final p in players) p.id, for (final f in fillers) f.id],
         plannedRounds: plannedRounds,
         rounds: roundList,
-        variations: variations,
+        variations: {for (final v in variations) Variation.parse(v)},
       ),
     ],
   );
@@ -327,7 +327,7 @@ void main() {
       id: 'r1',
       name: 'Round one',
       date: '2026-10-09',
-      colorToss: toss,
+      colorToss: ColorToss.parse(toss),
       players: [
         for (var i = 0; i < n; i++)
           Player(
@@ -368,7 +368,7 @@ void main() {
 
     test('the default toss is fixed by the event, so sections agree', () {
       final e = firstRound(8);
-      expect(effectiveColorToss(e), isIn(['higherWhite', 'higherBlack']));
+      expect(effectiveColorToss(e).code, isIn(['higherWhite', 'higherBlack']));
       expect(effectiveColorToss(e), effectiveColorToss(e.copy(name: 'other')));
     });
 
@@ -383,7 +383,9 @@ void main() {
     test('28R1: accelerated pairings pair quarters in round 1', () {
       final e = firstRound(8);
       final accelerated = e.copy(
-        sections: [e.sections.single.copy(accelerated: 'addedScore')],
+        sections: [
+          e.sections.single.copy(accelerated: Acceleration.addedScore),
+        ],
       );
       final r = proposeRound(
         accelerated,
@@ -764,7 +766,7 @@ void main() {
           name: 'Open',
           players: [for (var i = 1; i <= n; i++) '$i'],
           plannedRounds: 5,
-          accelerated: method,
+          accelerated: Acceleration.parse(method),
         ),
       ],
     );
@@ -887,7 +889,9 @@ void main() {
         plannedRounds: 5,
         variations: variations,
       );
-      return e.copy(sections: [e.sections.single.copy(prizes: prizes)]);
+      return e.copy(
+        sections: [e.sections.single.copy(prizes: PrizeTable.fromJson(prizes))],
+      );
     }
 
     Json classPrizes({int places = 2}) => {
@@ -1021,7 +1025,7 @@ void main() {
             name: 'Open',
             players: [for (final p in players) p.id],
             plannedRounds: 4,
-            variations: variations,
+            variations: {for (final v in variations) Variation.parse(v)},
             rounds: [
               Round(
                 number: 1,

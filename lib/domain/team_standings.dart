@@ -44,16 +44,10 @@ class TeamAwards {
 
   /// The section's team awards, or null when it has none. Throws on a
   /// malformed setting so a bad file or tool call is reported, not ignored.
-  static TeamAwards? of(Section section) => fromJson(section.prizes['teams']);
+  static TeamAwards? of(Section section) => section.prizes.teamAwards;
 
   /// Like [of], but a malformed setting reads as off (for display).
-  static TeamAwards? tryOf(Section section) {
-    try {
-      return of(section);
-    } on TournamentException {
-      return null;
-    }
-  }
+  static TeamAwards? tryOf(Section section) => section.prizes.teamAwardsOrNull;
 
   static TeamAwards? fromJson(Object? json) {
     if (json == null) return null;
@@ -110,11 +104,11 @@ class TeamAwards {
 
 /// [section] with its team awards set to [awards], or removed when null.
 Section withTeamAwards(Section section, TeamAwards? awards) => section.copy(
-  prizes: {
-    for (final e in section.prizes.entries)
+  prizes: PrizeTable.fromJson({
+    for (final e in section.prizes.toJson().entries)
       if (e.key != 'teams') e.key: e.value,
     if (awards != null) 'teams': awards.toJson(),
-  },
+  }),
 );
 
 /// Team labels compare like pairing's team-mate test: trimmed, any case.
@@ -384,8 +378,7 @@ int _coin(Event event, String key) {
 /// that already has team awards (so they can be turned off).
 bool offersTeamAwards(Event event, Section section) =>
     (section.format == Format.swiss || section.format == Format.roundRobin) &&
-    (sectionTeams(event, section).length >= 2 ||
-        section.prizes['teams'] != null);
+    (sectionTeams(event, section).length >= 2 || section.prizes.hasTeamSetting);
 
 /// One team prize as awarded.
 class TeamPrizeLine {
@@ -456,7 +449,7 @@ class TeamPrizeAllocation {
 /// reduced by the same based-on proportion as the individual prizes.
 TeamPrizeAllocation allocateTeamPrizes(Event event, Section section) {
   final prizes = [
-    for (final p in PrizeTable.fromJson(section.prizes).list)
+    for (final p in section.prizes.list)
       if (p.kind == PrizeKind.team) p,
   ]..sort((a, b) => a.place.compareTo(b.place));
   if (prizes.isEmpty) {

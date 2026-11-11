@@ -5,7 +5,6 @@ import 'package:path/path.dart' as p;
 
 import '../application/failures.dart';
 import '../application/tournament_controller_core.dart';
-import '../domain/bye_policy.dart';
 import '../domain/fide.dart';
 import '../domain/knockout.dart';
 import '../domain/ladder.dart';
@@ -921,15 +920,18 @@ class TournamentTools {
           rrTable: (args['rrTable'] ?? '') as String,
           doubleCycle: (args['doubleCycle'] ?? false) as bool,
           homeTeam: (args['homeTeam'] ?? '') as String,
-          accelerated: (args['accelerated'] ?? '') as String,
+          accelerated: Acceleration.parse(
+            (args['accelerated'] ?? '') as String,
+          ),
           avoidTeammates: (args['avoidTeammates'] ?? false) as bool,
           // Bughouse is never US Chess rated.
           unrated:
               args['format'] == Format.bughouse.name ||
               ((args['unrated'] ?? fideOnly) as bool),
-          variations: Set<String>.from(
-            args['variations'] as Iterable? ?? const [],
-          ),
+          variations: {
+            for (final code in args['variations'] as Iterable? ?? const [])
+              Variation.parse(code as String),
+          },
           fideRated: (args['fideRated'] ?? fideOnly) as bool,
           fideRanking: (args['fideRanking'] ?? '') as String,
           pabPoints: (args['pabPoints'] ?? 2) as int,
@@ -937,10 +939,10 @@ class TournamentTools {
             for (final p in args['partners'] as List? ?? const [])
               List<String>.from(p as Iterable),
           ],
-          bracket: _bracketArg(args['bracket'], const {}),
+          bracket: Bracket.fromJson(_bracketArg(args['bracket'], const {})),
         );
         if (section.format == Format.knockout) {
-          if (knockoutSettingsProblem(section.bracket) case final problem?) {
+          if (section.bracket.problem case final problem?) {
             throw TournamentException(problem);
           }
         }
@@ -965,6 +967,9 @@ class TournamentTools {
         }
         final name = ((args['name'] ?? current.name) as String).trim();
         if (name.isEmpty) throw const TournamentException('Name the section.');
+        final accelerated = args['accelerated'] == null
+            ? null
+            : Acceleration.parse(args['accelerated'] as String);
         final rrTable = args['rrTable'] ?? current.rrTable,
             doubleCycle = args['doubleCycle'] ?? current.doubleCycle,
             homeTeam = (args['homeTeam'] ?? current.homeTeam).trim();
@@ -981,22 +986,27 @@ class TournamentTools {
               current,
               current.copy(
                 fideRated: args['fideRated'] as bool?,
-                accelerated: args['accelerated'] as String?,
+                accelerated: accelerated,
                 pabPoints: args['pabPoints'] as int?,
               ),
             )
             case final problem?) {
           throw TournamentException(problem);
         }
-        final bracket = _bracketArg(args['bracket'], current.bracket);
+        final bracket = args['bracket'] == null
+            ? current.bracket
+            : Bracket.fromJson(
+                _bracketArg(args['bracket'], current.bracket.toJson()),
+              );
         if (args['bracket'] != null) {
-          if (knockoutSettingsProblem(bracket) case final problem?) {
+          if (bracket.problem case final problem?) {
             throw TournamentException(problem);
           }
+          // As stored: naming the default where none was stored is a change.
+          final now = bracket.toJson(), was = current.bracket.toJson();
           if (current.rounds.isNotEmpty &&
-              (bracket['gamesPerMatch'] != current.bracket['gamesPerMatch'] ||
-                  jsonEncode(bracket['seeds']) !=
-                      jsonEncode(current.bracket['seeds']))) {
+              (now['gamesPerMatch'] != was['gamesPerMatch'] ||
+                  jsonEncode(now['seeds']) != jsonEncode(was['seeds']))) {
             throw const TournamentException(
               'Games per match and seeding are fixed once round 1 is posted.',
             );
@@ -1014,13 +1024,13 @@ class TournamentTools {
         }
         var prizes = args['prizes'] == null
             ? null
-            : {
+            : PrizeTable.fromJson({
                 ...PrizeTable.fromJson(
                   Map<String, dynamic>.from(args['prizes'] as Map),
                 ).toJson(),
                 // A replaced prize table keeps the team awards.
-                'teams': ?current.prizes['teams'],
-              };
+                'teams': ?current.prizes.toJson()['teams'],
+              });
         if (args['teamAwards'] case final Map<dynamic, dynamic> raw) {
           final settings = Map<String, dynamic>.from(raw);
           final off = settings['method'] == 'off';
@@ -1064,8 +1074,7 @@ class TournamentTools {
                         rrTable: rrTable,
                         doubleCycle: doubleCycle,
                         homeTeam: homeTeam as String?,
-                        accelerated:
-                            (args['accelerated'] ?? x.accelerated) as String?,
+                        accelerated: accelerated,
                         unrated:
                             (x.format == Format.bughouse
                                     ? true
@@ -1080,14 +1089,18 @@ class TournamentTools {
                         pabPoints: (args['pabPoints'] ?? x.pabPoints) as int?,
                         variations: args['variations'] == null
                             ? x.variations
-                            : Set<String>.from(args['variations'] as Iterable),
+                            : {
+                                for (final code
+                                    in args['variations'] as Iterable)
+                                  Variation.parse(code as String),
+                              },
                         prizes: prizes,
                         bracket: bracket,
                         doubleGames: x.format == Format.knockout
                             ? knockoutGamesPerMatch(x.copy(bracket: bracket)) ==
                                   2
                             : null,
-                        byeRules: byeRules?.toJson() ?? x.byeRules,
+                        byeRules: byeRules,
                         partners: args['partners'] == null
                             ? x.partners
                             : [
@@ -1317,7 +1330,7 @@ class TournamentTools {
                 {
                   'id': s.id,
                   'name': s.name,
-                  'prizes': s.prizes,
+                  'prizes': s.prizes.toJson(),
                   ...allocatePrizes(event, s).toJson(),
                   if (allocateTeamPrizes(event, s) case final teams
                       when !teams.isEmpty)

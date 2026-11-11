@@ -34,7 +34,7 @@ Event field(
     id: 'e',
     name: 'Engine',
     date: '2026-11-10',
-    colorToss: 'higherWhite',
+    colorToss: ColorToss.higherWhite,
     players: players,
     sections: [
       Section(
@@ -42,7 +42,7 @@ Event field(
         name: 'Open',
         players: [for (final p in players) p.id],
         plannedRounds: rounds,
-        accelerated: accelerated,
+        accelerated: Acceleration.parse(accelerated),
         avoidTeammates: avoidTeammates,
       ),
     ],

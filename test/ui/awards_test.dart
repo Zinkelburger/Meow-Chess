@@ -59,11 +59,11 @@ Event scholastic({bool lastRoundDone = true, List<Json>? prizes}) {
             ],
           ),
         ],
-        prizes: {
+        prizes: PrizeTable.fromJson({
           'list':
               prizes ??
               [place(1, 'Trophy'), place(2, 'Trophy'), place(3, 'Medal')],
-        },
+        }),
       ),
     ],
   );
@@ -110,9 +110,9 @@ void main() {
               byes: [ByeAward('a', 2, 'test'), ByeAward('z', 2, 'test')],
             ),
           ],
-          prizes: {
+          prizes: PrizeTable.fromJson({
             'list': [place(1, 'Trophy')],
-          },
+          }),
         ),
       ],
     );

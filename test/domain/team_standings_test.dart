@@ -45,7 +45,10 @@ Event teamEvent(
         name: 'K-12',
         players: sorted,
         plannedRounds: rounds.length,
-        prizes: {'list': prizes, if (awards != null) 'teams': awards.toJson()},
+        prizes: PrizeTable.fromJson({
+          'list': prizes,
+          if (awards != null) 'teams': awards.toJson(),
+        }),
         rounds: [
           for (final (i, round) in rounds.indexed)
             Round(
@@ -356,8 +359,8 @@ void main() {
       final on = withTeamAwards(e.sections.single, const TeamAwards());
       expect(TeamAwards.of(on)!.counting, 4);
       final off = withTeamAwards(on, null);
-      expect(off.prizes.containsKey('teams'), isFalse);
-      expect(off.prizes['list'], hasLength(1));
+      expect(off.prizes.toJson().containsKey('teams'), isFalse);
+      expect(off.prizes.toJson()['list'], hasLength(1));
     });
 
     test('offered for a Swiss with at least two schools', () {

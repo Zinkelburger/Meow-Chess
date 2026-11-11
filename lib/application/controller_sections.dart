@@ -229,10 +229,7 @@ mixin _SectionCommands on _CommandContext {
   /// announced bye rules still allow a half-point bye for that round and
   /// the player has not used them up, otherwise zero.
   int lateEntryByePoints(Section section, Player player, int round) =>
-      ByePolicy.fromJson(
-            section.byeRules,
-          ).halfByeProblem(player, round, declared: true) ==
-          null
+      section.byeRules.halfByeProblem(player, round, declared: true) == null
       ? 1
       : 0;
 
@@ -311,9 +308,11 @@ mixin _SectionCommands on _CommandContext {
         final chosen = byes[r.number];
         final entrant = p.copy(byes: {...p.byes, ...mine});
         if (chosen == 1) {
-          final problem = ByePolicy.fromJson(
-            target.byeRules,
-          ).halfByeProblem(entrant, r.number, declared: true);
+          final problem = target.byeRules.halfByeProblem(
+            entrant,
+            r.number,
+            declared: true,
+          );
           if (problem != null) throw TournamentException(problem);
         }
         mine[r.number] =

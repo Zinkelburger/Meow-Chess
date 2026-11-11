@@ -755,9 +755,9 @@ List<ReportIssue> _issues(Event e, _Report built, DateTime? today) {
           ...round.games.where((g) => g.outcome.played),
     ];
     if (tieBreaks.isNotEmpty) {
-      final kind = s.bracket['tiebreak'];
+      final kind = s.bracket.tiebreak;
       add(
-        '${s.name}: ${tieBreaks.length} ${kind is String && kind != 'none' ? '$kind ' : ''}tie-break ${tieBreaks.length == 1 ? 'game is' : 'games are'} not in the report. ${kind == 'armageddon' ? 'Armageddon games are played at time odds, which US Chess does not rate (rule 5C1).' : 'They were played at a different time control from the section\'s ${s.effectiveTimeControl(e)}, so US Chess rates them as their own section: add that section in the US Chess portal after uploading if they should be rated.'}',
+        '${s.name}: ${tieBreaks.length} ${kind != KnockoutTiebreak.none ? '${kind.code} ' : ''}tie-break ${tieBreaks.length == 1 ? 'game is' : 'games are'} not in the report. ${kind == KnockoutTiebreak.armageddon ? 'Armageddon games are played at time odds, which US Chess does not rate (rule 5C1).' : 'They were played at a different time control from the section\'s ${s.effectiveTimeControl(e)}, so US Chess rates them as their own section: add that section in the US Chess portal after uploading if they should be rated.'}',
         repairs: [results(s)],
         blocking: false,
       );

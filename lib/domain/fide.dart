@@ -191,7 +191,8 @@ String? fideSettingsChangeProblem(Section before, Section after) {
   if (before.format == Format.swiss && after.fideRated != before.fideRated) {
     return 'FIDE rating changes the pairing system, so it is chosen before round 1.';
   }
-  if (after.accelerated == 'baku' || before.accelerated == 'baku') {
+  if (after.accelerated == Acceleration.baku ||
+      before.accelerated == Acceleration.baku) {
     if (after.accelerated != before.accelerated) {
       return 'The Baku acceleration is announced before round 1 and cannot change once the section is paired.';
     }

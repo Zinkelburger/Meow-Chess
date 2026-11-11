@@ -1,6 +1,6 @@
 import 'model.dart';
 
-/// Rule 22C: a section's announced half-point bye policy, read from
+/// Rule 22C: a section's announced half-point bye policy, stored as
 /// `Section.byeRules`. Every value is optional; zero means no limit.
 class ByePolicy {
   const ByePolicy({
@@ -8,9 +8,19 @@ class ByePolicy {
     this.maxHalfByes = 0,
     this.deadlineMinutes = 60,
     this.irrevocableFromRound = 0,
-  });
+  }) : _stored = null;
 
-  factory ByePolicy.fromJson(Json j) => ByePolicy(
+  ByePolicy._(
+    Json stored, {
+    required this.lastHalfByeRound,
+    required this.maxHalfByes,
+    required this.deadlineMinutes,
+    required this.irrevocableFromRound,
+  }) : _stored = Map.unmodifiable(stored);
+
+  /// Reads the stored policy, which [toJson] then writes back unchanged.
+  factory ByePolicy.fromJson(Json j) => ByePolicy._(
+    j,
     lastHalfByeRound: (j['lastHalfByeRound'] as num?)?.toInt() ?? 0,
     maxHalfByes: (j['maxHalfByes'] as num?)?.toInt() ?? 0,
     deadlineMinutes: (j['deadlineMinutes'] as num?)?.toInt() ?? 60,
@@ -29,12 +39,18 @@ class ByePolicy {
   /// Rule 22C4: byes for this round and later must be declared irrevocable.
   final int irrevocableFromRound;
 
-  Json toJson() => {
-    if (lastHalfByeRound > 0) 'lastHalfByeRound': lastHalfByeRound,
-    if (maxHalfByes > 0) 'maxHalfByes': maxHalfByes,
-    if (deadlineMinutes != 60) 'deadlineMinutes': deadlineMinutes,
-    if (irrevocableFromRound > 0) 'irrevocableFromRound': irrevocableFromRound,
-  };
+  /// The policy as read, when it was read from stored JSON.
+  final Json? _stored;
+
+  Json toJson() =>
+      _stored ??
+      {
+        if (lastHalfByeRound > 0) 'lastHalfByeRound': lastHalfByeRound,
+        if (maxHalfByes > 0) 'maxHalfByes': maxHalfByes,
+        if (deadlineMinutes != 60) 'deadlineMinutes': deadlineMinutes,
+        if (irrevocableFromRound > 0)
+          'irrevocableFromRound': irrevocableFromRound,
+      };
 
   bool get isDefault =>
       lastHalfByeRound == 0 &&

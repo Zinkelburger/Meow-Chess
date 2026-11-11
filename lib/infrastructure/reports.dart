@@ -5,7 +5,6 @@ import 'package:csv/csv.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import '../domain/bye_policy.dart';
 import '../domain/eligibility.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
@@ -1413,17 +1412,16 @@ Future<Uint8List> conditionsPdf(
             ?delayHint(s.effectiveTimeControl(e)),
           ].join(' · '),
           [
-            if (s.accelerated.isNotEmpty)
-              'Accelerated pairings: ${s.accelerated == 'addedScore'
-                  ? 'added score (28R1)'
-                  : s.accelerated == 'adjustedRating'
-                  ? 'adjusted rating (28R2)'
-                  : s.accelerated == 'sixths'
-                  ? 'sixths (28R3)'
-                  : s.accelerated}',
+            if (s.accelerated != Acceleration.none)
+              'Accelerated pairings: ${switch (s.accelerated) {
+                Acceleration.addedScore => 'added score (28R1)',
+                Acceleration.adjustedRating => 'adjusted rating (28R2)',
+                Acceleration.sixths => 'sixths (28R3)',
+                Acceleration.none || Acceleration.baku => s.accelerated.code,
+              }}',
             if (s.avoidTeammates) 'Team-mates not paired (28N)',
             if (s.variations.isNotEmpty)
-              'Variations: ${(s.variations.toList()..sort()).join(', ')}',
+              'Variations: ${Variation.codes(s.variations).join(', ')}',
             if (hasFixedSchedule(s) && s.rrTable.isNotEmpty)
               'Table: ${s.rrTable}',
             if (s.doubleCycle) 'Double round robin, second cycle (30F)',
@@ -1457,7 +1455,7 @@ Future<Uint8List> conditionsPdf(
 
   heading('Half-point byes (rule 22C)');
   for (final s in e.sections) {
-    line('${s.name}: ${ByePolicy.fromJson(s.byeRules).describe()}');
+    line('${s.name}: ${s.byeRules.describe()}');
   }
   final irrevocable = [
     for (final p in e.players)
@@ -1490,42 +1488,36 @@ Future<Uint8List> conditionsPdf(
   heading('Prizes (rule 25)');
   var anyPrizes = false;
   for (final s in e.sections) {
-    final list = s.prizes['list'];
-    if (list is! List || list.isEmpty) continue;
+    final prizes = s.prizes, list = prizes.list;
+    if (list.isEmpty) continue;
     anyPrizes = true;
-    final basedOn = s.prizes['basedOn'];
-    final fund = s.prizes['fundCents'];
     line(
       [
         s.name,
-        if (fund is num && fund > 0) 'fund ${_conditionsDollars(fund)}',
-        if (basedOn is num && basedOn > 0) 'based on $basedOn entries',
-        if (s.prizes['withdrawnEligible'] == true)
-          'withdrawn players stay eligible',
+        if (prizes.fundCents > 0)
+          'fund ${_conditionsDollars(prizes.fundCents)}',
+        if (prizes.basedOn > 0) 'based on ${prizes.basedOn} entries',
+        if (prizes.withdrawnEligible) 'withdrawn players stay eligible',
       ].join(' · '),
     );
     table(
       ['Prize', 'Eligibility', 'Amount'],
       [
-        for (final entry in list)
-          if (entry is Map)
+        for (final p in list)
+          [
+            p.label.isEmpty ? '${p.kind.code} ${p.place}' : p.label,
+            switch (p.kind) {
+              PrizeKind.classRange => '${p.min}–${p.max}',
+              PrizeKind.under => 'Under ${p.max}',
+              PrizeKind.points => '${p.points} half-points',
+              PrizeKind.team => 'Team place ${p.place}',
+              final kind => kind.code,
+            },
             [
-              '${entry['label'] ?? ''}'.trim().isEmpty
-                  ? '${entry['kind'] ?? ''} ${entry['place'] ?? ''}'.trim()
-                  : '${entry['label']}',
-              switch ('${entry['kind'] ?? ''}') {
-                'class' => '${entry['min'] ?? 0}–${entry['max'] ?? 0}',
-                'under' => 'Under ${entry['max'] ?? 0}',
-                'points' => '${entry['points'] ?? 0} half-points',
-                'team' => 'Team place ${entry['place'] ?? 1}',
-                final kind => kind,
-              },
-              [
-                if ((entry['cents'] as num? ?? 0) > 0)
-                  _conditionsDollars(entry['cents']),
-                if (entry['trophy'] == true) 'trophy',
-              ].join(' + '),
-            ],
+              if (p.cents > 0) _conditionsDollars(p.cents),
+              if (p.trophy) 'trophy',
+            ].join(' + '),
+          ],
       ],
     );
   }

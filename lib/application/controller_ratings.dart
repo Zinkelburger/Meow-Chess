@@ -170,16 +170,13 @@ void _checkAssignedRatings(Event e, Player player) {
 }
 
 bool _hasClassPrizeFor(Section section, int rating) {
-  final list = section.prizes['list'];
-  if (list is! List) return false;
-  for (final entry in list) {
-    if (entry is! Map) continue;
-    final kind = '${entry['kind'] ?? ''}'.toLowerCase();
-    if (kind != 'class' && kind != 'under') continue;
-    final min = (entry['min'] as num?)?.toInt() ?? 0;
-    final max = (entry['max'] as num?)?.toInt() ?? 0;
+  for (final prize in section.prizes.list) {
+    if (!prize.kind.ratingBased) continue;
+    final min = prize.min, max = prize.max;
     // Class ranges are inclusive; Under prizes exclude the ceiling.
-    final below = kind == 'class' ? rating <= max : rating < max;
+    final below = prize.kind == PrizeKind.classRange
+        ? rating <= max
+        : rating < max;
     if ((min == 0 || rating >= min) && (max == 0 || below)) return true;
   }
   return false;

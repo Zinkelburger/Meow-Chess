@@ -1,6 +1,7 @@
 import 'knockout.dart';
 import 'model.dart';
 import 'standings.dart';
+import 'team_standings.dart' show TeamAwards;
 
 /// Rules 32–33: the announced prize table of a section and the allocation
 /// of its prizes from the prize standings.
@@ -270,20 +271,73 @@ String dollars(int cents) {
 }
 
 class PrizeTable {
-  PrizeTable({
-    this.basedOn = 0,
-    this.fundCents = 0,
-    this.withdrawnEligible = false,
-    this.unratedCapCents = 0,
+  factory PrizeTable({
+    int basedOn = 0,
+    int fundCents = 0,
+    bool withdrawnEligible = false,
+    int unratedCapCents = 0,
     List<Prize> list = const [],
-    this.teams,
-  }) : list = List.unmodifiable(list);
+    Json? teams,
+  }) => PrizeTable._(
+    null,
+    basedOn: basedOn,
+    fundCents: fundCents,
+    withdrawnEligible: withdrawnEligible,
+    unratedCapCents: unratedCapCents,
+    list: list,
+    teams: teams,
+    rawTeams: teams,
+  );
+
+  PrizeTable._(
+    Json? stored, {
+    required this.basedOn,
+    required this.fundCents,
+    required this.withdrawnEligible,
+    required this.unratedCapCents,
+    required List<Prize> list,
+    required this.teams,
+    required Object? rawTeams,
+  }) : list = List.unmodifiable(list),
+       _stored = stored == null ? null : Map.unmodifiable(stored),
+       _teamAwards = _readTeams(rawTeams);
+
+  /// A section without prizes.
+  static final none = PrizeTable.fromJson(const {});
+
   final int basedOn, fundCents, unratedCapCents;
   final bool withdrawnEligible;
   final List<Prize> list;
 
   /// The `teams` settings, kept as stored (see `TeamAwards`); null is off.
   final Json? teams;
+
+  /// The team awards read from the stored `teams`, or why they cannot be.
+  final (TeamAwards?, TournamentException?) _teamAwards;
+
+  /// The table as read, when it was read from stored JSON.
+  final Json? _stored;
+
+  static (TeamAwards?, TournamentException?) _readTeams(Object? teams) {
+    try {
+      return (TeamAwards.fromJson(teams), null);
+    } on TournamentException catch (problem) {
+      return (null, problem);
+    }
+  }
+
+  /// The announced team awards, or null when there are none. Throws on a
+  /// malformed setting so a bad file or tool call is reported, not ignored.
+  TeamAwards? get teamAwards => switch (_teamAwards) {
+    (_, final TournamentException problem) => throw problem,
+    (final awards, null) => awards,
+  };
+
+  /// Like [teamAwards], but a malformed setting reads as off (for display).
+  TeamAwards? get teamAwardsOrNull => _teamAwards.$1;
+
+  /// Whether anything is stored under `teams`, even a malformed setting.
+  bool get hasTeamSetting => _teamAwards.$1 != null || _teamAwards.$2 != null;
 
   bool get isEmpty => list.isEmpty;
 
@@ -329,7 +383,8 @@ class PrizeTable {
         throw TournamentException('Prize id "${p.id}" is used twice.');
       }
     }
-    return PrizeTable(
+    return PrizeTable._(
+      j,
       basedOn: integer('basedOn'),
       fundCents: integer('fundCents'),
       withdrawnEligible: j['withdrawnEligible'] == true,
@@ -338,17 +393,22 @@ class PrizeTable {
       teams: j['teams'] is Map
           ? Map<String, dynamic>.from(j['teams'] as Map)
           : null,
+      rawTeams: j['teams'],
     );
   }
 
-  Json toJson() => {
-    'basedOn': basedOn,
-    'fundCents': fundCents,
-    'withdrawnEligible': withdrawnEligible,
-    if (unratedCapCents > 0) 'unratedCapCents': unratedCapCents,
-    'list': [for (final p in list) p.toJson()],
-    if (teams != null) 'teams': teams,
-  };
+  /// The table as stored: as it was read, or else in the order the
+  /// prize panel has always written it.
+  Json toJson() =>
+      _stored ??
+      {
+        'basedOn': basedOn,
+        'fundCents': fundCents,
+        'withdrawnEligible': withdrawnEligible,
+        if (unratedCapCents > 0) 'unratedCapCents': unratedCapCents,
+        'list': [for (final p in list) p.toJson()],
+        if (teams != null) 'teams': teams,
+      };
 
   PrizeTable copy({
     int? basedOn,
@@ -504,10 +564,10 @@ class PrizePayout {
   /// against its based-on number, and whether the event's announced funds
   /// exceed $500 (32C4b).
   factory PrizePayout.of(Event event, Section section) {
-    final table = PrizeTable.fromJson(section.prizes);
+    final table = section.prizes;
     final fund = event.sections.fold(
       0,
-      (sum, s) => sum + PrizeTable.fromJson(s.prizes).announcedCents,
+      (sum, s) => sum + s.prizes.announcedCents,
     );
     return PrizePayout(
       entries: section.players
@@ -713,7 +773,7 @@ List<_Entrant> _competitors(Event event, Section section) {
 /// the work grows with the number of prizes and groups, not with the number
 /// of ways to hand prizes out.
 PrizeAllocation allocatePrizes(Event event, Section section) {
-  final table = PrizeTable.fromJson(section.prizes).individual;
+  final table = section.prizes.individual;
   final notes = <String>[];
   final payout = PrizePayout.of(event, section);
   final entries = payout.entries;

@@ -162,9 +162,7 @@ class _AwardsBoardState extends State<AwardsBoard> {
       _source = e;
       _rows.clear();
     }
-    return _rows[s.id] ??= PrizeTable.fromJson(s.prizes).list.isEmpty
-        ? const []
-        : awardRows(e, s);
+    return _rows[s.id] ??= s.prizes.list.isEmpty ? const [] : awardRows(e, s);
   }
 
   void tick(String key, bool on) => setState(() {
@@ -197,7 +195,7 @@ class _AwardsBoardState extends State<AwardsBoard> {
     ];
     final prized = [
       for (final s in sections)
-        if (PrizeTable.fromJson(s.prizes).list.isNotEmpty) s,
+        if (s.prizes.list.isNotEmpty) s,
     ];
     final allDone =
         prized.isNotEmpty && prized.every((s) => awardsProgress(s).done);

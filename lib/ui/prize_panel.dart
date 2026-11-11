@@ -74,13 +74,13 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
     final c = widget.controller, s = section;
     if (s == null) return;
     try {
-      final next = edit(PrizeTable.fromJson(s.prizes));
+      final next = edit(s.prizes);
       c.change(
         'Edit prizes for ${s.name}',
         c.event!.copy(
           sections: [
             for (final x in c.event!.sections)
-              x.id == s.id ? x.copy(prizes: next.toJson()) : x,
+              x.id == s.id ? x.copy(prizes: next) : x,
           ],
         ),
       );
@@ -97,10 +97,7 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
   /// Sections other than this one that have no prizes yet.
   List<Section> get unprized => [
     for (final x in widget.controller.event!.sections)
-      if (x.id != widget.sectionId &&
-          !x.sideGames &&
-          PrizeTable.fromJson(x.prizes).list.isEmpty)
-        x,
+      if (x.id != widget.sectionId && !x.sideGames && x.prizes.list.isEmpty) x,
   ];
 
   /// Gives every section without prizes this section's prize list and
@@ -108,7 +105,7 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
   void copyToUnprized() {
     final c = widget.controller, s = section;
     if (s == null) return;
-    final table = PrizeTable.fromJson(s.prizes);
+    final table = s.prizes;
     final targets = {for (final x in unprized) x.id};
     if (targets.isEmpty || table.isEmpty) return;
     try {
@@ -120,8 +117,8 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
             for (final x in c.event!.sections)
               if (targets.contains(x.id))
                 x.copy(
-                  prizes: {
-                    ...x.prizes,
+                  prizes: PrizeTable.fromJson({
+                    ...x.prizes.toJson(),
                     ...table
                         .copy(
                           list: [
@@ -134,7 +131,7 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
                         )
                         .toJson()
                       ..remove('teams'),
-                  },
+                  }),
                 )
               else
                 x,
@@ -150,7 +147,7 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
   void addPrize() {
     final s = section;
     if (s == null) return;
-    final table = PrizeTable.fromJson(s.prizes);
+    final table = s.prizes;
     final places = table.list.where((p) => p.kind == PrizeKind.place).length;
     apply(
       (t) => t.copy(
@@ -166,7 +163,7 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
   Widget build(BuildContext context) {
     final s = section, colors = Theme.of(context).colorScheme;
     if (s == null) return const Text('This section no longer exists.');
-    final table = PrizeTable.fromJson(s.prizes);
+    final table = s.prizes;
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -443,7 +443,10 @@ void main() {
             doubleGames: twoGames,
             plannedRounds: 2,
             players: const ['k0', 'k1'],
-            bracket: {'gamesPerMatch': match, 'tiebreak': tiebreak},
+            bracket: Bracket.fromJson({
+              'gamesPerMatch': match,
+              'tiebreak': tiebreak,
+            }),
             rounds: [
               Round(
                 number: 1,

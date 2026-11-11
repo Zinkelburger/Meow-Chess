@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/event_template.dart';
 import 'package:meow_chess/domain/model.dart';
-import 'package:meow_chess/domain/prizes.dart';
 
 import '../support.dart';
 
@@ -24,18 +23,18 @@ void main() {
             plannedRounds: 5,
             doubleGames: true,
             ratingCeiling: 1800,
-            accelerated: 'addedScore',
-            byeRules: const {'lastHalfByeRound': 3},
+            accelerated: Acceleration.addedScore,
+            byeRules: ByePolicy.fromJson({'lastHalfByeRound': 3}),
             homeTeam: 'Home',
-            bracket: const {
+            bracket: Bracket.fromJson({
               'gamesPerMatch': 2,
               'seeds': ['p0', 'p1'],
-            },
+            }),
             prizes: PrizeTable(
               list: [
                 Prize(id: 'x', place: 1, cents: 5000, eligible: const ['p0']),
               ],
-            ).toJson(),
+            ),
           ),
           ...c.event!.sections.skip(1),
         ],
@@ -65,11 +64,11 @@ void main() {
     expect(s.plannedRounds, 5);
     expect(s.doubleGames, isTrue);
     expect(s.ratingCeiling, 1800);
-    expect(s.accelerated, 'addedScore');
-    expect(s.byeRules, {'lastHalfByeRound': 3});
+    expect(s.accelerated.code, 'addedScore');
+    expect(s.byeRules.toJson(), {'lastHalfByeRound': 3});
     expect(s.homeTeam, 'Home');
-    expect(s.bracket, {'gamesPerMatch': 2});
-    final prizes = PrizeTable.fromJson(s.prizes);
+    expect(s.bracket.toJson(), {'gamesPerMatch': 2});
+    final prizes = s.prizes;
     expect(prizes.list.single.cents, 5000);
     expect(prizes.list.single.eligible, isEmpty);
     expect(

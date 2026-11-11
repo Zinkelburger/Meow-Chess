@@ -47,7 +47,7 @@ void main() {
         'sectionId': sectionId,
         'byeRules': {'lastHalfByeRound': 3, 'irrevocableFromRound': 3},
       });
-      expect(tools.event.sections.single.byeRules, {
+      expect(tools.event.sections.single.byeRules.toJson(), {
         'lastHalfByeRound': 3,
         'irrevocableFromRound': 3,
       });

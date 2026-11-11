@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'bye_policy.dart';
 import 'knockout.dart';
 import 'ladder.dart';
 import 'fide.dart';
 import 'model.dart';
+import 'team_standings.dart' show TeamScoring;
 import 'tiebreaks.dart';
 
 /// One saved state of the event. Every command creates a node whose parent is
@@ -193,42 +193,39 @@ List<String> _bracketChanges(
   Section s,
   String Function(String) name,
 ) {
-  if (jsonEncode(o.bracket) == jsonEncode(s.bracket)) return const [];
+  // These compare what is stored: setting a value to its default is a
+  // change too.
+  final was = o.bracket.toJson(), now = s.bracket.toJson();
+  if (jsonEncode(was) == jsonEncode(now)) return const [];
   final out = <String>[];
-  if (jsonEncode(o.bracket['seeds']) != jsonEncode(s.bracket['seeds'])) {
+  if (jsonEncode(was['seeds']) != jsonEncode(now['seeds'])) {
     out.add('seeding set');
   }
-  if (o.bracket['gamesPerMatch'] != s.bracket['gamesPerMatch']) {
-    out.add('${knockoutGamesPerMatch(s)}-game matches');
+  if (was['gamesPerMatch'] != now['gamesPerMatch']) {
+    out.add('${s.bracket.gamesPerMatch}-game matches');
   }
-  if (o.bracket['tiebreak'] != s.bracket['tiebreak']) {
-    out.add(
-      'ties: ${knockoutTiebreakLabels[knockoutTiebreak(s)]?.toLowerCase()}',
-    );
+  if (was['tiebreak'] != now['tiebreak']) {
+    out.add('ties: ${s.bracket.tiebreak.label.toLowerCase()}');
   }
-  String key(Map<dynamic, dynamic> d) =>
-      '${d['board']}/${d['advanced']}/${d['reason']}';
+  String key(BracketDecision d) => '${d.board}/${d.advanced}/${d.reason}';
   Set<String> decisions(Section x) => {
-    for (final r in x.bracket['rounds'] as List? ?? const [])
-      if (r is Map)
-        for (final d in r['decisions'] as List? ?? const [])
-          if (d is Map) key(d),
+    for (final r in x.bracket.rounds)
+      for (final d in r.decisions) key(d),
   };
   final before = decisions(o);
   final matches = s.format == Format.knockout && s.players.length >= 2
       ? knockoutBracket(after, s).stages.expand((st) => st.matches).toList()
       : const <KnockoutMatch>[];
-  for (final r in s.bracket['rounds'] as List? ?? const []) {
-    if (r is! Map) continue;
-    for (final d in r['decisions'] as List? ?? const []) {
-      if (d is! Map || before.contains(key(d))) continue;
-      final who = '${d['advanced']}';
+  for (final r in s.bracket.rounds) {
+    for (final d in r.decisions) {
+      if (before.contains(key(d))) continue;
+      final who = '${d.advanced}';
       final match = matches
-          .where((m) => m.board == d['board'] && m.advanced == who)
+          .where((m) => m.board == d.board && m.advanced == who)
           .firstOrNull;
       final over = match?.eliminated;
       out.add(
-        '${name(who)} advances${over == null ? '' : ' over ${name(over)}'}: ${d['reason']}',
+        '${name(who)} advances${over == null ? '' : ' over ${name(over)}'}: ${d.reason}',
       );
     }
   }
@@ -448,16 +445,18 @@ List<String> describeChanges(
         'quad pairing schedule changed',
       if (o.doubleGames != s.doubleGames)
         s.doubleGames ? 'double games' : 'single games',
-      if (jsonEncode(o.byeRules) != jsonEncode(s.byeRules))
-        'bye policy: ${ByePolicy.fromJson(s.byeRules).describe()}',
-      if (jsonEncode({...o.prizes}..remove('teams')) !=
-          jsonEncode({...s.prizes}..remove('teams')))
+      if (jsonEncode(o.byeRules.toJson()) != jsonEncode(s.byeRules.toJson()))
+        'bye policy: ${s.byeRules.describe()}',
+      if (jsonEncode({...o.prizes.toJson()}..remove('teams')) !=
+          jsonEncode({...s.prizes.toJson()}..remove('teams')))
         'prize table changed',
-      if (jsonEncode(o.prizes['teams']) != jsonEncode(s.prizes['teams']))
-        s.prizes['teams'] == null ||
-                (s.prizes['teams'] as Map)['method'] == 'off'
-            ? 'team awards off'
-            : 'team awards: ${(s.prizes['teams'] as Map)['method'] == 'rollins' ? 'Rollins' : 'top'} ${(s.prizes['teams'] as Map)['counting'] ?? 4} count',
+      if (jsonEncode(o.prizes.toJson()['teams']) !=
+          jsonEncode(s.prizes.toJson()['teams']))
+        switch (s.prizes.teamAwardsOrNull) {
+          null => 'team awards off',
+          final awards =>
+            'team awards: ${awards.method == TeamScoring.rollins ? 'Rollins' : 'top'} ${awards.counting} count',
+        },
       ..._bracketChanges(after, o, s, name),
       if (o.unrated != s.unrated || o.fideRated != s.fideRated)
         'rated by ${RatedBy.of(s).label}',

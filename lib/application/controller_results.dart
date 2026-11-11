@@ -288,7 +288,7 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
           'Round ${round.number} is the last round, so there is no next round to hold them out of. Use the double forfeit (rule 29H3).',
         );
       }
-      final policy = ByePolicy.fromJson(s.byeRules);
+      final policy = s.byeRules;
       final held = <String, Player>{};
       for (final g in unreported) {
         for (final id in [g.white, g.black]) {

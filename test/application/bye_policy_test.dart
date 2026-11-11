@@ -21,7 +21,7 @@ TournamentController swiss({Map<String, dynamic> byeRules = const {}}) {
     c.event!.copy(
       sections: [
         for (final s in c.event!.sections)
-          s.copy(plannedRounds: 5, byeRules: byeRules),
+          s.copy(plannedRounds: 5, byeRules: ByePolicy.fromJson(byeRules)),
       ],
     ),
   );
@@ -220,7 +220,7 @@ void main() {
       c.event!.copy(
         sections: [
           for (final s in c.event!.sections)
-            s.copy(byeRules: const {'maxHalfByes': 1}),
+            s.copy(byeRules: ByePolicy.fromJson({'maxHalfByes': 1})),
         ],
       ),
     );

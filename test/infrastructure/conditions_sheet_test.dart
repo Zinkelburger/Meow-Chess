@@ -48,16 +48,31 @@ Event sample() => Event(
       format: Format.swiss,
       plannedRounds: 5,
       players: const ['a', 'b', 'c', 'd'],
-      accelerated: 'addedScore',
-      variations: const {'29E5h'},
-      byeRules: const {'lastHalfByeRound': 4, 'irrevocableFromRound': 4},
-      prizes: const {
+      accelerated: Acceleration.addedScore,
+      variations: const {Variation.equalizeOverRatings},
+      byeRules: ByePolicy.fromJson({
+        'lastHalfByeRound': 4,
+        'irrevocableFromRound': 4,
+      }),
+      prizes: PrizeTable.fromJson({
         'fundCents': 50000,
         'list': [
-          {'label': 'First', 'kind': 'place', 'place': 1, 'cents': 30000},
-          {'label': 'U1700', 'kind': 'under', 'max': 1700, 'cents': 12550},
+          {
+            'id': 'first',
+            'label': 'First',
+            'kind': 'place',
+            'place': 1,
+            'cents': 30000,
+          },
+          {
+            'id': 'u1700',
+            'label': 'U1700',
+            'kind': 'under',
+            'max': 1700,
+            'cents': 12550,
+          },
         ],
-      },
+      }),
     ),
   ],
 );

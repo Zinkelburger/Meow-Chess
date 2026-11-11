@@ -33,7 +33,9 @@ Map<String, ReentryCarry> reentryCarries(
   Section section, {
   Outcome Function(Game)? outcomeOf,
 }) {
-  if (section.variations.contains('28S5latest')) return const {};
+  if (section.variations.contains(Variation.reentryLatestScore)) {
+    return const {};
+  }
   final byId = {for (final p in event.players) p.id: p};
   final chains = <String, List<String>>{};
   for (final id in section.players) {

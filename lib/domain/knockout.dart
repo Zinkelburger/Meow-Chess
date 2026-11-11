@@ -20,47 +20,17 @@ const knockoutPolicy = 'knockout-v1';
 const knockoutRepairPolicy = 'knockout-repair-v1';
 
 /// What happens when a match is drawn, keyed as stored in `bracket['tiebreak']`.
-const knockoutTiebreakLabels = <String, String>{
-  'none': 'Director decides',
-  'rapid': 'Rapid games',
-  'blitz': 'Blitz games',
-  'armageddon': 'Armageddon',
+final knockoutTiebreakLabels = <String, String>{
+  for (final t in KnockoutTiebreak.values) t.code: t.label,
 };
 
-int knockoutGamesPerMatch(Section section) =>
-    switch (section.bracket['gamesPerMatch']) {
-      final int n => n,
-      final num n => n.toInt(),
-      _ => 2,
-    };
+int knockoutGamesPerMatch(Section section) => section.bracket.gamesPerMatch;
 
-String knockoutTiebreak(Section section) =>
-    section.bracket['tiebreak'] as String? ?? 'none';
-
-/// Why these bracket settings cannot be used, or null.
-String? knockoutSettingsProblem(Json bracket) {
-  final games = bracket['gamesPerMatch'] ?? 2;
-  if (games is! int || (games != 1 && games != 2)) {
-    return 'Matches of 1 or 2 games are supported. Choose 1 or 2 games per match.';
-  }
-  final tiebreak = bracket['tiebreak'] ?? 'none';
-  if (tiebreak is! String || !knockoutTiebreakLabels.containsKey(tiebreak)) {
-    return 'Tie-break must be ${knockoutTiebreakLabels.keys.join(', ')}.';
-  }
-  final seeds = bracket['seeds'];
-  if (seeds != null && (seeds is! List || seeds.any((s) => s is! String))) {
-    return 'Seeds must be a list of player IDs.';
-  }
-  final rounds = bracket['rounds'];
-  if (rounds != null && (rounds is! List || rounds.any((r) => r is! Map))) {
-    return 'Bracket rounds must be a list of bracket round records.';
-  }
-  return null;
-}
+KnockoutTiebreak knockoutTiebreak(Section section) => section.bracket.tiebreak;
 
 /// Why the section cannot be paired as a knockout, or null.
 String? knockoutProblem(Event event, Section section) {
-  if (knockoutSettingsProblem(section.bracket) case final problem?) {
+  if (section.bracket.problem case final problem?) {
     return problem;
   }
   if (knockoutSeeds(event, section).length < 2) {
@@ -73,10 +43,10 @@ String? knockoutProblem(Event event, Section section) {
 String knockoutSummary(Section section) {
   final games = knockoutGamesPerMatch(section);
   final tiebreak = switch (knockoutTiebreak(section)) {
-    'rapid' => 'rapid tie-break games',
-    'blitz' => 'blitz tie-break games',
-    'armageddon' => 'armageddon tie-breaks',
-    _ => 'director decides ties',
+    KnockoutTiebreak.rapid => 'rapid tie-break games',
+    KnockoutTiebreak.blitz => 'blitz tie-break games',
+    KnockoutTiebreak.armageddon => 'armageddon tie-breaks',
+    KnockoutTiebreak.none => 'director decides ties',
   };
   return '$games-game matches · $tiebreak';
 }
@@ -95,8 +65,8 @@ List<String> knockoutSeeds(Event event, Section section) {
   };
   bool active(String id) => played.contains(id) || !event.player(id).withdrawn;
   final stored = <String>[
-    for (final id in section.bracket['seeds'] as List? ?? const [])
-      if (id is String && members.contains(id) && active(id)) id,
+    for (final id in section.bracket.seeds)
+      if (members.contains(id) && active(id)) id,
   ];
   final rest = [
     for (final (index, id) in section.players.indexed)
@@ -282,7 +252,7 @@ class KnockoutBracket {
   });
   final List<String> seeds;
   final int size, gamesPerMatch;
-  final String tiebreak;
+  final KnockoutTiebreak tiebreak;
   final List<KnockoutStage> stages;
   int seedOf(String id) => seeds.indexOf(id) + 1;
   String? get winner => stages.lastOrNull?.matches.single.advanced;
@@ -295,18 +265,13 @@ class KnockoutBracket {
 /// The director's decisions by stage, then board.
 Map<int, Map<int, (String, String)>> _decisions(Section section) {
   final out = <int, Map<int, (String, String)>>{};
-  for (final entry in section.bracket['rounds'] as List? ?? const []) {
-    if (entry is! Map) continue;
-    final stage = entry['stage'];
-    if (stage is! int) continue;
-    for (final d in entry['decisions'] as List? ?? const []) {
-      if (d is! Map || d['board'] is! int || d['advanced'] is! String) {
-        continue;
-      }
-      (out[stage] ??= {})[d['board'] as int] = (
-        d['advanced'] as String,
-        '${d['reason'] ?? ''}',
-      );
+  for (final entry in section.bracket.rounds) {
+    final stage = entry.stage;
+    if (stage == null) continue;
+    for (final d in entry.decisions) {
+      final (board, advanced) = (d.board, d.advanced);
+      if (board == null || advanced == null) continue;
+      (out[stage] ??= {})[board] = (advanced, d.reason ?? '');
     }
   }
   return out;
@@ -414,7 +379,7 @@ KnockoutMatch _resolve({
   required int lowSeed,
   required List<Game> games,
   required int gamesPerMatch,
-  required String tiebreak,
+  required KnockoutTiebreak tiebreak,
   required (String, String)? decision,
 }) {
   KnockoutMatch result(
@@ -455,7 +420,7 @@ KnockoutMatch _resolve({
     return result(KnockoutMatchStatus.decided, advanced: hp > lp ? high : low);
   }
   final last = games.last;
-  if (tiebreak == 'armageddon' &&
+  if (tiebreak == KnockoutTiebreak.armageddon &&
       last.leg > gamesPerMatch &&
       last.outcome == Outcome.draw) {
     return result(
@@ -617,7 +582,7 @@ Round knockoutRound(Event event, Section section, int n, String Function() id) {
     // this only when a later stage is also unresolved, which cannot happen.
     throw const TournamentException('The bracket round is already resolved.');
   }
-  if (bracket.tiebreak == 'none') {
+  if (bracket.tiebreak == KnockoutTiebreak.none) {
     final m = tied.first;
     throw TournamentException(
       '${stage.name}, board ${m.board}: ${name(m.high)} and ${name(m.low)} drew the match. Choose who advances in the bracket.',
@@ -627,7 +592,9 @@ Round knockoutRound(Event event, Section section, int n, String Function() id) {
   final explanations = <String>[];
   for (final m in tied) {
     final from = m.games.map((g) => g.leg).reduce((a, b) => a > b ? a : b) + 1;
-    final legs = bracket.tiebreak == 'armageddon' ? [from] : [from, from + 1];
+    final legs = bracket.tiebreak == KnockoutTiebreak.armageddon
+        ? [from]
+        : [from, from + 1];
     for (final leg in legs) {
       final (white, black) = knockoutColors(stage.number, leg, m.high!, m.low!);
       games.add(
@@ -636,7 +603,7 @@ Round knockoutRound(Event event, Section section, int n, String Function() id) {
     }
     explanations.add(
       'Board ${m.board}: ${seeded(m.high)} – ${seeded(m.low)} drew the match ${scoreText(m.highPoints)}–${scoreText(m.lowPoints)}; '
-      '${bracket.tiebreak == 'armageddon' ? 'armageddon game ${legs.first}, ${name(games.last.white)} white: a draw advances ${name(games.last.black)}.' : '${knockoutTiebreakLabels[bracket.tiebreak]!.toLowerCase()} ${legs.first} and ${legs.last}.'}',
+      '${bracket.tiebreak == KnockoutTiebreak.armageddon ? 'armageddon game ${legs.first}, ${name(games.last.white)} white: a draw advances ${name(games.last.black)}.' : '${bracket.tiebreak.label.toLowerCase()} ${legs.first} and ${legs.last}.'}',
     );
   }
   return Round(
@@ -644,7 +611,7 @@ Round knockoutRound(Event event, Section section, int n, String Function() id) {
     games: games,
     policy: knockoutPolicy,
     note:
-        'Tie-break games (${bracket.tiebreak}) for the ${stage.name}: '
+        'Tie-break games (${bracket.tiebreak.code}) for the ${stage.name}: '
         '${tied.map((m) => '${name(m.high)} – ${name(m.low)}').join(', ')}. The bracket round does not advance.',
     explanations: explanations,
   );
@@ -670,40 +637,37 @@ Section knockoutAfterPost(Event event, Section section) {
           section,
         ).stages.where((s) => s.rounds.contains(repair)).firstOrNull?.number;
   section = _withoutReplacedPairings(event, section);
-  final stored = section.bracket['seeds'] as List? ?? const [];
+  final stored = section.bracket.seeds;
   final frozen = section.copy(
-    bracket: {
-      ...section.bracket,
-      'seeds': stored.isNotEmpty
-          ? List<String>.from(stored)
-          : knockoutSeeds(event, section),
-    },
+    bracket: section.bracket.withSeeds(
+      stored.isNotEmpty ? stored : knockoutSeeds(event, section),
+    ),
   );
   final bracket = knockoutBracket(event, frozen);
-  final previous = {
-    for (final entry in section.bracket['rounds'] as List? ?? const [])
-      if (entry is Map && entry['stage'] is int)
-        entry['stage'] as int: [
-          for (final d in entry['decisions'] as List? ?? const [])
-            if (d is Map &&
-                !(entry['stage'] == repairedStage &&
-                    repairedBoards.contains(d['board'])))
-              Map<String, dynamic>.from(d),
-        ],
-  };
+  final previous = <int, List<BracketDecision>>{};
+  for (final entry in section.bracket.rounds) {
+    final stage = entry.stage;
+    if (stage == null) continue;
+    previous[stage] = [
+      for (final d in entry.decisions)
+        if (!(stage == repairedStage && repairedBoards.contains(d.board))) d,
+    ];
+  }
   var tiebreakRounds = 0;
-  final rounds = <Json>[];
+  final rounds = <BracketRound>[];
   for (final stage in bracket.stages.where((s) => s.posted)) {
     tiebreakRounds += stage.rounds.length - 1;
-    rounds.add({
-      'stage': stage.number,
-      'name': stage.name,
-      'rounds': [for (final r in stage.rounds) r.number],
-      'decisions': previous[stage.number] ?? const [],
-    });
+    rounds.add(
+      BracketRound(
+        stage: stage.number,
+        name: stage.name,
+        rounds: [for (final r in stage.rounds) r.number],
+        decisions: previous[stage.number] ?? const [],
+      ),
+    );
   }
   return frozen.copy(
-    bracket: {...frozen.bracket, 'rounds': rounds},
+    bracket: frozen.bracket.withRounds(rounds),
     plannedRounds: bracket.stages.length + tiebreakRounds,
   );
 }
@@ -800,26 +764,24 @@ Section knockoutDecided(
     );
   }
   final text = reason.trim().isEmpty ? 'Director’s decision' : reason.trim();
-  final rounds = [
-    for (final entry in section.bracket['rounds'] as List? ?? const [])
-      if (entry is Map) Map<String, dynamic>.from(entry),
-  ];
-  var entry = rounds.where((r) => r['stage'] == stage.number).firstOrNull;
-  if (entry == null) {
-    entry = {
-      'stage': stage.number,
-      'name': stage.name,
-      'rounds': [for (final r in stage.rounds) r.number],
-      'decisions': const <Object?>[],
-    };
-    rounds.add(entry);
+  final rounds = [...section.bracket.rounds];
+  var at = rounds.indexWhere((r) => r.stage == stage.number);
+  if (at < 0) {
+    rounds.add(
+      BracketRound(
+        stage: stage.number,
+        name: stage.name,
+        rounds: [for (final r in stage.rounds) r.number],
+      ),
+    );
+    at = rounds.length - 1;
   }
-  entry['decisions'] = [
-    for (final d in entry['decisions'] as List? ?? const [])
-      if (d is Map && d['board'] != board) Map<String, dynamic>.from(d),
-    {'board': board, 'advanced': playerId, 'reason': text},
-  ];
-  return section.copy(bracket: {...section.bracket, 'rounds': rounds});
+  rounds[at] = rounds[at].withDecisions([
+    for (final d in rounds[at].decisions)
+      if (d.board != board) d,
+    BracketDecision(board: board, advanced: playerId, reason: text),
+  ]);
+  return section.copy(bracket: section.bracket.withRounds(rounds));
 }
 
 /// Placement rather than points: Winner, Runner-up, Semifinalist, and so

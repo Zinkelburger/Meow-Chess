@@ -29,7 +29,7 @@ String fideEngineInput(
     for (final id in section.players)
       if (event.player(id).house && !byes.any((b) => b.player == id)) id: 0,
   },
-  initialColor: effectiveColorToss(event) == 'higherBlack' ? 'B' : 'W',
+  initialColor: effectiveColorToss(event) == ColorToss.higherBlack ? 'B' : 'W',
   tournament: tournament,
 );
 
@@ -94,7 +94,8 @@ SwissProposal pairFideDutch(
   );
   return SwissProposal(games, awarded, [
     'Paired by the FIDE Dutch system (C.04.3, 2026 rules) with BBP Pairings, from pairing numbers ranked by ${t.section.fideRanking.isEmpty ? 'the section default' : t.section.fideRanking}.',
-    if (section.accelerated == 'baku' && n <= (section.plannedRounds + 1) ~/ 2)
+    if (section.accelerated == Acceleration.baku &&
+        n <= (section.plannedRounds + 1) ~/ 2)
       'Baku acceleration (C.04.7): group A pairs with ${n <= ((section.plannedRounds + 1) ~/ 2 + 1) ~/ 2 ? 'one virtual point' : 'half a virtual point'} this round.',
     if (section.pabPoints != 2)
       'The pairing-allocated bye scores ${section.pabPoints == 1 ? 'a draw' : 'nothing'}, as announced.',

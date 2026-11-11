@@ -88,14 +88,14 @@ Event randomPrizeEvent(
               ],
             ),
         ],
-        prizes: {
+        prizes: PrizeTable.fromJson({
           'basedOn': chance(30) ? 1 + rng.nextInt(30) : 0,
           'fundCents': chance(20) ? rng.nextInt(100000) : 0,
           'withdrawnEligible': chance(30),
           if (unratedCap && chance(40))
             'unratedCapCents': 1 + rng.nextInt(10000),
           'list': [for (var i = 0, n = rng.nextInt(9); i < n; i++) prize(i)],
-        },
+        }),
       ),
     ],
   );
@@ -186,7 +186,7 @@ void main() {
                   byes: [for (final p in players) ByeAward(p.id, halves, 't')],
                 ),
             ],
-            prizes: {
+            prizes: PrizeTable.fromJson({
               'list': [
                 for (var n = 1; n <= places; n++)
                   {
@@ -224,7 +224,7 @@ void main() {
                   ],
                 },
               ],
-            },
+            }),
           ),
         ],
       );
@@ -289,12 +289,12 @@ void main() {
             id: 's',
             name: 'Open',
             players: [for (final p in players) p.id],
-            prizes: {
+            prizes: PrizeTable.fromJson({
               'list': [
                 for (var n = 1; n <= 6; n++)
                   {'id': 'p$n', 'kind': 'place', 'place': n, 'cents': 4000 * n},
               ],
-            },
+            }),
           ),
         ],
       );

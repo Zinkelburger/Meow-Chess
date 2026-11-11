@@ -223,9 +223,11 @@ mixin _RosterCommands on _CommandContext {
       byes.remove(round);
     } else {
       if (points == 1 && s != null) {
-        final problem = ByePolicy.fromJson(
-          s.byeRules,
-        ).halfByeProblem(player, round, declared: declared.contains(round));
+        final problem = s.byeRules.halfByeProblem(
+          player,
+          round,
+          declared: declared.contains(round),
+        );
         if (problem != null) throw TournamentException(problem);
       }
       byes[round] = points;
@@ -258,9 +260,7 @@ mixin _RosterCommands on _CommandContext {
       );
     }
     if (points == 1) {
-      final problem = ByePolicy.fromJson(
-        s.byeRules,
-      ).halfByeProblem(player, round, declared: true);
+      final problem = s.byeRules.halfByeProblem(player, round, declared: true);
       if (problem != null) throw TournamentException(problem);
     }
     final bye = ByeAward(

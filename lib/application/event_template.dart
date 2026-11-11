@@ -1,7 +1,6 @@
 import 'package:uuid/uuid.dart';
 
 import '../domain/model.dart';
-import '../domain/prizes.dart';
 import '../domain/tiebreaks.dart';
 
 /// A new event set up like [source]: its sections (names, formats,
@@ -59,25 +58,17 @@ Section _sectionTemplate(Section s, String id) => Section(
   byeRules: s.byeRules,
   // Named prizes (junior, senior) list who qualifies by player id; those
   // players are not coming along.
-  prizes: s.prizes.isEmpty
-      ? const {}
-      : PrizeTable.fromJson(s.prizes)
-            .copy(
-              list: [
-                for (final p in PrizeTable.fromJson(s.prizes).list)
-                  p.copy(eligible: const []),
-              ],
-            )
-            .toJson(),
+  prizes: s.prizes.toJson().isEmpty
+      ? PrizeTable.none
+      : s.prizes.copy(
+          list: [for (final p in s.prizes.list) p.copy(eligible: const [])],
+        ),
   rrTable: s.rrTable,
   doubleCycle: s.doubleCycle,
   homeTeam: s.homeTeam,
   holland: s.holland,
   // The bracket's seeds and rounds name players; its match rules stay.
-  bracket: {
-    for (final e in s.bracket.entries)
-      if (e.key != 'seeds' && e.key != 'rounds') e.key: e.value,
-  },
+  bracket: s.bracket.rulesOnly,
   unrated: s.unrated,
   fideRated: s.fideRated,
   fideRanking: s.fideRanking,

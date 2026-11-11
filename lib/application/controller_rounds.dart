@@ -178,7 +178,7 @@ mixin _RoundCommands on _CommandContext {
     // Rule 29E2 TIP: one coin toss decides board one of every section, so
     // the toss the first Swiss round used is recorded on the event.
     final tossed =
-        e.colorToss.isEmpty &&
+        e.colorToss == ColorToss.none &&
         batch.rounds.values.any(
           (r) =>
               (r.policy == swissPolicy || r.policy == fideDutchPolicy) &&

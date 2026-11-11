@@ -212,7 +212,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('save-section')));
     await tester.pumpAndSettle();
     final saved = c.event!.sections.first;
-    expect(saved.accelerated, 'baku');
+    expect(saved.accelerated.code, 'baku');
     expect(saved.pabPoints, 1);
   });
 

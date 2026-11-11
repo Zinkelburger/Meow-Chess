@@ -818,9 +818,9 @@ TrfImport trfToEvent(
     city: file.city,
     timeControl: controlText ?? 'G/90 inc/30',
     colorToss: switch (initial) {
-      'W' => 'higherWhite',
-      'B' => 'higherBlack',
-      _ => '',
+      'W' => ColorToss.higherWhite,
+      'B' => ColorToss.higherBlack,
+      _ => ColorToss.none,
     },
     fide: FideRegistration(
       federation: isFederationCode(file.federation.toUpperCase())
@@ -846,14 +846,14 @@ TrfImport trfToEvent(
               .map((a) => a.lastPlayer)
               .reduce((a, b) => a > b ? a : b);
     section = section.copy(
-      accelerated: 'baku',
+      accelerated: Acceleration.baku,
       bakuLast: played == 0 ? '' : idOf[lastRank] ?? '',
     );
     event = event.copy(sections: [section]);
     if (file.accelerations.isNotEmpty) {
       final ours = _expand(bakuAccelerations(trfTournament(event, section)));
       if (!_sameAcceleration(_expand(file.accelerations), ours)) {
-        section = section.copy(accelerated: '');
+        section = section.copy(accelerated: Acceleration.none);
         event = event.copy(sections: [section]);
         warnings.add(
           'The file’s accelerated rounds (records 250/XXA) are not the Baku method, so they were not imported; later rounds pair without acceleration.',

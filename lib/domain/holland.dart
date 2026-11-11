@@ -11,14 +11,9 @@ import 'standings.dart';
 /// [Section.holland] = {group, role, qualifiers, unbalanced}. The final is
 /// a fresh competition (separate entries, no carried score), as a
 /// round-robin final of qualifiers is played.
-const hollandPrelim = 'prelim', hollandFinal = 'final';
-
-String hollandGroup(Section s) => (s.holland['group'] as String?) ?? '';
-String hollandRole(Section s) => (s.holland['role'] as String?) ?? '';
-int hollandQualifiers(Section s) => (s.holland['qualifiers'] as int?) ?? 1;
-bool hollandUnbalanced(Section s) => s.holland['unbalanced'] == true;
+String hollandGroup(Section s) => s.holland.group;
 bool isHollandPrelim(Section s) =>
-    hollandGroup(s).isNotEmpty && hollandRole(s) == hollandPrelim;
+    s.holland.group.isNotEmpty && s.holland.role == HollandRole.prelim;
 
 /// The prelims of [group] in event order (the first is "prelim 1" for 30I).
 List<Section> hollandPrelims(Event e, String group) => [
@@ -27,7 +22,10 @@ List<Section> hollandPrelims(Event e, String group) => [
 ];
 
 Section? hollandFinalOf(Event e, String group) => e.sections
-    .where((s) => hollandGroup(s) == group && hollandRole(s) == hollandFinal)
+    .where(
+      (s) =>
+          hollandGroup(s) == group && s.holland.role == HollandRole.finalStage,
+    )
     .firstOrNull;
 
 /// "2 of 3 prelims finished" for the Pairings view.
@@ -131,12 +129,12 @@ List<Section> planHolland(
           format: Format.roundRobin,
           plannedRounds: _roundRobinRounds(roster.length),
           boardStart: board,
-          holland: {
-            'group': group,
-            'role': hollandPrelim,
-            'qualifiers': qualifiers,
-            'unbalanced': unbalanced,
-          },
+          holland: Holland(
+            group: group,
+            role: HollandRole.prelim,
+            qualifiers: qualifiers,
+            unbalanced: unbalanced,
+          ),
         );
         board += (roster.length + 1) ~/ 2;
         return section;
@@ -150,7 +148,7 @@ List<Section> planHolland(
 typedef HollandFinal = ({Section section, List<Player> entries});
 
 /// Who advances from [prelim] (its index in the group is [index]): the top
-/// [hollandQualifiers] by standings, ties broken by the event's tie-breaks
+/// [Holland.qualifiers] by standings, ties broken by the event's tie-breaks
 /// (rule 34F order unless the event posts its own). Under rule 30I every
 /// plus score in Prelim 1 qualifies, the top two from Prelim 2 and the
 /// winner of each other prelim. A plus score is more than half the points
@@ -172,7 +170,7 @@ List<Player> hollandQualifiersOf(
     forPrizes: true,
   ).where((row) => !row.player.withdrawn).toList();
   int count;
-  if (hollandUnbalanced(prelim)) {
+  if (prelim.holland.unbalanced) {
     if (index == 0) {
       // Games each player is scheduled for; an odd field's sit-out is none.
       final scheduled = scheduledGames(prelim);
@@ -185,7 +183,7 @@ List<Player> hollandQualifiersOf(
       count = index == 1 ? 2 : 1;
     }
   } else {
-    count = hollandQualifiers(prelim);
+    count = prelim.holland.qualifiers;
   }
   count = min(count, rows.length);
   if (count <= 0 || count >= rows.length) {
@@ -260,12 +258,12 @@ HollandFinal finalsFor(
     timeControl: model.timeControl,
     rrTable: model.rrTable,
     unrated: model.unrated,
-    holland: {
-      'group': group,
-      'role': hollandFinal,
-      'qualifiers': hollandQualifiers(model),
-      'unbalanced': hollandUnbalanced(model),
-    },
+    holland: Holland(
+      group: group,
+      role: HollandRole.finalStage,
+      qualifiers: model.holland.qualifiers,
+      unbalanced: model.holland.unbalanced,
+    ),
   );
   // A field the Crenshaw tables do not cover falls back to the circle method.
   if (section.rrTable == crenshawTable && entries.length > crenshawMaxPlayers) {

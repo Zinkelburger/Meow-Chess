@@ -35,7 +35,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    PrizeTable table() => PrizeTable.fromJson(c.event!.sections.first.prizes);
+    PrizeTable table() => c.event!.sections.first.prizes;
     expect(find.text('No prizes yet.'), findsOneWidget);
     expect(find.byType(FilledButton), findsNothing);
 
@@ -133,10 +133,7 @@ void main() {
     open.value = false;
     await tester.pumpAndSettle();
     expect(find.byType(PrizeTablePanel), findsNothing);
-    expect(
-      PrizeTable.fromJson(c.event!.sections.first.prizes).fundCents,
-      25000,
-    );
+    expect(c.event!.sections.first.prizes.fundCents, 25000);
   });
 
   testWidgets('a section\'s prizes copy to the sections without any, as one '
@@ -156,11 +153,11 @@ void main() {
           first,
           second,
           third.copy(
-            prizes: {
+            prizes: PrizeTable.fromJson({
               'list': [
                 {'id': 'own', 'kind': 'place', 'place': 1, 'cents': 500},
               ],
-            },
+            }),
           ),
         ],
       ),
@@ -184,16 +181,14 @@ void main() {
     expect(find.byKey(const ValueKey('copy-prizes')), findsNothing);
     await tester.tap(find.byKey(const ValueKey('add-prize')));
     await tester.pumpAndSettle();
-    final id = PrizeTable.fromJson(
-      c.event!.sections.first.prizes,
-    ).list.single.id;
+    final id = c.event!.sections.first.prizes.list.single.id;
     await tester.enterText(find.byKey(ValueKey('prize-award-$id')), 'Trophy');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
     expect(find.text('Copy to 1 section without prizes'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('copy-prizes')));
     await tester.pumpAndSettle();
-    PrizeTable of(int i) => PrizeTable.fromJson(c.event!.sections[i].prizes);
+    PrizeTable of(int i) => c.event!.sections[i].prizes;
     expect(of(1).list.single.award, 'Trophy');
     expect(of(1).list.single.id, isNot(id));
     expect(of(2).list.single.id, 'own');

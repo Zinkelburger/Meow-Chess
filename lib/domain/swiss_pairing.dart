@@ -1,5 +1,4 @@
 import 'model.dart';
-import 'prizes.dart' show Prize, PrizeKind, PrizeTable;
 import 'standings.dart';
 
 /// US Chess Swiss pairings for one round (rules 27–29 of the 7th edition).
@@ -13,39 +12,22 @@ import 'standings.dart';
 /// review (29E TIP). Rule numbers in comments refer to that edition.
 const swissPolicy = 'uscf-swiss-29-v1';
 
-/// Announced variations the engine understands (`Section.variations`).
-const swissVariations = [
-  '29E4a',
-  '29E4b',
-  '29E4d',
-  '29E5h',
-  '28L2a',
-  '29I',
-  '29I2',
-  '29J',
-  '28S5latest',
-];
-const swissVariationLabels = {
-  '29E4a': 'Color priority to the lower-ranked player in minus score groups',
-  '29E4b': 'Alternating color priority within a score group',
-  '29E4d': 'Color priority by rank after two identical rounds',
-  '29E5h': 'Equalization over ratings: no 80/200-point limits',
-  '28L2a': 'Bye to a higher-rated player when it improves colors',
-  '29I': 'Class pairings in the last round, each class as its own Swiss',
-  '29I2': 'Partial class pairings in the last round: class-prize contenders',
-  '29J': 'Unrateds on plus scores paired together',
-  '28S5latest': 'Re-entries carry the latest score, not the better one',
+/// Announced variations the engine understands, by rule number, as the
+/// section form and automation spell them ([Variation]).
+final swissVariations = [for (final v in Variation.values) v.code];
+final swissVariationLabels = {
+  for (final v in Variation.values) v.code: v.label,
 };
 
 /// The round-1 toss that applies when the event has not recorded one. It is
 /// derived from the event ID so that a proposal is reproducible, and the
 /// controller records it on the event when the first round is posted (29E2
 /// TIP: one toss serves every section).
-String effectiveColorToss(Event event) => event.colorToss.isNotEmpty
+ColorToss effectiveColorToss(Event event) => event.colorToss != ColorToss.none
     ? event.colorToss
     : event.id.codeUnits.fold<int>(7, (h, c) => (h * 31 + c) & 0xffff).isEven
-    ? 'higherWhite'
-    : 'higherBlack';
+    ? ColorToss.higherWhite
+    : ColorToss.higherBlack;
 
 class SwissProposal {
   const SwissProposal(
@@ -165,7 +147,7 @@ class _Rules {
   final Section section;
   final int round;
   final bool lastRound;
-  bool has(String v) => section.variations.contains(v);
+  bool has(Variation v) => section.variations.contains(v);
 
   /// Each active entrant's score after this round's requested byes, for the
   /// 29I prize-contention checks; filled by [pairSwiss].
@@ -176,7 +158,7 @@ class _Rules {
 
   /// 29E5a / 29E5b limits, or none under variation 29E5h.
   int limitFor(int penalty) {
-    if (has('29E5h')) return 1 << 30;
+    if (has(Variation.equalizeOverRatings)) return 1 << 30;
     return penalty >= 2 ? 200 : 80;
   }
 }
@@ -240,7 +222,7 @@ SwissProposal pairSwiss(
       'No player is eligible for the full-point bye (28L2–28L4). Add a house player or review bye eligibility.',
     );
   }
-  if (rules.has('28L2a') && byeCandidates.length > 1) {
+  if (rules.has(Variation.byeForColors) && byeCandidates.length > 1) {
     byeCandidates = _higherByeForColors(rules, playing, byeCandidates);
   }
 
@@ -528,10 +510,12 @@ List<_Card> _cards(
 /// by round-1 results in [_pairAdjusted].
 void _acceleration(_Rules rules, List<_Card> playing, List<String> out) {
   final method = rules.section.accelerated;
-  if ((method == 'adjustedRating' || method == 'sixths') && rules.round == 1) {
+  if ((method == Acceleration.adjustedRating ||
+          method == Acceleration.sixths) &&
+      rules.round == 1) {
     final field = [...playing]..sort(_byRating);
     if (field.length.isOdd) field.removeLast(); // The bye comes first.
-    final tiers = _tiers(field.length, method == 'sixths' ? 3 : 2);
+    final tiers = _tiers(field.length, method == Acceleration.sixths ? 3 : 2);
     var start = 0;
     final names = <String>[];
     for (final (i, size) in tiers.indexed) {
@@ -544,7 +528,7 @@ void _acceleration(_Rules rules, List<_Card> playing, List<String> out) {
         tier.take(half).toList(),
         tier.skip(half).toList(),
       ].indexed) {
-        final label = method == 'sixths'
+        final label = method == Acceleration.sixths
             ? 'Sixth ${2 * i + j + 1}'
             : const ['A1', 'B1', 'C1', 'D1'][2 * i + j];
         names.add(
@@ -553,13 +537,13 @@ void _acceleration(_Rules rules, List<_Card> playing, List<String> out) {
       }
     }
     out.add(
-      method == 'sixths'
+      method == Acceleration.sixths
           ? 'Accelerated pairings by sixths (28R3): the first sixth plays the second, the third the fourth, the fifth the sixth. ${names.join('; ')}.'
           : 'Accelerated pairings, adjusted rating method (28R2): A1 plays B1 and C1 plays D1. ${names.join('; ')}.',
     );
     return;
   }
-  if (method != 'addedScore' || rules.round > 2) return;
+  if (method != Acceleration.addedScore || rules.round > 2) return;
   final Set<_Card> upper;
   if (rules.round == 1) {
     final field = [...playing]..sort(_byRank);
@@ -633,11 +617,15 @@ List<_Board> _pairRest(
   List<String> out,
 ) {
   final method = rules.section.accelerated;
-  if ((method == 'adjustedRating' || method == 'sixths') && rules.round == 2) {
+  if ((method == Acceleration.adjustedRating ||
+          method == Acceleration.sixths) &&
+      rules.round == 2) {
     final boards = _pairAdjusted(rules, field, maxMeetings, out);
     if (boards != null) return boards;
   }
-  if (rules.lastRound && (rules.has('29I') || rules.has('29I2'))) {
+  if (rules.lastRound &&
+      (rules.has(Variation.classPairings) ||
+          rules.has(Variation.partialClassPairings))) {
     return _pairClasses(rules, field, maxMeetings, out);
   }
   return _pairField(rules, field, maxMeetings, out);
@@ -656,7 +644,7 @@ List<_Board>? _pairAdjusted(
   for (final c in field) {
     c.rating = c.baseRating;
   }
-  final sixths = rules.section.accelerated == 'sixths';
+  final sixths = rules.section.accelerated == Acceleration.sixths;
   final first = rules.section.rounds.firstOrNull;
   if (first == null) return null;
   final rule = sixths ? '28R3' : '28R2';
@@ -942,14 +930,9 @@ const _classNames = {
 /// 29I: the classes are those of the announced class prizes; without any,
 /// the standard US Chess classes of 200 points.
 (List<_Band>, PrizeTable?) _classBands(Section section) {
-  PrizeTable? table;
-  try {
-    table = PrizeTable.fromJson(section.prizes);
-  } on TournamentException {
-    table = null;
-  }
+  final table = section.prizes;
   final classPrizes = [
-    for (final p in table?.list ?? const <Prize>[])
+    for (final p in table.list)
       if (p.kind.ratingBased) p,
   ];
   if (classPrizes.isEmpty) {
@@ -964,7 +947,7 @@ const _classNames = {
             _classNames[cuts[i]]!,
           ),
       ],
-      table?.isEmpty ?? true ? null : table,
+      table.isEmpty ? null : table,
     );
   }
   final cuts = <int>{};
@@ -1011,7 +994,7 @@ List<_Board> _pairClasses(
   int maxMeetings,
   List<String> out,
 ) {
-  final partial = !rules.has('29I');
+  final partial = !rules.has(Variation.classPairings);
   final rule = partial ? '29I2' : '29I1';
   final (bands, table) = _classBands(rules.section);
   final win = rules.win;
@@ -1583,7 +1566,11 @@ class _GroupContext {
       ..sort(_lowestFirst);
     for (final alt in alternatives) {
       final diff = (alt.rating - odd.rating).abs();
-      if (diff > 200 && !odd.unrated && !rules.has('29E5h')) continue;
+      if (diff > 200 &&
+          !odd.unrated &&
+          !rules.has(Variation.equalizeOverRatings)) {
+        continue;
+      }
       final _Plan plan;
       try {
         plan = _planWith(
@@ -1947,7 +1934,7 @@ class _GroupContext {
 
     // 29J: unrateds on plus scores in this group may be paired together.
     final unratedBoards = <_Board>[];
-    if (rules.has('29J')) {
+    if (rules.has(Variation.unratedsTogether)) {
       final plus =
           pool
               .where(
@@ -2424,7 +2411,7 @@ class _Move {
   _Card b,
   _Rules rules, {
   required int board,
-  String toss = 'higherWhite',
+  ColorToss toss = ColorToss.higherWhite,
 }) {
   final higher = _byRank(a, b) <= 0 ? a : b, lower = higher == a ? b : a;
   (_Card, _Card) give(_Card w) => w == a ? (a, b) : (b, a);
@@ -2435,7 +2422,7 @@ class _Move {
   }
   if (a.due == 0) {
     // 29E2 / 28J: the toss decides board one, then colors alternate.
-    final higherWhite = (toss == 'higherWhite') == board.isEven;
+    final higherWhite = (toss == ColorToss.higherWhite) == board.isEven;
     return give(higherWhite ? higher : lower);
   }
   final due = a.due;
@@ -2445,7 +2432,7 @@ class _Move {
     final w = ia > ib ? a : b;
     return give(due == 1 ? w : (w == a ? b : a));
   }
-  if (!rules.has('29E4d')) {
+  if (!rules.has(Variation.rankColorPriority)) {
     // Rules 3 and 4: the latest round in which their colors differed; the
     // player who did not have the due color then receives it now.
     final ca = {for (final c in a.colors) c.$1: c.$2};
@@ -2472,7 +2459,9 @@ class _Move {
   // Rule 5: the higher-ranked player takes the due color (29E4a: the
   // lower-ranked in minus groups).
   final minus = higher.points < rules.round - 1;
-  final priority = rules.has('29E4a') && minus ? lower : higher;
+  final priority = rules.has(Variation.lowerRankedColorPriority) && minus
+      ? lower
+      : higher;
   return give(due == 1 ? priority : (priority == a ? b : a));
 }
 
@@ -2490,7 +2479,7 @@ List<(String, String)> _assignColors(
   // on rule 5.
   for (final (i, b) in boards.indexed) {
     var (white, black) = _decide(b.upper, b.lower, rules, board: i, toss: toss);
-    if (rules.has('29E4b') &&
+    if (rules.has(Variation.alternatingColorPriority) &&
         b.upper.due == b.lower.due &&
         b.upper.due != 0 &&
         b.upper.balance.abs() == b.lower.balance.abs() &&
@@ -2509,7 +2498,7 @@ List<(String, String)> _assignColors(
   }
   if (rules.round == 1) {
     out.add(
-      'Round 1 colors: the ${toss == 'higherWhite' ? 'higher' : 'lower'}-rated player has white on board 1, alternating down the boards (28J, 29E2).',
+      'Round 1 colors: the ${toss == ColorToss.higherWhite ? 'higher' : 'lower'}-rated player has white on board 1, alternating down the boards (28J, 29E2).',
     );
   }
   return games;

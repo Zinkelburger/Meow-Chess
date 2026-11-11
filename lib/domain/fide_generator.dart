@@ -124,7 +124,7 @@ Event generateFideTournament(RandomTournamentSettings s) {
     endDate: '2026-03-0${min(9, 1 + s.rounds ~/ 2)}',
     city: 'Simulation',
     timeControl: 'G/90 inc/30',
-    colorToss: rng.nextBool() ? 'higherWhite' : 'higherBlack',
+    colorToss: rng.nextBool() ? ColorToss.higherWhite : ColorToss.higherBlack,
     fide: const FideRegistration(
       chiefArbiter: FideOfficial(name: 'Random Generator'),
     ),
@@ -142,7 +142,7 @@ Event generateFideTournament(RandomTournamentSettings s) {
         fideRated: true,
         // FIDE only, so ½–0, 0–½ and a played 0–0 may occur.
         unrated: true,
-        accelerated: s.baku ? 'baku' : '',
+        accelerated: s.baku ? Acceleration.baku : Acceleration.none,
         pabPoints: s.pabPoints,
       ),
     ],

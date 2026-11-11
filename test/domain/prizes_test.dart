@@ -47,13 +47,13 @@ Event fixture(
               ],
             ),
         ],
-        prizes: {
+        prizes: PrizeTable.fromJson({
           'basedOn': basedOn,
           'fundCents': fundCents,
           'withdrawnEligible': withdrawnEligible,
           if (unratedCapCents > 0) 'unratedCapCents': unratedCapCents,
           'list': prizes,
-        },
+        }),
       ),
       ...extraSections,
     ],

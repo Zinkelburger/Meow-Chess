@@ -150,7 +150,7 @@ typedef TrfAcceleration = ({
 /// recorded then holds ([Section.bakuLast], 1.3.2). Null without the Baku
 /// acceleration or players.
 String? bakuGroupLast(Event event, Section section) {
-  if (section.accelerated != 'baku') return null;
+  if (section.accelerated != Acceleration.baku) return null;
   final order = [
     for (final p in fidePairingOrder(event, section))
       if (!p.house) p.id,
@@ -269,7 +269,8 @@ String _official(FideOfficial official) {
 /// date to the rules in force (the 2026 rules since 1 February 2026); a
 /// round robin from Meow's own tables is `CUSTOM_ROUNDROBIN`.
 String trfTournamentType(Section section) => switch (pairingFormat(section)) {
-  Format.swiss when section.accelerated == 'baku' => 'FIDE_DUTCH_BAKU',
+  Format.swiss when section.accelerated == Acceleration.baku =>
+    'FIDE_DUTCH_BAKU',
   Format.swiss => 'FIDE_DUTCH',
   _ => 'CUSTOM_ROUNDROBIN',
 };

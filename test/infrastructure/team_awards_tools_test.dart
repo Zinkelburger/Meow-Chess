@@ -148,7 +148,7 @@ void main() {
     });
     s = tools.event.sections.single;
     expect(TeamAwards.of(s), isNull);
-    expect(s.prizes['list'], hasLength(2));
+    expect(s.prizes.toJson()['list'], hasLength(2));
   });
 
   test('reports carry the team standings and the scoring method', () async {
