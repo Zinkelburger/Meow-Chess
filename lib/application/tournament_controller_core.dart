@@ -129,7 +129,14 @@ class TournamentControllerCore extends ChangeNotifier
       // A close failure must not hide the original invalid-event error.
       try {
         repository.close();
-      } catch (_) {}
+      } catch (closeError, stack) {
+        Diagnostics.record(
+          'close event after failed load',
+          'failed',
+          error: closeError,
+          stack: stack,
+        );
+      }
       rethrow;
     }
     try {

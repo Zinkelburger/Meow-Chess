@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../application/diagnostics.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
 import '../domain/model.dart';
@@ -763,7 +764,13 @@ class _PrintPanelState extends State<PrintPanel> {
     refresh();
     try {
       await saved;
-    } catch (_) {
+    } catch (error, stack) {
+      Diagnostics.record(
+        'save paper size',
+        'failed',
+        error: error,
+        stack: stack,
+      );
       if (mounted) {
         showFailure(
           context,

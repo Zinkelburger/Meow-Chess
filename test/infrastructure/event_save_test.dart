@@ -53,8 +53,8 @@ void main() {
             return stagingDirectory.path;
           }
           expect(call.method, 'publish');
-          final args = Map<String, dynamic>.from(call.arguments);
-          final file = File(args['source']!);
+          final args = Map<String, dynamic>.from(call.arguments as Map);
+          final file = File(args['source']! as String);
           expect(file.parent.path, stagingDirectory.path);
           expect(args['destination'], destination);
           expect(args['replaceExisting'], replace);
@@ -88,7 +88,7 @@ void main() {
           File(destination).writeAsStringSync('created during staging');
           return stagingDirectory.path;
         }
-        final args = Map<String, dynamic>.from(call.arguments);
+        final args = Map<String, dynamic>.from(call.arguments as Map);
         expect(args['replaceExisting'], false);
         throw PlatformException(code: 'file-exists');
       });
@@ -106,7 +106,7 @@ void main() {
       call,
     ) async {
       if (call.method == 'stagingDirectory') return stagingDirectory.path;
-      final args = Map<String, dynamic>.from(call.arguments);
+      final args = Map<String, dynamic>.from(call.arguments as Map);
       expect(args['replaceExisting'], false);
       File(destination).writeAsStringSync('created by another process');
       // Native moveItem must reject this race rather than switching to replace.

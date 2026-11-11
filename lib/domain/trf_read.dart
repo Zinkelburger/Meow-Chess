@@ -574,9 +574,9 @@ TrfImport trfToEvent(
         federation: isFederationCode(federation) ? federation : '',
         birthDate: _birthDate(r.birthDate),
         sex: const {'m', 'w'}.contains(r.sex) ? r.sex : '',
-        memberId: nat?.id ?? '',
-        rating: nat?.rating ?? 0,
-        state: nat?.origin ?? '',
+        memberId: (nat?.id ?? '') as String,
+        rating: (nat?.rating ?? 0) as int,
+        state: (nat?.origin ?? '') as String,
       ),
     );
   }

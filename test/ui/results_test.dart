@@ -1,3 +1,4 @@
+import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/ui/result_format.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -211,7 +212,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 500));
   });
-  Future<void> mountPlayers(WidgetTester tester, c) async {
+  Future<void> mountPlayers(WidgetTester tester, TournamentController c) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);

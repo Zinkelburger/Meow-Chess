@@ -813,7 +813,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
                                   final line = lines[index];
                                   final cells = line - 1 < table.rows.length
                                       ? table.rows[line - 1]
-                                      : const [];
+                                      : const <dynamic>[];
                                   final error = byLine[line]!.error != null;
                                   return Container(
                                     decoration: BoxDecoration(

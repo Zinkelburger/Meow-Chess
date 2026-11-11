@@ -363,7 +363,7 @@ class UiHarness {
         act,
         Violation(
           'ui-exception',
-          _describe(error, _details.lastOrNull),
+          _describe(error as Object, _details.lastOrNull),
           errorType: '${error.runtimeType}',
         ),
       );

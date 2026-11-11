@@ -261,7 +261,7 @@ void main() {
         'stage': 1,
         'name': 'Quarterfinals',
         'rounds': [1, 2],
-        'decisions': [],
+        'decisions': <Object?>[],
       },
     ]);
     final match = knockoutBracket(e, s).stages.first.matches.first;

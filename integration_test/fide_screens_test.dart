@@ -129,7 +129,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('fide-ratings')));
     await tester.pumpAndSettle();
-    await tester.runAsync(() => Future.delayed(const Duration(seconds: 1)));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(seconds: 1)),
+    );
     await capture('fide-ratings-panel');
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();

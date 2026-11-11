@@ -32,7 +32,7 @@ void main() {
     });
     final created = await write('create_section', {
       'name': 'K-8',
-      'players': [for (final p in added['added']) p['id'] as String],
+      'players': [for (final p in added['added'] as List) p['id'] as String],
       'format': 'swiss',
       'plannedRounds': 3,
       'boardStart': 1,
@@ -73,7 +73,7 @@ void main() {
     final result = await tools.call('standings', {});
     final teams = result['sections'].single['teams'] as Map;
     expect(teams['summary'], 'Top 3 scores count');
-    expect(teams['tiebreakOrder'].map((t) => t['code']), [
+    expect(teams['tiebreakOrder'].map((dynamic t) => t['code']), [
       'modifiedMedian',
       'solkoff',
       'sonnebornBerger',
@@ -89,7 +89,10 @@ void main() {
       expect((r['counting'] as List).length, lessThanOrEqualTo(3));
       expect(
         r['score'],
-        (r['counting'] as List).fold<int>(0, (n, m) => n + m['points'] as int),
+        (r['counting'] as List).fold<int>(
+          0,
+          (n, m) => n + (m['points'] as int),
+        ),
       );
     }
   });
@@ -125,7 +128,7 @@ void main() {
     final report = await tools.call('prize_report', {});
     final section = report['sections'].single;
     // Individual lines only; the team prize is reported on its own.
-    expect(section['prizes'].map((p) => p['id']), ['p1']);
+    expect(section['prizes'].map((dynamic p) => p['id']), ['p1']);
     expect(section['paidCents'], 5000);
     final teamPrize = section['teamPrizes']['prizes'].single;
     expect(teamPrize['id'], 't1');

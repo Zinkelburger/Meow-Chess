@@ -401,15 +401,15 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
   static Event? _read(CommonDatabase db) {
     final row = db.select('SELECT data FROM event').firstOrNull;
     if (row == null) return null;
-    final j = jsonDecode(row['data']) as Json;
+    final j = jsonDecode(row['data'] as String) as Json;
     j['players'] = [
       for (final p in db.select('SELECT data FROM player ORDER BY rowid'))
-        jsonDecode(p['data']),
+        jsonDecode(p['data'] as String),
     ];
     j['sections'] = [
       for (final s in db.select('SELECT id,data FROM section ORDER BY ordinal'))
         {
-          ...jsonDecode(s['data']) as Json,
+          ...jsonDecode(s['data'] as String) as Json,
           'players': [
             for (final m in db.select(
               'SELECT player_id FROM membership WHERE section_id=? ORDER BY ordinal',
@@ -423,20 +423,20 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
               [s['id']],
             ))
               {
-                ...jsonDecode(r['data']) as Json,
+                ...jsonDecode(r['data'] as String) as Json,
                 'games': [
                   for (final g in db.select(
                     'SELECT data FROM game WHERE section_id=? AND round_number=? ORDER BY rowid',
                     [s['id'], r['number']],
                   ))
-                    jsonDecode(g['data']),
+                    jsonDecode(g['data'] as String),
                 ],
                 'byes': [
                   for (final b in db.select(
                     'SELECT data FROM bye WHERE section_id=? AND round_number=? ORDER BY rowid',
                     [s['id'], r['number']],
                   ))
-                    jsonDecode(b['data']),
+                    jsonDecode(b['data'] as String),
                 ],
               },
           ],
@@ -859,11 +859,11 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
       'SELECT id,parent,action,timestamp,(SELECT MAX(a.id) FROM audit a WHERE a.node=node.id) AS visit FROM node',
     ))
       HistoryNode(
-        id: r['id'],
-        parent: r['parent'],
-        action: r['action'],
-        timestamp: r['timestamp'],
-        lastVisit: r['visit'] ?? 0,
+        id: r['id'] as int,
+        parent: r['parent'] as int?,
+        action: r['action'] as String,
+        timestamp: r['timestamp'] as String,
+        lastVisit: (r['visit'] ?? 0) as int,
       ),
   ], _head());
 

@@ -93,8 +93,8 @@ void main() {
       (request) async => http.Response(
         jsonEncode(
           request.url.path.endsWith('rating-supplements')
-              ? {'items': []}
-              : {'id': '00123456', 'ratings': []},
+              ? {'items': <Object?>[]}
+              : {'id': '00123456', 'ratings': <Object?>[]},
         ),
         200,
       ),

@@ -30,7 +30,7 @@ void main() {
         {'name': 'Ed Gray', 'rating': 1500, 'memberId': '12000005'},
       ],
     });
-    ids = [for (final p in added['added']) p['id'] as String];
+    ids = [for (final p in added['added'] as List) p['id'] as String];
     final created = await tools.call('create_section', {
       'expectedRevision': tools.event.revision,
       'name': 'Ladder',

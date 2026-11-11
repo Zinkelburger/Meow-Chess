@@ -43,7 +43,14 @@ HistoryStep historyStep(
   final snapshot = read ?? c.repository.snapshot;
   try {
     return summarizeStep(snapshot(node.parent!), snapshot(id));
-  } catch (_) {
+  } catch (error, stack) {
+    Diagnostics.record(
+      'read history step',
+      'failed',
+      context: {'node': id},
+      error: error,
+      stack: stack,
+    );
     return (title: node.action, context: 'Details unavailable');
   }
 }
@@ -113,6 +120,7 @@ class _HistoryPanelState extends State<HistoryPanel> {
   static const _snapshotLimit = 32;
   final snapshots = <int, Event>{};
   final summaries = <int, HistoryStep>{};
+  final unreadable = <int>{};
   Event snapshot(int id) {
     final event = snapshots.remove(id) ?? c.repository.snapshot(id);
     snapshots[id] = event;
@@ -681,7 +689,17 @@ class _HistoryPanelState extends State<HistoryPanel> {
           : reversibleResult(snapshot(parent), snapshot(id), c.event!);
       lost = id == graph.head ? [] : playLost(c.event!, snapshot(id));
       dependent = id != graph.head && changesDependentResult(c, snapshot(id));
-    } catch (_) {
+    } catch (error, stack) {
+      // This runs during build, so report each saved state only once.
+      if (unreadable.add(id)) {
+        Diagnostics.record(
+          'read saved state',
+          'failed',
+          context: {'node': id},
+          error: error,
+          stack: stack,
+        );
+      }
       return const Padding(
         padding: EdgeInsets.only(bottom: 12, right: 16),
         child: Text('This saved state could not be read.'),

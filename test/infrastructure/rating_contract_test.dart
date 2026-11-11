@@ -653,7 +653,7 @@ void main() {
         ..remove('state')
         ..remove('reportName');
     }
-    final old = Event.fromJson(jsonDecode(jsonEncode(json)));
+    final old = Event.fromJson(jsonDecode(jsonEncode(json)) as Json);
     validateEvent(old);
     expect(
       (old.endDate, old.city, old.state, old.zip, old.level),

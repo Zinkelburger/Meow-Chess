@@ -39,7 +39,7 @@ Future<void> main(List<String> args) async {
             response = {
               'result': await api.call(
                 request['tool'] as String,
-                Map<String, dynamic>.from(request['arguments'] ?? {}),
+                Map<String, dynamic>.from(request['arguments'] as Map? ?? {}),
               ),
             };
           } catch (error) {
@@ -90,8 +90,10 @@ Future<void> main(List<String> args) async {
                   } else {
                     try {
                       final value = await api.call(
-                        params['name'],
-                        Map<String, dynamic>.from(params['arguments'] ?? {}),
+                        params['name'] as String,
+                        Map<String, dynamic>.from(
+                          params['arguments'] as Map? ?? {},
+                        ),
                       );
                       response = _result(id, {
                         'content': [

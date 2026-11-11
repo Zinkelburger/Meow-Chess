@@ -45,14 +45,17 @@ void main() {
           return replacementDirectory.path;
         }
         expect(call.method, 'publish');
-        final args = Map<String, dynamic>.from(call.arguments);
+        final args = Map<String, dynamic>.from(call.arguments as Map);
         expect(args['destination'], destination);
-        expect(File(args['source']!).parent.path, replacementDirectory.path);
-        expect(File(args['source']!).readAsBytesSync(), [1, 2, 3]);
+        expect(
+          File(args['source']! as String).parent.path,
+          replacementDirectory.path,
+        );
+        expect(File(args['source']! as String).readAsBytesSync(), [1, 2, 3]);
         expect(destinationDirectory.listSync().map((f) => f.path), [
           destination,
         ]);
-        File(args['source']!).copySync(destination);
+        File(args['source']! as String).copySync(destination);
         return null;
       });
       await writeSelectedArtifact(destination, [1, 2, 3]);

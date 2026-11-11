@@ -91,8 +91,14 @@ Future<bool> _claimThisTab() async {
         return lock == null ? null : Completer<JSAny?>().future.toJS;
       }).toJS,
     );
-  } catch (_) {
+  } catch (cause, stack) {
     // No Web Locks (a very old browser): run without the guard.
+    Diagnostics.record(
+      'claim browser tab',
+      'failed; running without the one-tab guard',
+      error: cause,
+      stack: stack,
+    );
     if (!claimed.isCompleted) claimed.complete(true);
   }
   return claimed.future;
@@ -170,7 +176,13 @@ class _MeowWebAppState extends State<MeowWebApp> {
             StoredEvent.fromJson(json as Map<String, dynamic>),
         ].where((e) => eventFileExists(e.path)).toList();
       }
-    } catch (_) {
+    } catch (cause, stack) {
+      Diagnostics.record(
+        'read event list',
+        'failed',
+        error: cause,
+        stack: stack,
+      );
       error =
           'The list of events in this browser could not be read. Upload a downloaded copy to continue.';
     }

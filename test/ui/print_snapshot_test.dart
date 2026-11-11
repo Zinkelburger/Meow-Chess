@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:printing/src/interface.dart';
+import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/remembered_printing.dart';
 import 'package:meow_chess/infrastructure/reports.dart';
@@ -235,22 +236,24 @@ void main() {
       );
     });
 
-    Widget panel(c, {Future<Uint8List> Function(Event)? generate}) =>
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              height: 900,
-              child: PrintPanel(
-                event: c.event!,
-                controller: c,
-                kind: ReportKind.packet,
-                onClose: () {},
-                printing: service,
-                generate: generate ?? (_) async => Uint8List(3),
-              ),
-            ),
+    Widget panel(
+      TournamentController c, {
+      Future<Uint8List> Function(Event)? generate,
+    }) => MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          height: 900,
+          child: PrintPanel(
+            event: c.event!,
+            controller: c,
+            kind: ReportKind.packet,
+            onClose: () {},
+            printing: service,
+            generate: generate ?? (_) async => Uint8List(3),
           ),
-        );
+        ),
+      ),
+    );
 
     testWidgets('Copies and options opens the system window, no printer', (
       tester,

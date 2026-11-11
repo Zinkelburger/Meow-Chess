@@ -233,7 +233,8 @@ class _RulingsPanelState extends State<RulingsPanel>
               ].join(' · '),
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            if (entry['players'] case final List ids when ids.isNotEmpty)
+            if (entry['players'] case final List<dynamic> ids
+                when ids.isNotEmpty)
               Text(ids.map(name).join(', '), style: muted),
             const SizedBox(height: 4),
             SelectableText('${entry['text'] ?? ''}'),

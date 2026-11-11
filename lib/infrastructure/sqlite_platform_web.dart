@@ -6,6 +6,8 @@ import 'package:archive/archive.dart';
 import 'package:sqlite3/wasm.dart';
 import 'package:web/web.dart' as web;
 
+import '../application/diagnostics.dart';
+
 /// The browser's SQLite: sqlite3.wasm (served beside the app) over a file
 /// system kept in IndexedDB, so events survive closing the tab. Loaded once
 /// by [initializeWebStorage] before the app starts.
@@ -22,7 +24,14 @@ Future<void> initializeWebStorage() async {
   // refuse; events are still kept, only without that promise.
   try {
     await web.window.navigator.storage.persist().toDart;
-  } catch (_) {}
+  } catch (error, stack) {
+    Diagnostics.record(
+      'request persistent storage',
+      'failed; the browser may evict events',
+      error: error,
+      stack: stack,
+    );
+  }
 }
 
 /// Waits until every change so far is written to IndexedDB. The file system

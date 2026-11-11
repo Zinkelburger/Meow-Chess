@@ -53,7 +53,7 @@ void main() {
     // outside the fake clock.
     Future<void> settle() => tester.runAsync(() async {
       for (var i = 0; i < 40; i++) {
-        await Future.delayed(const Duration(milliseconds: 50));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
         await tester.pump();
       }
     });

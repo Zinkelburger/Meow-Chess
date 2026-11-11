@@ -692,22 +692,23 @@ class TournamentTools {
   /// Metadata is checked when it changes, so automation cannot store a value
   /// the rating report would later refuse without saying so.
   void _checkMetadata(Json args) {
-    _checkControl(args['timeControl']);
+    _checkControl(args['timeControl'] as String?);
     final atd = args['assistantTdId'] as String?;
     if (atd != null && atd.isNotEmpty && !isMemberId(atd)) {
       throw const TournamentException(
         'The assistant chief TD\'s US Chess ID has eight digits.',
       );
     }
-    if (otherTdProblem(args['otherTdIds'] ?? '') case final problem?) {
+    if (otherTdProblem((args['otherTdIds'] ?? '') as String)
+        case final problem?) {
       throw TournamentException(problem);
     }
-    if (args['tiebreaks'] case final List codes) {
+    if (args['tiebreaks'] case final List<dynamic> codes) {
       if (tiebreakCodesProblem(List<String>.from(codes)) case final problem?) {
         throw TournamentException(problem);
       }
     }
-    if (args['fideTiebreaks'] case final List codes) {
+    if (args['fideTiebreaks'] case final List<dynamic> codes) {
       if (fideTiebreakCodesProblem(List<String>.from(codes))
           case final problem?) {
         throw TournamentException(problem);
@@ -749,7 +750,7 @@ class TournamentTools {
     switch (name) {
       case 'create_event':
       case 'open_event':
-        final path = _path(args['path']);
+        final path = _path(args['path'] as String);
         if (p.extension(path) != '.meow') {
           throw const TournamentException('Use a .meow filename.');
         }
@@ -770,8 +771,8 @@ class TournamentTools {
           initial = Event.fromJson({
             ...Event(
               id: 'pending',
-              name: args['name'],
-              date: args['date'],
+              name: args['name'] as String,
+              date: args['date'] as String,
               practice: true,
             ).toJson(),
             for (final key in _metadata.keys)
@@ -840,8 +841,11 @@ class TournamentTools {
         final additions = (args['players'] as List)
             .map(
               (value) => Player.fromJson({
-                ...Player(id: controller.newId(), name: value['name']).toJson(),
-                ...value as Map,
+                ...Player(
+                  id: controller.newId(),
+                  name: value['name'] as String,
+                ).toJson(),
+                ...(value as Map).cast<String, dynamic>(),
               }),
             )
             .toList();
@@ -874,7 +878,7 @@ class TournamentTools {
           'added': additions.map((p) => p.toJson()).toList(),
         };
       case 'update_player':
-        final old = event.player(args['playerId']);
+        final old = event.player(args['playerId'] as String);
         controller.savePlayer(
           Player.fromJson({
             ...old.toJson(),
@@ -883,7 +887,7 @@ class TournamentTools {
           }),
         );
       case 'create_section':
-        final ids = List<String>.from(args['players']);
+        final ids = List<String>.from(args['players'] as Iterable);
         for (final id in ids) {
           event.player(id);
           if (event.sectionOf(id) != null) {
@@ -892,7 +896,7 @@ class TournamentTools {
             );
           }
         }
-        _checkControl(args['timeControl']);
+        _checkControl(args['timeControl'] as String?);
         // With fideModeDefault on, a new section without rating choices is
         // FIDE only.
         final fideOnly =
@@ -900,36 +904,38 @@ class TournamentTools {
             args['unrated'] == null &&
             fideModeDefault &&
             fideFormats.contains(
-              Format.values.byName(args['format'] ?? 'swiss'),
+              Format.values.byName((args['format'] ?? 'swiss') as String),
             );
         final section = Section(
           id: controller.newId(),
-          name: args['name'],
+          name: args['name'] as String,
           players: ids,
-          format: Format.values.byName(args['format']),
-          plannedRounds: args['plannedRounds'],
-          boardStart: args['boardStart'],
-          doubleGames: args['doubleGames'] ?? false,
-          ratingCeiling: args['ratingCeiling'] ?? 0,
-          ratingFloor: args['ratingFloor'] ?? 0,
-          timeControl: args['timeControl'] ?? '',
-          sideGames: args['sideGames'] ?? false,
-          rrTable: args['rrTable'] ?? '',
-          doubleCycle: args['doubleCycle'] ?? false,
-          homeTeam: args['homeTeam'] ?? '',
-          accelerated: args['accelerated'] ?? '',
-          avoidTeammates: args['avoidTeammates'] ?? false,
+          format: Format.values.byName(args['format'] as String),
+          plannedRounds: args['plannedRounds'] as int,
+          boardStart: args['boardStart'] as int,
+          doubleGames: (args['doubleGames'] ?? false) as bool,
+          ratingCeiling: (args['ratingCeiling'] ?? 0) as int,
+          ratingFloor: (args['ratingFloor'] ?? 0) as int,
+          timeControl: (args['timeControl'] ?? '') as String,
+          sideGames: (args['sideGames'] ?? false) as bool,
+          rrTable: (args['rrTable'] ?? '') as String,
+          doubleCycle: (args['doubleCycle'] ?? false) as bool,
+          homeTeam: (args['homeTeam'] ?? '') as String,
+          accelerated: (args['accelerated'] ?? '') as String,
+          avoidTeammates: (args['avoidTeammates'] ?? false) as bool,
           // Bughouse is never US Chess rated.
           unrated:
               args['format'] == Format.bughouse.name ||
-              (args['unrated'] ?? fideOnly),
-          variations: Set<String>.from(args['variations'] ?? const []),
-          fideRated: args['fideRated'] ?? fideOnly,
-          fideRanking: args['fideRanking'] ?? '',
-          pabPoints: args['pabPoints'] ?? 2,
+              ((args['unrated'] ?? fideOnly) as bool),
+          variations: Set<String>.from(
+            args['variations'] as Iterable? ?? const [],
+          ),
+          fideRated: (args['fideRated'] ?? fideOnly) as bool,
+          fideRanking: (args['fideRanking'] ?? '') as String,
+          pabPoints: (args['pabPoints'] ?? 2) as int,
           partners: [
             for (final p in args['partners'] as List? ?? const [])
-              List<String>.from(p),
+              List<String>.from(p as Iterable),
           ],
           bracket: _bracketArg(args['bracket'], const {}),
         );
@@ -947,17 +953,17 @@ class TournamentTools {
         );
         return {..._summary(), 'section': section.toJson()};
       case 'update_section':
-        final current = _section(args['sectionId']);
+        final current = _section(args['sectionId'] as String);
         if (args['timeControl'] != current.timeControl) {
-          _checkControl(args['timeControl']);
+          _checkControl(args['timeControl'] as String?);
         }
-        final rounds = args['plannedRounds'] ?? current.plannedRounds;
+        final rounds = (args['plannedRounds'] ?? current.plannedRounds) as int;
         if (rounds < current.rounds.length) {
           throw TournamentException(
             '${current.rounds.length} rounds are already posted, so the section needs at least that many.',
           );
         }
-        final name = (args['name'] ?? current.name).trim();
+        final name = ((args['name'] ?? current.name) as String).trim();
         if (name.isEmpty) throw const TournamentException('Name the section.');
         final rrTable = args['rrTable'] ?? current.rrTable,
             doubleCycle = args['doubleCycle'] ?? current.doubleCycle,
@@ -974,9 +980,9 @@ class TournamentTools {
         if (fideSettingsChangeProblem(
               current,
               current.copy(
-                fideRated: args['fideRated'],
-                accelerated: args['accelerated'],
-                pabPoints: args['pabPoints'],
+                fideRated: args['fideRated'] as bool?,
+                accelerated: args['accelerated'] as String?,
+                pabPoints: args['pabPoints'] as int?,
               ),
             )
             case final problem?) {
@@ -999,8 +1005,8 @@ class TournamentTools {
         if (doubleCycleProblem(
               current.copy(
                 plannedRounds: rounds,
-                rrTable: rrTable,
-                doubleCycle: doubleCycle,
+                rrTable: rrTable as String?,
+                doubleCycle: doubleCycle as bool?,
               ),
             )
             case final problem?) {
@@ -1015,7 +1021,7 @@ class TournamentTools {
                 // A replaced prize table keeps the team awards.
                 'teams': ?current.prizes['teams'],
               };
-        if (args['teamAwards'] case final Map raw) {
+        if (args['teamAwards'] case final Map<dynamic, dynamic> raw) {
           final settings = Map<String, dynamic>.from(raw);
           final off = settings['method'] == 'off';
           final awards = off
@@ -1049,25 +1055,32 @@ class TournamentTools {
                 x.id == current.id
                     ? x.copy(
                         name: name,
-                        timeControl: (args['timeControl'] ?? x.timeControl)
-                            .trim(),
+                        timeControl:
+                            (args['timeControl'] ?? x.timeControl).trim()
+                                as String?,
                         plannedRounds: rounds,
-                        boardStart: args['boardStart'] ?? x.boardStart,
+                        boardStart:
+                            (args['boardStart'] ?? x.boardStart) as int?,
                         rrTable: rrTable,
                         doubleCycle: doubleCycle,
-                        homeTeam: homeTeam,
-                        accelerated: args['accelerated'] ?? x.accelerated,
-                        unrated: x.format == Format.bughouse
-                            ? true
-                            : args['unrated'] ?? x.unrated,
+                        homeTeam: homeTeam as String?,
+                        accelerated:
+                            (args['accelerated'] ?? x.accelerated) as String?,
+                        unrated:
+                            (x.format == Format.bughouse
+                                    ? true
+                                    : args['unrated'] ?? x.unrated)
+                                as bool?,
                         avoidTeammates:
-                            args['avoidTeammates'] ?? x.avoidTeammates,
-                        fideRated: args['fideRated'] ?? x.fideRated,
-                        fideRanking: args['fideRanking'] ?? x.fideRanking,
-                        pabPoints: args['pabPoints'] ?? x.pabPoints,
+                            (args['avoidTeammates'] ?? x.avoidTeammates)
+                                as bool?,
+                        fideRated: (args['fideRated'] ?? x.fideRated) as bool?,
+                        fideRanking:
+                            (args['fideRanking'] ?? x.fideRanking) as String?,
+                        pabPoints: (args['pabPoints'] ?? x.pabPoints) as int?,
                         variations: args['variations'] == null
                             ? x.variations
-                            : Set<String>.from(args['variations']),
+                            : Set<String>.from(args['variations'] as Iterable),
                         prizes: prizes,
                         bracket: bracket,
                         doubleGames: x.format == Format.knockout
@@ -1079,7 +1092,7 @@ class TournamentTools {
                             ? x.partners
                             : [
                                 for (final p in args['partners'] as List)
-                                  List<String>.from(p),
+                                  List<String>.from(p as Iterable),
                               ],
                       )
                     : x,
@@ -1088,38 +1101,51 @@ class TournamentTools {
         );
         return {..._summary(), 'section': _section(current.id).toJson()};
       case 'advance_knockout':
-        _section(args['sectionId']);
+        _section(args['sectionId'] as String);
         controller.advanceKnockout(
-          args['sectionId'],
-          args['board'],
-          args['playerId'],
-          reason: args['reason'] ?? '',
+          args['sectionId'] as String,
+          args['board'] as int,
+          args['playerId'] as String,
+          reason: (args['reason'] ?? '') as String,
         );
         return {
           ..._summary(),
-          'bracket': knockoutBracketLines(event, _section(args['sectionId'])),
+          'bracket': knockoutBracketLines(
+            event,
+            _section(args['sectionId'] as String),
+          ),
         };
       case 'pair_side_game':
         final section = controller.addSideGame(
-          args['white'],
-          args['black'],
-          sectionId: args['sectionId'],
+          args['white'] as String,
+          args['black'] as String,
+          sectionId: args['sectionId'] as String?,
         );
         return {..._summary(), 'sectionId': section};
       case 'add_section_entry':
         final entry = controller.addSectionEntry(
-          args['playerId'],
-          args['sectionId'],
+          args['playerId'] as String,
+          args['sectionId'] as String,
         );
         return {..._summary(), 'entry': entry.toJson()};
       case 'draw_lots':
-        controller.drawLots(args['sectionId'], seed: args['seed']);
-        return {..._summary(), 'section': _section(args['sectionId']).toJson()};
+        controller.drawLots(
+          args['sectionId'] as String,
+          seed: args['seed'] as int?,
+        );
+        return {
+          ..._summary(),
+          'section': _section(args['sectionId'] as String).toJson(),
+        };
       case 'set_partners':
-        controller.setPartners(args['sectionId'], [
-          for (final p in args['partners'] as List) List<String>.from(p),
+        controller.setPartners(args['sectionId'] as String, [
+          for (final p in args['partners'] as List)
+            List<String>.from(p as Iterable),
         ]);
-        return {..._summary(), 'section': _section(args['sectionId']).toJson()};
+        return {
+          ..._summary(),
+          'section': _section(args['sectionId'] as String).toJson(),
+        };
       case 'make_quads':
         controller.applyQuads(controller.quadPreview(), event.revision);
         return {
@@ -1128,12 +1154,12 @@ class TournamentTools {
         };
       case 'make_holland':
         final ids = controller.makeHolland(
-          groups: args['groups'],
-          qualifiers: args['qualifiers'],
-          unbalanced: args['unbalanced'] ?? false,
+          groups: args['groups'] as int,
+          qualifiers: args['qualifiers'] as int,
+          unbalanced: (args['unbalanced'] ?? false) as bool,
           players: args['players'] == null
               ? null
-              : List<String>.from(args['players']),
+              : List<String>.from(args['players'] as Iterable),
         );
         return {
           ..._summary(),
@@ -1141,8 +1167,8 @@ class TournamentTools {
         };
       case 'make_holland_final':
         final id = controller.makeHollandFinal(
-          args['group'],
-          seed: args['seed'],
+          args['group'] as String,
+          seed: args['seed'] as int?,
         );
         return {..._summary(), 'section': _section(id).toJson()};
       case 'move_players':
@@ -1161,23 +1187,25 @@ class TournamentTools {
           }
         }
         controller.movePlayers(
-          List<String>.from(args['players']),
-          args['sectionId'],
-          reason: args['reason'] ?? '',
+          List<String>.from(args['players'] as Iterable),
+          args['sectionId'] as String,
+          reason: (args['reason'] ?? '') as String,
           lateByes: lateByes,
         );
       case 'remove_players':
-        controller.removePlayers(List<String>.from(args['players']));
+        controller.removePlayers(
+          List<String>.from(args['players'] as Iterable),
+        );
       case 'reserve_bye':
         controller.reserveBye(
-          args['playerId'],
-          args['round'],
-          args['points'],
-          irrevocable: args['irrevocable'],
+          args['playerId'] as String,
+          args['round'] as int,
+          args['points'] as int,
+          irrevocable: args['irrevocable'] as bool?,
         );
         // FIDE checklist VCL.17: a full-point bye is allowed but deprecated.
         if (args['points'] == 2 &&
-            (event.sectionOf(args['playerId'])?.fideRated ?? false)) {
+            (event.sectionOf(args['playerId'] as String)?.fideRated ?? false)) {
           return {
             ..._summary(),
             'warning':
@@ -1186,31 +1214,33 @@ class TournamentTools {
         }
       case 'cancel_bye':
         controller.reserveBye(
-          args['playerId'],
-          args['round'],
+          args['playerId'] as String,
+          args['round'] as int,
           -1,
-          irrevocable: args['irrevocable'],
+          irrevocable: args['irrevocable'] as bool?,
         );
       case 'hold_out_non_reporters':
         final boards = controller.holdOutNonReporters(
-          args['sectionId'],
-          treatment: NonReporterTreatment.parse(args['treatment']),
+          args['sectionId'] as String,
+          treatment: NonReporterTreatment.parse(args['treatment'] as String),
         );
         return {..._summary(), 'boards': boards};
       case 'log_ruling':
         final id = controller.logRuling(
-          kind: args['kind'],
-          text: args['text'],
-          round: args['round'] ?? 0,
-          section: args['sectionId'] ?? '',
-          players: List<String>.from(args['players'] ?? const []),
-          decidedBy: args['decidedBy'] ?? '',
-          outcome: args['outcome'] ?? '',
+          kind: args['kind'] as String,
+          text: args['text'] as String,
+          round: (args['round'] ?? 0) as int,
+          section: (args['sectionId'] ?? '') as String,
+          players: List<String>.from(args['players'] as Iterable? ?? const []),
+          decidedBy: (args['decidedBy'] ?? '') as String,
+          outcome: (args['outcome'] ?? '') as String,
         );
         return {..._summary(), 'rulingId': id};
       case 'propose_pairings':
-        if (args['sectionId'] != null) _section(args['sectionId']);
-        final batch = await controller.propose(sectionId: args['sectionId']);
+        if (args['sectionId'] != null) _section(args['sectionId'] as String);
+        final batch = await controller.propose(
+          sectionId: args['sectionId'] as String?,
+        );
         final id = controller.newId();
         _proposals.clear();
         _proposals[id] = batch;
@@ -1234,48 +1264,51 @@ class TournamentTools {
       case 'record_ladder_game':
         final challengerWhite = args['challengerWhite'] ?? false;
         final gameId = controller.recordLadderGame(
-          args['sectionId'],
-          args['challenger'],
-          args['defender'],
+          args['sectionId'] as String,
+          args['challenger'] as String,
+          args['defender'] as String,
           ChallengeResult.parse(
-            args['result'],
-          ).outcome(challengerWhite: challengerWhite),
+            args['result'] as String,
+          ).outcome(challengerWhite: challengerWhite as bool),
           challengerWhite: challengerWhite,
-          reason: args['reason'] ?? '',
+          reason: (args['reason'] ?? '') as String,
         );
         return {
           ..._summary(),
           'gameId': gameId,
-          'ladder': _section(args['sectionId']).players,
+          'ladder': _section(args['sectionId'] as String).players,
         };
       case 'set_ladder_order':
         controller.setLadderOrder(
-          args['sectionId'],
-          List<String>.from(args['players']),
-          args['reason'],
-        );
-        return {..._summary(), 'ladder': _section(args['sectionId']).players};
-      case 'repair_round':
-        final notes = controller.repairUnstarted(
-          args['sectionId'],
-          List<String>.from(args['keep']),
-          args['reason'],
+          args['sectionId'] as String,
+          List<String>.from(args['players'] as Iterable),
+          args['reason'] as String,
         );
         return {
           ..._summary(),
-          'round': _section(args['sectionId']).rounds.last.toJson(),
+          'ladder': _section(args['sectionId'] as String).players,
+        };
+      case 'repair_round':
+        final notes = controller.repairUnstarted(
+          args['sectionId'] as String,
+          List<String>.from(args['keep'] as Iterable),
+          args['reason'] as String,
+        );
+        return {
+          ..._summary(),
+          'round': _section(args['sectionId'] as String).rounds.last.toJson(),
           'explanations': notes,
         };
       case 'start_round':
-        controller.startRound(args['sectionId']);
+        controller.startRound(args['sectionId'] as String);
       case 'record_result':
         controller.recordResult(
-          args['gameId'],
-          Outcome.values.byName(args['outcome']),
-          reason: args['reason'] ?? '',
+          args['gameId'] as String,
+          Outcome.values.byName(args['outcome'] as String),
+          reason: (args['reason'] ?? '') as String,
         );
       case 'prize_report':
-        if (args['sectionId'] != null) _section(args['sectionId']);
+        if (args['sectionId'] != null) _section(args['sectionId'] as String);
         return {
           'revision': event.revision,
           'sections': [
@@ -1368,7 +1401,7 @@ class TournamentTools {
       case 'export_event':
         final selected = args['sectionId'] == null
             ? null
-            : _section(args['sectionId']);
+            : _section(args['sectionId'] as String);
         // A separate section package carries only that section's moves.
         final snapshot = selected == null
             ? event
@@ -1381,7 +1414,7 @@ class TournamentTools {
                       t,
                 ],
               );
-        final directory = Directory(_path(args['directory']));
+        final directory = Directory(_path(args['directory'] as String));
         if (FileSystemEntity.typeSync(directory.path) !=
             FileSystemEntityType.notFound) {
           throw const TournamentException(
@@ -1456,16 +1489,16 @@ class TournamentTools {
           ],
         };
       case 'backup_event':
-        final path = _path(args['path']);
+        final path = _path(args['path'] as String);
         if (p.extension(path) != '.meow') {
           throw const TournamentException('Use a .meow filename.');
         }
         controller.repository.backup(path);
         return {'path': path, ..._summary()};
       case 'undo':
-        controller.undo(acceptLosses: args['acceptLosses'] ?? false);
+        controller.undo(acceptLosses: (args['acceptLosses'] ?? false) as bool);
       case 'redo':
-        controller.redo(acceptLosses: args['acceptLosses'] ?? false);
+        controller.redo(acceptLosses: (args['acceptLosses'] ?? false) as bool);
     }
     return _summary();
   }
@@ -1484,7 +1517,7 @@ class TournamentTools {
       (throw const TournamentException('Unknown section.'));
 
   void _postManual(Json args) {
-    final s = _section(args['sectionId']);
+    final s = _section(args['sectionId'] as String);
     final reason = (args['reason'] as String).trim();
     if (reason.isEmpty) {
       throw const TournamentException('Explain the manual pairing.');
@@ -1499,20 +1532,20 @@ class TournamentTools {
         .map(
           (g) => Game(
             id: controller.newId(),
-            white: g['white'],
-            black: g['black'],
-            board: g['board'],
-            leg: g['leg'] ?? 1,
+            white: g['white'] as String,
+            black: g['black'] as String,
+            board: g['board'] as int,
+            leg: (g['leg'] ?? 1) as int,
           ),
         )
         .toList();
     final byes = (args['byes'] as List)
         .map(
           (b) => ByeAward(
-            b['player'],
-            b['points'],
-            b['reason'],
-            allocated: b['allocated'] ?? false,
+            b['player'] as String,
+            b['points'] as int,
+            b['reason'] as String,
+            allocated: (b['allocated'] ?? false) as bool,
           ),
         )
         .toList();
@@ -1606,8 +1639,9 @@ void _validate(dynamic value, Json schema, String at) {
       fail('invalid choice');
     }
     if (value is int &&
-        ((schema['minimum'] != null && value < schema['minimum']) ||
-            (schema['maximum'] != null && value > schema['maximum']))) {
+        ((schema['minimum'] != null && value < (schema['minimum'] as num)) ||
+            (schema['maximum'] != null &&
+                value > (schema['maximum'] as num)))) {
       fail('out of range');
     }
   }

@@ -206,7 +206,8 @@ List<String> _bracketChanges(
       'ties: ${knockoutTiebreakLabels[knockoutTiebreak(s)]?.toLowerCase()}',
     );
   }
-  String key(Map d) => '${d['board']}/${d['advanced']}/${d['reason']}';
+  String key(Map<dynamic, dynamic> d) =>
+      '${d['board']}/${d['advanced']}/${d['reason']}';
   Set<String> decisions(Section x) => {
     for (final r in x.bracket['rounds'] as List? ?? const [])
       if (r is Map)

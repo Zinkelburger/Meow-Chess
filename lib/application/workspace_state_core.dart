@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'diagnostics.dart';
 import 'headless_foundation.dart';
 
 import 'event_repository.dart';
@@ -13,6 +14,7 @@ class WorkspaceStateCore extends ChangeNotifier {
   final EventRepository repository;
   final _memory = <String, String>{};
   final failures = <String, String>{};
+  final _unreadable = <String>{};
   bool _scheduled = false, _disposed = false;
 
   /// After release the event file is closed, so only drafts already held in
@@ -26,7 +28,17 @@ class WorkspaceStateCore extends ChangeNotifier {
       return value == null || value.isEmpty
           ? {}
           : Map<String, dynamic>.from(jsonDecode(value) as Map);
-    } catch (_) {
+    } catch (error, stack) {
+      // Views read from getters during build, so report each key only once.
+      if (_unreadable.add(key)) {
+        Diagnostics.record(
+          'read saved draft',
+          'failed; starting empty',
+          context: {'key': key},
+          error: error,
+          stack: stack,
+        );
+      }
       return {};
     }
   }

@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
+import '../application/diagnostics.dart';
 import '../domain/model.dart';
 
 /// Device preferences live outside tournament files and their undo history.
@@ -57,7 +58,15 @@ class PrinterPreference {
     try {
       final map = jsonDecode(await (await _paperFile).readAsString());
       return map is Map && map['size'] == 'a4';
-    } catch (_) {
+    } on PathNotFoundException {
+      return false; // Never chosen on this computer.
+    } catch (error, stack) {
+      Diagnostics.record(
+        'read paper size',
+        'failed; using Letter',
+        error: error,
+        stack: stack,
+      );
       return false;
     }
   }

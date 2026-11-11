@@ -345,51 +345,58 @@ class Player {
     if (fideEvidence.isNotEmpty) 'fideEvidence': fideEvidence,
   };
   factory Player.fromJson(Json j) => Player(
-    id: j['id'],
-    personId: j['personId'],
-    name: j['name'],
-    memberId: j['memberId'],
-    rating: j['rating'],
-    checkedIn: j['checkedIn'],
-    withdrawn: j['withdrawn'],
-    club: j['club'],
-    team: j['team'] ?? '',
-    avoid: Set<String>.from(j['avoid'] ?? const []),
-    notes: j['notes'],
-    registrationNote: j['registrationNote'] ?? '',
-    source: j['source'],
-    house: j['house'] ?? false,
-    byes: (j['byes'] as Map).map((k, v) => MapEntry(int.parse(k), v as int)),
-    state: j['state'] ?? '',
-    reportName: j['reportName'] ?? '',
-    ratingEvidence: Map<String, dynamic>.from(j['ratingEvidence'] ?? {}),
-    membershipEvidence: Map<String, dynamic>.from(
-      j['membershipEvidence'] ??
-          (j['ratingEvidence'] is Map &&
-                  (j['ratingEvidence'] as Map).containsKey('expiration')
-              ? j['ratingEvidence']
-              : const {}),
+    id: j['id'] as String,
+    personId: j['personId'] as String?,
+    name: j['name'] as String,
+    memberId: j['memberId'] as String,
+    rating: j['rating'] as int,
+    checkedIn: j['checkedIn'] as bool,
+    withdrawn: j['withdrawn'] as bool,
+    club: j['club'] as String,
+    team: (j['team'] ?? '') as String,
+    avoid: Set<String>.from(j['avoid'] as Iterable? ?? const []),
+    notes: j['notes'] as String,
+    registrationNote: (j['registrationNote'] ?? '') as String,
+    source: j['source'] as String,
+    house: (j['house'] ?? false) as bool,
+    byes: (j['byes'] as Map).map(
+      (k, v) => MapEntry(int.parse(k as String), v as int),
     ),
-    pairingRating: j['pairingRating'] ?? 0,
-    prizeRating: j['prizeRating'] ?? 0,
-    ratingNote: j['ratingNote'] ?? '',
-    foreignRating: j['foreignRating'] ?? 0,
-    foreignFederation: j['foreignFederation'] ?? '',
-    fixedBoard: j['fixedBoard'] ?? 0,
-    reentryOf: j['reentryOf'] ?? '',
+    state: (j['state'] ?? '') as String,
+    reportName: (j['reportName'] ?? '') as String,
+    ratingEvidence: Map<String, dynamic>.from(
+      j['ratingEvidence'] as Map? ?? {},
+    ),
+    membershipEvidence: Map<String, dynamic>.from(
+      (j['membershipEvidence'] ??
+              (j['ratingEvidence'] is Map &&
+                      (j['ratingEvidence'] as Map).containsKey('expiration')
+                  ? j['ratingEvidence']
+                  : const <Object?, Object?>{}))
+          as Map,
+    ),
+    pairingRating: (j['pairingRating'] ?? 0) as int,
+    prizeRating: (j['prizeRating'] ?? 0) as int,
+    ratingNote: (j['ratingNote'] ?? '') as String,
+    foreignRating: (j['foreignRating'] ?? 0) as int,
+    foreignFederation: (j['foreignFederation'] ?? '') as String,
+    fixedBoard: (j['fixedBoard'] ?? 0) as int,
+    reentryOf: (j['reentryOf'] ?? '') as String,
     irrevocableByes: {
       for (final r in j['irrevocableByes'] as List? ?? const []) r as int,
     },
-    computer: j['computer'] ?? false,
-    fideId: j['fideId'] ?? '',
-    fideStandard: j['fideStandard'] ?? 0,
-    fideRapid: j['fideRapid'] ?? 0,
-    fideBlitz: j['fideBlitz'] ?? 0,
-    title: j['title'] ?? '',
-    federation: j['federation'] ?? '',
-    birthDate: j['birthDate'] ?? '',
-    sex: j['sex'] ?? '',
-    fideEvidence: Map<String, dynamic>.from(j['fideEvidence'] ?? const {}),
+    computer: (j['computer'] ?? false) as bool,
+    fideId: (j['fideId'] ?? '') as String,
+    fideStandard: (j['fideStandard'] ?? 0) as int,
+    fideRapid: (j['fideRapid'] ?? 0) as int,
+    fideBlitz: (j['fideBlitz'] ?? 0) as int,
+    title: (j['title'] ?? '') as String,
+    federation: (j['federation'] ?? '') as String,
+    birthDate: (j['birthDate'] ?? '') as String,
+    sex: (j['sex'] ?? '') as String,
+    fideEvidence: Map<String, dynamic>.from(
+      j['fideEvidence'] as Map? ?? const {},
+    ),
   );
 }
 
@@ -483,24 +490,24 @@ class Game {
     if (shortGame) 'shortGame': shortGame,
   };
   factory Game.fromJson(Json j) => Game(
-    id: j['id'],
-    white: j['white'],
-    black: j['black'],
-    board: j['board'],
-    leg: j['leg'],
-    outcome: Outcome.values.byName(j['outcome']),
-    note: j['note'],
+    id: j['id'] as String,
+    white: j['white'] as String,
+    black: j['black'] as String,
+    board: j['board'] as int,
+    leg: j['leg'] as int,
+    outcome: Outcome.values.byName(j['outcome'] as String),
+    note: j['note'] as String,
     pairingAssumption: j['pairingAssumption'] == null
         ? null
-        : Outcome.values.byName(j['pairingAssumption']),
-    pairingReason: j['pairingReason'] ?? '',
-    adjudicated: j['adjudicated'] ?? false,
+        : Outcome.values.byName(j['pairingAssumption'] as String),
+    pairingReason: (j['pairingReason'] ?? '') as String,
+    adjudicated: (j['adjudicated'] ?? false) as bool,
     prizeOutcome: j['prizeOutcome'] == null
         ? null
-        : Outcome.values.byName(j['prizeOutcome']),
-    whitePartner: j['whitePartner'] ?? '',
-    blackPartner: j['blackPartner'] ?? '',
-    shortGame: j['shortGame'] ?? false,
+        : Outcome.values.byName(j['prizeOutcome'] as String),
+    whitePartner: (j['whitePartner'] ?? '') as String,
+    blackPartner: (j['blackPartner'] ?? '') as String,
+    shortGame: (j['shortGame'] ?? false) as bool,
   );
 }
 
@@ -521,10 +528,10 @@ class ByeAward {
     'allocated': allocated,
   };
   factory ByeAward.fromJson(Json j) => ByeAward(
-    j['player'],
-    j['points'],
-    j['reason'],
-    allocated: j['allocated'],
+    j['player'] as String,
+    j['points'] as int,
+    j['reason'] as String,
+    allocated: j['allocated'] as bool,
   );
 }
 
@@ -585,15 +592,15 @@ class Round {
     if (explanations.isNotEmpty) 'explanations': explanations,
   };
   factory Round.fromJson(Json j) => Round(
-    number: j['number'],
-    games: (j['games'] as List).map((g) => Game.fromJson(g)).toList(),
-    byes: (j['byes'] as List).map((b) => ByeAward.fromJson(b)).toList(),
-    postedAt: j['postedAt'],
-    startedAt: j['startedAt'],
-    revision: j['revision'],
-    policy: j['policy'],
-    note: j['note'],
-    explanations: List<String>.from(j['explanations'] ?? const []),
+    number: j['number'] as int,
+    games: (j['games'] as List).map((g) => Game.fromJson(g as Json)).toList(),
+    byes: (j['byes'] as List).map((b) => ByeAward.fromJson(b as Json)).toList(),
+    postedAt: j['postedAt'] as String?,
+    startedAt: j['startedAt'] as String?,
+    revision: j['revision'] as int,
+    policy: j['policy'] as String,
+    note: j['note'] as String,
+    explanations: List<String>.from(j['explanations'] as Iterable? ?? const []),
   );
 }
 
@@ -856,41 +863,47 @@ class Section {
     if (bakuLast.isNotEmpty) 'bakuLast': bakuLast,
   };
   factory Section.fromJson(Json j) => Section(
-    id: j['id'],
-    name: j['name'],
-    players: List<String>.from(j['players']),
-    format: Format.values.byName(j['format']),
-    plannedRounds: j['plannedRounds'],
-    boardStart: j['boardStart'],
-    doubleGames: j['doubleGames'],
-    rounds: (j['rounds'] as List).map((r) => Round.fromJson(r)).toList(),
-    ratingCeiling: j['ratingCeiling'] ?? 0,
-    ratingFloor: j['ratingFloor'] ?? 0,
-    rangeExceptions: Map<String, String>.from(j['rangeExceptions'] ?? const {}),
-    timeControl: j['timeControl'] ?? '',
-    sideGames: j['sideGames'] ?? false,
+    id: j['id'] as String,
+    name: j['name'] as String,
+    players: List<String>.from(j['players'] as Iterable),
+    format: Format.values.byName(j['format'] as String),
+    plannedRounds: j['plannedRounds'] as int,
+    boardStart: j['boardStart'] as int,
+    doubleGames: j['doubleGames'] as bool,
+    rounds: (j['rounds'] as List)
+        .map((r) => Round.fromJson(r as Json))
+        .toList(),
+    ratingCeiling: (j['ratingCeiling'] ?? 0) as int,
+    ratingFloor: (j['ratingFloor'] ?? 0) as int,
+    rangeExceptions: Map<String, String>.from(
+      j['rangeExceptions'] as Map? ?? const {},
+    ),
+    timeControl: (j['timeControl'] ?? '') as String,
+    sideGames: (j['sideGames'] ?? false) as bool,
     quadPairings: [
-      for (final r in j['quadPairings'] as List? ?? const []) List<int>.from(r),
+      for (final r in j['quadPairings'] as List? ?? const [])
+        List<int>.from(r as Iterable),
     ],
-    accelerated: j['accelerated'] ?? '',
-    avoidTeammates: j['avoidTeammates'] ?? false,
-    variations: Set<String>.from(j['variations'] ?? const []),
-    byeRules: Map<String, dynamic>.from(j['byeRules'] ?? const {}),
-    prizes: Map<String, dynamic>.from(j['prizes'] ?? const {}),
-    rrTable: j['rrTable'] ?? '',
-    doubleCycle: j['doubleCycle'] ?? false,
-    homeTeam: j['homeTeam'] ?? '',
-    holland: Map<String, dynamic>.from(j['holland'] ?? const {}),
-    bracket: Map<String, dynamic>.from(j['bracket'] ?? const {}),
+    accelerated: (j['accelerated'] ?? '') as String,
+    avoidTeammates: (j['avoidTeammates'] ?? false) as bool,
+    variations: Set<String>.from(j['variations'] as Iterable? ?? const []),
+    byeRules: Map<String, dynamic>.from(j['byeRules'] as Map? ?? const {}),
+    prizes: Map<String, dynamic>.from(j['prizes'] as Map? ?? const {}),
+    rrTable: (j['rrTable'] ?? '') as String,
+    doubleCycle: (j['doubleCycle'] ?? false) as bool,
+    homeTeam: (j['homeTeam'] ?? '') as String,
+    holland: Map<String, dynamic>.from(j['holland'] as Map? ?? const {}),
+    bracket: Map<String, dynamic>.from(j['bracket'] as Map? ?? const {}),
     partners: [
-      for (final p in j['partners'] as List? ?? const []) List<String>.from(p),
+      for (final p in j['partners'] as List? ?? const [])
+        List<String>.from(p as Iterable),
     ],
-    unrated: j['unrated'] ?? false,
-    fideRated: j['fideRated'] ?? false,
-    fideRanking: j['fideRanking'] ?? '',
-    fideOrder: List<String>.from(j['fideOrder'] ?? const []),
-    pabPoints: j['pabPoints'] ?? 2,
-    bakuLast: j['bakuLast'] ?? '',
+    unrated: (j['unrated'] ?? false) as bool,
+    fideRated: (j['fideRated'] ?? false) as bool,
+    fideRanking: (j['fideRanking'] ?? '') as String,
+    fideOrder: List<String>.from(j['fideOrder'] as Iterable? ?? const []),
+    pabPoints: (j['pabPoints'] ?? 2) as int,
+    bakuLast: (j['bakuLast'] ?? '') as String,
   );
 }
 
@@ -975,7 +988,7 @@ class FideRegistration {
         'FIDE officials and the federation are text.',
       ),
     };
-    final deputies = j['deputies'] ?? const [];
+    final deputies = j['deputies'] ?? const <Object?>[];
     if (deputies is! List || deputies.any((d) => d is! Map)) {
       throw const TournamentException(
         'Deputy arbiters are a list of names and FIDE IDs.',
@@ -988,7 +1001,7 @@ class FideRegistration {
         id: text(j['chiefArbiterId']),
       ),
       deputies: List.unmodifiable([
-        for (final d in deputies.cast<Map>())
+        for (final d in deputies.cast<Map<dynamic, dynamic>>())
           FideOfficial(name: text(d['name']), id: text(d['id'])),
       ]),
     );
@@ -1206,45 +1219,52 @@ class Event {
     if (fideTiebreaks.isNotEmpty) 'fideTiebreaks': fideTiebreaks,
   };
   factory Event.fromJson(Json j) => Event(
-    id: j['id'],
-    name: j['name'],
-    date: j['date'],
-    useTiebreaks: j['useTiebreaks'] ?? false,
-    timeControl: j['timeControl'],
-    venue: j['venue'],
-    tdId: j['tdId'],
-    assistantTdId: j['assistantTdId'] ?? '',
-    otherTdIds: j['otherTdIds'] ?? '',
-    affiliateId: j['affiliateId'],
-    revision: j['revision'],
-    practice: j['practice'],
-    backupFolder: j['backupFolder'],
-    lastBackupRevision: j['lastBackupRevision'],
-    players: (j['players'] as List).map((p) => Player.fromJson(p)).toList(),
-    sections: (j['sections'] as List).map((s) => Section.fromJson(s)).toList(),
-    transitions: List<Json>.from(j['transitions']),
-    notes: j['notes'] ?? '',
-    submission: j['submission'] ?? '',
-    rosterSource: Map<String, dynamic>.from(j['rosterSource'] ?? {}),
-    policy: j['policy'] ?? '',
-    endDate: j['endDate'] ?? '',
-    city: j['city'] ?? '',
-    state: j['state'] ?? '',
-    zip: j['zip'] ?? '',
-    level: j['level'] ?? 'N',
-    colorToss: j['colorToss'] ?? '',
-    tiebreaks: List<String>.from(j['tiebreaks'] ?? const []),
-    online: j['online'] ?? false,
+    id: j['id'] as String,
+    name: j['name'] as String,
+    date: j['date'] as String,
+    useTiebreaks: (j['useTiebreaks'] ?? false) as bool,
+    timeControl: j['timeControl'] as String,
+    venue: j['venue'] as String,
+    tdId: j['tdId'] as String,
+    assistantTdId: (j['assistantTdId'] ?? '') as String,
+    otherTdIds: (j['otherTdIds'] ?? '') as String,
+    affiliateId: j['affiliateId'] as String,
+    revision: j['revision'] as int,
+    practice: j['practice'] as bool,
+    backupFolder: j['backupFolder'] as String,
+    lastBackupRevision: j['lastBackupRevision'] as int?,
+    players: (j['players'] as List)
+        .map((p) => Player.fromJson(p as Json))
+        .toList(),
+    sections: (j['sections'] as List)
+        .map((s) => Section.fromJson(s as Json))
+        .toList(),
+    transitions: List<Json>.from(j['transitions'] as Iterable),
+    notes: (j['notes'] ?? '') as String,
+    submission: (j['submission'] ?? '') as String,
+    rosterSource: Map<String, dynamic>.from(j['rosterSource'] as Map? ?? {}),
+    policy: (j['policy'] ?? '') as String,
+    endDate: (j['endDate'] ?? '') as String,
+    city: (j['city'] ?? '') as String,
+    state: (j['state'] ?? '') as String,
+    zip: (j['zip'] ?? '') as String,
+    level: (j['level'] ?? 'N') as String,
+    colorToss: (j['colorToss'] ?? '') as String,
+    tiebreaks: List<String>.from(j['tiebreaks'] as Iterable? ?? const []),
+    online: (j['online'] ?? false) as bool,
     rulings: List<Json>.from(
       (j['rulings'] as List? ?? const []).map(
         (r) => Map<String, dynamic>.from(r as Map),
       ),
     ),
     fide: FideRegistration.fromJson(j['fide']),
-    fideTiebreaks: List<String>.from(j['fideTiebreaks'] ?? const []),
+    fideTiebreaks: List<String>.from(
+      j['fideTiebreaks'] as Iterable? ?? const [],
+    ),
   );
   String encode() => jsonEncode(toJson());
-  factory Event.decode(String source) => Event.fromJson(jsonDecode(source));
+  factory Event.decode(String source) =>
+      Event.fromJson(jsonDecode(source) as Json);
 }
 
 /// The fields of an event's JSON that belong to the computer it is open on,

@@ -33,7 +33,7 @@ void main() {
           {'name': 'Player $i', 'rating': 2000 - 50 * i},
       ],
     });
-    ids = [for (final p in added['added']) p['id'] as String];
+    ids = [for (final p in added['added'] as List) p['id'] as String];
     final created = await write('create_section', {
       'name': 'Knockout',
       'players': ids,
@@ -177,7 +177,7 @@ void main() {
     expect(round['note'], startsWith('Tie-break games (rapid)'));
     expect(
       [
-        for (final g in round['games']) [g['board'], g['leg']],
+        for (final g in round['games'] as List) [g['board'], g['leg']],
       ],
       [
         [1, 3],
@@ -200,7 +200,7 @@ void main() {
     });
     final created = await write('create_section', {
       'name': 'Final',
-      'players': [for (final p in added['added']) p['id']],
+      'players': [for (final p in added['added'] as List) p['id']],
       'format': 'knockout',
       'plannedRounds': 1,
       'boardStart': 1,
@@ -236,7 +236,7 @@ void main() {
     await expectLater(
       write('create_section', {
         'name': 'Knockout',
-        'players': [for (final p in added['added']) p['id']],
+        'players': [for (final p in added['added'] as List) p['id']],
         'format': 'knockout',
         'plannedRounds': 1,
         'boardStart': 1,

@@ -810,7 +810,7 @@ Section knockoutDecided(
       'stage': stage.number,
       'name': stage.name,
       'rounds': [for (final r in stage.rounds) r.number],
-      'decisions': const [],
+      'decisions': const <Object?>[],
     };
     rounds.add(entry);
   }

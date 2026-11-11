@@ -1,5 +1,5 @@
 import 'model.dart';
-import 'prizes.dart' show PrizeKind, PrizeTable;
+import 'prizes.dart' show Prize, PrizeKind, PrizeTable;
 import 'standings.dart';
 
 /// US Chess Swiss pairings for one round (rules 27–29 of the 7th edition).
@@ -949,7 +949,7 @@ const _classNames = {
     table = null;
   }
   final classPrizes = [
-    for (final p in table?.list ?? const [])
+    for (final p in table?.list ?? const <Prize>[])
       if (p.kind.ratingBased) p,
   ];
   if (classPrizes.isEmpty) {

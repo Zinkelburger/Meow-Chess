@@ -5,12 +5,28 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 
+import '../application/diagnostics.dart';
 import '../domain/member_observation.dart';
 import 'diagnostic_log.dart';
 import 'ratings_api.dart' show RatingsApi;
 
 const _secure = FlutterSecureStorage();
 const _keyName = 'uschess-v2';
+
+var _keychainFailureRecorded = false;
+
+/// A missing keychain is normal on some Linux desktops and every lookup in a
+/// roster refresh meets it, so this is recorded once per launch.
+void _recordKeychainFailure(Object error, StackTrace stack) {
+  if (_keychainFailureRecorded) return;
+  _keychainFailureRecorded = true;
+  Diagnostics.record(
+    'read system keychain',
+    'failed; treating as no saved value',
+    error: error,
+    stack: stack,
+  );
+}
 
 /// Owns provider credentials and short-lived HTTP clients. Reads never write to
 /// an event repository; the application must accept evidence before storing it.
@@ -26,8 +42,9 @@ class MemberDirectory {
     String? key;
     try {
       key = await storage.read(key: _keyName);
-    } catch (_) {
+    } catch (error, stack) {
       // Public lookup also works when the system keychain is unavailable.
+      _recordKeychainFailure(error, stack);
     }
     final client = createClient();
     try {
@@ -67,7 +84,8 @@ Future<void> saveMemberApiKey(String key) => key.trim().isEmpty
 Future<bool> hasMemberApiKey() async {
   try {
     return (await _secure.read(key: _keyName))?.trim().isNotEmpty ?? false;
-  } catch (_) {
+  } catch (error, stack) {
+    _recordKeychainFailure(error, stack);
     return false;
   }
 }
@@ -102,21 +120,34 @@ class RatingCategoryPreference {
         final saved = (jsonDecode(f.readAsStringSync()) as Map)['category'];
         return _categories.contains(saved) ? saved as String : 'R';
       }
-    } catch (_) {
+    } catch (error, stack) {
+      Diagnostics.record(
+        'read default rating category',
+        'failed; using Regular',
+        error: error,
+        stack: stack,
+      );
       return 'R';
     }
     final String? legacy;
     try {
       legacy = await storage.read(key: _legacyCategoryKey);
-    } catch (_) {
+    } catch (error, stack) {
+      _recordKeychainFailure(error, stack);
       return 'R';
     }
     final value = _categories.contains(legacy) ? legacy! : 'R';
     if (f != null) {
       try {
         _write(f, value);
-      } catch (_) {
+      } catch (error, stack) {
         // Migration retries next time.
+        Diagnostics.record(
+          'migrate default rating category',
+          'failed',
+          error: error,
+          stack: stack,
+        );
       }
     }
     return value;

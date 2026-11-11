@@ -335,7 +335,9 @@ class PrizeTable {
       withdrawnEligible: j['withdrawnEligible'] == true,
       unratedCapCents: integer('unratedCapCents'),
       list: list,
-      teams: j['teams'] is Map ? Map<String, dynamic>.from(j['teams']) : null,
+      teams: j['teams'] is Map
+          ? Map<String, dynamic>.from(j['teams'] as Map)
+          : null,
     );
   }
 

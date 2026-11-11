@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../domain/model.dart';
 import '../domain/us_chess.dart';
 import '../domain/member_observation.dart';
+import '../application/diagnostics.dart';
 import '../application/member_lookup.dart';
 
 export '../domain/member_observation.dart';
@@ -45,12 +46,24 @@ class RatingsApi {
         results.add(member);
       }
       return List.unmodifiable(results);
-    } catch (_) {
+    } catch (error, stack) {
+      _recordUnreadable('search members', error, stack);
       throw const TournamentException(
         'Unreadable US Chess search results. Try again later.',
       );
     }
   }
+
+  /// Records the error's type and where it arose, never its message: a
+  /// FormatException quotes the response, and provider responses stay out of
+  /// the log.
+  void _recordUnreadable(String operation, Object error, StackTrace stack) =>
+      Diagnostics.record(
+        operation,
+        'unreadable response',
+        error: error.runtimeType,
+        stack: stack,
+      );
 
   /// All provider routes share redirect, timeout, credential and failure policy.
   Future<http.Response> _get(
@@ -178,9 +191,8 @@ class RatingsApi {
       for (final row in latest['ratings'] as List) {
         final value = row['rating'];
         if (row['source'] is String) {
-          ratings[row['source']] = value is int && value >= 0 && value <= 4000
-              ? value
-              : null;
+          ratings[row['source'] as String] =
+              value is int && value >= 0 && value <= 4000 ? value : null;
         }
       }
       return MemberObservation(
@@ -192,10 +204,11 @@ class RatingsApi {
         status: profile.status,
         state: profile.state,
         reportName: profile.reportName,
-        supplementDate: latest['ratingSupplementDate'],
+        supplementDate: latest['ratingSupplementDate'] as String?,
         provider: publicAccess ? 'US Chess public v1' : 'US Chess API v2',
       );
-    } catch (_) {
+    } catch (error, stack) {
+      _recordUnreadable('read rating supplement', error, stack);
       throw const TournamentException(
         'No readable dated monthly supplement was returned. Keep the local rating and try again later.',
       );
@@ -271,11 +284,11 @@ MemberObservation _parseMember(Json json, DateTime retrieved) {
   for (final value in (json['ratings'] as List? ?? [])) {
     if (value is Map && value['ratingSystem'] is String) {
       final rating = value['rating'];
-      ratings[value['ratingSystem']] = rating is int ? rating : null;
+      ratings[value['ratingSystem'] as String] = rating is int ? rating : null;
     }
   }
   return MemberObservation(
-    id: json['id'],
+    id: json['id'] as String,
     name: [json['firstName'], json['lastName']].whereType<String>().join(' '),
     retrievedAt: retrieved.toUtc().toIso8601String(),
     ratings: Map.unmodifiable(ratings),

@@ -36,7 +36,7 @@ void main() {
             {'name': 'Tiger $i', 'rating': 1790 - i * 10, 'team': 'Tigers'},
         ],
       });
-      final ids = [for (final p in added['added']) p['id'] as String];
+      final ids = [for (final p in added['added'] as List) p['id'] as String];
       final created = await write('create_section', {
         'name': 'Match',
         'players': ids,

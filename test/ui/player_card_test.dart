@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/ui/player_actions.dart';
 import 'package:meow_chess/ui/player_panel.dart';
@@ -11,7 +12,7 @@ import 'package:meow_chess/ui/theme.dart';
 import '../support.dart';
 import 'package:meow_chess/ui/select.dart';
 
-Future<void> mountPlayers(WidgetTester tester, c) async {
+Future<void> mountPlayers(WidgetTester tester, TournamentController c) async {
   tester.view.physicalSize = const Size(1400, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -29,7 +30,11 @@ Future<void> mountPlayers(WidgetTester tester, c) async {
   );
 }
 
-Future<void> mountPanel(WidgetTester tester, c, {String? focusField}) async {
+Future<void> mountPanel(
+  WidgetTester tester,
+  TournamentController c, {
+  String? focusField,
+}) async {
   tester.view.physicalSize = const Size(600, 1400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);

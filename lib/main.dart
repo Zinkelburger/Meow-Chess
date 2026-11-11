@@ -162,9 +162,17 @@ class _MeowAppState extends State<MeowApp> {
     super.initState();
     try {
       if (library.existsSync()) {
-        recent = List<String>.from(jsonDecode(library.readAsStringSync()));
+        recent = List<String>.from(
+          jsonDecode(library.readAsStringSync()) as Iterable,
+        );
       }
-    } catch (_) {
+    } catch (cause, stack) {
+      Diagnostics.record(
+        'read recent events',
+        'failed',
+        error: cause,
+        stack: stack,
+      );
       error =
           'Recent-event list could not be read. Your event files are unaffected.';
     }
@@ -421,7 +429,15 @@ class _MeowAppState extends State<MeowApp> {
     );
     try {
       library.writeAsStringSync(jsonEncode(recent), flush: true);
-    } catch (_) {}
+    } catch (cause, stack) {
+      // The entry is gone for now but returns at the next launch.
+      Diagnostics.record(
+        'save recent events',
+        'failed',
+        error: cause,
+        stack: stack,
+      );
+    }
   }
 
   Future<void> reveal(BuildContext context, String filename) async {

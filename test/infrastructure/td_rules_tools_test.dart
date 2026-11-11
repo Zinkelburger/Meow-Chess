@@ -34,7 +34,7 @@ void main() {
           {'name': 'Di', 'rating': 1500},
         ],
       });
-      final ids = [for (final p in added['added']) p['id'] as String];
+      final ids = [for (final p in added['added'] as List) p['id'] as String];
       final created = await write('create_section', {
         'name': 'Open',
         'players': ids,
@@ -144,7 +144,7 @@ void main() {
         {'name': 'Di', 'rating': 1500},
       ],
     });
-    final ids = [for (final p in added['added']) p['id'] as String];
+    final ids = [for (final p in added['added'] as List) p['id'] as String];
     final created = await write('create_section', {
       'name': 'Open',
       'players': ids,
@@ -174,7 +174,7 @@ void main() {
         for (var i = 0; i < 6; i++) {'name': 'P$i', 'rating': 1800 - 50 * i},
       ],
     });
-    final ids = [for (final p in added['added']) p['id'] as String];
+    final ids = [for (final p in added['added'] as List) p['id'] as String];
     final created = await write('create_section', {
       'name': 'Open',
       'players': ids,

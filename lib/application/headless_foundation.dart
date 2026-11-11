@@ -42,4 +42,4 @@ bool listEquals<T>(List<T>? a, List<T>? b) =>
     (a != null &&
         b != null &&
         a.length == b.length &&
-        Iterable.generate(a.length).every((i) => a[i] == b[i]));
+        Iterable<int>.generate(a.length).every((i) => a[i] == b[i]));
