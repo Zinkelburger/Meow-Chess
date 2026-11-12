@@ -34,7 +34,7 @@ A release is one commit that bumps the version in `pubspec.yaml`,
 [the changelog](CHANGELOG.md) and updates the README, followed by a tag:
 
 ```
-git tag v1.5.0 && git push origin main v1.5.0
+git tag v1.5.1 && git push origin main v1.5.1
 ```
 
 The lint refuses a tag that does not match the package version. Pushing the

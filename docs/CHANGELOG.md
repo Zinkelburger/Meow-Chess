@@ -4,6 +4,19 @@ Downloads for each version are on
 [Releases](https://github.com/Zinkelburger/Meow-Chess/releases); the browser
 version at https://chessautoprep.com/meow-chess/ follows the latest release.
 
+## 1.5.1 — November 12, 2026
+
+- Ticking players and then creating a section or moving them no longer leaves
+  an old Move-to or swap waiting to be applied.
+- Crosstable headings stay over their columns in every layout, and tables in
+  FIDE-only events are sized to the columns they show.
+- Tab into the crosstable lands on the cell you were on, or else the first one
+  still missing a result.
+- An event whose prize table or variation setting cannot be read is refused
+  when it opens rather than failing later.
+- More unexpected problems (keychain, damaged drafts, US Chess replies, browser
+  storage) are written to the diagnostic log instead of passing silently.
+
 ## 1.5.0 — November 10, 2026
 
 - **Events saved by this version cannot be opened by 1.4.0 or earlier**, which
