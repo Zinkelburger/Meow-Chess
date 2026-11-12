@@ -263,8 +263,8 @@ void main() {
       await tester.tap(find.text('Pairings').first);
       await tester.pumpAndSettle();
       final state = tester.state<ResultsViewState>(find.byType(ResultsView));
-      expect(state.selectedRound, 1);
-      expect(state.correcting, false);
+      expect(state.selection.selectedRound, 1);
+      expect(state.selection.correcting, false);
       await tester.tap(find.byKey(const ValueKey('print-round')));
       await tester.pump();
       final preview = tester.widget<PrintPanel>(find.byType(PrintPanel));

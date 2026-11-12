@@ -28,30 +28,13 @@ import 'players_view.dart';
 import 'pairing_review.dart';
 import 'pane_controls.dart';
 import 'panels.dart';
+import 'results_view_model.dart';
 import 'theme.dart';
 import 'workspace_status.dart';
 
-class BoardRow {
-  const BoardRow(this.section, this.round, this.game);
-  final Section section;
-  final Round round;
-  final Game game;
-}
+export 'results_view_model.dart' show BoardRow, unstartedBoards;
 
-/// The boards of [round] that have not started: no result and no pairing
-/// assumption on any of their games (both games of a double-game board
-/// count together), in board order.
-List<int> unstartedBoards(Round round) {
-  final started = {
-    for (final g in round.games)
-      if (g.outcome != Outcome.unreported || g.pairingAssumption != null)
-        g.board,
-  };
-  return {
-    for (final g in round.games)
-      if (!started.contains(g.board)) g.board,
-  }.toList()..sort();
-}
+part 'results_view_widgets.dart';
 
 /// Pairings and results, laid out like the wall sheet: round and result count,
 /// then one row per board with a score box either side. Typing 1/W, 0/L or D in
@@ -123,14 +106,9 @@ class ResultsViewState extends State<ResultsView> {
   final crosstableHeading = GlobalKey();
   final stackedScroll = ScrollController();
 
-  /// An earlier round on screen; null shows each section's current round.
-  /// Restored read-only; a newly posted round resets the selection.
-  int? selectedRound;
-  bool showAllRounds = false;
-
-  /// The default view: a fixed quad schedule shows every round, while
-  /// Swiss sections beside it stay on their current round.
-  bool scheduleRounds = true;
+  /// Which rounds are on screen, and whether an earlier one is being
+  /// corrected.
+  final selection = RoundSelection();
 
   /// Every board was entered; focus rests on the completion status.
   bool allEntered = false;
@@ -154,12 +132,6 @@ class ResultsViewState extends State<ResultsView> {
     if (target != null) Scrollable.ensureVisible(target);
   }
 
-  /// Whether results in an earlier round may be changed.
-  bool correcting = false;
-
-  /// A result key was pressed on a read-only round.
-  bool nudged = false;
-
   /// Editing pairings: two clicked players swap places.
   bool swapping = false;
   String? swapPick;
@@ -179,7 +151,7 @@ class ResultsViewState extends State<ResultsView> {
   @override
   void initState() {
     super.initState();
-    showAllRounds = allQuads;
+    selection.showAllRounds = allQuads;
     roundSignature = signature();
     final saved = c.workspaceState.readMap(preference);
     if (c.workspaceState.read('pairings-missing-only') == null) {
@@ -188,13 +160,15 @@ class ResultsViewState extends State<ResultsView> {
         '${saved['missingOnly'] == true}',
       );
     }
-    if (saved['signature'] == roundSignature) {
-      selectedRound = saved['round'] as int?;
-      showAllRounds = saved['allRounds'] == true;
-      scheduleRounds = saved['scheduleRounds'] != false;
-      jump.text = saved['search'] as String? ?? '';
-      activeBox = saved['box'] as String?;
-      scrollOffset = (saved['scroll'] as num? ?? 0).toDouble();
+    final restored = SavedResultsView.restore(saved, roundSignature);
+    if (restored != null) {
+      selection
+        ..selectedRound = restored.round
+        ..showAllRounds = restored.allRounds
+        ..scheduleRounds = restored.scheduleRounds;
+      jump.text = restored.search;
+      activeBox = restored.box;
+      scrollOffset = restored.scroll;
     }
     ready = true;
     jump.addListener(remember);
@@ -208,12 +182,9 @@ class ResultsViewState extends State<ResultsView> {
       } else {
         focusFirst();
       }
-      if (scroll.hasClients && saved['signature'] == roundSignature) {
+      if (scroll.hasClients && restored != null) {
         scroll.jumpTo(
-          (saved['scroll'] as num? ?? 0).toDouble().clamp(
-            0,
-            scroll.position.maxScrollExtent,
-          ),
+          restored.scroll.clamp(0, scroll.position.maxScrollExtent),
         );
       }
     });
@@ -229,7 +200,9 @@ class ResultsViewState extends State<ResultsView> {
     context,
     c.event!,
     sectionId: widget.sectionId,
-    roundNumber: sections.every(hasFixedQuadSchedule) ? null : selectedRound,
+    roundNumber: sections.every(hasFixedQuadSchedule)
+        ? null
+        : selection.selectedRound,
     kind: ReportKind.packet,
   );
 
@@ -240,8 +213,7 @@ class ResultsViewState extends State<ResultsView> {
   bool get allQuads =>
       sections.isNotEmpty && sections.every(hasFixedQuadSchedule);
 
-  String signature() =>
-      sections.map((s) => '${s.id}:${s.rounds.length}').join('|');
+  String signature() => roundCountSignature(sections);
 
   @override
   void didUpdateWidget(covariant ResultsView oldWidget) {
@@ -249,10 +221,8 @@ class ResultsViewState extends State<ResultsView> {
     final next = signature();
     // A round was posted or undone: go back to the current round.
     if (roundSignature.isNotEmpty && next != roundSignature) {
-      selectedRound = null;
-      showAllRounds = allQuads;
-      scheduleRounds = true;
-      correcting = nudged = allEntered = invalidKey = false;
+      selection.reset(allQuads: allQuads);
+      allEntered = invalidKey = false;
       activeBox = null;
       jump.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -282,13 +252,13 @@ class ResultsViewState extends State<ResultsView> {
   }
 
   FocusNode box(String gameId, bool white) =>
-      boxes.putIfAbsent('$gameId-${white ? 'w' : 'b'}', () {
+      boxes.putIfAbsent(boxKey(gameId, white), () {
         final node = FocusNode(
           debugLabel: 'score $gameId ${white ? 'white' : 'black'}',
         );
         node.addListener(() {
           if (node.hasFocus) {
-            activeBox = '$gameId-${white ? 'w' : 'b'}';
+            activeBox = boxKey(gameId, white);
             invalidKey = false;
             // Back on a board: the status line names it again.
             allEntered = false;
@@ -298,63 +268,14 @@ class ResultsViewState extends State<ResultsView> {
         return node;
       });
 
-  /// The round of [s] on screen.
-  Round? shownRound(Section s) => selectedRound == null
-      ? s.rounds.lastOrNull
-      : s.rounds.where((r) => r.number == selectedRound).firstOrNull;
+  List<BoardRow> rows() => boardRows(sections, selection);
 
-  /// Whether every round of [s] is on screen. A quad's fixed schedule never
-  /// turns a Swiss section beside it into an earlier round.
-  bool allRoundsOf(Section s) =>
-      showAllRounds ||
-      (scheduleRounds && selectedRound == null && hasFixedQuadSchedule(s));
-
-  Iterable<Round> shownRounds(Section s) =>
-      allRoundsOf(s) ? s.rounds : [?shownRound(s)];
-
-  /// An earlier round, whose results change only while correcting.
-  bool earlier(Section s, Round r) =>
-      s.format == Format.swiss && r.number < s.rounds.length;
-  bool past(BoardRow row) => earlier(row.section, row.round);
-  bool locked(BoardRow row) => past(row) && !correcting;
-
-  List<BoardRow> rows() {
-    final result = <BoardRow>[];
-    for (final s in sections) {
-      for (final r in shownRounds(s)) {
-        for (final g in r.games) {
-          result.add(BoardRow(s, r, g));
-        }
-      }
-    }
-    result.sort((a, b) {
-      final round = a.round.number.compareTo(b.round.number);
-      if (round != 0) return round;
-      final board = a.game.board.compareTo(b.game.board);
-      return board != 0 ? board : a.game.leg.compareTo(b.game.leg);
-    });
-    return result;
-  }
-
-  bool named(Player p) {
-    final q = jump.text.trim().toLowerCase();
-    return q.isEmpty || p.name.toLowerCase().contains(q);
-  }
-
-  List<BoardRow> visibleRows() {
-    final q = jump.text.trim();
-    final e = c.event!;
-    return rows()
-        .where(
-          (r) =>
-              (!missingOnly || !r.game.outcome.resolved) &&
-              (q.isEmpty ||
-                  '${r.game.board}' == q ||
-                  named(e.player(r.game.white)) ||
-                  named(e.player(r.game.black))),
-        )
-        .toList();
-  }
+  List<BoardRow> visibleRows() => filterBoardRows(
+    rows(),
+    c.event!,
+    query: jump.text,
+    missingOnly: missingOnly,
+  );
 
   /// The last scroll offset, kept after the list detaches on dispose.
   double scrollOffset = 0;
@@ -376,24 +297,24 @@ class ResultsViewState extends State<ResultsView> {
     if (!ready) return;
     scrollSave?.cancel();
     scrollSave = null;
-    final state = {
-      'signature': roundSignature,
-      'round': selectedRound,
-      'allRounds': showAllRounds,
-      'scheduleRounds': scheduleRounds,
-      'search': jump.text,
-      'box': activeBox,
-      'scroll': scroll.hasClients ? scroll.offset : scrollOffset,
-    };
+    final state = SavedResultsView(
+      signature: roundSignature,
+      round: selection.selectedRound,
+      allRounds: selection.showAllRounds,
+      scheduleRounds: selection.scheduleRounds,
+      search: jump.text,
+      box: activeBox,
+      scroll: scroll.hasClients ? scroll.offset : scrollOffset,
+    ).toMap();
     final next = '$state';
     if (next == remembered) return;
     if (c.workspaceState.writeMap(preference, state)) remembered = next;
   }
 
-  /// Where each board sits in the list of rows last drawn (section
-  /// headings, score groups and byes included), and how many rows there are.
-  Map<String, int> _itemOf = const {};
-  int _itemCount = 0;
+  /// The rows last drawn (section headings, score groups and byes
+  /// included) and where each board sits among them. Empty whenever no
+  /// boards are drawn, so a jump never uses positions from an older sheet.
+  SheetLayout _sheet = SheetLayout.empty;
 
   /// Whether [node]'s box is on screen now. The boards are a lazy list, and
   /// a node keeps the context of a row the list has since dropped, so only
@@ -408,7 +329,7 @@ class ResultsViewState extends State<ResultsView> {
         // where it should be. Either way the row may simply not be drawn
         // yet, so look again once the sheet has been built.
         if (scroll.hasClients) {
-          if (_itemOf[gameId] case final index?) {
+          if (_sheet.itemOf[gameId] case final index?) {
             scroll.position.jumpTo(_offsetNear(index));
           }
         }
@@ -448,7 +369,7 @@ class ResultsViewState extends State<ResultsView> {
   double _offsetNear(int target) {
     final position = scroll.position;
     final anchors = <(int, double)>[];
-    for (final MapEntry(key: id, value: index) in _itemOf.entries) {
+    for (final MapEntry(key: id, value: index) in _sheet.itemOf.entries) {
       // Only rows still on the list: a dropped row's context is defunct.
       final row = boxes['$id-w']?.context;
       if (row == null || !row.mounted) continue;
@@ -469,7 +390,7 @@ class ResultsViewState extends State<ResultsView> {
       offset = fromAt + (target - from) * perRow - lead;
     } else {
       final total = position.maxScrollExtent + position.viewportDimension;
-      offset = total * target / math.max(1, _itemCount) - lead;
+      offset = total * target / math.max(1, _sheet.items.length) - lead;
     }
     return offset.clamp(position.minScrollExtent, position.maxScrollExtent);
   }
@@ -477,20 +398,14 @@ class ResultsViewState extends State<ResultsView> {
   /// Puts the cursor in White's box on the first board without a result.
   void focusFirst() {
     if (!mounted) return;
-    final all = visibleRows();
-    final row =
-        all.where((r) => !r.game.outcome.resolved).firstOrNull ??
-        all.firstOrNull;
+    final row = firstOpenRow(visibleRows());
     if (row != null) focusBox(row.game.id, true);
   }
 
   /// Moves [by] boards up or down, keeping the same side.
   void step(String gameId, bool white, int by) {
-    final all = visibleRows();
-    if (all.isEmpty) return;
-    final i = all.indexWhere((r) => r.game.id == gameId);
-    final next = all[(i + by).clamp(0, all.length - 1)];
-    focusBox(next.game.id, white);
+    final next = stepFrom(visibleRows(), gameId, by);
+    if (next != null) focusBox(next, white);
   }
 
   /// After a result: the next board still missing one, same side, in the
@@ -509,15 +424,7 @@ class ResultsViewState extends State<ResultsView> {
       return;
     }
     final ids = order ?? [for (final r in visibleRows()) r.game.id];
-    final open = {
-      for (final r in rows())
-        if (!r.game.outcome.resolved) r.game.id,
-    };
-    final i = ids.indexOf(gameId);
-    final next = [
-      ...ids.skip(i + 1),
-      ...ids.take(math.max(i, 0)),
-    ].where(open.contains).firstOrNull;
+    final next = nextOpenGame(ids, rows(), gameId);
     if (next != null) {
       focusBox(next, white);
       return;
@@ -534,8 +441,8 @@ class ResultsViewState extends State<ResultsView> {
   /// before anything is committed.
   void enter(BoardRow row, Outcome outcome, {required bool white}) {
     if (busy) return;
-    if (locked(row)) {
-      setState(() => nudged = true);
+    if (selection.locked(row)) {
+      setState(() => selection.nudged = true);
       return;
     }
     if (row.game.outcome == outcome) {
@@ -559,16 +466,15 @@ class ResultsViewState extends State<ResultsView> {
     save(row, outcome, white: white);
   }
 
-  /// What replacing the result of [row] did, for the notice with Undo:
-  /// "Board 7 was 1–0, now ½–½", led by the section when every section is
-  /// on screen and by the round when more than the current one is.
-  String overwriteNotice(BoardRow row, Outcome before, Outcome now) => [
-    if (widget.sectionId == null) row.section.name,
-    if (allRoundsOf(row.section) ||
-        row.round.number != row.section.rounds.length)
-      'Round ${row.round.number}',
-    resultChangeText(row.game.board, before, now),
-  ].join(' · ');
+  /// What replacing the result of [row] did, for the notice with Undo.
+  String overwriteNotice(BoardRow row, Outcome before, Outcome now) =>
+      overwriteNoticeText(
+        row,
+        before,
+        now,
+        everySection: widget.sectionId == null,
+        allRounds: selection.allRoundsOf(row.section),
+      );
 
   void save(
     BoardRow row,
@@ -611,91 +517,87 @@ class ResultsViewState extends State<ResultsView> {
 
   /// Shows round [n], or the current round when [n] is the latest.
   void pickRound(int? n, int latest) {
-    setState(() {
-      selectedRound = n == latest ? null : n;
-      showAllRounds = scheduleRounds = false;
-      correcting = nudged = false;
-    });
+    setState(() => selection.pick(n, latest));
     WidgetsBinding.instance.addPostFrameCallback((_) => focusFirst());
   }
 
-  KeyEventResult onKey(BoardRow row, bool white, KeyEvent event) {
-    if (event is KeyUpEvent) return KeyEventResult.ignored;
-    final arrow = [
-      LogicalKeyboardKey.arrowUp,
-      LogicalKeyboardKey.arrowDown,
-      LogicalKeyboardKey.arrowLeft,
-      LogicalKeyboardKey.arrowRight,
-    ].contains(event.logicalKey);
-    // Holding a result key never enters it twice.
-    if (event is KeyRepeatEvent && !arrow) return KeyEventResult.handled;
-    if (HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isMetaPressed ||
-        HardwareKeyboard.instance.isAltPressed) {
-      return KeyEventResult.ignored;
-    }
+  /// What the grid makes of [event] on a box for White ([white]) or Black,
+  /// on a board whose result is [current].
+  static GridKeyPress _gridKeyPress(
+    KeyEvent event, {
+    required bool white,
+    required Outcome current,
+  }) => GridKeyPress(
     // By position on a keyboard layout without Latin letters.
-    final key = commandKey(event), g = row.game;
-    if (busy) return KeyEventResult.handled;
-    switch (key) {
-      case LogicalKeyboardKey.arrowDown ||
-          LogicalKeyboardKey.enter ||
-          LogicalKeyboardKey.numpadEnter:
-        step(g.id, white, HardwareKeyboard.instance.isShiftPressed ? -1 : 1);
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.arrowUp:
-        step(g.id, white, -1);
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.arrowLeft || LogicalKeyboardKey.arrowRight:
-        focusBox(g.id, key == LogicalKeyboardKey.arrowLeft);
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.keyA:
-        if (!locked(row) && !g.outcome.resolved) assume(g.id);
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.space:
-        showPlayer(white ? g.white : g.black);
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.f2:
-        // An explicit correction, also of an earlier round: the review
-        // opens beside the table.
-        if (g.outcome != Outcome.unreported) {
-          openResultCorrection(
-            context,
-            c,
-            g.id,
-            white: white,
-            onDone: () {
-              if (mounted) focusBox(g.id, white);
-            },
-          );
-        }
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.delete || LogicalKeyboardKey.backspace:
-        enter(row, Outcome.unreported, white: white);
-        return KeyEventResult.handled;
-    }
-    final outcome = resultFromKey(
-      event,
-      white: white,
-      current: row.game.outcome,
+    switch (commandKey(event)) {
+      LogicalKeyboardKey.arrowUp => GridKey.up,
+      LogicalKeyboardKey.arrowDown => GridKey.down,
+      LogicalKeyboardKey.arrowLeft => GridKey.left,
+      LogicalKeyboardKey.arrowRight => GridKey.right,
+      LogicalKeyboardKey.enter ||
+      LogicalKeyboardKey.numpadEnter => GridKey.enter,
+      LogicalKeyboardKey.keyA => GridKey.assume,
+      LogicalKeyboardKey.space => GridKey.details,
+      LogicalKeyboardKey.f2 => GridKey.correct,
+      LogicalKeyboardKey.delete ||
+      LogicalKeyboardKey.backspace => GridKey.clear,
+      _ => GridKey.other,
+    },
+    release: event is KeyUpEvent,
+    repeat: event is KeyRepeatEvent,
+    modified:
+        HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed,
+    shift: HardwareKeyboard.instance.isShiftPressed,
+    outcome: resultFromKey(event, white: white, current: current),
+    drawAttempt: isDrawAttempt(event),
+    printable: (event.character ?? '').trim().isNotEmpty,
+    refusedOnForfeit: refusedOnForfeit(event, current),
+  );
+
+  KeyEventResult onKey(BoardRow row, bool white, KeyEvent event) {
+    final g = row.game;
+    final action = gridKeyAction(
+      _gridKeyPress(event, white: white, current: g.outcome),
+      busy: busy,
+      locked: selection.locked(row),
+      current: g.outcome,
     );
-    if (outcome == null) {
-      // A printable key that is not a result: say which keys are. 5, = and
-      // the decimal point are answered with the draw key, whether or not
-      // the key carries a character (the numpad decimal may not).
-      final draw = isDrawAttempt(event);
-      if (draw || (event.character ?? '').trim().isNotEmpty) {
+    switch (action) {
+      case GridKeyIgnored():
+        return KeyEventResult.ignored;
+      case GridKeySwallowed():
+        break;
+      case GridMoveBoard(:final by):
+        step(g.id, white, by);
+      case GridMoveSide(white: final toWhite):
+        focusBox(g.id, toWhite);
+      case GridAssume():
+        assume(g.id);
+      case GridShowPlayer():
+        showPlayer(white ? g.white : g.black);
+      case GridCorrect():
+        // The review opens beside the table.
+        openResultCorrection(
+          context,
+          c,
+          g.id,
+          white: white,
+          onDone: () {
+            if (mounted) focusBox(g.id, white);
+          },
+        );
+      case GridRefuse(:final forfeit, :final draw):
         setState(() {
           invalidKey = true;
-          forfeitRefused = refusedOnForfeit(event, g.outcome);
+          forfeitRefused = forfeit;
           drawHint = draw;
         });
-        return KeyEventResult.handled;
-      }
-      return KeyEventResult.ignored;
+      case GridEnter(:final outcome, :final clearsHint):
+        if (clearsHint && invalidKey) setState(() => invalidKey = false);
+        enter(row, outcome, white: white);
     }
-    if (invalidKey) setState(() => invalidKey = false);
-    enter(row, outcome, white: white);
     return KeyEventResult.handled;
   }
 
@@ -709,37 +611,14 @@ class ResultsViewState extends State<ResultsView> {
     });
   }
 
-  /// The boards of the round on screen that have not started (no result
-  /// and no pairing assumption on any of their games), when they can be
-  /// paired again on their own: one section's latest round, in a US Chess
-  /// Swiss. Null where that does not apply.
-  ({Section section, Round round, List<int> boards})? repairable(
-    List<(Section, Round)> shown,
-  ) {
-    final only = widget.sectionId == null ? null : shown.singleOrNull;
-    if (only == null) return null;
-    final (s, r) = only;
-    if (pairingFormat(s) != Format.swiss ||
-        s.fideRated ||
-        r.number != s.rounds.length ||
-        r.games.isEmpty) {
-      return null;
-    }
-    return (section: s, round: r, boards: unstartedBoards(r));
-  }
-
   /// Opens re-pairing beside the boards. The reason starts as the
   /// withdrawal that usually prompts it, for the director to change.
   void openRepair(Round round) {
     if (!applyCardEdits()) return;
     if (repairReason.text.trim().isEmpty) {
-      final e = c.event!, waiting = unstartedBoards(round).toSet();
-      final gone = {
-        for (final g in round.games.where((g) => waiting.contains(g.board)))
-          for (final id in [g.white, g.black])
-            if (e.player(id).withdrawn) e.player(id).name,
-      };
-      if (gone.isNotEmpty) repairReason.text = '${gone.join(', ')} withdrew';
+      if (suggestedRepairReason(round, c.event!) case final reason?) {
+        repairReason.text = reason;
+      }
     }
     setState(() {
       Dock.maybeOf(context)?.claim(panelOwner);
@@ -756,74 +635,36 @@ class ResultsViewState extends State<ResultsView> {
     setState(() => repairing = false);
   }
 
-  Widget assumePanel(String gameId) {
-    // C.04.2 3.1: a FIDE section pairs an unfinished game as a draw.
-    final fide = c.event!.sections.any(
-      (s) =>
-          s.fideRated &&
-          s.rounds.any((r) => r.games.any((g) => g.id == gameId)),
-    );
-    return FieldsPanel(
-      key: ValueKey('assume-$gameId'),
-      controller: c,
-      draftKey: 'draft-assume-$gameId',
-      title: 'Assume a result for pairing',
-      description: fide
-          ? 'Use when a game is still going but the next round must be paired. FIDE pairs it as a draw; it does not count for points or ratings.'
-          : 'Use when a game is still going but the next round must be paired. This is not a real result and does not count for points or ratings.',
-      fields: [
-        FieldSpec(
-          'score',
-          'Assume',
-          options: fide
-              ? const {'0.5': 'Draw'}
-              : const {'0.5': 'Draw', '1': 'White wins', '0': 'Black wins'},
-        ),
-        const FieldSpec('reason', 'Reason', required: true),
-      ],
-      values: const {'score': '0.5'},
-      saveLabel: 'Assume for pairing',
-      onClose: () {
-        Dock.maybeOf(context)?.close();
-        setState(() => assumeFor = null);
-      },
-      onSave: (values) {
-        final outcome = switch (values['score']) {
-          '1' => Outcome.whiteWin,
-          '0.5' => Outcome.draw,
-          '0' => Outcome.blackWin,
-          _ => null,
-        };
-        if (outcome == null) {
-          throw const TournamentException('Choose a result.');
-        }
-        c.setPairingAssumption(gameId, outcome, values['reason']!.trim());
-      },
-    );
+  void closeAssume() {
+    Dock.maybeOf(context)?.close();
+    setState(() => assumeFor = null);
   }
 
   /// First click picks a player; the second swaps the two, saved as a new
   /// pairing revision. Two players on one board swap colours.
   void pickSwap(String id) {
-    final a = swapPick;
-    if (a == null || a == id) {
-      setState(() => swapPick = a == id ? null : id);
-      return;
-    }
-    setState(() => swapPick = null);
+    final next = pickForSwap(swapPick, id);
+    setState(() => swapPick = next.pick);
+    final a = next.swapWith;
+    if (a == null) return;
     final s = sections.single, r = s.rounds.last, e = c.event!;
-    String swapped(String x) => x == a
-        ? id
-        : x == id
-        ? a
-        : x;
     try {
-      c.replacePairing(s.id, r.number, [
-        for (final g in r.games)
-          g.copy(white: swapped(g.white), black: swapped(g.black)),
-      ], 'Swapped ${e.player(a).name} and ${e.player(id).name}');
+      c.replacePairing(
+        s.id,
+        r.number,
+        swapInRound(r, a, id),
+        'Swapped ${e.player(a).name} and ${e.player(id).name}',
+      );
     } catch (error) {
       showFailure(context, error);
+    }
+  }
+
+  void withdraw(String id) {
+    try {
+      c.setWithdrawn([id], true);
+    } catch (error) {
+      if (mounted) showFailure(context, error);
     }
   }
 
@@ -838,71 +679,166 @@ class ResultsViewState extends State<ResultsView> {
     final roundNumbers =
         sections.expand((s) => s.rounds).map((r) => r.number).toSet().toList()
           ..sort();
-    if (selectedRound != null && !roundNumbers.contains(selectedRound)) {
-      selectedRound = null;
-    }
+    selection.keepWithin(roundNumbers);
     final shown = [
       for (final s in sections)
-        for (final r in shownRounds(s)) (s, r),
+        for (final r in selection.shownRounds(s)) (s, r),
     ];
     final all = rows(), visible = visibleRows();
     // Tab enters the grid at the active box, or the first board missing a
     // result; every other box is reached with the arrows.
-    final keys = {
-      for (final r in visible) ...['${r.game.id}-w', '${r.game.id}-b'],
-    };
-    final start =
-        visible.where((r) => !r.game.outcome.resolved).firstOrNull ??
-        visible.firstOrNull;
-    entryBox = keys.contains(activeBox)
-        ? activeBox
-        : start == null
-        ? null
-        : '${start.game.id}-w';
+    entryBox = entryBoxFor(visible, activeBox);
     // Any earlier Swiss round on screen: its boards are read-only, while
     // other sections' boards beside it stay open for entry.
-    final viewingPast = shown.any((x) => earlier(x.$1, x.$2));
-    final latest = roundNumbers.lastOrNull;
+    final viewingPast = shown.any((x) => isEarlierRound(x.$1, x.$2));
     final player = e.players.where((p) => p.id == openPlayerId).firstOrNull;
     if (assumeFor != null && !all.any((r) => r.game.id == assumeFor)) {
       assumeFor = null;
     }
-    final repair = repairable(shown);
+    final everySection = widget.sectionId == null;
+    final repair = repairableRound(shown, singleSection: !everySection);
     if (repair == null) repairing = false;
-    final single = widget.sectionId == null ? null : shown.singleOrNull;
+    final single = everySection ? null : shown.singleOrNull;
     if (viewingPast || single == null || single.$2.hasPlay) {
       swapping = false;
       swapPick = null;
     }
-    final boardHeading = _roundLine(
-      context,
+    final heading = roundHeading(
       shown,
+      sections,
       all,
-      roundNumbers,
-      viewingPast,
+      showAllRounds: selection.showAllRounds,
+    );
+    final boardHeading = _RoundLine(
+      title: heading.title,
+      facts: heading.facts,
+      // An earlier round says so in words beside its title; the way in
+      // (Correct a result) and out (Done correcting) is in the toolbar.
+      pastStatus: viewingPast
+          ? _PastStatus(
+              correcting: selection.correcting,
+              nudged: selection.nudged,
+              what: readOnlyText(
+                shown,
+                everySection: everySection,
+                showAllRounds: selection.showAllRounds,
+              ),
+            )
+          : null,
+      // Bughouse pairs partnerships: form them here before round 1.
+      partners: heading.numbers.isEmpty
+          ? sections
+                .where((s) => s.format == Format.bughouse && s.rounds.isEmpty)
+                .firstOrNull
+          : null,
+      onPartners: (s) => showBughousePartners(context, c, sectionId: s.id),
+      roundNumbers: roundNumbers,
+      selectedRound: selection.selectedRound,
+      showAllRounds: selection.showAllRounds,
+      onPickRound: (n) => pickRound(n, roundNumbers.last),
+      onShowAll: () => setState(selection.showAll),
     );
     // Always present, so the boards start at the same height in every
     // section whether or not it has pairings yet.
-    final boardToolbar = _strip(context, shown, viewingPast, repair);
+    final quad = sections.where(hasFixedQuadSchedule).singleOrNull;
+    final editable = !viewingPast && single != null && !single.$2.hasPlay;
+    final boardToolbar = _BoardToolbar(
+      controller: c,
+      search: jump,
+      searchable: shown.isNotEmpty,
+      onSearchChanged: () => setState(() {}),
+      onSearchSubmitted: () {
+        final first = visibleRows().firstOrNull;
+        if (first != null) focusBox(first.game.id, true);
+      },
+      // A finished Holland prelim offers its final from here.
+      prelim: sections
+          .where((s) => s.id == widget.sectionId && isHollandPrelim(s))
+          .firstOrNull,
+      viewingPast: viewingPast,
+      correcting: selection.correcting,
+      onCorrect: () => setState(selection.startCorrecting),
+      onDoneCorrecting: () => setState(selection.stopCorrecting),
+      onEditPairings: (quad != null || editable) && !swapping
+          ? quad != null
+                ? () => showQuadPairingsEditor(context, c, sectionId: quad.id)
+                : () => setState(() {
+                    swapping = true;
+                    swapPick = null;
+                  })
+          : null,
+      repair: repair,
+      onRepair: repair == null ? null : () => openRepair(repair.round),
+      missingOnly: missingOnly,
+      onMissingOnly: shown.isEmpty
+          ? null
+          : (v) => setState(
+              () => c.workspaceState.write('pairings-missing-only', '$v'),
+            ),
+      printTooltip: sections.every(hasFixedQuadSchedule)
+          ? 'Print pairings and result sheets'
+          : selection.showAllRounds
+          ? 'Print pairings and result sheets for the current round'
+          : 'Print pairings and result sheets for this round',
+      onPrint: shown.isEmpty ? null : printRound,
+    );
     // Notices belong to the boards, so they sit in the boards pane and never
     // push the crosstable beside it down.
     final notices = [
       for (final s in sections)
         if (c.quadScheduleIssues[s.id] case final issue?)
-          _scheduleIssue(context, s, issue),
-      if (swapping) _swapBanner(context, shown.single.$2),
-      if (repair != null) ?_withdrawnNotice(context, repair.round),
+          _ScheduleIssue(
+            sectionId: s.id,
+            text: everySection ? '${s.name}: $issue' : issue,
+          ),
+      if (swapping)
+        _SwapBanner(
+          picked: swapPick == null ? null : e.player(swapPick!).name,
+          onDone: () => setState(() {
+            swapping = false;
+            swapPick = null;
+          }),
+        ),
+      if (repair != null)
+        if (withdrawnOnUnstarted(repair.round, e) case final gone
+            when gone.isNotEmpty)
+          _WithdrawnNotice(
+            gone: gone,
+            onRepair: repairing ? null : () => openRepair(repair.round),
+          ),
     ];
     if (allEntered && !visible.every((r) => r.game.outcome.resolved)) {
       allEntered = false;
     }
-    final boardTable = e.players.isEmpty || sections.isEmpty
-        ? _nothingToPair(context)
-        : roundNumbers.isEmpty
-        ? _blankTable(context)
-        : visible.isEmpty && !shown.any((x) => x.$2.byes.isNotEmpty)
-        ? _noBoards(context)
-        : _table(context, shown, visible, latest);
+    // No boards drawn unless the table below is: a jump must not use
+    // positions from the last sheet drawn.
+    _sheet = SheetLayout.empty;
+    final Widget boardTable;
+    if (e.players.isEmpty || sections.isEmpty) {
+      final noPlayers = e.players.isEmpty;
+      boardTable = _NothingToPair(
+        noPlayers: noPlayers,
+        noSections: sections.isEmpty,
+        action: noPlayers ? widget.onAddPlayers : widget.onNewSection,
+      );
+    } else if (roundNumbers.isEmpty) {
+      boardTable = _BlankSheet(
+        event: e,
+        sections: sections.toList(),
+        everySection: everySection,
+        scroll: scroll,
+      );
+    } else if (visible.isEmpty && !shown.any((x) => x.$2.byes.isNotEmpty)) {
+      boardTable = _NoBoards(
+        searched: jump.text.trim().isNotEmpty,
+        missingOnly: missingOnly,
+        allEntered: allEntered,
+        doneNode: doneNode,
+        onFocusChange: () => setState(() {}),
+      );
+    } else {
+      boardTable = _table(e, shown, visible);
+    }
     return PlayerDetailsLayout(
       expandContent: true,
       panel:
@@ -910,7 +846,11 @@ class ResultsViewState extends State<ResultsView> {
               Dock.maybeOf(context)!.id != panelOwner
           ? null
           : assumeFor != null
-          ? assumePanel(assumeFor!)
+          ? _AssumePanel(
+              controller: c,
+              gameId: assumeFor!,
+              onClose: closeAssume,
+            )
           : repairing
           ? RepairPanel(
               key: ValueKey('repair-${repair!.section.id}'),
@@ -929,1412 +869,128 @@ class ResultsViewState extends State<ResultsView> {
               focusField: openFocus,
               onClose: () => showPlayer(null),
             ),
-      child: LayoutBuilder(
-        builder: (context, layout) {
-          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-          // A wide gutter with a hairline keeps the two tables distinct.
-          const gutter = 40.0;
-          final split = layout.maxWidth >= 1040 * scale + gutter;
-          // Each pane takes half of a wide window, so long names fit, up to
-          // a width a row is still easy to read across.
-          final paneWidth = math.min(
-            (layout.maxWidth - gutter) / 2,
-            _widestPane * scale,
-          );
-          final divider = SizedBox(
-            width: gutter,
-            child: Center(
-              child: VerticalDivider(
-                width: 1,
-                thickness: 1,
-                color: Theme.of(context).colorScheme.outlineVariant,
-              ),
-            ),
-          );
-          final standings = PlayersView(
-            key: ValueKey('crosstable-${widget.sectionId}'),
+      child: _PairingsLayout(
+        sectionId: widget.sectionId,
+        controller: c,
+        roundAction: widget.roundAction,
+        onPlayer: showPlayer,
+        crosstableHeading: crosstableHeading,
+        stackedScroll: stackedScroll,
+        boardHeading: boardHeading,
+        boardToolbar: boardToolbar,
+        notices: notices,
+        boardTable: boardTable,
+      ),
+    );
+  }
+
+  /// The boards on their sheet, with one column header that stays put while
+  /// they scroll under it, and the status line and keys below.
+  Widget _table(Event e, List<(Section, Round)> shown, List<BoardRow> visible) {
+    final layout = layoutSheet(
+      event: e,
+      shown: shown,
+      visible: visible,
+      selection: selection,
+      everySection: widget.sectionId == null,
+      missingOnly: missingOnly,
+      query: jump.text,
+    );
+    // Builders, not rows: the list makes only the rows on screen.
+    final items = <WidgetBuilder>[
+      for (final item in layout.items)
+        switch (item) {
+          SheetHeading(:final section, :final round) => (_) => _SectionHeading(
+            section: section,
+            round: round,
+            allRounds: selection.allRoundsOf(section),
+          ),
+          SheetScoreGroup(:final points) => (_) => _ScoreGroup(points: points),
+          SheetBoard(:final row, :final before) => (_) => _GameRow(
             controller: c,
-            sectionId: widget.sectionId,
-            standingsOnly: true,
-            onPlayer: showPlayer,
-            standingsLayout: (heading, toolbar, table) {
-              final crossHeading = KeyedSubtree(
-                key: crosstableHeading,
-                child: heading,
-              );
-              if (!split) {
-                return SingleChildScrollView(
-                  key: const ValueKey('pairings-stacked'),
-                  controller: stackedScroll,
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: SizedBox(
-                      width: math.min(layout.maxWidth, _widestPane * scale),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          boardHeading,
-                          boardToolbar,
-                          ...notices,
-                          boardTable,
-                          const SizedBox(height: 24),
-                          crossHeading,
-                          toolbar,
-                          table,
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }
-              Widget sharedRow(Widget left, Widget right) => IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(width: paneWidth, child: left),
-                    divider,
-                    SizedBox(width: paneWidth, child: right),
-                  ],
-                ),
-              );
-              return Column(
-                key: const ValueKey('pairings-split'),
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: layout.maxHeight * 0.6,
-                    ),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          sharedRow(crossHeading, boardHeading),
-                          sharedRow(toolbar, boardToolbar),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(width: paneWidth, child: table),
-                        divider,
-                        SizedBox(
-                          width: paneWidth,
-                          child: notices.isEmpty
-                              ? boardTable
-                              : Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    ...notices,
-                                    Expanded(child: boardTable),
-                                  ],
-                                ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (widget.roundAction != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: widget.roundAction!,
-                  ),
-                ),
-              Expanded(child: standings),
-            ],
-          );
+            row: row,
+            before: before,
+            locked: selection.locked(row),
+            past: isEarlierRound(row.section, row.round),
+            swapping: swapping,
+            swapPick: swapPick,
+            entryBox: entryBox,
+            whiteBox: _scoreBox(row, white: true),
+            blackBox: _scoreBox(row, white: false),
+            onTap: () => focusBox(row.game.id, true),
+            onShowPlayer: showPlayer,
+            onPickSwap: pickSwap,
+            onWithdraw: withdraw,
+          ),
+          SheetBye(:final bye, :final round, :final every) => (_) => _ByeRow(
+            bye: bye,
+            player: e.player(bye.player),
+            round: round,
+            every: every,
+            onShowPlayer: showPlayer,
+          ),
         },
-      ),
-    );
-  }
-
-  /// Compact round heading beside the crosstable heading.
-  Widget _roundLine(
-    BuildContext context,
-    List<(Section, Round)> shown,
-    List<BoardRow> all,
-    List<int> roundNumbers,
-    bool viewingPast,
-  ) {
-    final colors = Theme.of(context).colorScheme;
-    final numbers = shown.map((x) => x.$2.number).toSet().toList()..sort();
-    final planned = [
-      for (final s in shown.isEmpty ? sections : shown.map((x) => x.$1))
-        s.plannedRounds,
-    ].fold(0, math.max);
-    final title = numbers.isEmpty
-        ? planned == 0
-              ? 'Round 1'
-              : 'Round 1 of $planned'
-        : showAllRounds
-        ? 'All rounds'
-        : numbers.length == 1
-        ? 'Round ${numbers.single} of $planned'
-        : 'Rounds ${numbers.first}–${numbers.last}';
-    final done = all.where((r) => r.game.outcome.resolved).length;
-    final complete = shown.every((x) => x.$2.complete);
-    final facts = [
-      if (numbers.isEmpty)
-        'Not paired yet'
-      else ...[
-        if (showAllRounds) '${numbers.length} rounds',
-        complete
-            ? 'All ${all.length} results in'
-            : '$done of ${all.length} results in',
-      ],
     ];
-    final tabular = const [FontFeature.tabularFigures()];
-    // Every piece of the heading is one control tall, so when the chips wrap
-    // the title still sits on the same line as the Crosstable title beside it.
-    final band = BoxConstraints(
-      minHeight: MediaQuery.textScalerOf(context).scale(controlHeight),
-    );
-    Widget line(Widget child) => ConstrainedBox(
-      constraints: band,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        widthFactor: 1,
-        heightFactor: 1,
-        child: child,
-      ),
-    );
-    return PaneHeading(
-      child: Wrap(
-        spacing: 24,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          line(
-            Semantics(
-              header: true,
-              child: Text.rich(
-                key: const ValueKey('round-line'),
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        height: 1.2,
-                      ),
-                    ),
-                    TextSpan(
-                      text: '   ${facts.join('  ·  ')}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: colors.onSurfaceVariant,
-                        fontFeatures: tabular,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // An earlier round says so in words beside its title; the way in
-          // (Correct a result) and out (Done correcting) is in the toolbar.
-          if (viewingPast) line(_pastStatus(context, shown)),
-          // Bughouse pairs partnerships: form them here before round 1.
-          if (numbers.isEmpty)
-            for (final s
-                in sections
-                    .where(
-                      (s) => s.format == Format.bughouse && s.rounds.isEmpty,
-                    )
-                    .take(1))
-              line(
-                TextButton(
-                  key: const ValueKey('bughouse-partners'),
-                  onPressed: () =>
-                      showBughousePartners(context, c, sectionId: s.id),
-                  child: const Text('Partners'),
-                ),
-              ),
-          // The round chips share the title's line, so a section with them
-          // is no taller than one without.
-          if (roundNumbers.length > 1)
-            Semantics(
-              label: 'Show round',
-              container: true,
-              child: Wrap(
-                key: const ValueKey('round-selector'),
-                spacing: 4,
-                runSpacing: 4,
-                children: [
-                  for (final n in roundNumbers)
-                    ChoiceChip(
-                      label: Text('$n'),
-                      showCheckmark: false,
-                      selected:
-                          !showAllRounds &&
-                          (selectedRound ?? roundNumbers.last) == n,
-                      onSelected: (_) => pickRound(n, roundNumbers.last),
-                    ),
-                  ChoiceChip(
-                    key: const ValueKey('all-rounds'),
-                    label: const Text('All'),
-                    showCheckmark: false,
-                    selected: showAllRounds,
-                    onSelected: (_) => setState(() {
-                      showAllRounds = true;
-                      selectedRound = null;
-                      correcting = nudged = false;
-                    }),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
+    _sheet = layout;
+    return _BoardFrame(scroll: scroll, items: items, footer: _legend(visible));
   }
 
-  /// Find boards, filter missing results, edit pairings, and print.
-  Widget _strip(
-    BuildContext context,
-    List<(Section, Round)> shown,
-    bool viewingPast,
-    ({Section section, Round round, List<int> boards})? repair,
-  ) {
-    final single = widget.sectionId == null ? null : shown.singleOrNull;
-    final quad = sections.where(hasFixedQuadSchedule).singleOrNull;
-    final editable = !viewingPast && single != null && !single.$2.hasPlay;
-    final search = SearchField(
-      key: const ValueKey('board-search'),
-      controller: jump,
-      enabled: shown.isNotEmpty,
-      onChanged: () => setState(() {}),
-      onSubmitted: () {
-        final first = visibleRows().firstOrNull;
-        if (first != null) focusBox(first.game.id, true);
-      },
-    );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          search,
-          // A finished Holland prelim offers its final from here.
-          if (sections
-                  .where((s) => s.id == widget.sectionId && isHollandPrelim(s))
-                  .firstOrNull
-              case final prelim?)
-            HollandFinalsAction(c, prelim),
-          if (viewingPast && correcting)
-            OutlinedButton(
-              key: const ValueKey('done-correcting'),
-              onPressed: () => setState(() => correcting = nudged = false),
-              child: const Text('Done correcting'),
-            )
-          else if (viewingPast)
-            OutlinedButton(
-              key: const ValueKey('correct-round'),
-              onPressed: () => setState(() {
-                correcting = true;
-                nudged = false;
-              }),
-              child: const Text('Correct a result'),
-            )
-          else if ((quad != null || editable) && !swapping)
-            TextButton(
-              key: const ValueKey('edit-pairings'),
-              onPressed: quad != null
-                  ? () => showQuadPairingsEditor(context, c, sectionId: quad.id)
-                  : () => setState(() {
-                      swapping = true;
-                      swapPick = null;
-                    }),
-              child: const Text('Edit pairings'),
-            ),
-          // Stays in place, greyed, once every board has started, so the
-          // toolbar does not reflow under the last result being typed.
-          if (repair != null)
-            Tooltip(
-              message: repair.boards.isEmpty
-                  ? 'Every board has a result or has started'
-                  : 'Pair the boards that have not started again, as after a withdrawal',
-              child: TextButton(
-                key: const ValueKey('repair-unstarted'),
-                onPressed: repair.boards.isEmpty
-                    ? null
-                    : () => openRepair(repair.round),
-                child: const Text('Re-pair unstarted boards'),
-              ),
-            ),
-          FilterChip(
-            chipAnimationStyle: noChipAnimation,
-            label: const Text('Missing only'),
-            selected: missingOnly,
-            onSelected: shown.isEmpty
-                ? null
-                : (v) => setState(
-                    () => c.workspaceState.write('pairings-missing-only', '$v'),
-                  ),
-          ),
-          IconButton(
-            key: const ValueKey('print-round'),
-            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-            padding: EdgeInsets.zero,
-            tooltip: sections.every(hasFixedQuadSchedule)
-                ? 'Print pairings and result sheets'
-                : showAllRounds
-                ? 'Print pairings and result sheets for the current round'
-                : 'Print pairings and result sheets for this round',
-            onPressed: shown.isEmpty ? null : printRound,
-            icon: const Icon(Icons.print_outlined, size: 18),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Where focus rests after the last missing result, so the next key
-  /// cannot overwrite a board. Announced as it appears. It sits in the
-  /// status line under the boards, which is always there, so nothing moves
-  /// when the last result goes in.
-  Widget _allEntered(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final every = rows().every((r) => r.game.outcome.resolved);
-    return Focus(
-      focusNode: doneNode,
-      onFocusChange: (_) => setState(() {}),
-      child: Semantics(
-        liveRegion: true,
-        child: Container(
-          key: const ValueKey('all-results-entered'),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: doneNode.hasFocus ? focusRing(colors) : Colors.transparent,
-              width: focusRingWidth,
-            ),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.check_circle_outline,
-                size: 16,
-                color: colors.onSurface,
-              ),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  every ? 'All results entered' : 'All matching boards entered',
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// In place of the boards when none are listed. With Missing only on,
-  /// the last result empties the sheet, so this message is then where
-  /// focus rests. A search that finds nothing says so; without a search or
-  /// the filter it never reads as one.
-  Widget _noBoards(BuildContext context) {
-    final searched = jump.text.trim().isNotEmpty;
-    if (missingOnly && (!searched || allEntered)) {
-      final colors = Theme.of(context).colorScheme;
-      return Focus(
-        focusNode: doneNode,
-        onFocusChange: (_) => setState(() {}),
-        child: Semantics(
-          liveRegion: true,
-          child: Container(
-            key: const ValueKey('all-results-entered'),
-            margin: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: doneNode.hasFocus
-                    ? focusRing(colors)
-                    : Colors.transparent,
-                width: focusRingWidth,
-              ),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: EmptyState(
-              icon: Icons.check_circle_outline,
-              title: searched
-                  ? 'All matching boards entered'
-                  : 'All results entered',
-              body: searched
-                  ? 'Clear the search or turn off Missing only to see the other boards.'
-                  : 'Turn off Missing only to review them.',
-            ),
-          ),
-        ),
-      );
-    }
-    return searched
-        ? const EmptyState(
-            icon: Icons.search_off,
-            title: 'No matching boards',
-            body: 'Try another name or board number.',
-          )
-        : const EmptyState(
-            icon: Icons.grid_view_outlined,
-            title: 'No boards in this round',
-            body: 'Nobody is paired against an opponent in this round.',
-          );
-  }
-
-  /// Before there is anything to pair: what to do next, with the way
-  /// there when the workspace gave one.
-  Widget _nothingToPair(BuildContext context) {
-    // No boards: a jump must not use positions from the last sheet drawn.
-    _itemOf = const {};
-    _itemCount = 0;
-    final noPlayers = c.event!.players.isEmpty;
-    final action = noPlayers ? widget.onAddPlayers : widget.onNewSection;
-    return EmptyState(
-      key: const ValueKey('nothing-to-pair'),
-      icon: noPlayers ? Icons.group_add_outlined : Icons.table_rows_outlined,
-      title: noPlayers ? 'No players yet' : 'No section yet',
-      body: noPlayers
-          ? sections.isEmpty
-                ? 'Add players on the Players page, then create a section to pair them.'
-                : 'Add players on the Players page to pair them here.'
-          : 'Create a section to pair these players.',
-      action: action == null
-          ? null
-          : OutlinedButton(
-              key: ValueKey(
-                noPlayers ? 'empty-add-players' : 'empty-new-section',
-              ),
-              onPressed: action,
-              child: Text(noPlayers ? 'Add players' : 'New section'),
-            ),
-    );
-  }
-
-  /// A withdrawn player still sitting at a board that has not started:
-  /// said above the boards, with the way to pair those boards again.
-  Widget? _withdrawnNotice(BuildContext context, Round round) {
-    final e = c.event!, waiting = unstartedBoards(round).toSet();
-    final gone = [
-      for (final g in round.games.where((g) => waiting.contains(g.board)))
-        if (g.leg == 1)
-          for (final id in [g.white, g.black])
-            if (e.player(id).withdrawn) (e.player(id).name, g.board),
-    ];
-    if (gone.isEmpty) return null;
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      key: const ValueKey('repair-notice'),
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      padding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
-      decoration: BoxDecoration(
-        color: colors.secondaryContainer,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Icon(
-            Icons.person_off_outlined,
-            size: 18,
-            color: colors.onSecondaryContainer,
-          ),
-          Text(
-            gone.length == 1
-                ? '${gone.single.$1} withdrew but is still on board ${gone.single.$2}.'
-                : '${gone.length} withdrawn players are still on boards that have not started.',
-            style: TextStyle(color: colors.onSecondaryContainer),
-          ),
-          OutlinedButton(
-            key: const ValueKey('repair-notice-action'),
-            onPressed: repairing ? null : () => openRepair(round),
-            child: const Text('Re-pair unstarted boards'),
-          ),
-        ],
-      ),
+  /// One player's score box on [row]. Its focus node is made as the row is
+  /// built, and only the box Tab enters at is in the traversal order.
+  Widget _scoreBox(BoardRow row, {required bool white}) {
+    final g = row.game;
+    return _ScoreBox(
+      controller: c,
+      row: row,
+      white: white,
+      node: box(g.id, white),
+      locked: selection.locked(row),
+      entry: boxKey(g.id, white) == entryBox,
+      onKey: (event) => onKey(row, white, event),
+      onFocusChange: () => setState(() {}),
+      onTap: () => focusBox(g.id, white),
+      onShowPlayer: showPlayer,
     );
   }
 
   /// Under the boards: whose result the focused box enters, and the keys.
   /// A key that is not a result makes the legend say so.
-  Widget _legend(BuildContext context, List<BoardRow> visible) {
-    final colors = Theme.of(context).colorScheme, e = c.event!;
+  Widget _legend(List<BoardRow> visible) {
     final focused = boxes[activeBox]?.hasFocus == true;
     final row = !focused
         ? null
         : visible
               .where(
                 (r) =>
-                    activeBox == '${r.game.id}-w' ||
-                    activeBox == '${r.game.id}-b',
+                    activeBox == boxKey(r.game.id, true) ||
+                    activeBox == boxKey(r.game.id, false),
               )
               .firstOrNull;
     final white = activeBox?.endsWith('-w') ?? true;
-    final line = row == null
-        ? null
-        : [
-            if (widget.sectionId == null) row.section.name,
-            'Round ${row.round.number}',
-            'Board ${row.game.board}${row.section.doubleGames ? ' · Game ${row.game.leg}' : ''}',
-            '${e.player(row.game.white).name} vs ${e.player(row.game.black).name}',
-            locked(row)
-                ? 'read-only'
-                : 'entering ${white ? 'White' : 'Black'}\'s result',
-          ].join(' · ');
-    return Container(
-      key: const ValueKey('result-legend'),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        border: Border(top: BorderSide(color: colors.outlineVariant)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // The status line is always there, two lines tall, so the sheet
-          // keeps its height as the cursor comes and goes and when the
-          // last result is entered. A long context line wraps onto the
-          // second line rather than losing whose result is being entered.
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: MediaQuery.textScalerOf(context).scale(_statusLine),
+    final locked = row != null && selection.locked(row);
+    return _Legend(
+      line: row == null
+          ? null
+          : entryContext(
+              row,
+              c.event!,
+              everySection: widget.sectionId == null,
+              locked: locked,
+              white: white,
             ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              heightFactor: 1,
-              child: allEntered
-                  ? _allEntered(context)
-                  : line == null
-                  ? const SizedBox.shrink()
-                  : Text(
-                      line,
-                      key: const ValueKey('entry-context'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13),
-                    ),
-            ),
-          ),
-          Semantics(
-            liveRegion: invalidKey,
-            child: Text(
-              invalidKey && forfeitRefused
-                  ? 'A forfeit is only won or lost. 1 or 0 picks who won it · Delete clears it to enter a played game'
-                  : invalidKey && drawHint
-                  ? '$drawKeyHint · $resultKeyHint'
-                  : invalidKey
-                  ? 'Not a result key. $resultKeyHint · $moreResultKeys'
-                  : row != null && !locked(row) && isForfeit(row.game.outcome)
-                  ? '${forfeitKeyHint(row.game.outcome, white: white)} · $gridKeyHint'
-                  : '$resultKeyHint · $gridKeyHint',
-              key: const ValueKey('result-key-legend'),
-              style: TextStyle(
-                fontSize: 12,
-                color: invalidKey ? colors.onSurface : colors.onSurfaceVariant,
-                fontWeight: invalidKey ? FontWeight.w600 : null,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// What is read-only among the rounds on screen, in words: all of it, or
-  /// only the earlier Swiss rounds, named so the boards beside them are
-  /// not taken for locked too.
-  String readOnlyText(List<(Section, Round)> shown) {
-    final locked = [
-      for (final (s, r) in shown)
-        if (earlier(s, r)) (s, r),
-    ];
-    if (locked.length == shown.length) return 'Read-only';
-    if (locked.length == 1) {
-      final (s, r) = locked.single;
-      return widget.sectionId == null
-          ? '${s.name} round ${r.number} is read-only'
-          : 'Round ${r.number} is read-only';
-    }
-    return showAllRounds
-        ? 'Earlier rounds are read-only'
-        : '${locked.length} sections are read-only';
-  }
-
-  /// Shown while an earlier round is on screen, so nobody enters this
-  /// round's results there by mistake. Typing into a locked box says how.
-  Widget _pastStatus(BuildContext context, List<(Section, Round)> shown) {
-    final colors = Theme.of(context).colorScheme;
-    final color = correcting ? colors.error : colors.onSurfaceVariant;
-    final what = readOnlyText(shown);
-    return Row(
-      key: const ValueKey('past-round-banner'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          correcting ? Icons.edit_outlined : Icons.lock_outline,
-          size: 16,
-          color: color,
-        ),
-        const SizedBox(width: 4),
-        Flexible(
-          child: Text(
-            correcting
-                ? 'Correcting · review each change before saving'
-                : nudged
-                ? '$what · choose Correct a result to change it'
-                : what,
-            style: TextStyle(
-              fontSize: 14,
-              color: nudged && !correcting ? colors.onSurface : color,
-              fontWeight: nudged && !correcting ? FontWeight.w600 : null,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _swapBanner(BuildContext context, Round r) {
-    final colors = Theme.of(context).colorScheme;
-    final picked = swapPick == null ? null : c.event!.player(swapPick!);
-    return Container(
-      key: const ValueKey('swap-banner'),
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      padding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
-      decoration: BoxDecoration(
-        color: colors.secondaryContainer,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Icon(Icons.swap_horiz, size: 18, color: colors.onSecondaryContainer),
-          const SizedBox(width: 8),
-          Text(
-            picked == null
-                ? 'Click two players to swap them. Two on one board swap colours.'
-                : 'Swap ${picked.name} with… click another player, or click ${picked.name} again to cancel.',
-            style: TextStyle(color: colors.onSecondaryContainer),
-          ),
-          const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: () => setState(() {
-              swapping = false;
-              swapPick = null;
-            }),
-            child: const Text('Done editing'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// A quad round that posting would refuse is not shown; say why.
-  Widget _scheduleIssue(BuildContext context, Section s, String issue) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      key: ValueKey(('quad-schedule-issue', s.id)),
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: colors.errorContainer,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        widget.sectionId == null ? '${s.name}: $issue' : issue,
-        style: TextStyle(color: colors.onErrorContainer),
-      ),
-    );
-  }
-
-  /// One column header that stays put while the boards scroll under it.
-  Widget _table(
-    BuildContext context,
-    List<(Section, Round)> shown,
-    List<BoardRow> visible,
-    int? latest,
-  ) {
-    final e = c.event!;
-    final bySection = <(String, int), List<BoardRow>>{};
-    for (final r in visible) {
-      bySection.putIfAbsent((r.section.id, r.round.number), () => []).add(r);
-    }
-    int firstBoard((Section, Round) x) =>
-        x.$2.games.map((g) => g.board).fold(1 << 30, math.min);
-    final ordered = [...shown]
-      ..sort((a, b) {
-        final round = a.$2.number.compareTo(b.$2.number);
-        return round != 0 ? round : firstBoard(a).compareTo(firstBoard(b));
-      });
-    // Builders, not rows: the list makes only the rows on screen.
-    final items = <WidgetBuilder>[];
-    final itemOf = <String, int>{};
-    for (final (s, r) in ordered) {
-      final boards = bySection[(s.id, r.number)] ?? const <BoardRow>[];
-      final byes = missingOnly
-          ? const <ByeAward>[]
-          : r.byes.where((b) => named(e.player(b.player))).toList();
-      if (boards.isEmpty && byes.isEmpty) continue;
-      if (widget.sectionId == null || allRoundsOf(s)) {
-        items.add((context) => _sectionRow(context, s, r));
-      }
-      // Swiss boards fall into score groups once anyone has a score.
-      final before = s.format == Format.swiss && r.number > 1
-          ? scoresBefore(s, r.number)
-          : null;
-      int group(Game g) =>
-          math.max(before?[g.white] ?? 0, before?[g.black] ?? 0);
-      final grouped =
-          before != null && boards.map((b) => group(b.game)).toSet().length > 1;
-      int? last;
-      for (final row in boards) {
-        if (grouped && group(row.game) != last) {
-          final points = last = group(row.game);
-          items.add((context) => _scoreGroup(context, points));
-        }
-        itemOf[row.game.id] = items.length;
-        items.add((context) => _game(context, row, before));
-      }
-      for (final b in byes) {
-        items.add(
-          (context) => _bye(context, b, r.number, every: allRoundsOf(s)),
-        );
-      }
-    }
-    _itemOf = itemOf;
-    _itemCount = items.length;
-    return _frame(context, items, footer: _legend(context, visible));
-  }
-
-  /// The ruled sheet the boards sit on, with a column header that stays put
-  /// while the boards scroll under it.
-  Widget _frame(
-    BuildContext context,
-    List<WidgetBuilder> items, {
-    Widget? footer,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-    // The sheet built in full, for the layouts that are not lazy.
-    List<Widget> whole(BuildContext context) => [
-      _columns(context),
-      for (final item in items) item(context),
-      ?footer,
-    ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Keep player names and inline actions readable at enlarged text sizes.
-        final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
-        final width = constraints.maxWidth.clamp(
-          520 * scale,
-          _widestPane * scale,
-        );
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: width,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainerLowest,
-                  border: Border.all(color: colors.outlineVariant),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: !constraints.hasBoundedHeight
-                    ? Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: whole(context),
-                      )
-                    : constraints.maxHeight <
-                          MediaQuery.textScalerOf(context).scale(150)
-                    ? SingleChildScrollView(
-                        controller: scroll,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: whole(context),
-                        ),
-                      )
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _columns(context),
-                          // Lazy: a round of hundreds of boards builds only
-                          // those on screen, so entering a result stays quick.
-                          // Shrink-wrapped so a short round's sheet ends at
-                          // its last board; it still lays out only what shows.
-                          Flexible(
-                            child: ListView.builder(
-                              controller: scroll,
-                              shrinkWrap: true,
-                              padding: EdgeInsets.zero,
-                              itemCount: items.length,
-                              itemBuilder: (context, i) => items[i](context),
-                            ),
-                          ),
-                          ?footer,
-                        ],
-                      ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  static const _board = 40.0, _row = 32.0, _statusLine = 38.0;
-
-  /// The widest a pane of boards grows, before text scaling.
-  static const _widestPane = 760.0;
-  double scoreWidth(BuildContext context) =>
-      math.max(36, MediaQuery.textScalerOf(context).scale(32));
-
-  /// The board column grows with the text, so its "Board" heading still fits
-  /// at large text sizes (it vanished at 200%; found by the UI fuzzer).
-  double boardWidth(BuildContext context) =>
-      math.max(_board, MediaQuery.textScalerOf(context).scale(_board));
-
-  /// Before round 1: the board sheet with nothing filled in, one row per
-  /// board the section will need, so nothing moves when pairings arrive.
-  Widget _blankTable(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final e = c.event!;
-    final muted = TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.w600,
-      color: colors.onSurfaceVariant,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
-    Widget box() => Container(
-      width: scoreWidth(context),
-      height: 24,
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        border: Border.all(color: colors.outlineVariant),
-        borderRadius: BorderRadius.circular(4),
-      ),
-    );
-    Widget row(String label, {bool bye = false}) => Container(
-      constraints: const BoxConstraints(minHeight: _row),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.5)),
-        ),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: boardWidth(context),
-            child: Text(label, style: muted),
-          ),
-          if (bye) SizedBox(width: scoreWidth(context)) else box(),
-          const Spacer(),
-          if (!bye) box(),
-        ],
-      ),
-    );
-    final items = <Widget>[];
-    for (final s in sections) {
-      final entrants = s.players.where((id) => !e.player(id).withdrawn).length;
-      if (widget.sectionId == null) {
-        items.add(
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: colors.outlineVariant),
-                bottom: BorderSide(color: colors.outlineVariant),
-              ),
-            ),
-            child: Text(
-              s.name,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-          ),
-        );
-      }
-      for (var board = 1; board <= entrants ~/ 2; board++) {
-        items.add(row('$board'));
-      }
-      if (entrants.isOdd) items.add(row('Bye', bye: true));
-    }
-    // No boards: a jump must not use positions from the last sheet drawn.
-    _itemOf = const {};
-    _itemCount = 0;
-    return KeyedSubtree(
-      key: const ValueKey('blank-board-sheet'),
-      child: Semantics(
-        label: 'Boards appear here when pairings are created.',
-        child: _frame(context, [for (final item in items) (_) => item]),
-      ),
-    );
-  }
-
-  Widget _columns(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      key: const ValueKey('board-column-header'),
-      color: colors.surfaceContainerLow,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: DefaultTextStyle.merge(
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: colors.onSurfaceVariant,
-        ),
-        child: Row(
-          children: [
-            SizedBox(width: boardWidth(context), child: const Text('Board')),
-            SizedBox(
-              width: scoreWidth(context),
-              child: Text('Score', textAlign: TextAlign.center),
-            ),
-            SizedBox(width: 12),
-            Expanded(child: Text('White')),
-            SizedBox(width: 12),
-            Expanded(child: Text('Black', textAlign: TextAlign.right)),
-            SizedBox(width: 12),
-            SizedBox(
-              width: scoreWidth(context),
-              child: Text('Score', textAlign: TextAlign.center),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Section name above its boards when every section is on screen.
-  Widget _sectionRow(BuildContext context, Section s, Round r) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      key: ValueKey('board-round-heading-${s.id}-${r.number}'),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: colors.outlineVariant),
-          bottom: BorderSide(color: colors.outlineVariant),
-        ),
-      ),
-      child: Text(
-        allRoundsOf(s) ? '${s.name} · Round ${r.number}' : s.name,
-        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-
-  Widget _scoreGroup(BuildContext context, int points) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      color: colors.surfaceContainerLow.withValues(alpha: 0.5),
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: Text(
-        pointsText(points),
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: colors.onSurfaceVariant,
-        ),
-      ),
-    );
-  }
-
-  /// A bye, listed after the boards.
-  Widget _bye(
-    BuildContext context,
-    ByeAward b,
-    int round, {
-    required bool every,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-    final p = c.event!.player(b.player);
-    return Container(
-      key: ValueKey(every ? 'bye-${p.id}-$round' : 'bye-${p.id}'),
-      constraints: const BoxConstraints(minHeight: _row),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.5)),
-        ),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: boardWidth(context),
-            child: Text(
-              'Bye',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: scoreWidth(context),
-            child: Text(
-              halves(b.points),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  WidgetSpan(
-                    alignment: PlaceholderAlignment.baseline,
-                    baseline: TextBaseline.alphabetic,
-                    // The grid is one Tab stop; names are not.
-                    child: ExcludeFocusTraversal(
-                      child: InkWell(
-                        key: ValueKey(
-                          every
-                              ? 'bye-player-${p.id}-$round'
-                              : 'bye-player-${p.id}',
-                        ),
-                        onTap: () => showPlayer(p.id),
-                        child: Text(
-                          p.name,
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // The points are in the score column; a pairing bye needs
-                  // no further words.
-                  if (!b.allocated)
-                    TextSpan(
-                      text: '   ${b.reason.toLowerCase()}',
-                      style: TextStyle(color: colors.onSurfaceVariant),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _game(BuildContext context, BoardRow row, Map<String, int>? before) {
-    final e = c.event!, colors = Theme.of(context).colorScheme;
-    final g = row.game;
-    final white = e.player(g.white), black = e.player(g.black);
-    final lock = locked(row);
-    Widget name(Player p, {required bool right}) {
-      final score = before?[p.id];
-      final label = Text.rich(
-        TextSpan(
-          children: [
-            if (score != null && right)
-              TextSpan(
-                text: '(${halves(score)})  ',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: colors.onSurfaceVariant,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            // A bughouse side is both partners: "Chen / Patel".
-            TextSpan(
-              text: switch (p.id == g.white ? g.whitePartner : g.blackPartner) {
-                '' => p.name,
-                final partner => '${p.name} / ${e.player(partner).name}',
-              },
-            ),
-            if (score != null && !right)
-              TextSpan(
-                text: '  (${halves(score)})',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: colors.onSurfaceVariant,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-          ],
-        ),
-        style: const TextStyle(fontSize: 14),
-        textAlign: right ? TextAlign.right : TextAlign.left,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      );
-      if (swapping) {
-        final picked = swapPick == p.id;
-        return Semantics(
-          selected: picked,
-          button: true,
-          child: InkWell(
-            key: ValueKey('round-player-${g.id}-${p.id}'),
-            onTap: () => pickSwap(p.id),
-            borderRadius: BorderRadius.circular(4),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: picked ? colors.primary.withValues(alpha: 0.12) : null,
-                border: Border.all(
-                  color: picked ? colors.primary : colors.outlineVariant,
-                ),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: label,
-            ),
-          ),
-        );
-      }
-      void menu(Offset at) => showPlayerMenu(
-        context,
-        c,
-        p.id,
-        at,
-        onByes: (id) => showPlayer(id, focus: 'byes'),
-      );
-      // The grid is one Tab stop, so names are not: Space on a score box
-      // opens that player's details, Shift+F10 their menu.
-      final playerLink = ExcludeFocusTraversal(
-        child: Tooltip(
-          message: '${p.name} · Double-click for player details',
-          child: ContextMenuKeys(
-            onMenu: menu,
-            child: CallbackShortcuts(
-              bindings: {
-                const SingleActivator(LogicalKeyboardKey.enter): () =>
-                    showPlayer(p.id),
-                const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
-                    showPlayer(p.id),
-              },
-              child: Semantics(
-                button: true,
-                hint: 'Opens player details',
-                child: InkWell(
-                  key: ValueKey('round-player-${g.id}-${p.id}'),
-                  onSecondaryTapDown: (details) => menu(details.globalPosition),
-                  onDoubleTap: () => showPlayer(p.id),
-                  child: label,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      final forfeited =
-          g.outcome == Outcome.doubleForfeit ||
-          (p.id == g.white && g.outcome == Outcome.blackForfeit) ||
-          (p.id == g.black && g.outcome == Outcome.whiteForfeit);
-      if (!forfeited || past(row)) return playerLink;
-      return Column(
-        crossAxisAlignment: right
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          playerLink,
-          if (p.withdrawn)
-            Text(
-              'Withdrawn',
-              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+      entered: allEntered
+          ? _AllEntered(
+              doneNode: doneNode,
+              every: rows().every((r) => r.game.outcome.resolved),
+              onFocusChange: () => setState(() {}),
             )
-          else
-            // Reached with Tab only from this board's score boxes.
-            ExcludeFocusTraversal(
-              excluding: !{'${g.id}-w', '${g.id}-b'}.contains(entryBox),
-              child: TextButton(
-                key: ValueKey('withdraw-${g.id}-${p.id}'),
-                onPressed: () {
-                  try {
-                    c.setWithdrawn([p.id], true);
-                  } catch (error) {
-                    if (mounted) showFailure(context, error);
-                  }
-                },
-                // The same words as the player menu and the player card.
-                child: Text(statusLabel(e, StatusAction.withdraw, [p.id])),
-              ),
-            ),
-        ],
-      );
-    }
-
-    return GestureDetector(
-      key: ValueKey('game-${g.id}'),
-      behavior: HitTestBehavior.opaque,
-      onTap: () => focusBox(g.id, true),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: _row),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(
-              color: colors.outlineVariant.withValues(alpha: 0.5),
-            ),
-          ),
-        ),
-        child: Semantics(
-          label:
-              'Round ${row.round.number}, board ${g.board}, ${white.name} versus ${black.name}: ${g.outcome.label}${lock ? ', read-only' : ''}',
-          child: Row(
-            children: [
-              SizedBox(
-                width: boardWidth(context),
-                child: Text(
-                  '${g.board}${row.section.doubleGames ? '·${g.leg}' : ''}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: colors.onSurface,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ),
-              _scoreBox(context, row, white: true),
-              const SizedBox(width: 12),
-              Expanded(child: name(white, right: false)),
-              const SizedBox(width: 12),
-              Expanded(child: name(black, right: true)),
-              const SizedBox(width: 12),
-              _scoreBox(context, row, white: false),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _scoreBox(BuildContext context, BoardRow row, {required bool white}) {
-    final colors = Theme.of(context).colorScheme, g = row.game;
-    final node = box(g.id, white), lock = locked(row);
-    node.skipTraversal = '${g.id}-${white ? 'w' : 'b'}' != entryBox;
-    final owner = c.event!.player(white ? g.white : g.black);
-    final assumed = !g.outcome.resolved && g.pairingAssumption != null;
-    // Unfinished, disputed and assumed results each look different from an
-    // empty box, so none of them reads as "not reported yet".
-    final (mark, caption) = switch (g.outcome) {
-      // A game still going may carry an assumption for pairing.
-      Outcome.unfinished when assumed => (
-        '(${scoreMark(g.pairingAssumption!, white: white)})',
-        'playing',
-      ),
-      Outcome.unfinished => ('', 'playing'),
-      Outcome.disputed => ('?', 'disputed'),
-      _ when assumed => (
-        '(${scoreMark(g.pairingAssumption!, white: white)})',
-        'assumed',
-      ),
-      _ => (scoreMark(g.outcome, white: white), null),
-    };
-    final odd = g.outcome == Outcome.disputed;
-    final spoken = switch (g.outcome) {
-      Outcome.unreported when assumed =>
-        'assumed ${mark.replaceAll(RegExp('[()]'), '')} for pairing only',
-      Outcome.unreported => 'no result',
-      Outcome.unfinished when assumed =>
-        'still playing, assumed ${mark.replaceAll(RegExp('[()]'), '')} for pairing only',
-      Outcome.unfinished => 'still playing',
-      Outcome.disputed => 'disputed',
-      Outcome.doubleForfeit => 'double forfeit',
-      _ when !g.outcome.played => mark == 'X' ? 'won by forfeit' : 'forfeited',
-      _ => mark,
-    };
-    return ContextMenuKeys(
-      onMenu: (at) => showPlayerMenu(
-        context,
-        c,
-        owner.id,
-        at,
-        onByes: (id) => showPlayer(id, focus: 'byes'),
-      ),
-      child: Focus(
-        focusNode: node,
-        onKeyEvent: (_, event) => onKey(row, white, event),
-        onFocusChange: (has) {
-          setState(() {});
-        },
-        child: Semantics(
-          label: '${owner.name}\'s score: $spoken${lock ? ', read-only' : ''}',
-          child: Tooltip(
-            message: assumed
-                ? 'Assumed for pairing only: ${g.pairingReason}'
-                : odd
-                ? g.outcome.label
-                : '',
-            child: MouseRegion(
-              cursor: lock ? SystemMouseCursors.basic : SystemMouseCursors.text,
-              child: GestureDetector(
-                key: ValueKey('score-${g.id}-${white ? 'w' : 'b'}'),
-                onTap: () => focusBox(g.id, white),
-                child: Container(
-                  width: scoreWidth(context),
-                  constraints: const BoxConstraints(minHeight: 24),
-                  padding: EdgeInsets.symmetric(
-                    vertical: caption == null ? 3 : 2,
-                  ),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: lock ? colors.surfaceContainerLow : colors.surface,
-                    border: node.hasFocus
-                        ? Border.all(color: colors.primary, width: 2)
-                        : Border.all(color: colors.outline),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        mark,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          height: 1,
-                          color: odd
-                              ? colors.error
-                              : assumed
-                              ? colors.onSurfaceVariant
-                              : colors.onSurface,
-                        ),
-                      ),
-                      if (caption != null)
-                        Text(
-                          caption,
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.1,
-                            color: odd ? colors.error : colors.onSurfaceVariant,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+          : null,
+      invalidKey: invalidKey,
+      forfeitRefused: forfeitRefused,
+      drawHint: drawHint,
+      forfeitHint: row != null && !locked && isForfeit(row.game.outcome)
+          ? forfeitKeyHint(row.game.outcome, white: white)
+          : null,
     );
   }
 }
