@@ -106,6 +106,17 @@ const irrevocableByeNote =
 /// Rule 22C5: a player who cancelled an irrevocable half-point bye for
 /// [roundNumber] and then won has the result counted as a draw for prizes.
 /// Returns [game] with `prizeOutcome` and its note set or cleared.
+///
+/// Only a win over the board is reduced. The rule says "if the player
+/// wins", which covers a forfeit win too (the player again turns a half
+/// point into a full one), but no [Outcome] can say how such a game counts
+/// for prizes: the winner should keep ½, the absent opponent 0, and the
+/// game should stay unplayed for tie-breaks (34E1, 34E3). `Outcome.draw`
+/// would credit the absent player ½ and count a game that was never
+/// played; `Outcome.doubleForfeit` would take the winner's half point too.
+/// Expressing it needs a per-player prize score on [Game] (a model and file
+/// format change), so a forfeit win is left as the wall chart records it
+/// and the director adjusts that prize by hand.
 Game applyIrrevocableByeRule(Event e, Game game, int roundNumber) {
   bool cancelledBye(String id) {
     final p = e.players.where((p) => p.id == id).firstOrNull;

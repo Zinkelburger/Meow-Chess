@@ -91,7 +91,9 @@ enum TiebreakMethod {
   ),
 
   /// 34E10: the average performance rating of the played opponents, with
-  /// games between tied players left out. Unrated players are skipped.
+  /// games between tied players left out of each opponent's performance
+  /// (the interpretation is spelled out where it is computed). Unrated
+  /// players are skipped.
   opponentsPerformance(
     'opponentsPerformance',
     "Opponents' performance",
@@ -894,8 +896,29 @@ class _Calculator {
 
   int _rating(String id) => event.player(id).effectivePairingRating;
 
-  /// 34E10: each opponent's performance, averaged. The performances keep
-  /// their fractions, so the result is rounded once.
+  /// 34E10 averages "the performance ratings of the players' opposition",
+  /// each the opponent's opponents' ratings ±400 for a win or loss, and
+  /// says "results of tied players against each other should not be
+  /// included, since this would give one of the players an unfair
+  /// advantage". The rule does not say which list the excluded result
+  /// leaves, so this is the interpretation chosen here:
+  ///
+  ///  * every played opponent of [id] stays in the average, including an
+  ///    opponent who is in the tie ([group]); the tied player's own list of
+  ///    opponents is never shortened;
+  ///  * an opponent's performance omits every game the opponent played
+  ///    against a tied player when the opponent is tied as well, so a game
+  ///    between two tied players credits neither of them through the
+  ///    other's performance (the "unfair advantage"); and
+  ///  * games an untied opponent played against tied players (including
+  ///    [id]) count normally: they are ordinary results of the opposition.
+  ///
+  /// An opponent's performance is the average of its rated games' credits;
+  /// unrated opponents' opponents add no credit, and an opponent left with
+  /// no credits is skipped. The performances keep their fractions, so the
+  /// result is rounded once; 0 when no opponent has a performance. Requires
+  /// [group] to be the players still tied on points and every earlier
+  /// method (see [tiebreakValues]).
   int _opponentsPerformance(String id, List<String> group) {
     final tied = group.toSet();
     final performances = <double>[];
