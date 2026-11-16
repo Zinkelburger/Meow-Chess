@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../application/tournament_controller.dart';
@@ -154,44 +156,51 @@ class _KnockoutBracketViewState extends State<KnockoutBracketView> {
       fontWeight: FontWeight.w600,
       color: colors.onSurfaceVariant,
     );
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 900),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            row([
-              text(120, 'Stage', headerStyle),
-              text(60, 'Board', headerStyle),
-              text(260, 'Match', headerStyle),
-              text(150, 'Games', headerStyle),
-              Expanded(child: Text('Advances', style: headerStyle)),
-            ]),
-            for (final stage in bracket.stages)
-              for (final m in stage.matches)
-                KeyedSubtree(
-                  key: ValueKey('match-${stage.number}-${m.index}'),
-                  child: row([
-                    text(120, m.index == 0 ? stage.name : ''),
-                    text(60, m.board == 0 ? '' : '${m.board}', muted),
-                    text(
-                      260,
-                      '${seeded(m.high, m.highSeed)} – ${seeded(m.low, m.lowSeed)}',
-                    ),
-                    text(150, knockoutMatchScore(m)),
-                    Expanded(child: outcome(m)),
-                  ]),
+    // Each row's last column fills what is left, so the bracket needs a
+    // bounded width inside its own horizontal scroll: the space it is given,
+    // and never less than 900.
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: constraints.hasBoundedWidth
+              ? math.max(900.0, constraints.maxWidth)
+              : 900.0,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              row([
+                text(120, 'Stage', headerStyle),
+                text(60, 'Board', headerStyle),
+                text(260, 'Match', headerStyle),
+                text(150, 'Games', headerStyle),
+                Expanded(child: Text('Advances', style: headerStyle)),
+              ]),
+              for (final stage in bracket.stages)
+                for (final m in stage.matches)
+                  KeyedSubtree(
+                    key: ValueKey('match-${stage.number}-${m.index}'),
+                    child: row([
+                      text(120, m.index == 0 ? stage.name : ''),
+                      text(60, m.board == 0 ? '' : '${m.board}', muted),
+                      text(
+                        260,
+                        '${seeded(m.high, m.highSeed)} – ${seeded(m.low, m.lowSeed)}',
+                      ),
+                      text(150, knockoutMatchScore(m)),
+                      Expanded(child: outcome(m)),
+                    ]),
+                  ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: Text(
+                  key: const ValueKey('knockout-placings'),
+                  'Placings: ${knockoutPlacings(e, s).map((p) => '${name(p.$1)} – ${p.$2}').join('; ')}',
+                  style: muted,
                 ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: Text(
-                key: const ValueKey('knockout-placings'),
-                'Placings: ${knockoutPlacings(e, s).map((p) => '${name(p.$1)} – ${p.$2}').join('; ')}',
-                style: muted,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
