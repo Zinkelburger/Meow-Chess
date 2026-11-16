@@ -17,7 +17,11 @@ That manual test must create an event outside the container, save a copy, choose
 an external backup folder, restart the app, reopen from Recent events and verify
 a new automatic backup without selecting either path again. Also verify that a
 disconnected backup volume reports a backup failure without preventing event
-editing, and that reconnecting and restarting restores its grant.
+editing, and that reconnecting and restarting restores its grant. While that
+event is open, `club.meow-wal` must appear beside it and the workspace must not
+warn that crash protection is unavailable: Info.plist declares SQLite's
+`-wal`/`-shm`/`-journal` files as related items and `SQLiteSidecarPresenter`
+extends the event's grant to them, which the unsandboxed XCTests cannot prove.
 The workflow runs on every push to `main`, and can also run manually from
 Actions → CI without publishing anything. All work is committed directly to
 `main`; the project does not use feature branches.
@@ -133,7 +137,14 @@ New regression coverage lives in `member_lookup_batch_test.dart`,
 provider failures independent of wording, atomic approval, newer evidence,
 native staging outside the selected directory and publication failure. The
 macOS XCTest target tests native creation/replacement and preservation of the
-old report when the staged source is missing.
+old report when the staged source is missing, the related-item declaration of
+SQLite's journal files, that every remembered or restored event registers one
+journal presenter per suffix until its access is released, and that SQLite keeps
+a write-ahead log beside a presented event.
+
+On Linux, `integration_test/app_test.dart` also checks that the native save
+channel is still registered after startup and refuses a bad argument without
+opening a dialog.
 
 `test_boylston_replay.py` rebuilds each anonymized report in
 `test/fixtures/boylston/` through the MCP tools, exports it, and fails on any

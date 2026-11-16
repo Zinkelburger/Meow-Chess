@@ -40,6 +40,25 @@
 			<key>LSItemContentTypes</key>
 			<array><string>org.meowchess.tournament</string></array>
 		</dict>
+		<!-- SQLite's journal files beside an event (club.meow-wal and so on).
+		     NSIsRelatedItemType lets the sandbox extend the grant for a chosen
+		     event to them; see SQLiteSidecarPresenter. Never opened by Finder. -->
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Meow Chess event journal</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>None</string>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>meow-wal</string>
+				<string>meow-shm</string>
+				<string>meow-journal</string>
+			</array>
+			<key>NSIsRelatedItemType</key>
+			<true/>
+		</dict>
 	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>

@@ -263,4 +263,23 @@ void main() {
       c.dispose();
     },
   );
+  testWidgets(
+    'the Linux save channel outlives its setup and validates its argument',
+    (tester) async {
+      // The runner drops its own reference to the channel right after
+      // registering it; the engine's messenger must be keeping it alive.
+      // A bad argument is answered without opening a dialog.
+      await expectLater(
+        const MethodChannel('meow_chess/file_save').invokeMethod('save', 42),
+        throwsA(
+          isA<PlatformException>().having(
+            (e) => e.code,
+            'code',
+            'bad-arguments',
+          ),
+        ),
+      );
+    },
+    skip: !Platform.isLinux,
+  );
 }

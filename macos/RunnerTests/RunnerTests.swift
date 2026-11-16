@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import SQLite3
 import XCTest
 @testable import Meow_Chess
 
@@ -150,6 +151,95 @@ class RunnerTests: XCTestCase {
       source: source, to: destination, replaceExisting: false))
     XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), "another event")
     XCTAssertEqual(try String(contentsOf: source, encoding: .utf8), "reviewed snapshot")
+  }
+
+  // The sandbox extends a chosen event's grant to SQLite's journal only for
+  // extensions the app declares as related items.
+  func testInfoPlistDeclaresTheJournalFilesAsRelatedItems() throws {
+    let types = try XCTUnwrap(
+      Bundle.main.object(forInfoDictionaryKey: "CFBundleDocumentTypes") as? [[String: Any]])
+    let related = types.filter { $0["NSIsRelatedItemType"] as? Bool == true }
+    XCTAssertEqual(related.count, 1)
+    let extensions = try XCTUnwrap(related.first?["CFBundleTypeExtensions"] as? [String])
+    XCTAssertEqual(
+      Set(extensions),
+      Set(SQLiteSidecarPresenter.suffixes.map { SQLiteSidecarPresenter.eventExtension + $0 }))
+  }
+
+  func testEventFilesPresentTheirJournalsUntilAccessIsReleased() throws {
+    let manager = FileManager.default
+    let directory = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: directory) }
+    let event = directory.appendingPathComponent("Chess résumé.meow")
+    let report = directory.appendingPathComponent("report.csv")
+    try Data().write(to: event)
+    try Data("report".utf8).write(to: report)
+    let suite = "meow.bookmark-tests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    func canonical(_ url: URL?) -> String? { url?.resolvingSymlinksInPath().path }
+    func presented() -> [SQLiteSidecarPresenter] {
+      NSFileCoordinator.filePresenters.compactMap { $0 as? SQLiteSidecarPresenter }
+        .filter { canonical($0.primaryPresentedItemURL)?.hasPrefix(canonical(directory)!) == true }
+    }
+
+    let store = FileAccessBookmarks(defaults: defaults)
+    try store.remember(event)
+    try store.remember(directory)
+    try store.remember(report)
+    // One presenter per journal suffix, all for the event; remembering the
+    // same file again (as the resolved bookmark does) adds none.
+    let sidecars = presented()
+    XCTAssertEqual(sidecars.count, SQLiteSidecarPresenter.suffixes.count)
+    XCTAssertEqual(
+      Set(sidecars.compactMap { canonical($0.presentedItemURL) }),
+      Set(SQLiteSidecarPresenter.suffixes.map { canonical(event)! + $0 }))
+    XCTAssertEqual(Set(sidecars.compactMap { canonical($0.primaryPresentedItemURL) }), [canonical(event)!])
+    store.releaseAccess()
+    XCTAssertEqual(presented().count, 0)
+
+    // Recent events are presented again from their bookmarks at startup.
+    let reopened = FileAccessBookmarks(defaults: defaults)
+    defer { reopened.releaseAccess() }
+    XCTAssertEqual(reopened.restore(), [])
+    XCTAssertEqual(presented().count, SQLiteSidecarPresenter.suffixes.count)
+  }
+
+  // Inside the test container every path is writable, so this cannot show the
+  // sandbox grant itself; it shows SQLite keeps its write-ahead log beside a
+  // presented event, in the locking mode the app uses, with presenters live.
+  func testSQLiteWritesItsLogBesideAPresentedEvent() throws {
+    let manager = FileManager.default
+    let directory = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: directory) }
+    let event = directory.appendingPathComponent("club.meow")
+    try Data().write(to: event)  // An empty file is an empty SQLite database.
+    let suite = "meow.bookmark-tests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let store = FileAccessBookmarks(defaults: defaults)
+    defer { store.releaseAccess() }
+    try store.remember(event)
+
+    var db: OpaquePointer?
+    XCTAssertEqual(sqlite3_open(event.path, &db), SQLITE_OK)
+    defer { sqlite3_close(db) }
+    func text(_ sql: String) -> String? {
+      var statement: OpaquePointer?
+      guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return nil }
+      defer { sqlite3_finalize(statement) }
+      guard sqlite3_step(statement) == SQLITE_ROW, let value = sqlite3_column_text(statement, 0)
+      else { return nil }
+      return String(cString: value)
+    }
+    XCTAssertEqual(text("PRAGMA locking_mode = EXCLUSIVE"), "exclusive")
+    XCTAssertEqual(text("PRAGMA journal_mode = WAL"), "wal")
+    XCTAssertEqual(sqlite3_exec(db, "CREATE TABLE t(x); INSERT INTO t VALUES(1)", nil, nil, nil), SQLITE_OK)
+    XCTAssertTrue(manager.fileExists(atPath: event.path + "-wal"))
+    XCTAssertEqual(text("SELECT count(*) FROM t"), "1")
   }
 
 }

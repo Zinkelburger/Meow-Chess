@@ -9,6 +9,9 @@ final class FileAccessBookmarks {
 
   private let defaults: UserDefaults
   private var scopedURLs: [String: URL] = [:]
+  /// Keyed by real path; registered once per event file and kept until
+  /// [releaseAccess], so SQLite can always reach the file's journal.
+  private var sidecarPresenters: [String: [SQLiteSidecarPresenter]] = [:]
   private var terminationObserver: NSObjectProtocol?
 
   init(defaults: UserDefaults = .standard) {
@@ -110,7 +113,11 @@ final class FileAccessBookmarks {
   }
 
   /// Every successful start is paired once, including repeated restore calls.
+  /// Sidecar presenters go first: they extend the grants being released.
   func releaseAccess() {
+    let presenters = sidecarPresenters.values.flatMap { $0 }
+    sidecarPresenters.removeAll()
+    for presenter in presenters { NSFileCoordinator.removeFilePresenter(presenter) }
     let urls = Array(scopedURLs.values)
     scopedURLs.removeAll()
     for url in urls { url.stopAccessingSecurityScopedResource() }
@@ -120,6 +127,14 @@ final class FileAccessBookmarks {
     let path = url.standardizedFileURL.path
     if scopedURLs[path] == nil && url.startAccessingSecurityScopedResource() {
       scopedURLs[path] = url
+    }
+    // Even without a security scope (a path from Dart), the open or save
+    // panel's grant for this session is what the presenters extend. Keyed by
+    // the real path: a Dart path and its resolved bookmark can differ by a
+    // symlink (/var and /private/var), and one set per file is enough.
+    let file = url.resolvingSymlinksInPath().path
+    if SQLiteSidecarPresenter.presentsSidecars(of: url) && sidecarPresenters[file] == nil {
+      sidecarPresenters[file] = SQLiteSidecarPresenter.present(sidecarsOf: url)
     }
   }
 
@@ -154,5 +169,74 @@ final class FileAccessBookmarks {
       resolvingBookmarkData: data,
       options: [.withSecurityScope, .withoutUI, .withoutMounting],
       relativeTo: nil, bookmarkDataIsStale: &stale)
+  }
+}
+
+/// SQLite keeps an event's journal in files beside it, named by appending a
+/// suffix: `club.meow-wal` (plus `-shm` and `-journal` in other modes). The App
+/// Sandbox grant for a file the user chose covers that one file, not new names
+/// in its folder, so without help SQLite cannot create its journal and the
+/// event opens with an in-memory one that a crash mid-save can corrupt.
+///
+/// Apple's remedy for SQLite is the related-item mechanism: Info.plist declares
+/// the suffixed extensions as document types with NSIsRelatedItemType, and one
+/// presenter per sidecar names the event file as its primary item. File
+/// Coordination then extends the event file's grant to the sidecar. A
+/// presenter must be registered before SQLite opens the file.
+final class SQLiteSidecarPresenter: NSObject, NSFilePresenter {
+  /// The journal suffixes SQLite uses, matched by the related-item extensions
+  /// in Info.plist (`meow` + suffix).
+  static let suffixes = ["-wal", "-shm", "-journal"]
+  static let eventExtension = "meow"
+
+  /// One serial queue for every presenter. Never the main queue: [present]
+  /// coordinates on the main thread and must not wait on itself.
+  private static let queue: OperationQueue = {
+    let queue = OperationQueue()
+    queue.name = "Meow Chess SQLite sidecar presenters"
+    queue.maxConcurrentOperationCount = 1
+    return queue
+  }()
+
+  let primaryPresentedItemURL: URL?
+  let presentedItemURL: URL?
+  var presentedItemOperationQueue: OperationQueue { Self.queue }
+
+  init(event: URL, suffix: String) {
+    primaryPresentedItemURL = event
+    presentedItemURL = URL(fileURLWithPath: event.path + suffix)
+    super.init()
+  }
+
+  /// Only event files get presenters: Info.plist declares related items for
+  /// the `.meow` extension alone, and folders have no journal.
+  static func presentsSidecars(of url: URL) -> Bool {
+    url.isFileURL && !url.hasDirectoryPath
+      && url.pathExtension.lowercased() == eventExtension
+  }
+
+  /// Registers a presenter for each sidecar of [event] and returns them; the
+  /// caller removes them with NSFileCoordinator.removeFilePresenter. Each
+  /// registration is followed by an empty coordinated write through that
+  /// presenter's own coordinator. Registration is asynchronous; the write
+  /// returns only once File Coordination knows the presenter and has granted
+  /// the sidecar, so SQLite, which Dart opens next, finds it accessible.
+  static func present(sidecarsOf event: URL) -> [SQLiteSidecarPresenter] {
+    suffixes.map { (suffix) -> SQLiteSidecarPresenter in
+      let presenter = SQLiteSidecarPresenter(event: event, suffix: suffix)
+      NSFileCoordinator.addFilePresenter(presenter)
+      if let sidecar = presenter.presentedItemURL {
+        var error: NSError?
+        NSFileCoordinator(filePresenter: presenter).coordinate(
+          writingItemAt: sidecar, options: [], error: &error
+        ) { _ in }
+        if let error = error {
+          // Not fatal: SQLite then reports the refusal and the event opens
+          // without crash protection, which the workspace shows.
+          NSLog("Meow Chess: could not coordinate %@: %@", sidecar.path, error.localizedDescription)
+        }
+      }
+      return presenter
+    }
   }
 }
