@@ -110,8 +110,9 @@ Event doubleBlitz() {
         state: 'MA',
       ),
   ];
-  Game g(String id, String w, String b, int leg, Outcome o) =>
-      Game(id: id, white: w, black: b, board: 1, leg: leg, outcome: o);
+  // Both legs of a pairing share its board; pairings in a round do not.
+  Game g(String id, String w, String b, int leg, Outcome o, {int board = 1}) =>
+      Game(id: id, white: w, black: b, board: board, leg: leg, outcome: o);
   return Event(
     id: 'double-blitz',
     name: 'Synthetic double blitz',
@@ -138,8 +139,8 @@ Event doubleBlitz() {
             games: [
               g('a', 'p0', 'p1', 1, Outcome.whiteWin),
               g('b', 'p1', 'p0', 2, Outcome.blackWin),
-              g('c', 'p2', 'p3', 1, Outcome.draw),
-              g('d', 'p3', 'p2', 2, Outcome.whiteWin),
+              g('c', 'p2', 'p3', 1, Outcome.draw, board: 2),
+              g('d', 'p3', 'p2', 2, Outcome.whiteWin, board: 2),
             ],
           ),
           Round(
@@ -748,6 +749,7 @@ void main() {
         // Rated Friday Night Blitz (202604280273): six double rounds at G/5;d0
         // were rated as twelve blitz rounds.
         final event = doubleBlitz();
+        validateEvent(event);
         expect(ratingPreflight(event, today: today), isEmpty);
         final files = ratingPackage(event, today: today);
         final (_, sections) = readDbf(files['TSEXPORT.DBF']!);

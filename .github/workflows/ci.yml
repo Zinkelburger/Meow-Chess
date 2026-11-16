@@ -167,6 +167,7 @@ jobs:
           flutter test test/infrastructure/rating_contract_test.dart
           test/infrastructure/dbf_importer_test.dart
           test/infrastructure/dbf_byte_contract_test.dart
+          test/infrastructure/dbf_scenarios_test.dart
           test/infrastructure/section_time_control_test.dart
           test/infrastructure/import_reports_test.dart
       - name: Independently validate the macOS DBFs

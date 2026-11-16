@@ -1,9 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
-import 'package:meow_chess/ui/history_panel.dart' show historyTime;
+import 'package:meow_chess/ui/history_panel.dart';
 import 'package:meow_chess/ui/workspace.dart';
 import '../support.dart';
 
@@ -389,5 +390,39 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 500));
     });
+  });
+
+  testWidgets('the key legend names the platform\'s undo shortcut', (
+    tester,
+  ) async {
+    final c = fixture();
+    addTearDown(c.dispose);
+    Future<String> legend() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Row(
+              children: [HistoryPanel(controller: c, onClose: () {})],
+            ),
+          ),
+        ),
+      );
+      return tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(const ValueKey('history-keys')),
+              matching: find.byType(Text),
+            ),
+          )
+          .data!;
+    }
+
+    expect(await legend(), contains('Ctrl+Z undo'));
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      expect(await legend(), contains('⌘Z undo'));
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }

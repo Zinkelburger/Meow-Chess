@@ -90,19 +90,46 @@ python -m pip install dbfread==2.0.7
 python scripts/check_exports.py
 ```
 
-This generates eight synthetic packages, checks their contents with `dbfread`,
-compares every active result with its source event, runs the existing seven
-validator corruption controls, and runs 51 mock-importer tests. CI runs the same
-checks on Linux and Windows using `--validate-only` after its Flutter test step
-generates the files. No account or network is needed after dependency setup.
+This regenerates every synthetic package, checks each with `dbfread`
+(`scripts/verify_dbf.py`), compares every entrant and active result with its
+source event, runs the validator's 16 corruption controls plus a missing source
+event (`scripts/test_dbf_validator.py`, also under `python -O`), the 93
+mock-importer tests (`scripts/test_mock_uscf_importer.py`) and the 3 Boylston
+anonymizer tests. A package a test writes but the script does not list, or one
+it lists but no test wrote, fails the check. CI runs the same checks on Linux
+and Windows, and on macOS for DBFs written there, using `--validate-only` after
+its Flutter test step generates the files. No account or network is needed
+after dependency setup.
 
-The packages exercise 1, 3, 12 and 32 rounds; mixed round counts with the short
-section first or last; independent side-game entries for the same members;
-1,000 players and four-digit opponent numbers; chronological quad reporting;
-regular, dual and quick categories; unrated players; leading-zero IDs; maximum
-text widths; accent folding; multi-day dates; wins, draws, losses, forfeits and
-full/half/zero byes. Generated files live under ignored `artifacts/dbf-contract`
-and `artifacts/dbf-importer`. These synthetic tournaments must not be submitted.
+Eighteen packages are generated, all checked against their source event except
+the last:
+
+| Package | Written by | Exercises |
+| --- | --- | --- |
+| `dbf-contract` | `rating_contract_test.dart` | 2 sections, 12 rounds, every outcome and bye, unrated player, leading-zero IDs, accent folding, explicit report name, multi-day dates |
+| `dbf-importer/mixed-long-first`, `mixed-short-first` | `dbf_importer_test.dart` | sections of 12 and 1 rounds in both orders; U0 padding |
+| `dbf-importer/rounds-1`, `rounds-32` | `dbf_importer_test.dart` | the smallest and largest round counts |
+| `dbf-importer/quad` | `dbf_importer_test.dart` | chronological quad reported as round robin `R` |
+| `dbf-importer/side-games` | `dbf_importer_test.dart` | independent one-round side-game entries for the same members |
+| `dbf-importer/four-digit-opponents` | `dbf_importer_test.dart` | 1,000 players, four-digit opponent numbers, rating 4000 |
+| `dbf-importer/double-blitz`, `blank-state` | `dbf_importer_test.dart` | double-game blitz with legs and both bye sizes; assistant and other TDs; a blank `D_STATE` |
+| `dbf-importer/categories` | `dbf_byte_contract_test.dart` | regular, dual, quick and blitz sections |
+| `dbf-importer/double-byes-forfeits` | `dbf_byte_contract_test.dart` | double-game byes split across legs; forfeits with no opponent |
+| `dbf-importer/round-robin-bye` | `dbf_byte_contract_test.dart` | three-player round robin with its U0 bye |
+| `dbf-importer/withdrawal-half-bye` | `dbf_scenarios_test.dart` | a withdrawal reported as U0; a final-round half-point bye |
+| `dbf-importer/officials-sections` | `dbf_scenarios_test.dart` | assistant chief TD and 28 other TDs (251 of 255 characters); two sections with section-local pair numbers |
+| `dbf-importer/field-widths` | `dbf_scenarios_test.dart` | event name, city, section name and player name at exactly 35, 21, 30 and 30 characters |
+| `dbf-importer/rating-mix` | `dbf_scenarios_test.dart` | ratings 4000 and 850 beside unrated players with assigned or foreign ratings (reported as 0) |
+| `dbf` (reciprocity only) | `import_reports_test.dart` | a completed quad, without a source event |
+
+The byte contract tests (`dbf_byte_contract_test.dart`,
+`dbf_scenarios_test.dart`) also pin, without writing packages: golden bytes
+for every record of the minimal event and the scenarios above; that a value one
+character over its field width is refused rather than truncated; four-digit
+`D_PAIR_NUM` and `S_LST_PAIR`; that 10,000 entrants in a section and a 29th
+other TD are refused; and that players moved between sections before play
+started are reported where they now play. Generated files live under ignored `artifacts/`. These synthetic tournaments
+must not be submitted.
 
 ## The deliberately fragile importer
 
@@ -117,23 +144,26 @@ the manifest/source-event sidecars. It emits a JSON event with sections, players
 active round results and independently calculated scores. Failure reports a
 specific field/record and exits nonzero, including under `python -O`.
 
-It assumes exact filenames, field order, types, widths, ASCII bytes, zeroed
-reserved header/descriptor bytes, left-justified character numbers, undeleted
-records, exact file lengths and EOF markers. It checks section/player counts,
-event links, section-local pairing numbers, reciprocal opponents/results/colors,
-calendar dates, IDs, and nonplayed-result codes. The negative tests corrupt
-these properties and require the specific expected rejection.
+Its baseline is empirical: everything the seven accepted Boylston SwissSys
+packages contain is accepted, including all-character descriptors (dates as
+C(8)), a 26 or 126 header year byte, nonzero reserved header bytes, blank event
+IDs, `S_SCH_LVL`, `S_GP_PTS` and `D_STATE`, loose time-control spellings, round
+robin type `R`, SwissSys double-game codes and `X0`/`F0`/`Z0` cells with no
+opponent. It stays strict about exact filenames, the field list and widths,
+header and record lengths consistent with the file size, the EOF byte, section
+and player counts, section-local pairing numbers 1..`S_LST_PAIR`, reciprocal
+opponents, results and colors, member-ID shape, calendar dates and ASCII. Some
+strictness is defensive rather than proven: field order, colors on played
+games, `U0` in padding columns and `S_R_SYSTEM` limited to `R`/`D`/`Q`. The
+negative tests corrupt these properties and require the specific expected
+rejection.
 
-This intentionally narrow consumer supports Meow's non-FIDE, non-Grand-Prix,
-chronological Swiss output. It is stricter than the published format in several
-respects: colors are mandatory, result spelling is compact, and optional DBF
-variations are rejected. It follows the published `D(8)` date descriptors, so it
-deliberately rejects the `C(8)` date variant observed in the supplied SwissSys
-files. Rejecting another program's output here is not evidence that US Chess
-rejects it. These assumptions stress our output, not emulate undocumented MUIR
-internals. The general-purpose `dbfread` check and source-event oracle remain
-separate: a format reader alone cannot detect two mutually consistent results
-that both differ from the actual game.
+This narrow consumer supports non-FIDE, non-Grand-Prix output only. Rejecting
+another program's output here is not evidence that US Chess rejects it; it
+stresses our output and does not emulate undocumented MUIR internals. The
+general-purpose `dbfread` check and source-event oracle remain separate: a
+format reader alone cannot detect two mutually consistent results that both
+differ from the actual game.
 
 ## Mixed-round fix and real-file evidence
 

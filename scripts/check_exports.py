@@ -20,10 +20,12 @@ IMPORTER = 'artifacts/dbf-importer'
 RECIPROCITY_ONLY = 'artifacts/dbf'
 IMPORTER_PACKAGES = ('mixed-long-first', 'mixed-short-first', 'rounds-1', 'rounds-32', 'quad',
                      'side-games', 'four-digit-opponents', 'double-blitz', 'blank-state',
-                     'categories', 'double-byes-forfeits', 'round-robin-bye')
+                     'categories', 'double-byes-forfeits', 'round-robin-bye',
+                     'withdrawal-half-bye', 'officials-sections', 'field-widths', 'rating-mix')
 GENERATORS = ('test/infrastructure/rating_contract_test.dart',
               'test/infrastructure/dbf_importer_test.dart',
               'test/infrastructure/dbf_byte_contract_test.dart',
+              'test/infrastructure/dbf_scenarios_test.dart',
               'test/infrastructure/section_time_control_test.dart',
               'test/infrastructure/import_reports_test.dart')
 

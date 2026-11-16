@@ -16,15 +16,16 @@ import 'rating_contract_test.dart' show doubleBlitz, today;
 /// on, golden records for a minimal event, and one package per section shape
 /// (categories, double-game byes and forfeits, round robins with a bye).
 
-Player _player(int i, {String state = 'MA', int rating = 1500}) => Player(
-  id: 'p$i',
-  name: 'Given$i Family$i',
-  memberId: '${12345670 + i}',
-  rating: rating,
-  state: state,
-);
+Player syntheticPlayer(int i, {String state = 'MA', int rating = 1500}) =>
+    Player(
+      id: 'p$i',
+      name: 'Given$i Family$i',
+      memberId: '${12345670 + i}',
+      rating: rating,
+      state: state,
+    );
 
-Event _event({
+Event syntheticEvent({
   required List<Player> players,
   required List<Section> sections,
   String timeControl = 'G/90;d30',
@@ -44,8 +45,11 @@ Event _event({
 
 /// Two players, one decisive game: the smallest ratable report.
 Event _minimal() {
-  final players = [_player(1), _player(2, state: '', rating: 0)];
-  return _event(
+  final players = [
+    syntheticPlayer(1),
+    syntheticPlayer(2, state: '', rating: 0),
+  ];
+  return syntheticEvent(
     players: players,
     sections: [
       Section(
@@ -117,13 +121,13 @@ void expectDbfFraming(
   }
 }
 
-String _records(Uint8List bytes) {
+String dbfRecords(Uint8List bytes) {
   final view = ByteData.sublistView(bytes);
   final header = view.getUint16(8, Endian.little);
   return ascii.decode(bytes.sublist(header, bytes.length - 1));
 }
 
-const _header = [
+const headerSchema = [
   ('H_FORMAT', 5),
   ('H_PROGRAM', 10),
   ('H_EVENT_ID', 12),
@@ -141,7 +145,7 @@ const _header = [
   ('H_ATD_ID', 8),
   ('H_OTHER_TD', 255),
 ];
-const _section = [
+const sectionSchema = [
   ('S_EVENT_ID', 12),
   ('S_SEC_NUM', 2),
   ('S_SEC_NAME', 30),
@@ -159,7 +163,7 @@ const _section = [
   ('S_GP_PTS', 3),
   ('S_FIDE', 1),
 ];
-List<(String, int)> _detail(int rounds) => [
+List<(String, int)> detailSchema(int rounds) => [
   ('D_EVENT_ID', 12),
   ('D_SEC_NUM', 2),
   ('D_PAIR_NUM', 4),
@@ -170,7 +174,7 @@ List<(String, int)> _detail(int rounds) => [
   for (var n = 1; n <= rounds; n++) ('D_RND${n.toString().padLeft(2, '0')}', 7),
 ];
 
-String _cells(List<(String, int)> values) =>
+String dbfCells(List<(String, int)> values) =>
     values.map((v) => v.$1.padRight(v.$2)).join();
 
 void main() {
@@ -182,36 +186,36 @@ void main() {
       final date = DateTime(2024, 2, 28);
       expectDbfFraming(
         files['THEXPORT.DBF']!,
-        fields: _header,
+        fields: headerSchema,
         records: 1,
         date: date,
       );
       expectDbfFraming(
         files['TSEXPORT.DBF']!,
-        fields: _section,
+        fields: sectionSchema,
         records: 1,
         date: date,
       );
       expectDbfFraming(
         files['TDEXPORT.DBF']!,
-        fields: _detail(1),
+        fields: detailSchema(1),
         records: 2,
         date: date,
       );
       expect(
-        _records(files['THEXPORT.DBF']!),
-        ' ${_cells([('2C', 5), ('MEOW $appVersion', 10), ('', 12), ('Byte contract', 35), ('1', 2), ('20240228', 8), ('20240228', 8), ('A6012345', 8), ('Boston', 21), ('MA', 2), ('02116', 10), ('USA', 21), ('N', 1), ('00123456', 8), ('', 8), ('', 255)])}',
+        dbfRecords(files['THEXPORT.DBF']!),
+        ' ${dbfCells([('2C', 5), ('MEOW $appVersion', 10), ('', 12), ('Byte contract', 35), ('1', 2), ('20240228', 8), ('20240228', 8), ('A6012345', 8), ('Boston', 21), ('MA', 2), ('02116', 10), ('USA', 21), ('N', 1), ('00123456', 8), ('', 8), ('', 255)])}',
       );
       expect(
-        _records(files['TSEXPORT.DBF']!),
-        ' ${_cells([('', 12), ('1', 2), ('Open', 30), ('R', 1), ('G/90;d30', 40), ('00123456', 8), ('', 8), ('S', 1), ('1', 2), ('2', 4), ('20240228', 8), ('20240228', 8), ('N', 1), ('N', 1), ('0', 3), ('N', 1)])}',
+        dbfRecords(files['TSEXPORT.DBF']!),
+        ' ${dbfCells([('', 12), ('1', 2), ('Open', 30), ('R', 1), ('G/90;d30', 40), ('00123456', 8), ('', 8), ('S', 1), ('1', 2), ('2', 4), ('20240228', 8), ('20240228', 8), ('N', 1), ('N', 1), ('0', 3), ('N', 1)])}',
       );
       // Numbers are left-justified and blank-padded, as SwissSys writes them;
       // an unrated player reports 0 and a missing state stays blank.
       expect(
-        _records(files['TDEXPORT.DBF']!),
-        ' ${_cells([('', 12), ('1', 2), ('1', 4), ('12345671', 8), ('FAMILY1, GIVEN1', 30), ('MA', 2), ('1500', 4), ('W2W', 7)])}'
-        ' ${_cells([('', 12), ('1', 2), ('2', 4), ('12345672', 8), ('FAMILY2, GIVEN2', 30), ('', 2), ('0', 4), ('L1B', 7)])}',
+        dbfRecords(files['TDEXPORT.DBF']!),
+        ' ${dbfCells([('', 12), ('1', 2), ('1', 4), ('12345671', 8), ('FAMILY1, GIVEN1', 30), ('MA', 2), ('1500', 4), ('W2W', 7)])}'
+        ' ${dbfCells([('', 12), ('1', 2), ('2', 4), ('12345672', 8), ('FAMILY2, GIVEN2', 30), ('', 2), ('0', 4), ('L1B', 7)])}',
       );
     });
 
@@ -234,19 +238,19 @@ void main() {
       final date = DateTime(2024, 2, 28);
       expectDbfFraming(
         files['THEXPORT.DBF']!,
-        fields: _header,
+        fields: headerSchema,
         records: 1,
         date: date,
       );
       expectDbfFraming(
         files['TSEXPORT.DBF']!,
-        fields: _section,
+        fields: sectionSchema,
         records: 1,
         date: date,
       );
       expectDbfFraming(
         files['TDEXPORT.DBF']!,
-        fields: _detail(4),
+        fields: detailSchema(4),
         records: 4,
         date: date,
       );
@@ -257,7 +261,7 @@ void main() {
   });
 
   test('each rule 5C category gets its own section system and control', () {
-    final players = [for (var i = 0; i < 8; i++) _player(i)];
+    final players = [for (var i = 0; i < 8; i++) syntheticPlayer(i)];
     Section section(int n, String control) => Section(
       id: 's$n',
       name: 'Section $n',
@@ -279,7 +283,7 @@ void main() {
         ),
       ],
     );
-    final event = _event(
+    final event = syntheticEvent(
       players: players,
       sections: [
         section(0, 'G/90;d30'),
@@ -312,7 +316,7 @@ void main() {
   });
 
   test('double-game byes split across legs and forfeits keep no opponent', () {
-    final players = [for (var i = 0; i < 8; i++) _player(i)];
+    final players = [for (var i = 0; i < 8; i++) syntheticPlayer(i)];
     Game g(String id, String w, String b, int leg, Outcome o) => Game(
       id: id,
       white: w,
@@ -321,7 +325,7 @@ void main() {
       leg: leg,
       outcome: o,
     );
-    final event = _event(
+    final event = syntheticEvent(
       timeControl: 'G/5;d0',
       players: players,
       sections: [
@@ -376,10 +380,10 @@ void main() {
   });
 
   test('a three-player round robin reports its bye as R with U0 cells', () {
-    final players = [for (var i = 0; i < 3; i++) _player(i)];
+    final players = [for (var i = 0; i < 3; i++) syntheticPlayer(i)];
     final ids = [for (final p in players) p.id];
     final schedule = roundRobinSchedule(ids);
-    final event = _event(
+    final event = syntheticEvent(
       players: players,
       sections: [
         Section(

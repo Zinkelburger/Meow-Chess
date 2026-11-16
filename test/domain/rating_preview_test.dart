@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/domain/rating_preview.dart';
@@ -215,5 +217,61 @@ void main() {
       ).rating,
       isNull,
     );
+  });
+
+  // Expected values below are computed in the test from the formulas of
+  // "The US Chess Rating System" (Glickman and Doan, April 6, 2026), not
+  // from the helpers under test.
+  group('US Chess rating specification, April 6, 2026', () {
+    double nStar(num r0) => r0 > 2355
+        ? 50
+        : 50 / math.sqrt(0.662 + 0.00000739 * (2569 - r0) * (2569 - r0));
+    double we(num r, num ri) => 1 / (1 + math.pow(10, -(r - ri) / 400));
+
+    test('four wins with an opponent met twice earn the bonus', () {
+      final e = eventWith(
+        [
+          game('1', Outcome.whiteWin, opponent: 'a'),
+          game('2', Outcome.blackWin, black: true, opponent: 'b'),
+          game('3', Outcome.whiteWin, opponent: 'c'),
+          game('4', Outcome.blackWin, black: true, opponent: 'a'),
+        ],
+        rating: 1800,
+        opponent: 1700,
+      );
+      final k = 800 / (nStar(1800) + 4);
+      final gain = k * (4 - 4 * we(1800, 1700));
+      final bonus = math.max(0, gain - 10 * math.sqrt(4));
+      expect(bonus, greaterThan(0));
+      expect(estimate(e).rating, (1800 + gain + bonus).round());
+    });
+
+    test('a dual-rated master gains the reduced K and its bonus', () {
+      final e = eventWith(
+        [
+          for (final id in ['a', 'b', 'c'])
+            game(id, Outcome.whiteWin, opponent: id),
+        ],
+        rating: 2300,
+        opponent: 2300,
+        timeControl: 'G/45 d5',
+      );
+      final k = 800 * (6.5 - 0.0025 * 2300) / (nStar(2300) + 3);
+      final gain = k * (3 - 3 * we(2300, 2300));
+      final bonus = math.max(0, gain - 10 * math.sqrt(4));
+      expect(estimate(e).rating, (2300 + gain + bonus).round());
+    });
+
+    test('section 5: no rating falls below the absolute floor of 100', () {
+      final e = eventWith(
+        [game('1', Outcome.blackWin)],
+        rating: 110,
+        opponent: 110,
+      );
+      // 110 − 800 / (N* + 1) × 0.5 is well under 100.
+      expect(110 - 800 / (nStar(110) + 1) * 0.5, lessThan(100));
+      expect(estimate(e).rating, 100);
+      expect(estimate(e).change, -10);
+    });
   });
 }
