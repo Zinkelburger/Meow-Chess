@@ -494,6 +494,47 @@ void main() {
       expect(cash(run(e)), {'1': 100, '2': 100, '3': 50, '4': 30});
     });
 
+    test(
+      '33E with 32B1/32B2: players who take a points prize leave the pool',
+      () {
+        // 1 and 2 tie on 5 for 1st + 2nd ($160, $80 each), but 5 points
+        // win $90: both take it, so neither is a tied winner of the place
+        // prizes, which pass down (32B1): 1st to 3 on 4, 2nd to 4 on 3.
+        final e = fixture(
+          [('1', 2000, 10), ('2', 2000, 10), ('3', 2000, 8), ('4', 2000, 6)],
+          [
+            place(1, 100),
+            place(2, 60),
+            {'id': 'five', 'kind': 'points', 'points': 10, 'cents': 9000},
+          ],
+        );
+        final a = run(e);
+        expect(cash(a), {'1': 90, '2': 90, '3': 100, '4': 60});
+        expect(a.explanations.join('\n'), contains('32B2'));
+      },
+    );
+
+    test('33E with 32B2: the rest of the tie divides what is left', () {
+      // Only player 1 may win the points prize. 1 takes $90 instead of an
+      // $80 share; 2 is the one remaining tied winner and takes 1st (one
+      // prize per winner, 32B2), and 2nd goes to 3 below.
+      final e = fixture(
+        [('1', 2000, 10), ('2', 2000, 10), ('3', 2000, 8)],
+        [
+          place(1, 100),
+          place(2, 60),
+          {
+            'id': 'five',
+            'kind': 'points',
+            'points': 10,
+            'cents': 9000,
+            'eligible': ['1'],
+          },
+        ],
+      );
+      expect(cash(run(e)), {'1': 90, '2': 100, '3': 60});
+    });
+
     test('33F: unrateds win only place and unrated prizes', () {
       final e = fixture(
         [('u', 0, 10), ('v', 0, 8), ('b', 1700, 6)],

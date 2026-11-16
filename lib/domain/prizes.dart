@@ -670,7 +670,7 @@ class _Entrant {
 /// A cash prize while it is being allocated: pool awards may leave a
 /// remainder behind (32C6), which stays in the group as its own prize.
 class _Cash {
-  _Cash(this.prize, this.cents, {this.remainderOf});
+  _Cash(this.prize, this.cents, {this.remainderOf}) : assert(cents >= 0);
   final Prize prize;
   final int cents;
   final Prize? remainderOf;
@@ -772,6 +772,12 @@ List<_Entrant> _competitors(Event event, Section section) {
 /// prizes the tie can hold at one each (a matching of prizes to groups), and
 /// the work grows with the number of prizes and groups, not with the number
 /// of ways to hand prizes out.
+///
+/// A 33E points prize is the most valuable prize a player can take (32B1):
+/// a tied player whose points prize pays more than their share of the tie
+/// takes it and leaves the tie, and the rest divide that level's prizes, at
+/// most one each (32B2); what they cannot take passes down to the next
+/// level.
 PrizeAllocation allocatePrizes(Event event, Section section) {
   final table = section.prizes.individual;
   final notes = <String>[];
@@ -953,6 +959,7 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     int Function(_Entrant) cap,
   ) {
     final caps = {for (final e in tied) e.id: cap(e)};
+    assert(pool >= 0 && pool <= caps.values.fold(0, (s, c) => s + c));
     final out = <String, int>{};
     var remaining = pool;
     var open = tied.map((e) => e.id).toList();
@@ -976,6 +983,11 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     for (final e in tied) {
       out.putIfAbsent(e.id, () => 0);
     }
+    assert(
+      out.values.fold(0, (s, c) => s + c) == pool &&
+          out.entries.every((s) => s.value >= 0 && s.value <= caps[s.key]!),
+      'A tie must split its pool exactly, within each 32B3 cap.',
+    );
     return out;
   }
 
@@ -983,6 +995,9 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
 
   final awarded = <_Cash>{};
   final pending = <_Cash>[];
+  // What the levels pooled, and what they left for the levels below
+  // (32C6); every cent pooled and not carried is held by a player.
+  var pooledCents = 0, carriedCents = 0;
 
   /// Allocates among [tied] (one level) from [prizes], recursively carving
   /// out players who do better from prizes the rest cannot win.
@@ -1103,6 +1118,7 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     for (final c in pool) {
       awarded.add(c);
     }
+    pooledCents += total;
     if (contenders.length == 1 && pool.length == 1) {
       final e = contenders.single, c = pool.single;
       final amount = full[e.id]!;
@@ -1178,6 +1194,7 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
             '${e.name} is unrated and limited to ${dollars(table.unratedCapCents)}; ';
         if (excess > 0) {
           pending.add(_Cash(source.prize, excess, remainderOf: source.prize));
+          carriedCents += excess;
         }
         notes.add(
           excess == 0
@@ -1203,6 +1220,83 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     }
   }
 
+  // 33E: the points prizes, highest score first.
+  final pointPrizes = [
+    for (final p in table.list)
+      if (p.kind == PrizeKind.points && p.points > 0) p,
+  ]..sort((a, b) => b.points.compareTo(a.points));
+
+  /// The points prize for the highest score [e] reached that [e] may win.
+  Prize? pointsPrizeFor(_Entrant e) => pointPrizes
+      .where((p) => e.points >= p.points && eligible(e, p))
+      .firstOrNull;
+
+  /// Divides the open prizes among one level ([group], tied).
+  ///
+  /// 33E with 32B1 and 32B2: a player whose points prize pays more than
+  /// their share takes the points prize and so is not one of the tied
+  /// winners of the pooled prizes. Those are divided again among the rest
+  /// of the tie, at most one prize per winner; any the rest cannot take stay
+  /// open for the levels below. A trial division is rolled back until no
+  /// remaining player prefers a points prize, which ends because each trial
+  /// removes a player.
+  void allocateLevel(List<_Entrant> group) {
+    var tied = group;
+    while (true) {
+      final open = [
+        for (final c in available)
+          if (!awarded.contains(c)) c,
+        ...pending.where((c) => !awarded.contains(c)),
+      ];
+      if (open.isEmpty) return;
+      // The state a trial division changes, to roll it back.
+      final cents = [for (final e in tied) e.cents];
+      final lines = {
+        for (final MapEntry(:key, :value) in cashLines.entries) key: {...value},
+      };
+      final pooled = {...pooledWith};
+      final taken = {...awarded}, carried = [...pending];
+      final noted = notes.length, wasPooled = pooledCents;
+      final wasCarried = carriedCents;
+      allocateTie(tied, open);
+      final leaving = [
+        for (final e in tied)
+          if (e.cents > 0 && (paid[pointsPrizeFor(e)?.id] ?? 0) > e.cents) e,
+      ];
+      if (leaving.isEmpty) return;
+      for (final (k, e) in tied.indexed) {
+        e.cents = cents[k];
+      }
+      cashLines
+        ..clear()
+        ..addAll(lines);
+      pooledWith
+        ..clear()
+        ..addAll(pooled);
+      awarded
+        ..clear()
+        ..addAll(taken);
+      pending
+        ..clear()
+        ..addAll(carried);
+      notes.removeRange(noted, notes.length);
+      pooledCents = wasPooled;
+      carriedCents = wasCarried;
+      for (final e in leaving) {
+        notes.add(
+          '${e.name} (${scoreText(e.points)}) takes the '
+          '${pointsPrizeFor(e)!.title} prize instead of a share of the prizes '
+          'this score group divides, so the others in the tie divide them '
+          '(32B1, 32B2, 33E).',
+        );
+      }
+      tied = [
+        for (final e in tied)
+          if (!leaving.contains(e)) e,
+      ];
+    }
+  }
+
   // Levels from the top; the pool of a level never reaches below it.
   var i = 0;
   while (i < entrants.length) {
@@ -1210,42 +1304,33 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     while (j < entrants.length && entrants[j].level == entrants[i].level) {
       j++;
     }
-    final tied = entrants.sublist(i, j);
-    final open = [
-      for (final c in available)
-        if (!awarded.contains(c)) c,
-      ...pending.where((c) => !awarded.contains(c)),
-    ];
-    if (open.isEmpty) break;
-    allocateTie(tied, open);
+    allocateLevel(entrants.sublist(i, j));
     i = j;
   }
+  assert(
+    entrants.every((e) => e.cents >= 0),
+    'No player can hold a negative prize.',
+  );
+  assert(
+    entrants.fold(0, (sum, e) => sum + e.cents) == pooledCents - carriedCents,
+    'Prize money not conserved: players hold '
+    '${entrants.fold(0, (sum, e) => sum + e.cents)} cents of $pooledCents '
+    'pooled less $carriedCents carried.',
+  );
 
-  // 33E: prizes by points, one per player, instead of a smaller pooled award.
-  final pointPrizes = [
-    for (final p in table.list)
-      if (p.kind == PrizeKind.points && p.points > 0) p,
-  ]..sort((a, b) => b.points.compareTo(a.points));
+  // 33E: prizes by points, one per player, for the highest score the player
+  // reached. Every player at that score wins it; none is divided. A player
+  // whose points prize beats their pooled share left the tie above, so here
+  // they hold nothing yet.
   for (final e in entrants) {
-    final prize = pointPrizes
-        .where((p) => e.points >= p.points && eligible(e, p))
-        .firstOrNull;
+    final prize = pointsPrizeFor(e);
     if (prize == null) continue;
     final amount = paid[prize.id]!;
     if (amount <= e.cents) continue;
-    if (e.cents > 0) {
-      notes.add(
-        '${e.name} takes the ${prize.title} prize (${dollars(amount)}) '
-        'instead of ${dollars(e.cents)} from the pooled prizes (32B1).',
-      );
-      for (final line in cashLines.values) {
-        line.remove(e.id);
-      }
-    } else {
-      notes.add(
-        '${e.name} (${scoreText(e.points)}) wins ${prize.title}: ${dollars(amount)}.',
-      );
-    }
+    assert(e.cents == 0, '${e.name} should have left the tie.');
+    notes.add(
+      '${e.name} (${scoreText(e.points)}) wins ${prize.title}: ${dollars(amount)}.',
+    );
     e.cents = amount;
     cashLines[prize.id]![e.id] = amount;
   }
