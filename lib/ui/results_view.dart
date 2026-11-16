@@ -20,6 +20,7 @@ import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import 'dialogs.dart';
+import 'focus_pool.dart';
 import 'result_correction_panel.dart';
 import 'player_panel.dart';
 import 'player_format.dart';
@@ -98,8 +99,25 @@ class ResultsViewState extends State<ResultsView> {
   final repairReason = TextEditingController();
   final repairStarted = <int>{};
 
-  /// Score boxes by '$gameId-w' / '$gameId-b'.
-  final boxes = <String, FocusNode>{};
+  /// Score boxes by '$gameId-w' / '$gameId-b'; each build frees the boxes
+  /// of games it no longer shows.
+  late final boxes = FocusNodePool((key) {
+    final white = key.endsWith('-w');
+    final node = FocusNode(
+      debugLabel:
+          'score ${key.substring(0, key.length - 2)} ${white ? 'white' : 'black'}',
+    );
+    node.addListener(() {
+      if (node.hasFocus) {
+        activeBox = key;
+        invalidKey = false;
+        // Back on a board: the status line names it again.
+        allEntered = false;
+        remember();
+      }
+    });
+    return node;
+  });
   bool busy = false;
   bool get missingOnly =>
       c.workspaceState.read('pairings-missing-only') == 'true';
@@ -240,9 +258,7 @@ class ResultsViewState extends State<ResultsView> {
     remember();
     scrollSave?.cancel();
     ready = false;
-    for (final n in boxes.values) {
-      n.dispose();
-    }
+    boxes.dispose();
     doneNode.dispose();
     scroll.dispose();
     stackedScroll.dispose();
@@ -251,22 +267,7 @@ class ResultsViewState extends State<ResultsView> {
     super.dispose();
   }
 
-  FocusNode box(String gameId, bool white) =>
-      boxes.putIfAbsent(boxKey(gameId, white), () {
-        final node = FocusNode(
-          debugLabel: 'score $gameId ${white ? 'white' : 'black'}',
-        );
-        node.addListener(() {
-          if (node.hasFocus) {
-            activeBox = boxKey(gameId, white);
-            invalidKey = false;
-            // Back on a board: the status line names it again.
-            allEntered = false;
-            remember();
-          }
-        });
-        return node;
-      });
+  FocusNode box(String gameId, bool white) => boxes.node(boxKey(gameId, white));
 
   List<BoardRow> rows() => boardRows(sections, selection);
 
@@ -341,7 +342,7 @@ class ResultsViewState extends State<ResultsView> {
       // Out of reach: never leave the cursor on the board just entered,
       // where the next key would change its result, and never ask a
       // dropped box for focus, which it would take later at random.
-      if (boxes.values.any((n) => n.hasPrimaryFocus)) {
+      if (boxes.hasPrimaryFocus) {
         FocusManager.instance.primaryFocus?.unfocus();
       }
       return;
@@ -688,6 +689,14 @@ class ResultsViewState extends State<ResultsView> {
     // Tab enters the grid at the active box, or the first board missing a
     // result; every other box is reached with the arrows.
     entryBox = entryBoxFor(visible, activeBox);
+    // Boxes of games no longer listed (earlier rounds, filtered boards) are
+    // freed; they are made again if their games come back.
+    boxes.retainOnly({
+      for (final r in visible) ...[
+        boxKey(r.game.id, true),
+        boxKey(r.game.id, false),
+      ],
+    });
     // Any earlier Swiss round on screen: its boards are read-only, while
     // other sections' boards beside it stay open for entry.
     final viewingPast = shown.any((x) => isEarlierRound(x.$1, x.$2));

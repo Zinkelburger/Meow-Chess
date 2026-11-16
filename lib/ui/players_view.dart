@@ -20,6 +20,7 @@ import '../domain/team_standings.dart' show TeamAwards;
 import '../domain/scheveningen.dart';
 import '../domain/rating_preview.dart';
 import 'dialogs.dart';
+import 'focus_pool.dart';
 import 'result_correction_panel.dart';
 import 'roster_import_panel.dart';
 import '../infrastructure/roster_import.dart' show decodeRosterText;
@@ -162,18 +163,20 @@ class _PlayersViewState extends State<PlayersView> {
 
   /// Players in on-screen order, for arrow-key movement.
   List<Player> order = const [];
-  final resultFocus = <String, FocusNode>{};
+
+  /// The crosstable's score boxes by '$gameId-$playerId'. Each build frees
+  /// the boxes it no longer shows (an undone round, a filtered row).
+  final resultFocus = FocusNodePool(
+    (key) => FocusNode(debugLabel: 'standing-$key', skipTraversal: true),
+  );
   List<String>? entryOrder;
   String? activeResult;
   bool enteringResult = false;
 
   /// A score cell's focus. Each cell keeps itself out of the Tab order
   /// unless it is the [entryCell].
-  FocusNode standingFocus(Game g, String player) => resultFocus.putIfAbsent(
-    cellKey(g.id, player),
-    () =>
-        FocusNode(debugLabel: 'standing-${g.id}-$player', skipTraversal: true),
-  );
+  FocusNode standingFocus(Game g, String player) =>
+      resultFocus.node(cellKey(g.id, player));
 
   /// The crosstable is one Tab stop: Tab enters at this cell (the active
   /// one, or the first missing a result), and every other cell is reached
@@ -331,9 +334,7 @@ class _PlayersViewState extends State<PlayersView> {
     if (!mounted) return;
     if (!hasFocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted &&
-            !enteringResult &&
-            !resultFocus.values.any((node) => node.hasFocus)) {
+        if (mounted && !enteringResult && !resultFocus.hasFocus) {
           setState(() {
             entryOrder = null;
             invalidKey = false;
@@ -537,9 +538,7 @@ class _PlayersViewState extends State<PlayersView> {
     scroll.dispose();
     search.dispose();
     moveReason.dispose();
-    for (final node in resultFocus.values) {
-      node.dispose();
-    }
+    resultFocus.dispose();
     super.dispose();
   }
 
@@ -863,6 +862,10 @@ class _PlayersViewState extends State<PlayersView> {
     final started = layout.started, ranked = started;
     order = layout.order;
     cellGames = layout.cellGames;
+    resultFocus.retainOnly({
+      for (final MapEntry(key: player, value: games) in cellGames.entries)
+        for (final g in games) cellKey(g.id, player),
+    });
     entryCell = widget.standingsOnly
         ? entryCellFor(order, cellGames, activeResult)
         : null;
