@@ -4,6 +4,42 @@ Downloads for each version are on
 [Releases](https://github.com/Zinkelburger/Meow-Chess/releases); the browser
 version at https://chessautoprep.com/meow-chess/ follows the latest release.
 
+## Unreleased
+
+Fixes from an October review that never reached a release:
+
+- **Prizes:** when a tied player takes a larger points prize, they leave the
+  tie and the others divide the place prizes; what they can't take passes down.
+  Those place prizes used to go unawarded.
+- **Swiss colors:** the due color is right when one player sat out the latest
+  round the two differ in, and the alternating-color variation restarts in each
+  score group. A double-game pairing counts as one meeting, scores in double-game
+  sections are measured as such, and bughouse partnerships get no invented
+  color history.
+- **Printed reports:** Swiss sections no longer print round-robin prize
+  standings; "Under X" classes use the prize rating; a double-game full-point
+  bye prints B, not U; bughouse partners appear on board 2 with their
+  partnership's result; wall-chart totals include a re-entry's carried score;
+  conditions sheets print open classes and points prizes plainly; Scheveningen
+  sheets show the match score; knockouts export as ASCII crosstables.
+- **On screen:** the knockout bracket draws again on Pairings, and each bracket
+  keeps its own advance reasons when searching. Bughouse partners get a score
+  box, Swiss score groups include re-entry scores, the Prize standings print
+  matches the screen, and Fetch missing states keeps going after leaving
+  Reports.
+- **Corrections** warn about a player moved into a section that had played
+  fewer rounds.
+- **Names** with accents (José Núñez) match US Chess's NUNEZ without a
+  wrong-ID warning.
+- **Sections and byes:** adding a section is checked like creating one;
+  moving players who are already in the target records nothing; a bye is
+  cancelled with its own command, and bye values outside 0–2 are refused.
+- **Automation:** create_section refuses withdrawn players, duplicates and
+  more than 32 rounds, and errors say what is allowed.
+- **Files:** reopening an event no longer leaves a -shm file beside it; the
+  Linux save dialog no longer blocks the app; the Mac sandbox build keeps SQLite's
+  journal beside the event (not yet checked on a Mac).
+
 ## 1.5.1 — November 12, 2026
 
 - Ticking players and then creating a section or moving them no longer leaves
