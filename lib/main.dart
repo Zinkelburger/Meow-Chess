@@ -123,6 +123,11 @@ class _MeowAppState extends State<MeowApp> {
   String? path, error;
   bool light = true;
   List<String> recent = [];
+
+  /// [recent] with each file's modification time, refreshed when the list
+  /// changes, when an event closes and when the app resumes, so building the
+  /// welcome screen does no file I/O.
+  List<RecentEvent> recentEvents = const [];
   final navigator = GlobalKey<NavigatorState>();
   final welcomeLogo = GlobalKey();
   bool launchComplete = false;
@@ -176,6 +181,7 @@ class _MeowAppState extends State<MeowApp> {
       error =
           'Recent-event list could not be read. Your event files are unaffected.';
     }
+    _readRecentStamps();
     try {
       if (settings.existsSync()) {
         light = jsonDecode(settings.readAsStringSync())['theme'] != 'dark';
@@ -184,7 +190,11 @@ class _MeowAppState extends State<MeowApp> {
     if (widget.initialPath != null) open(widget.initialPath!);
     files.start();
     exits = AppLifecycleListener(
-      onResume: () => controller?.checkFile(),
+      onResume: () {
+        controller?.checkFile();
+        // Event files may have changed in another program meanwhile.
+        if (mounted && controller == null) setState(_readRecentStamps);
+      },
       onExitRequested: () async {
         _closeForExit();
         return AppExitResponse.exit;
@@ -243,7 +253,13 @@ class _MeowAppState extends State<MeowApp> {
     _retiring.add(old);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_retiring.remove(old)) old.dispose();
+      // Back on the welcome screen, show the closed file's final save.
+      if (mounted && controller == null) setState(_readRecentStamps);
     });
+  }
+
+  void _readRecentStamps() {
+    recentEvents = [for (final filename in recent) RecentEvent.read(filename)];
   }
 
   void open(String filename) {
@@ -269,6 +285,7 @@ class _MeowAppState extends State<MeowApp> {
         filename,
         ...recent.where((x) => !_samePath(x, filename)),
       ].take(12).toList();
+      _readRecentStamps();
       opened = true;
     } catch (e, stack) {
       Diagnostics.record('open event', 'failed', error: e, stack: stack);
@@ -405,28 +422,12 @@ class _MeowAppState extends State<MeowApp> {
     }
   }
 
-  /// When an event file last changed, for the recent list.
-  String changed(String filename) {
-    try {
-      final file = File(filename);
-      if (!file.existsSync()) return 'File not found';
-      final t = file.lastModifiedSync(), now = DateTime.now();
-      final clock =
-          '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-      if (t.year == now.year && t.month == now.month && t.day == now.day) {
-        return 'Changed today $clock';
-      }
-      return 'Changed ${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
-    } catch (_) {
-      return 'Unreadable';
-    }
-  }
-
   /// Takes an event off the recent list; the file itself is untouched.
   void forget(String filename) {
-    setState(
-      () => recent = recent.where((x) => !_samePath(x, filename)).toList(),
-    );
+    setState(() {
+      recent = recent.where((x) => !_samePath(x, filename)).toList();
+      _readRecentStamps();
+    });
     try {
       library.writeAsStringSync(jsonEncode(recent), flush: true);
     } catch (cause, stack) {
@@ -743,17 +744,17 @@ class _MeowAppState extends State<MeowApp> {
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                             const SizedBox(height: 12),
-                            for (final filename in recent)
+                            for (final entry in recentEvents)
                               Card(
                                 child: ListTile(
                                   leading: const Icon(
                                     Icons.description_outlined,
                                   ),
                                   title: Text(
-                                    p.basenameWithoutExtension(filename),
+                                    p.basenameWithoutExtension(entry.path),
                                   ),
                                   subtitle: Text(
-                                    '${changed(filename)} · $filename',
+                                    '${entry.describe(DateTime.now())} · ${entry.path}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -767,16 +768,16 @@ class _MeowAppState extends State<MeowApp> {
                                           size: 18,
                                         ),
                                         onPressed: () =>
-                                            reveal(context, filename),
+                                            reveal(context, entry.path),
                                       ),
                                       IconButton(
                                         tooltip: 'Remove from recent events',
                                         icon: const Icon(Icons.close, size: 18),
-                                        onPressed: () => forget(filename),
+                                        onPressed: () => forget(entry.path),
                                       ),
                                     ],
                                   ),
-                                  onTap: () => open(filename),
+                                  onTap: () => open(entry.path),
                                 ),
                               ),
                           ],
@@ -803,4 +804,42 @@ bool _samePath(String a, String b) {
   }
 
   return p.equals(a, b) || p.equals(canonical(a), canonical(b));
+}
+
+/// One event on the recent list, with its file's modification time read when
+/// the list was last refreshed, so building the welcome screen never touches
+/// the disk.
+@immutable
+class RecentEvent {
+  const RecentEvent(this.path, {this.modified, this.missing = false});
+
+  /// Reads [path]'s modification time now. A missing file and an unreadable
+  /// one are told apart, as the recent list shows them differently.
+  factory RecentEvent.read(String path) {
+    try {
+      final file = File(path);
+      if (!file.existsSync()) return RecentEvent(path, missing: true);
+      return RecentEvent(path, modified: file.lastModifiedSync());
+    } catch (_) {
+      return RecentEvent(path);
+    }
+  }
+
+  final String path;
+
+  /// When the file last changed; null when it is missing or unreadable.
+  final DateTime? modified;
+  final bool missing;
+
+  /// "Changed today 14:05", "Changed 2026-03-07", "File not found" or
+  /// "Unreadable", relative to [now].
+  String describe(DateTime now) {
+    final t = modified;
+    if (t == null) return missing ? 'File not found' : 'Unreadable';
+    String two(int n) => n.toString().padLeft(2, '0');
+    if (t.year == now.year && t.month == now.month && t.day == now.day) {
+      return 'Changed today ${two(t.hour)}:${two(t.minute)}';
+    }
+    return 'Changed ${t.year}-${two(t.month)}-${two(t.day)}';
+  }
 }

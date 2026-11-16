@@ -109,4 +109,43 @@ void main() {
     expect(jsonDecode(library.readAsStringSync()), [event.path]);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('file times are read when the list changes, not on each build', (
+    tester,
+  ) async {
+    await tester.pumpWidget(MeowApp(dataDirectory: directory));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.textContaining('Changed today'), 100);
+    expect(find.textContaining('Changed today'), findsOneWidget);
+    event.deleteSync();
+    // A rebuild alone shows what was read, without touching the disk.
+    await tester.tap(find.byTooltip('Dark mode'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Changed today'), findsOneWidget);
+    // Coming back to the app reads the files again.
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('File not found'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  test('a recent event describes when its file changed', () {
+    final now = DateTime(2026, 10, 9, 18);
+    expect(
+      RecentEvent('a', modified: DateTime(2026, 10, 9, 7, 5)).describe(now),
+      'Changed today 07:05',
+    );
+    expect(
+      RecentEvent('a', modified: DateTime(2026, 3, 7, 23)).describe(now),
+      'Changed 2026-03-07',
+    );
+    expect(
+      const RecentEvent('a', missing: true).describe(now),
+      'File not found',
+    );
+    expect(const RecentEvent('a').describe(now), 'Unreadable');
+    expect(RecentEvent.read('${directory.path}/none.meow').missing, isTrue);
+    expect(RecentEvent.read(event.path).modified, isNotNull);
+  });
 }
