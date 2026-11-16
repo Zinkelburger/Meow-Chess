@@ -1,3 +1,5 @@
+import 'us_chess.dart';
+
 /// Whether an entered name plausibly belongs to the US Chess member found
 /// for its ID. It exists to catch a wrong ID (somebody else entirely), so it
 /// forgives nicknames, initials, word order and a single typo. When US Chess
@@ -46,8 +48,9 @@ const _particles = {
   'von',
 };
 
-List<String> _words(String name) => name
-    .toLowerCase()
+/// Lower-case words without accents ([nameKey]), so "Núñez" as entered
+/// matches the plain "NUNEZ" US Chess stores; suffixes and initials dropped.
+List<String> _words(String name) => nameKey(name)
     .split(RegExp(r"[^a-zÀ-ɏ']+"))
     .map((w) => w.replaceAll("'", ''))
     .where((w) => w.length > 1 && !_suffixes.contains(w))

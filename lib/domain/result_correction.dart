@@ -29,10 +29,36 @@ class ResultCorrection {
   List<Round> get later =>
       section.rounds.where((r) => r.number > round.number).toList();
 
-  // Transfers carry scores into another section. Conservatively protect the
-  // connected sections, even when the particular correction changes no pairing.
-  late final Set<String> connectedSections = () {
-    final ids = {section.id};
+  /// Whether transfer [t] may carry this game's result into its target,
+  /// that is, whether it took effect after this round. Scores travel with
+  /// the players: standings count every section's games.
+  ///
+  /// `effectiveRound` numbers the target's rounds, so it is comparable with
+  /// this round only while the two sections are in step. A transfer of a
+  /// player who played (or had a bye) here in this round or later happened
+  /// after this round too, however few rounds the target had then.
+  bool _carriesThisRound(Json t) {
+    if ((t['effectiveRound'] as int) > round.number) return true;
+    if (t['target'] == section.id) return false;
+    final moved = (t['players'] as List).cast<String>().toSet();
+    return section.rounds
+        .where((r) => r.number >= round.number)
+        .any(
+          (r) =>
+              r.games.any(
+                (g) => moved.contains(g.white) || moved.contains(g.black),
+              ) ||
+              r.byes.any((b) => moved.contains(b.player)),
+        );
+  }
+
+  /// Section ID → the first of its rounds that may depend on this result:
+  /// for another section, the effective round of the earliest transfer
+  /// that carried scores into it; for this one, the next round. Transfers
+  /// are followed transitively, and conservatively: a connected section is
+  /// protected even when this correction changes no pairing of it.
+  late final Map<String, int> _dependentFrom = () {
+    final from = {section.id: round.number + 1};
     final players = <String>{
       ...section.players,
       for (final r in section.rounds)
@@ -43,31 +69,53 @@ class ResultCorrection {
     while (changed) {
       changed = false;
       for (final t in event.transitions) {
-        if ((t['effectiveRound'] as int) <= round.number) continue;
+        if (!_carriesThisRound(t)) continue;
+        final target = t['target'] as String;
         final moved = (t['players'] as List).cast<String>();
-        if (!moved.any(players.contains) && !ids.contains(t['target'])) {
+        if (!moved.any(players.contains) && !from.containsKey(target)) {
           continue;
         }
-        if (ids.add(t['target'] as String)) changed = true;
+        final effective = t['effectiveRound'] as int;
+        if (target != section.id &&
+            (from[target] == null || effective < from[target]!)) {
+          from[target] = effective;
+          changed = true;
+        }
+        final known = players.length;
         players.addAll(moved);
-        for (final s in event.sections.where((s) => ids.contains(s.id))) {
+        for (final s in event.sections.where((s) => from.containsKey(s.id))) {
           players.addAll(s.players);
         }
+        // New players can link transfers already passed over.
+        if (players.length != known) changed = true;
       }
     }
-    return ids;
+    return from;
   }();
 
+  /// This section and every section a transfer links to this result.
+  late final Set<String> connectedSections = _dependentFrom.keys.toSet();
+
+  /// Whether a transfer carried this result into a connected section, or a
+  /// later transfer brought players into this one. Reopening is refused
+  /// then ([canReopenFrom]).
   bool get hasTransfers => event.transitions.any(
-    (t) =>
-        (t['effectiveRound'] as int) > round.number &&
-        connectedSections.contains(t['target']),
+    (t) => _carriesThisRound(t) && connectedSections.contains(t['target']),
   );
+
+  /// Rounds of other sections that may have been paired on this result.
+  /// They are shown, never removed: [apply] only reopens this section.
+  ///
+  /// Invariant: non-empty only when [hasTransfers]. Every section other than
+  /// this one enters [connectedSections] as the target of a transfer that
+  /// [_carriesThisRound], and such a transfer makes [hasTransfers] true. So
+  /// reopening, which [hasTransfers] refuses, never leaves these rounds
+  /// paired on scores from rounds that no longer exist.
   List<(Section, Round)> get relatedRounds => [
     for (final s in event.sections)
-      if (s.id != section.id && connectedSections.contains(s.id))
+      if (s.id != section.id && _dependentFrom.containsKey(s.id))
         for (final r in s.rounds)
-          if (r.number > round.number) (s, r),
+          if (r.number >= _dependentFrom[s.id]!) (s, r),
   ];
 
   /// Later rounds were made from this result: a Swiss or bughouse pairing
@@ -124,6 +172,10 @@ class ResultCorrection {
       later.any((r) => r.number == number) &&
       later.where((r) => r.number >= number).every((r) => !r.hasPlay);
 
+  /// The event with this game's result set to [outcome]. With [reopenFrom],
+  /// this section's rounds from that number on are removed as well; rounds
+  /// of other sections are never touched, which is sound only because
+  /// [canReopenFrom] refuses whenever [relatedRounds] could be non-empty.
   Event apply(
     Outcome outcome, {
     String reason = '',
@@ -138,6 +190,11 @@ class ResultCorrection {
         'Only later rounds without recorded play or section transfers can be reopened. Confirm that none of their games have started.',
       );
     }
+    assert(
+      reopenFrom == null || relatedRounds.isEmpty,
+      'Reopening would leave rounds of a connected section paired on '
+      'scores from removed rounds.',
+    );
     // A knockout round paired with a player this correction puts out cannot
     // be played as posted. While none of it has started it is unpaired with
     // the correction; once it has, the correction stands and the bracket

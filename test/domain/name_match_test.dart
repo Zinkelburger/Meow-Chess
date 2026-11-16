@@ -13,6 +13,31 @@ void main() {
     expect(namesLookAlike("Sean O'Brien", 'Sean OBrien'), true);
   });
 
+  test('accents, typographic apostrophes and ß match the plain spelling', () {
+    expect(
+      namesLookAlike(
+        'José Núñez',
+        'Jose Nunez',
+        lastName: lastNameOf('NUNEZ, JOSE'),
+      ),
+      true,
+    );
+    expect(
+      namesLookAlike(
+        'Søren Ødegård',
+        'Soren Odegard',
+        lastName: lastNameOf('ODEGARD, SOREN'),
+      ),
+      true,
+    );
+    expect(namesLookAlike('Sean O’Brien', "Sean O'Brien"), true);
+    expect(
+      namesLookAlike('Jürgen Strauß', 'Jurgen Strauss', lastName: 'STRAUSS'),
+      true,
+    );
+    expect(namesLookAlike('Zoë Ólafsdóttir', 'Daniel Whitfield'), false);
+  });
+
   test('a different person is flagged', () {
     expect(namesLookAlike('Maria Garcia-Lopez', 'Daniel Whitfield'), false);
     expect(namesLookAlike('Lena Novak', 'Liam Nolan'), false);
