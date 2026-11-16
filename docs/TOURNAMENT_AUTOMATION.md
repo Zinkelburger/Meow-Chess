@@ -17,8 +17,8 @@ asset. Keep `bundle/bin` and `bundle/lib` together. On another workstation run
 the same Dart build command with its resource limits.
 
 The repository's `.mcp.json` registers `meow-chess` for Claude Code when launched
-in this checkout. It runs `scripts/tournament_mcp.sh` and confines files to
-`artifacts/mcp-events`. Claude currently reports “Pending approval” for this project server. Open `claude`
+in this checkout. It runs `dart scripts/tournament_mcp.dart`, which starts the
+bundle built above, and confines files to `artifacts/mcp-events`. Claude currently reports “Pending approval” for this project server. Open `claude`
 in the checkout and accept its one-time project MCP prompt to enable it.
 No user-wide Claude configuration or API credentials are needed or changed.
 For another client, configure an absolute path to the wrapper and optionally

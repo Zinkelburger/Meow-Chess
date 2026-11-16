@@ -12,12 +12,16 @@ dart run tools/compare_pairings.dart artifacts/<rehearsal-run>/artifacts/<rehear
 
 Over the 49 Swiss rounds (240 boards) the engine reproduced 27 rounds exactly
 and 172 of the 240 boards; 134 of those 172 had the same colors, and 13 of the
-16 full-point byes went to the same player. Every difference was read against
+16 full-point byes went to the same player (unchanged when re-run on v1.5.1
+against the same 2026-10-09 replay files). Every difference was read against
 the rulebook; none is a rule violation by the engine, and the report lists each
 one with the engine's own explanation. The recurring causes:
 
-- **Ladders** (April and May, `G45`/`G90`) are not Swiss-paired at all, so
-  their rounds are expected to differ and are excluded from the counts above.
+- **Ladders** (April and May, `G45`/`G90`) were not Swiss-paired at the club,
+  but the replays store their sections as Swiss, so their 17 rounds (35
+  boards) are compared and counted above, and are expected to differ. Without
+  them: 21 of 32 rounds identical, 164 of 205 boards, 131 of those 164 with the
+  same colors, and 13 of 15 byes.
 - **Late entrants:** SwissSys paired a round-1 field of 28 and added two late
   entrants as their own board; given all 30 at once the engine splits the halves
   at a different place (Spring Festival Open round 1). Both follow 28J.
