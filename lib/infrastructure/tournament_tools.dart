@@ -25,6 +25,9 @@ Json _string([String? description]) => {
   'description': ?description,
 };
 Json _integer(int minimum) => {'type': 'integer', 'minimum': minimum};
+
+/// A section's planned rounds, as the section panel allows them.
+const _rounds = {'type': 'integer', 'minimum': 1, 'maximum': 32};
 Json _object(Json properties, [List<String> required = const []]) => {
   'type': 'object',
   'properties': properties,
@@ -259,9 +262,12 @@ final _byeFields = _object(
 /// Local tools share the GUI controller, repository, reports and domain rules.
 /// One connection owns one event; close it before opening that file in the GUI.
 class TournamentTools {
-  TournamentTools(String directory)
+  /// Event files live under [directory]. [now] is the clock the rating
+  /// checks compare the event dates with (an event cannot end after today).
+  TournamentTools(String directory, {this.now = DateTime.now})
     : root = Directory(directory).absolute..createSync(recursive: true);
   final Directory root;
+  final DateTime Function() now;
   TournamentControllerCore? _controller;
   final _proposals = <String, PairingBatch>{};
   TournamentControllerCore get controller =>
@@ -345,7 +351,7 @@ class TournamentTools {
           'name': _string(),
           'players': _array(_string()),
           'format': _enum(Format.values.map((v) => v.name)),
-          'plannedRounds': _integer(1),
+          'plannedRounds': _rounds,
           'boardStart': _integer(1),
           'doubleGames': _bool,
           'ratingCeiling': _integer(0),
@@ -369,7 +375,7 @@ class TournamentTools {
           'sectionId': _string(),
           'name': _string(),
           'timeControl': _string('Blank inherits the event default.'),
-          'plannedRounds': _integer(1),
+          'plannedRounds': _rounds,
           'boardStart': _integer(1),
           'rrTable': _enum(['', crenshawTable]),
           'doubleCycle': _bool,
@@ -887,14 +893,21 @@ class TournamentTools {
         );
       case 'create_section':
         final ids = List<String>.from(args['players'] as Iterable);
+        // Refused as the section panel refuses it; automation also leaves
+        // a player's current section to move_players.
+        controller.checkNewSectionPlayers(ids);
         for (final id in ids) {
-          event.player(id);
           if (event.sectionOf(id) != null) {
             throw const TournamentException(
               'Player already has a section; use move_players.',
             );
           }
         }
+        final name = controller.checkNewSectionSettings(
+          args['name'] as String,
+          args['plannedRounds'] as int,
+          event.sections,
+        );
         _checkControl(args['timeControl'] as String?);
         // With fideModeDefault on, a new section without rating choices is
         // FIDE only.
@@ -907,7 +920,7 @@ class TournamentTools {
             );
         final section = Section(
           id: controller.newId(),
-          name: args['name'] as String,
+          name: name,
           players: ids,
           format: Format.values.byName(args['format'] as String),
           plannedRounds: args['plannedRounds'] as int,
@@ -1398,7 +1411,7 @@ class TournamentTools {
           ],
         };
       case 'rating_preflight':
-        final all = ratingIssues(event);
+        final all = ratingIssues(event, today: now());
         return {
           'revision': event.revision,
           'issues': [
@@ -1433,9 +1446,10 @@ class TournamentTools {
             'Export directory already exists. Choose a new one.',
           );
         }
-        final issues = ratingPreflight(snapshot);
+        final today = now();
+        final issues = ratingPreflight(snapshot, today: today);
         final dbfs = issues.isEmpty
-            ? ratingPackage(snapshot)
+            ? ratingPackage(snapshot, today: today)
             : <String, List<int>>{};
         // FIDE-rated sections also get their TRF26 files when complete.
         final fideIssues = fideSections(snapshot).isEmpty
@@ -1496,7 +1510,7 @@ class TournamentTools {
           'dbfIssues': issues,
           if (fideSections(snapshot).isNotEmpty) 'fideIssues': fideIssues,
           'advice': [
-            for (final issue in ratingIssues(snapshot))
+            for (final issue in ratingIssues(snapshot, today: today))
               if (!issue.blocking) issue.message,
           ],
         };
@@ -1526,7 +1540,7 @@ class TournamentTools {
 
   Section _section(String id) =>
       event.sections.where((s) => s.id == id).firstOrNull ??
-      (throw const TournamentException('Unknown section.'));
+      (throw TournamentException('No section has the ID "$id".'));
 
   void _postManual(Json args) {
     final s = _section(args['sectionId'] as String);
@@ -1534,10 +1548,14 @@ class TournamentTools {
     if (reason.isEmpty) {
       throw const TournamentException('Explain the manual pairing.');
     }
-    if (s.rounds.length >= s.plannedRounds ||
-        s.rounds.any((r) => !r.complete)) {
-      throw const TournamentException(
-        'Complete the previous round and check the planned round count.',
+    if (s.rounds.any((r) => !r.complete)) {
+      throw TournamentException(
+        'Complete round ${s.rounds.firstWhere((r) => !r.complete).number} of ${s.name} before posting the next one.',
+      );
+    }
+    if (s.rounds.length >= s.plannedRounds) {
+      throw TournamentException(
+        'All ${s.plannedRounds} planned rounds of ${s.name} are posted. Raise the planned rounds with update_section first.',
       );
     }
     final games = (args['games'] as List)
@@ -1561,6 +1579,15 @@ class TournamentTools {
           ),
         )
         .toList();
+    // A full-point bye is worth both games of a double round.
+    final fullPoint = s.doubleGames ? 4 : 2;
+    for (final bye in byes) {
+      if (bye.points > fullPoint) {
+        throw TournamentException(
+          'A bye in ${s.name} is worth 0 to $fullPoint half-points.',
+        );
+      }
+    }
     final participants = {
       ...games.expand((g) => [g.white, g.black]),
       ...byes.map((b) => b.player),
@@ -1648,13 +1675,21 @@ void _validate(dynamic value, Json schema, String at) {
     }
     if (schema.containsKey('enum') &&
         !(schema['enum'] as List).contains(value)) {
-      fail('invalid choice');
+      fail(
+        'invalid choice ${jsonEncode(value)}; choose one of '
+        '${(schema['enum'] as List).map(jsonEncode).join(', ')}',
+      );
     }
+    final (low, high) = (schema['minimum'] as num?, schema['maximum'] as num?);
     if (value is int &&
-        ((schema['minimum'] != null && value < (schema['minimum'] as num)) ||
-            (schema['maximum'] != null &&
-                value > (schema['maximum'] as num)))) {
-      fail('out of range');
+        ((low != null && value < low) || (high != null && value > high))) {
+      fail(
+        high == null
+            ? 'must be $low or more'
+            : low == null
+            ? 'must be $high or less'
+            : 'must be between $low and $high',
+      );
     }
   }
 }

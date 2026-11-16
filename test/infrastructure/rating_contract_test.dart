@@ -681,7 +681,11 @@ void main() {
     final event = exportFixture();
     final paths = await Future.wait([
       for (var i = 0; i < 8; i++)
-        writeRatingPackage(event.copy(revision: i), folder.path),
+        writeRatingPackage(
+          event.copy(revision: i),
+          folder.path,
+          now: () => today,
+        ),
     ]);
     expect(paths.toSet(), hasLength(8));
     for (final (i, path) in paths.indexed) {
@@ -691,7 +695,7 @@ void main() {
               as Map;
       expect(manifest['revision'], i);
       expect(manifest['ratingSystem'], 'D');
-      for (final entry in ratingPackage(event).entries) {
+      for (final entry in ratingPackage(event, today: today).entries) {
         expect(File(p.join(path, entry.key)).readAsBytesSync(), entry.value);
       }
     }
@@ -707,11 +711,16 @@ void main() {
       final folder = Directory.systemTemp.createTempSync('meow export é ');
       addTearDown(() => folder.deleteSync(recursive: true));
       final event = exportFixture();
-      final first = await writeRatingPackage(event, folder.path);
+      final first = await writeRatingPackage(
+        event,
+        folder.path,
+        now: () => today,
+      );
       final bytes = File(p.join(first, 'TDEXPORT.DBF')).readAsBytesSync();
       final second = await writeRatingPackage(
         event.copy(revision: 7),
         folder.path,
+        now: () => today,
       );
       expect(first, isNot(second));
       expect(File(p.join(first, 'TDEXPORT.DBF')).readAsBytesSync(), bytes);
@@ -728,19 +737,50 @@ void main() {
       }
       expect(folder.listSync().any((f) => f.path.endsWith('.partial')), false);
       await expectLater(
-        writeRatingPackage(event.copy(practice: true), folder.path),
+        writeRatingPackage(
+          event.copy(practice: true),
+          folder.path,
+          now: () => today,
+        ),
         throwsA(isA<TournamentException>()),
       );
       expect(folder.listSync(), hasLength(2));
       final obstruction = File(p.join(folder.path, 'ordinary file'))
         ..writeAsStringSync('preserve');
       await expectLater(
-        writeRatingPackage(event, obstruction.path),
+        writeRatingPackage(event, obstruction.path, now: () => today),
         throwsA(isA<FileSystemException>()),
       );
       expect(obstruction.readAsStringSync(), 'preserve');
     },
   );
+
+  test('the written package checks dates against the injected clock', () async {
+    final folder = Directory.systemTemp.createTempSync('meow clock ');
+    addTearDown(() => folder.deleteSync(recursive: true));
+    // exportFixture() ends on 2024-02-29: the day before, it has not ended.
+    await expectLater(
+      writeRatingPackage(
+        exportFixture(),
+        folder.path,
+        now: () => DateTime(2024, 2, 28, 23, 59, 59),
+      ),
+      throwsA(
+        isA<TournamentException>().having(
+          (e) => e.message,
+          'message',
+          contains('ends after today'),
+        ),
+      ),
+    );
+    expect(folder.listSync(), isEmpty);
+    final written = await writeRatingPackage(
+      exportFixture(),
+      folder.path,
+      now: () => DateTime(2024, 2, 29),
+    );
+    expect(Directory(written).existsSync(), isTrue);
+  });
 
   group('Boylston findings', () {
     test(

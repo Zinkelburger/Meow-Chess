@@ -1643,13 +1643,26 @@ void validateEvent(Event e) {
         );
       }
       for (final b in r.byes) {
-        require(
-          ids.contains(b.player) &&
-              participants.add('${b.player}/1') &&
-              b.points >= 0 &&
-              b.points <= (s.doubleGames ? 4 : 2),
-          'A bye conflicts with a game or another bye.',
-        );
+        // Messages name the player and round, built only on a failure.
+        String where() => 'round ${r.number} of ${s.name}';
+        if (!ids.contains(b.player)) {
+          require(false, 'A bye in ${where()} is for an unregistered player.');
+        }
+        if (!participants.add('${b.player}/1')) {
+          require(
+            false,
+            '${e.player(b.player).name} has a bye and another game or bye '
+            'in ${where()}.',
+          );
+        }
+        final full = s.doubleGames ? 4 : 2;
+        if (b.points < 0 || b.points > full) {
+          require(
+            false,
+            '${e.player(b.player).name}\'s bye in ${where()} is worth '
+            '${b.points} half-points; a bye there is worth 0 to $full.',
+          );
+        }
       }
     }
   }

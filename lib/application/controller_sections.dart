@@ -50,7 +50,7 @@ mixin _SectionCommands on _CommandContext {
     bool doubleGames = false,
     bool assignUnassigned = true,
   }) {
-    final e = event!, title = _checkedSection(e.sections, name, rounds);
+    final e = event!, title = checkNewSectionSettings(name, rounds, e.sections);
     final free = e.players
         .where((p) => !p.withdrawn && e.sectionOf(p.id) == null)
         .map((p) => p.id)
@@ -91,19 +91,7 @@ mixin _SectionCommands on _CommandContext {
     String timeControl = '',
   }) {
     final e = event!, pool = players.toSet();
-    for (final id in pool) {
-      final p = e.player(id), from = e.sectionOf(id);
-      if (p.withdrawn) {
-        throw TournamentException(
-          '${p.name} has withdrawn. Reinstate them first.',
-        );
-      }
-      if (from != null && from.rounds.isNotEmpty) {
-        throw TournamentException(
-          '${from.name} has been paired. Move ${p.name} from there instead.',
-        );
-      }
-    }
+    checkNewSectionPlayers(pool.toList());
     final emptied = sectionsEmptiedBy(e, pool);
     final kept = [
       for (final s in e.sections)
@@ -140,7 +128,7 @@ mixin _SectionCommands on _CommandContext {
       }
       label = 'Make ${created.length} sections';
     } else {
-      final title = _checkedSection(kept, name, rounds);
+      final title = checkNewSectionSettings(name, rounds, kept);
       created.add(
         Section(
           id: newId(),
@@ -159,6 +147,54 @@ mixin _SectionCommands on _CommandContext {
     }
     change(label, e.copy(sections: [...kept, ...created]));
     return [for (final s in created) s.id];
+  }
+
+  /// Refuses [players] for a new section as the section panel does: each
+  /// listed once, none withdrawn, and none in a section that has been
+  /// paired. Automation's create_section shares these checks.
+  void checkNewSectionPlayers(List<String> players) {
+    final e = event!;
+    if (players.toSet().length != players.length) {
+      throw const TournamentException('A player is listed twice.');
+    }
+    for (final id in players) {
+      final p = e.player(id), from = e.sectionOf(id);
+      if (p.withdrawn) {
+        throw TournamentException(
+          '${p.name} has withdrawn. Reinstate them first.',
+        );
+      }
+      if (from != null && from.rounds.isNotEmpty) {
+        throw TournamentException(
+          '${from.name} has been paired. Move ${p.name} from there instead.',
+        );
+      }
+    }
+  }
+
+  /// Refuses a new section's [name] and [rounds] as the section panel
+  /// does: a name no section in [sections] already has, and 1 to 32 rounds.
+  /// Returns the name trimmed.
+  String checkNewSectionSettings(
+    String name,
+    int rounds,
+    Iterable<Section> sections,
+  ) {
+    final title = name.trim();
+    if (title.isEmpty) {
+      throw const TournamentException('Enter the section name.');
+    }
+    if (sections.any(
+      (s) => s.name.trim().toLowerCase() == title.toLowerCase(),
+    )) {
+      throw TournamentException('There is already a section called $title.');
+    }
+    if (rounds < 1 || rounds > 32) {
+      throw const TournamentException(
+        'Number of rounds must be between 1 and 32.',
+      );
+    }
+    return title;
   }
 
   /// Removing an unplayed section keeps its entrants in the event roster.
@@ -502,22 +538,4 @@ mixin _SectionCommands on _CommandContext {
       ),
     );
   }
-}
-
-/// The trimmed [name] of a new section beside [others], refusing a blank
-/// or taken name and a round count outside 1 to 32.
-String _checkedSection(Iterable<Section> others, String name, int rounds) {
-  final title = name.trim();
-  if (title.isEmpty) {
-    throw const TournamentException('Enter the section name.');
-  }
-  if (others.any((s) => s.name.trim().toLowerCase() == title.toLowerCase())) {
-    throw TournamentException('There is already a section called $title.');
-  }
-  if (rounds < 1 || rounds > 32) {
-    throw const TournamentException(
-      'Number of rounds must be between 1 and 32.',
-    );
-  }
-  return title;
 }

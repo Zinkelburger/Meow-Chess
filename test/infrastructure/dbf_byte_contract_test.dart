@@ -487,9 +487,9 @@ void main() {
     final event = _minimal();
     final dir = await Directory.systemTemp.createTemp('meow-dbf-bytes-');
     addTearDown(() => dir.delete(recursive: true));
-    final folder = await writeRatingPackage(event, dir.path);
+    final folder = await writeRatingPackage(event, dir.path, now: () => today);
     expect(p.dirname(folder), dir.path);
-    final expected = ratingPackage(event);
+    final expected = ratingPackage(event, today: today);
     expect(
       Directory(folder).listSync().map((f) => p.basename(f.path)).toSet(),
       {...expected.keys, 'manifest.json'},

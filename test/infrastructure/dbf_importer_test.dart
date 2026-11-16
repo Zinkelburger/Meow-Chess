@@ -93,7 +93,9 @@ void main() {
         ],
       );
       validateEvent(event);
-      final (fields, rows) = readDbf(ratingPackage(event)['TDEXPORT.DBF']!);
+      final (fields, rows) = readDbf(
+        ratingPackage(event, today: today)['TDEXPORT.DBF']!,
+      );
       expect(fields, hasLength(7 + count));
       expect(rows, hasLength(2));
       saveFixture('rounds-$count', event);
@@ -134,7 +136,9 @@ void main() {
     );
     validateEvent(event);
     saveFixture('quad', event);
-    final rows = readDbf(ratingPackage(event)['TSEXPORT.DBF']!).$2;
+    final rows = readDbf(
+      ratingPackage(event, today: today)['TSEXPORT.DBF']!,
+    ).$2;
     expect(rows.single['S_TRN_TYPE'], 'R');
     expect(rows.single['S_TOT_RNDS'], '3');
   });
@@ -180,7 +184,7 @@ void main() {
       ],
     );
     validateEvent(event);
-    expect(ratingPreflight(event), isEmpty);
+    expect(ratingPreflight(event, today: today), isEmpty);
     saveFixture('side-games', event);
   });
 
@@ -225,7 +229,9 @@ void main() {
         ],
       );
       validateEvent(event);
-      final rows = readDbf(ratingPackage(event)['TDEXPORT.DBF']!).$2;
+      final rows = readDbf(
+        ratingPackage(event, today: today)['TDEXPORT.DBF']!,
+      ).$2;
       expect(rows.first['D_RND01'], 'W1000W');
       expect(rows.last['D_RND01'], 'L1B');
       saveFixture('four-digit-opponents', event);
