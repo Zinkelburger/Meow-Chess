@@ -350,6 +350,30 @@ void main() {
       },
     );
 
+    test('standings are ranked once per event, not once per build', () {
+      final e = club();
+      RosterLayout layout(Event e, {String query = ''}) => layoutRoster(
+        e,
+        sectionId: 'open',
+        standingsOnly: true,
+        query: query,
+        prizeStandings: false,
+      );
+      final first = layout(e);
+      // A search keystroke or a focus change lays out the same event again.
+      expect(
+        identical(layout(e, query: 'Ben').tables['open'], first.tables['open']),
+        isTrue,
+      );
+      // Another revision is ranked afresh.
+      final next = e.copy(name: 'Club night');
+      expect(
+        identical(layout(next).tables['open'], first.tables['open']),
+        isFalse,
+      );
+      expect(layout(next).tables['open']!['b']!.points, 2);
+    });
+
     test('while a result is entered the rows keep the order they had', () {
       final layout = layoutRoster(
         club(),

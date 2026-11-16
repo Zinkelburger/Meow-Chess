@@ -210,6 +210,14 @@ class RosterLayout {
   int get shown => groups.fold(0, (int n, g) => n + g.$2.length);
 }
 
+/// Each section's standings by player, kept with the event they rank, by
+/// section and whether they are the prize standings. An event never changes
+/// once made, so a focus change or a search keystroke does not re-rank the
+/// field; each new revision is ranked afresh.
+final _standingsCache = Expando<Map<(String, bool), Map<String, Standing>>>(
+  'standings',
+);
+
 /// Lays out the players of [e] in section [sectionId] (every section when
 /// null). The crosstable ([standingsOnly]) ranks a paired section by its
 /// standings, [prizeStandings] leaving out early round-robin withdrawals.
@@ -238,17 +246,22 @@ RosterLayout layoutRoster(
   // Rule 30B: a round-robin player who withdrew before half their games
   // leaves the prize standings.
   final prizeSection = rankedSection != null && hasFixedSchedule(rankedSection);
+  final cached = _standingsCache[e] ??= {};
+  Map<String, Standing> table(Section s, {required bool forPrizes}) =>
+      cached.putIfAbsent(
+        (s.id, forPrizes),
+        () => Map.unmodifiable({
+          for (final row in standings(e, s, forPrizes: forPrizes))
+            row.player.id: row,
+        }),
+      );
   final tables = <String, Map<String, Standing>>{
     for (final s in e.sections)
       if (s.rounds.isNotEmpty)
-        s.id: {
-          for (final row in standings(
-            e,
-            s,
-            forPrizes: prizeStandings && prizeSection && hasFixedSchedule(s),
-          ))
-            row.player.id: row,
-        },
+        s.id: table(
+          s,
+          forPrizes: prizeStandings && prizeSection && hasFixedSchedule(s),
+        ),
   };
   final numbers = <String, int>{}, ranks = <String, int>{};
   // While a result is entered each row keeps its place on the frozen list;
