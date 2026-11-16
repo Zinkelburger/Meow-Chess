@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/domain/standings.dart';
 import 'package:meow_chess/infrastructure/reports.dart';
+import 'package:meow_chess/ui/result_format.dart' show scoresBefore;
 
 import 'pairing_sheets_test.dart' show pdfText;
 
@@ -268,6 +269,12 @@ void main() {
       expect(crosstable(reentry), contains(RegExp(r'XR .*H--- 1 +D1w 1\.5')));
       final pdf = pdfText(await reportPdf(reentry, ReportKind.crosstable));
       expect(pdf, contains('H---\n1'.replaceAll('\n', '')));
+    });
+
+    test('the Swiss score groups on Results use the carried score', () {
+      expect(scoresBefore(reentry, section, 3)['xr'], 3);
+      expect(scoresBefore(reentry, section, 2)['xr'], 2);
+      expect(scoresBefore(reentry, section, 1)['xr'], 0);
     });
   });
 }

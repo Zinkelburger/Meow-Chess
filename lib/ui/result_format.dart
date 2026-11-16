@@ -1,5 +1,10 @@
 import '../domain/model.dart';
+import '../domain/reentry.dart';
+import '../infrastructure/reports.dart' show cumulativeScores;
 import 'player_format.dart';
+
+// The crosstable's bye mark: one rule for the screen and the reports.
+export '../infrastructure/reports.dart' show byeMark;
 
 /// What one player's score box shows for a game: 1, 0, ½, or blank, and
 /// the US Chess letters for unplayed games: X won by forfeit, F forfeited.
@@ -30,29 +35,28 @@ String resultText(Outcome o) => switch (o) {
 String resultChangeText(int board, Outcome before, Outcome now) =>
     'Board $board was ${resultText(before)}, now ${resultText(now)}';
 
-/// A bye as US Chess crosstables print it: B full point, H half point,
-/// U zero (unpaired), with dashes where an opponent number would be.
-String byeMark(int points) => switch (points) {
-  2 => 'B---',
-  1 => 'H---',
-  _ => 'U---',
-};
-
 /// Half-points as words: "½ point", "1 point", "2½ points".
 String pointsText(int n) =>
     '${halves(n)} ${n == 1 || n == 2 ? 'point' : 'points'}';
 
-/// Each player's score, in half-points, before round [number] of [s].
-Map<String, int> scoresBefore(Section s, int number) {
-  final scores = <String, int>{for (final id in s.players) id: 0};
-  for (final r in s.rounds.where((r) => r.number < number)) {
-    for (final b in r.byes) {
-      scores[b.player] = (scores[b.player] ?? 0) + b.points;
-    }
-    for (final g in r.games) {
-      scores[g.white] = (scores[g.white] ?? 0) + g.outcome.whiteScore;
-      scores[g.black] = (scores[g.black] ?? 0) + g.outcome.blackScore;
-    }
-  }
-  return scores;
+/// Each player's score, in half-points, before round [number] of [s]: the
+/// wall chart's running total after the round before ([cumulativeScores]),
+/// so bughouse partners and 28S5 re-entries count as the standings count
+/// them. Players paired in [s] who have since left it are included.
+Map<String, int> scoresBefore(Event e, Section s, int number) {
+  final carries = reentryCarries(e, s);
+  final earlier = s.rounds.where((r) => r.number < number).length;
+  final ids = {
+    ...s.players,
+    for (final r in s.rounds) ...[
+      for (final g in r.games) ...[g.white, g.black],
+      for (final b in r.byes) b.player,
+    ],
+  };
+  return {
+    for (final id in ids)
+      id: earlier == 0
+          ? 0
+          : cumulativeScores(e, s, id, carries: carries)[earlier - 1],
+  };
 }

@@ -1309,9 +1309,9 @@ class _CellBox extends StatelessWidget {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                scoreMark(g.outcome, white: g.white == p.id).isEmpty
+                scoreMark(g.outcome, white: scoresAsWhite(g, p.id)).isEmpty
                     ? '—'
-                    : scoreMark(g.outcome, white: g.white == p.id),
+                    : scoreMark(g.outcome, white: scoresAsWhite(g, p.id)),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 14,

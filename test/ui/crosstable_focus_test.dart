@@ -223,4 +223,58 @@ void main() {
     expect(find.byKey(const ValueKey('standing-key-hint')), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('a bughouse partner has a score box and the match result', (
+    tester,
+  ) async {
+    final c = TournamentController(SqliteEventRepository(':memory:'))
+      ..create('Bughouse Night');
+    addTearDown(c.dispose);
+    c.importPlayers([
+      for (final i in [0, 1, 2, 3])
+        Player(id: 'p$i', name: 'Player $i', rating: 1800 - 100 * i),
+    ]);
+    c.addSection('Bughouse', Format.bughouse, 2);
+    final s0 = c.event!.sections.single;
+    c.change(
+      'Partner up',
+      c.event!.copy(
+        sections: [
+          s0.copy(
+            partners: const [
+              ['p0', 'p3'],
+              ['p1', 'p2'],
+            ],
+          ),
+        ],
+      ),
+    );
+    c.post((await tester.runAsync(() => c.propose()))!);
+    final g = c.event!.sections.single.rounds.single.games.single;
+    expect(g.whitePartner, isNotEmpty);
+    await mount(tester, c);
+    Finder box(String player) =>
+        find.byKey(ValueKey('standing-score-${g.id}-$player'));
+    // Partners used to show no box, as if unpaired.
+    expect(box(g.whitePartner), findsOneWidget);
+    expect(box(g.blackPartner), findsOneWidget);
+    // A result typed in a partner's box is their partnership's.
+    await tester.tap(box(g.blackPartner));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
+    await tester.pumpAndSettle();
+    expect(
+      c.event!.games.firstWhere((x) => x.id == g.id).outcome,
+      Outcome.blackWin,
+    );
+    expect(
+      find.descendant(of: box(g.whitePartner), matching: find.text('0')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: box(g.blackPartner), matching: find.text('1')),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox());
+  });
 }

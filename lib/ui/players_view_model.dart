@@ -5,6 +5,7 @@ import '../domain/fide.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import '../domain/standings.dart';
+import '../infrastructure/reports.dart' show Seat, roundSeats;
 import 'player_format.dart';
 import 'result_format.dart';
 
@@ -345,14 +346,23 @@ RosterLayout layoutRoster(
   );
 }
 
-/// [playerId]'s games in round [round] of [s], as the round lists them:
-/// none when that round is not posted or the player has a bye in it.
+/// [playerId]'s games in round [round] of [s], legs in order: none when
+/// that round is not posted or the player has a bye in it. A bughouse
+/// partner sits at the match's second board, so has the match too.
 List<Game> gamesOf(Section s, int round, String playerId) => [
-  for (final g
-      in s.rounds.where((r) => r.number == round).firstOrNull?.games ??
-          const <Game>[])
-    if (g.white == playerId || g.black == playerId) g,
+  for (final seat in seatsOf(s, round, playerId)) seat.game,
 ];
+
+/// Where [playerId] sat in round [round] of [s] ([roundSeats]).
+List<Seat> seatsOf(Section s, int round, String playerId) {
+  final posted = s.rounds.where((r) => r.number == round).firstOrNull;
+  return posted == null ? const [] : roundSeats(posted, playerId);
+}
+
+/// Whether [playerId] takes White's result at [game]: White, or White's
+/// bughouse partner, who takes the partnership's result.
+bool scoresAsWhite(Game game, String playerId) =>
+    game.white == playerId || game.whitePartner == playerId;
 
 /// Fixed column widths, before text scaling, keep the table narrow and
 /// aligned.
@@ -499,7 +509,10 @@ int cellIndex(List<(Player, Game)> cells, String player, String gameId) =>
   return played
       ? _playedText(e, s, r, p.id)
       : bye != null
-      ? (byeMark(bye), 'Round $r: ${halves(bye)}-point bye requested')
+      ? (
+          byeMark(bye, doubleGames: s?.doubleGames ?? false),
+          'Round $r: ${halves(bye)}-point bye requested',
+        )
       : ('—', 'Round $r: not paired yet.');
 }
 
@@ -509,14 +522,16 @@ int cellIndex(List<(Player, Game)> cells, String player, String gameId) =>
   if (round == null) return ('', '');
   final bye = round.byes.where((b) => b.player == pid).firstOrNull;
   if (bye != null) {
-    return (byeMark(bye.points), 'Round $number: ${bye.reason}');
+    return (
+      byeMark(bye.points, doubleGames: s.doubleGames),
+      'Round $number: ${bye.reason}',
+    );
   }
-  final games = gamesOf(s, number, pid);
-  if (games.isEmpty) return ('', '');
-  String against(Game g) {
-    final white = g.white == pid;
-    final o = e.player(white ? g.black : g.white);
-    final result = switch (scoreMark(g.outcome, white: white)) {
+  final seats = seatsOf(s, number, pid);
+  if (seats.isEmpty) return ('', '');
+  String against(Seat seat) {
+    final g = seat.game, o = e.player(seat.opponent);
+    final result = switch (scoreMark(g.outcome, white: scoresAsWhite(g, pid))) {
       _ when !g.outcome.resolved => '',
       '1' => '1 (won) ',
       '0' => '0 (lost) ',
@@ -529,10 +544,10 @@ int cellIndex(List<(Player, Game)> cells, String player, String gameId) =>
         : g.outcome == Outcome.unreported
         ? ', no result yet'
         : ', ${g.outcome.label.toLowerCase()}';
-    return '${result}vs ${o.name} (${ratingText(o.rating)}) as ${white ? 'White' : 'Black'}$pending';
+    return '${result}vs ${o.name} (${ratingText(o.rating)}) as ${seat.white ? 'White' : 'Black'}$pending';
   }
 
-  final tip = 'Round $number: ${games.map(against).join('; ')}';
+  final tip = 'Round $number: ${seats.map(against).join('; ')}';
   // Played games show score boxes; only a bye needs a mark.
   return ('', tip);
 }

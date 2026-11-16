@@ -241,7 +241,11 @@ class _PlayersViewState extends State<PlayersView> {
     final cells = roundCells(order, c.pairingEvent, round);
     final action = cellKeyAction(
       press(
-        resultFromKey(event, white: game.white == p.id, current: game.outcome),
+        resultFromKey(
+          event,
+          white: scoresAsWhite(game, p.id),
+          current: game.outcome,
+        ),
       ),
       player: p.id,
       game: game,
@@ -294,7 +298,7 @@ class _PlayersViewState extends State<PlayersView> {
           c,
           game.id,
           outcome: outcome,
-          white: game.white == p.id,
+          white: scoresAsWhite(game, p.id),
         );
         return;
       }

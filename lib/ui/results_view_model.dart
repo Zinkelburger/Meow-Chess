@@ -244,7 +244,7 @@ SheetLayout layoutSheet({
     }
     // Swiss boards fall into score groups once anyone has a score.
     final before = s.format == Format.swiss && r.number > 1
-        ? scoresBefore(s, r.number)
+        ? scoresBefore(event, s, r.number)
         : null;
     int group(Game g) => math.max(before?[g.white] ?? 0, before?[g.black] ?? 0);
     final grouped =
