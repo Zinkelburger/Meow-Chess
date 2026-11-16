@@ -935,6 +935,7 @@ class _EmptyGroup extends StatelessWidget {
 /// table shows.
 class _PlayerRow extends StatelessWidget {
   const _PlayerRow({
+    super.key,
     required this.event,
     required this.player,
     required this.section,

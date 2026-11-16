@@ -1065,6 +1065,9 @@ class _PlayersViewState extends State<PlayersView> {
       onStatus: applyStatusTo,
     );
     return _PlayerRow(
+      // Keyed at the root, so a row keeps its own state as a search or a
+      // result moves it.
+      key: ValueKey(('player-row', p.id)),
       event: c.event!,
       player: p,
       section: s,

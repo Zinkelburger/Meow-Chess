@@ -103,6 +103,24 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('a row moved by a search is the same row, not a neighbour', (
+    tester,
+  ) async {
+    final c = swiss();
+    addTearDown(c.dispose);
+    await mount(tester, c, standingsOnly: false);
+    final row = find.byKey(const ValueKey('player-p4'));
+    final before = tester.element(row);
+    // The search moves Player 4 to the top, where Player 0's row was.
+    await tester.enterText(
+      find.byKey(const ValueKey('player-search')),
+      'Player 4',
+    );
+    await tester.pumpAndSettle();
+    expect(identical(tester.element(row), before), isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('the crosstable keeps # and adds Rank once it is ranked', (
     tester,
   ) async {
