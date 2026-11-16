@@ -207,6 +207,29 @@ void main() {
       }
     });
   }
+  test('a reopened event keeps its WAL index in memory, not in -shm', () {
+    // Reading the version before choosing exclusive locking once mapped a
+    // shared-memory -shm file for every reopened event, which network
+    // drives do not support reliably.
+    final path = p.join(directory.path, 'reopened.meow');
+    fixture(path: path).dispose();
+    final reopened = SqliteEventRepository(path);
+    addTearDown(reopened.close);
+    reopened.writePreference('checked', 'yes');
+    expect(reopened.crashProtected, isTrue);
+    expect(File('$path-wal').existsSync(), isTrue, reason: 'still WAL');
+    expect(File('$path-shm').existsSync(), isFalse);
+    expect(
+      () => SqliteEventRepository(path),
+      throwsA(
+        isA<TournamentException>().having(
+          (e) => e.message,
+          'message',
+          contains('open in another window'),
+        ),
+      ),
+    );
+  });
   test('preferences and interrupted drafts survive reopening', () {
     final path = p.join(directory.path, 'draft.meow');
     final c = fixture(path: path);

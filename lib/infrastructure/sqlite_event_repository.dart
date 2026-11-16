@@ -34,10 +34,10 @@ class SqliteEventRepository implements EventRepository {
     try {
       _db.execute('PRAGMA foreign_keys = ON');
       _db.execute('PRAGMA busy_timeout = 1000');
+      _db.execute('PRAGMA locking_mode = EXCLUSIVE');
       final version =
           _db.select('PRAGMA user_version').first.values.first as int;
       if (version > schemaVersion) throw _newerVersion;
-      _db.execute('PRAGMA locking_mode = EXCLUSIVE');
       // Merely choosing a file must not migrate an unrelated or damaged
       // database. These reads happen before persistent journal/schema changes;
       // exclusive locking mode retains their locks until ownership is acquired.
