@@ -159,7 +159,9 @@ Round bughouseRound(Event event, Section section, int n, String Function() id) {
   final stand = section.copy(
     players: [for (final pair in ranked) repOf[pair[0]]!],
     format: Format.swiss,
-    doubleGames: false,
+    // A double match gives each side both colors: the engine then keeps
+    // no color history (29E1) and scores a full-point bye as two games.
+    doubleGames: section.doubleGames,
     partners: const [],
     rounds: rounds,
   );
@@ -201,9 +203,8 @@ Round bughouseRound(Event event, Section section, int n, String Function() id) {
     board++;
   }
   for (final b in proposal.byes) {
-    final points = b.allocated && section.doubleGames ? 4 : b.points;
     for (final pid in partnershipOf(section, b.player) ?? [b.player]) {
-      byes.add(ByeAward(pid, points, b.reason, allocated: b.allocated));
+      byes.add(ByeAward(pid, b.points, b.reason, allocated: b.allocated));
     }
   }
 

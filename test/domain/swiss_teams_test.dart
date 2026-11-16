@@ -245,4 +245,59 @@ void main() {
     expect(round.games.length, 2);
     expect(round.explanations.join('\n'), contains('28N1'));
   });
+
+  test('28N1: plus two counts games, not rounds, in a double-game section', () {
+    // Each round is two games. After round 1, a1 and a2 (one school) each
+    // won one game and drew the other: 1½ of 2, a plus score but not plus
+    // two (that is two more wins than losses: 2 of 2). Below plus two,
+    // team-mates who could only meet each other move down instead (28N1b).
+    final players = [
+      Player(id: 'a1', name: 'A1', rating: 2000, team: 'A'),
+      Player(id: 'a2', name: 'A2', rating: 1900, team: 'A'),
+      for (var i = 1; i <= 4; i++)
+        Player(id: 'x$i', name: 'X$i', rating: 1800 - 10 * i),
+    ];
+    var board = 0;
+    List<Game> match(String w, String b, Outcome first, Outcome second) => [
+      Game(id: 'g${board++}', white: w, black: b, board: board, outcome: first),
+      Game(
+        id: 'g${board++}',
+        white: b,
+        black: w,
+        board: board - 1,
+        leg: 2,
+        outcome: second,
+      ),
+    ];
+    final e = Event(
+      id: 'double',
+      name: 'Blitz',
+      date: '2026-11-16',
+      players: players,
+      sections: [
+        Section(
+          id: 's',
+          name: 'Blitz',
+          players: [for (final p in players) p.id],
+          plannedRounds: 3,
+          doubleGames: true,
+          avoidTeammates: true,
+          rounds: [
+            Round(
+              number: 1,
+              games: [
+                ...match('a1', 'x1', Outcome.whiteWin, Outcome.draw),
+                ...match('a2', 'x2', Outcome.whiteWin, Outcome.draw),
+                ...match('x3', 'x4', Outcome.draw, Outcome.draw),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+    final round = proposeRound(e, e.sections.single, ids('x'));
+    printOnFailure(round.explanations.join('\n'));
+    expect(mates(e, round), isEmpty);
+    expect(round.explanations.join('\n'), contains('28N1b'));
+  });
 }

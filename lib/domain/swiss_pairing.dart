@@ -134,10 +134,6 @@ class _Card {
     if ((balance + color).abs() >= 2 || (last == color && run >= 2)) return 2;
     return 1;
   }
-
-  String get colorHistory => colors.isEmpty
-      ? 'no colors yet'
-      : colors.map((c) => c.$2 == 1 ? 'W' : 'B').join();
 }
 
 /// What the director announced for this section.
@@ -155,6 +151,11 @@ class _Rules {
 
   /// A full point in half points (two games in a double-game round).
   int get win => section.doubleGames ? 4 : 2;
+
+  /// An even score before this round, in half points: half of everything
+  /// the earlier rounds could give. Plus and minus score groups (28N1,
+  /// 29E4a, 29J) are measured from here.
+  int get evenScore => (round - 1) * win ~/ 2;
 
   /// 29E5a / 29E5b limits, or none under variation 29E5h.
   int limitFor(int penalty) {
@@ -448,6 +449,7 @@ List<_Card> _cards(
     byId[a]?.meetings.update(b, (m) => m + 1, ifAbsent: () => 1);
   }
 
+  final pairedRounds = <String>{};
   for (final s in event.sections) {
     for (final r in s.rounds) {
       for (final b in r.byes) {
@@ -464,8 +466,14 @@ List<_Card> _cards(
         if (g.outcome == Outcome.whiteForfeit) byId[g.white]?.forfeitWin = true;
         if (g.outcome == Outcome.blackForfeit) byId[g.black]?.forfeitWin = true;
         if (!g.outcome.played && g.pairingAssumption == null) continue;
-        meet(g.white, g.black);
-        meet(g.black, g.white);
+        // A double-game pairing is one meeting (27A1) however many of its
+        // legs were played; a second meeting is a later round's pairing.
+        final pair = ([g.white, g.black]..sort()).join('/');
+        final firstLeg = pairedRounds.add('${s.id}/${r.number}/$pair');
+        if (firstLeg) {
+          meet(g.white, g.black);
+          meet(g.black, g.white);
+        }
         // A double-game round gives both colors, so it carries no color
         // history (and a double-game section pairs without color goals).
         if (!s.doubleGames && !section.doubleGames) {
@@ -475,6 +483,7 @@ List<_Card> _cards(
           carriedColors[g.black]?.add((r.number, -1));
         }
         // The earlier entry's opponents carry over to the re-entry.
+        if (!firstLeg) continue;
         for (final (me, opp) in [(g.white, g.black), (g.black, g.white)]) {
           for (final entry in earlier.entries) {
             if (entry.value.contains(me) && !(reentries[opp] ?? false)) {
@@ -1124,10 +1133,14 @@ List<(_Card, String)> _higherByeForColors(
   var best = base;
   for (final candidate in candidates.skip(1)) {
     final c = candidate.$1;
-    if (c.unrated || c.score != natural.score || c.rating < natural.rating) {
+    // Pre-tournament ratings (29E5a): a trial pairing above may have left
+    // a 28R2 round-2 adjustment on the cards.
+    if (c.unrated ||
+        c.score != natural.score ||
+        c.baseRating < natural.baseRating) {
       continue;
     }
-    final diff = c.rating - natural.rating;
+    final diff = c.baseRating - natural.baseRating;
     final q = quality(c);
     if (q == null) continue;
     final strongBetter = q.$1 < best.$1;
@@ -1139,7 +1152,7 @@ List<(_Card, String)> _higherByeForColors(
     best = q;
     chosen = (
       c,
-      'Bye to ${c.name} (${c.rating}) instead of ${natural.name} (${natural.rating}) to improve the colors of the lowest group: a $diff-point switch (28L2a, 29E5${q.$1 < base.$1 ? 'b' : 'a'})',
+      'Bye to ${c.name} (${c.baseRating}) instead of ${natural.name} (${natural.baseRating}) to improve the colors of the lowest group: a $diff-point switch (28L2a, 29E5${q.$1 < base.$1 ? 'b' : 'a'})',
     );
   }
   if (chosen == null) return candidates;
@@ -1421,10 +1434,10 @@ class _GroupContext {
   String get label => name ?? '${scoreText(members.first.score)}-point group';
 
   /// 28N1: team-mates stay apart below plus-two; at plus-two or above they
-  /// are not moved out of the group to avoid each other.
-  bool get belowPlusTwo =>
-      members.first.points - (rules.round - 1) * 1 < 2 * 1 + 0 &&
-      members.first.points - (rules.round - 1) < 2;
+  /// are not moved out of the group to avoid each other. Plus two is two
+  /// more wins than losses: one point (two half points) above an even
+  /// score, however many games a round has.
+  bool get belowPlusTwo => members.first.points - rules.evenScore < 2;
 
   bool teammates(_Card a, _Card b) =>
       rules.section.avoidTeammates &&
@@ -1936,12 +1949,7 @@ class _GroupContext {
     final unratedBoards = <_Board>[];
     if (rules.has(Variation.unratedsTogether)) {
       final plus =
-          pool
-              .where(
-                (c) =>
-                    c.unrated && c.points > (rules.round - 1) * rules.win ~/ 2,
-              )
-              .toList()
+          pool.where((c) => c.unrated && c.points > rules.evenScore).toList()
             ..sort(_byRating);
       if (plus.length.isOdd) plus.removeLast();
       final paired = plus.length >= 2 ? _matchInOrder(plus) : null;
@@ -2432,37 +2440,40 @@ class _Move {
     final w = ia > ib ? a : b;
     return give(due == 1 ? w : (w == a ? b : a));
   }
-  if (!rules.has(Variation.rankColorPriority)) {
-    // Rules 3 and 4: the latest round in which their colors differed; the
-    // player who did not have the due color then receives it now.
-    final ca = {for (final c in a.colors) c.$1: c.$2};
-    final cb = {for (final c in b.colors) c.$1: c.$2};
-    for (var r = rules.round - 1; r >= 1; r--) {
-      final x = ca[r] ?? 0, y = cb[r] ?? 0;
-      if (x == y) continue;
-      final w = x == due ? b : (y == due ? a : (x == 0 ? a : b));
-      return give(due == 1 ? w : (w == a ? b : a));
-    }
-  } else {
-    final ca = {for (final c in a.colors) c.$1: c.$2};
-    final cb = {for (final c in b.colors) c.$1: c.$2};
-    final r = rules.round - 1;
-    if (r >= 2 && (ca[r] != cb[r] || ca[r - 1] != cb[r - 1])) {
-      for (var k = r; k >= r - 1; k--) {
-        final x = ca[k] ?? 0, y = cb[k] ?? 0;
-        if (x == y) continue;
-        final w = x == due ? b : (y == due ? a : (x == 0 ? a : b));
-        return give(due == 1 ? w : (w == a ? b : a));
-      }
-    }
+  // Rules 3 and 4: in the latest round in which their colors differed
+  // (an unplayed game differs from a played one, 29E4 example 2), each
+  // player is given the color opposite to the one played then. So the due
+  // color goes to whoever then had the other color, or to the one who had
+  // no game when the other had the due color. Under 29E4d rule 4 does not
+  // apply: only the last two rounds are compared, and identical colors in
+  // both fall through to rule 5.
+  final ca = {for (final c in a.colors) c.$1: c.$2};
+  final cb = {for (final c in b.colors) c.$1: c.$2};
+  final earliest = rules.has(Variation.rankColorPriority) ? rules.round - 2 : 1;
+  for (var r = rules.round - 1; r >= earliest && r >= 1; r--) {
+    final x = ca[r] ?? 0, y = cb[r] ?? 0;
+    if (x == y) continue;
+    final aGetsDue = x == -due || y == due;
+    final w = aGetsDue ? a : b;
+    return give(due == 1 ? w : (w == a ? b : a));
   }
   // Rule 5: the higher-ranked player takes the due color (29E4a: the
   // lower-ranked in minus groups).
-  final minus = higher.points < rules.round - 1;
+  final minus = higher.points < rules.evenScore;
   final priority = rules.has(Variation.lowerRankedColorPriority) && minus
       ? lower
       : higher;
   return give(due == 1 ? priority : (priority == a ? b : a));
+}
+
+/// 29E4 rule 5: the same color in every round, unplayed rounds included
+/// (rules 1–4 decide every other pair).
+bool _sameColorSequence(_Card a, _Card b) {
+  if (a.colors.length != b.colors.length) return false;
+  for (var i = 0; i < a.colors.length; i++) {
+    if (a.colors[i] != b.colors[i]) return false;
+  }
+  return true;
 }
 
 /// Colors for the paired boards, in board order, and the 29E5f check.
@@ -2474,18 +2485,22 @@ List<(String, String)> _assignColors(
 ) {
   final toss = effectiveColorToss(event);
   final games = <(String, String)>[];
-  var alternate = 0;
-  // 29E4b: alternate entitlement within a group when several boards tie
-  // on rule 5.
+  // 29E4b: within a score group, the boards that rule 5 decides alternate
+  // the entitlement from the higher- to the lower-rated player. A board
+  // belongs to the group it was paired in, the lower of its two scores
+  // (an odd player from above is paired in the group below).
+  final rule5Boards = <int, int>{};
   for (final (i, b) in boards.indexed) {
     var (white, black) = _decide(b.upper, b.lower, rules, board: i, toss: toss);
     if (rules.has(Variation.alternatingColorPriority) &&
         b.upper.due == b.lower.due &&
         b.upper.due != 0 &&
-        b.upper.balance.abs() == b.lower.balance.abs() &&
-        b.upper.colorHistory == b.lower.colorHistory) {
-      if (alternate.isOdd) (white, black) = (black, white);
-      alternate++;
+        _sameColorSequence(b.upper, b.lower)) {
+      final group = b.upper.score < b.lower.score
+          ? b.upper.score
+          : b.lower.score;
+      final seen = rule5Boards.update(group, (n) => n + 1, ifAbsent: () => 0);
+      if (seen.isOdd) (white, black) = (black, white);
     }
     for (final (c, color) in [(white, 1), (black, -1)]) {
       if (c.last == color && c.run >= 2 && c.due != color) {

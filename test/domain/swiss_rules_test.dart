@@ -303,6 +303,52 @@ void main() {
       expect(decide('WBWB', 'BWWB'), ('a', 'b'));
       expect(decide('BWxBW', 'BWBxW'), ('a', 'b'));
     });
+    test('rule 4: a played round against an unplayed one', () {
+      // Both are due white. In round 4, the latest round their colors
+      // differed, BWWB had black and WxBx no game: BWWB is given the
+      // color opposite to the one it played then, white.
+      expect(decide('BWWB', 'WxBx'), ('a', 'b'));
+      expect(decide('WxBx', 'BWWB'), ('b', 'a'));
+    });
+    test('29E4b: alternation restarts in each score group', () {
+      final e = scenario(
+        [
+          (id: 'a', rating: 2000, colors: 'WB', points: 4),
+          (id: 'b', rating: 1900, colors: 'WB', points: 4),
+          (id: 'c', rating: 1800, colors: 'WB', points: 0),
+          (id: 'd', rating: 1700, colors: 'WB', points: 0),
+          (id: 'e', rating: 1600, colors: 'WB', points: 0),
+          (id: 'f', rating: 1500, colors: 'WB', points: 0),
+        ],
+        variations: {'29E4b'},
+      );
+      // The 2-point group's only board gives the higher-rated player the
+      // due white; the 0-point group starts again from its first board.
+      expect(games(proposeRound(e, e.sections.single, ids('x'))), [
+        ('a', 'b'),
+        ('c', 'e'),
+        ('f', 'd'),
+      ]);
+    });
+    test('29E4b leaves pairs that rules 1–4 decide alone', () {
+      // Everyone is due black. Board 1 has identical histories, so rule 5
+      // gives the higher-rated player black. Board 2 played the same colors
+      // (BWBW) but in different rounds: rule 4 decides it (29E4 example 2,
+      // BWxBW gets white), and 29E4b's alternation must not flip it.
+      final e = scenario(
+        [
+          (id: 'a', rating: 2000, colors: 'BWBWx', points: 4),
+          (id: 'b', rating: 1900, colors: 'BWxBW', points: 4),
+          (id: 'c', rating: 1800, colors: 'BWBWx', points: 4),
+          (id: 'd', rating: 1700, colors: 'BWBxW', points: 4),
+        ],
+        variations: {'29E4b'},
+      );
+      expect(games(proposeRound(e, e.sections.single, ids('x'))), [
+        ('c', 'a'),
+        ('b', 'd'),
+      ]);
+    });
     test('rule 5: the higher-ranked player takes the due color', () {
       expect(decide('WB', 'WB'), ('a', 'b'));
       expect(decide('BW', 'BW'), ('b', 'a'));
@@ -543,6 +589,45 @@ void main() {
         expect(r.explanations.first, contains('27A1'));
       },
     );
+
+    test('27A1: a double-game pairing is one meeting, not one per leg', () {
+      final e = Event(
+        id: 'double',
+        name: 'Blitz',
+        date: '2026-10-09',
+        players: [
+          Player(id: 'a', name: 'A', rating: 1800),
+          Player(id: 'b', name: 'B', rating: 1700),
+        ],
+        sections: [
+          Section(
+            id: 's',
+            name: 'Blitz',
+            players: ['a', 'b'],
+            plannedRounds: 2,
+            doubleGames: true,
+          ),
+        ],
+      );
+      final r1 = proposeRound(e, e.sections.single, ids('x'));
+      final played = e.copy(
+        sections: [
+          e.sections.single.copy(
+            rounds: [
+              r1.copy(
+                games: [
+                  for (final g in r1.games) g.copy(outcome: Outcome.draw),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      final r2 = proposeRound(played, played.sections.single, ids('y'));
+      expect(r2.games, hasLength(2));
+      // The only possible pairing is their second meeting, not a third.
+      expect(r2.explanations.first, contains('a second meeting'));
+    });
   });
 
   group('28L bye eligibility', () {
@@ -997,6 +1082,60 @@ void main() {
       expect(bye.player, 'c2');
       expect(bye.reason, contains('28L2a'));
       expect(games(r), contains(('c3', 'c1')));
+    });
+
+    test('28L2a compares pre-tournament ratings in a 28R2 round 2', () {
+      // Round 1 is all draws, so the whole field is one score group and
+      // 28R2 moves the lower half's drawers down 100 points. Trying p13's
+      // bye leaves p12 on its adjusted 1204, which must not hide that p12
+      // is really 24 points above p13 (29E5a counts ratings, not the
+      // temporary adjustment).
+      const ratings = [
+        1988, 1876, 1827, 1703, 1686, 1671, 1637, 1618, //
+        1545, 1491, 1481, 1422, 1304, 1280, 1208,
+      ];
+      final players = [
+        for (final (i, r) in ratings.indexed)
+          Player(id: 'p$i', name: 'P$i', rating: r),
+      ];
+      var e = Event(
+        id: 'acc',
+        name: 'Open',
+        date: '2026-11-16',
+        players: players,
+        sections: [
+          Section(
+            id: 's',
+            name: 'Open',
+            players: [for (final p in players) p.id],
+            plannedRounds: 5,
+            accelerated: Acceleration.adjustedRating,
+            variations: {Variation.byeForColors},
+          ),
+        ],
+      );
+      final r1 = proposeRound(e, e.sections.single, ids('a'));
+      e = e.copy(
+        sections: [
+          e.sections.single.copy(
+            rounds: [
+              r1.copy(
+                games: [
+                  for (final g in r1.games) g.copy(outcome: Outcome.draw),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      final r2 = proposeRound(e, e.sections.single, ids('b'));
+      final bye = r2.byes.singleWhere((b) => b.allocated);
+      expect(bye.player, 'p12');
+      expect(
+        bye.reason,
+        'Bye to P12 (1304) instead of P13 (1280) to improve the colors of '
+        'the lowest group: a 24-point switch (28L2a, 29E5b)',
+      );
     });
   });
 

@@ -154,6 +154,34 @@ void main() {
     }
   });
 
+  test('double-game matches carry no color history (29E1)', () {
+    // Partnerships 10 points apart, so any switch for colors would be
+    // within 80 points. After a drawn first round every pair is on the same
+    // score; the repeat-free pairing is A–D, B–C. Both legs of a double
+    // match give each side both colors, so nothing justifies switching it.
+    final base = build(doubleGames: true);
+    var e = base.copy(
+      players: [
+        for (final (i, p) in base.players.indexed)
+          p.copy(rating: 1800 - 10 * (i ~/ 2)),
+      ],
+    );
+    final r1 = proposeRound(e, e.sections.single, ids());
+    final drawn = r1.copy(
+      games: [for (final g in r1.games) g.copy(outcome: Outcome.draw)],
+    );
+    e = e.copy(
+      sections: [
+        e.sections.single.copy(rounds: [drawn]),
+      ],
+    );
+    final s = e.sections.single;
+    expect(meetings(s, r1), {'p0p1-p4p5', 'p2p3-p6p7'});
+    final r2 = proposeRound(e, s, ids());
+    expect(meetings(s, r2), {'p0p1-p6p7', 'p2p3-p4p5'});
+    expect(r2.explanations.join('\n'), isNot(contains('for colors')));
+  });
+
   test(
     'an odd field gives the bye to a partnership; the unpartnered sit out',
     () {
