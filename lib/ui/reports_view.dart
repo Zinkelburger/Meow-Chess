@@ -42,15 +42,38 @@ class ReportsView extends StatefulWidget {
   State<ReportsView> createState() => _ReportsViewState();
 }
 
+/// One "Fetch missing states" run. It belongs to the controller, not to the
+/// Reports view: leaving Reports mid-fetch still saves the states found, in
+/// one audited revision, and coming back shows the run's progress and its
+/// last notice instead of offering a second run.
+class _StateFetch extends ChangeNotifier {
+  bool running = true;
+  String? notice;
+
+  void report(String? text, {bool finished = false}) {
+    notice = text;
+    if (finished) running = false;
+    notifyListeners();
+  }
+}
+
+/// The latest state fetch for each controller; it goes with the controller.
+final _stateFetches = Expando<_StateFetch>('state fetch');
+
 class _ReportsViewState extends State<ReportsView> {
   final detailsKey = GlobalKey<ReportDetailsState>();
   final scroll = ScrollController();
-  bool fetchingStates = false, showAdvice = false, showFideAdvice = false;
-  String? stateNotice;
+  bool showAdvice = false, showFideAdvice = false;
+
+  /// The controller's latest state fetch, which this view listens to.
+  _StateFetch? _fetch;
+  bool get fetchingStates => _fetch?.running ?? false;
+  String? get stateNotice => _fetch?.notice;
   TournamentController get controller => widget.controller;
   @override
   void initState() {
     super.initState();
+    _follow();
     final saved = controller.workspaceState.readMap('reports-view');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && scroll.hasClients) {
@@ -70,9 +93,26 @@ class _ReportsViewState extends State<ReportsView> {
   }
 
   @override
+  void didUpdateWidget(ReportsView old) {
+    super.didUpdateWidget(old);
+    if (old.controller != widget.controller) _follow();
+  }
+
+  @override
   void dispose() {
+    _fetch?.removeListener(_fetchChanged);
     scroll.dispose();
     super.dispose();
+  }
+
+  /// Listens to the latest state fetch of [controller].
+  void _follow() {
+    _fetch?.removeListener(_fetchChanged);
+    _fetch = _stateFetches[controller]?..addListener(_fetchChanged);
+  }
+
+  void _fetchChanged() {
+    if (mounted) setState(() {});
   }
 
   void repair(ReportRepair action) {
@@ -192,26 +232,25 @@ class _ReportsViewState extends State<ReportsView> {
 
   Future<void> _fetchStates() async {
     final c = controller, event = controller.event!;
+    final lookup = widget.memberLookup;
     final players = _stateless(event);
     final lookups = players.where((p) => p.memberId.isNotEmpty).length;
     // One batch produces one audited membership save, including partial success.
     final found = <String, Json>{};
     final failures = <String>[];
-    bool current() => mounted && controller == c && c.event?.id == event.id;
-    setState(() {
-      fetchingStates = true;
-      stateNotice = null;
-    });
+    // The run outlives this view (_StateFetch), but not the event.
+    bool current() => !c.closed && c.event?.id == event.id;
+    final fetch = _stateFetches[c] = _StateFetch();
+    _follow();
+    setState(() {});
     try {
       await const MemberLookupBatch().run(
         players,
-        lookup: (id) => widget.memberLookup(id),
+        lookup: lookup,
         isCurrent: current,
         onFound: (player, member) {
           found[player.id] = member.toJson();
-          setState(
-            () => stateNotice = 'Looked up ${found.length} of $lookups…',
-          );
+          fetch.report('Looked up ${found.length} of $lookups…');
         },
         onFailure: (player, error, _) =>
             failures.add('${player.name}: ${plainMessage(error)}'),
@@ -224,17 +263,17 @@ class _ReportsViewState extends State<ReportsView> {
             .where((id) => c.event!.player(id).state.isNotEmpty)
             .length;
       }
-      if (!mounted) return;
       final remaining = current() ? _stateless(c.event!).length : 0;
-      stateNotice = current()
-          ? 'Saved $filled missing ${filled == 1 ? 'state' : 'states'}. '
-                '${remaining == 0 ? 'All player states are filled.' : '$remaining still missing; add a US Chess ID, retry the lookup, or enter the state manually.'}'
-                '${failures.isEmpty ? '' : '\n${failures.join('\n')}'}'
-          : 'Event changed. Fetch again for the current roster.';
+      fetch.report(
+        current()
+            ? 'Saved $filled missing ${filled == 1 ? 'state' : 'states'}. '
+                  '${remaining == 0 ? 'All player states are filled.' : '$remaining still missing; add a US Chess ID, retry the lookup, or enter the state manually.'}'
+                  '${failures.isEmpty ? '' : '\n${failures.join('\n')}'}'
+            : 'Event changed. Fetch again for the current roster.',
+        finished: true,
+      );
     } catch (error) {
-      if (mounted) stateNotice = plainMessage(error);
-    } finally {
-      if (mounted) setState(() => fetchingStates = false);
+      fetch.report(plainMessage(error), finished: true);
     }
   }
 

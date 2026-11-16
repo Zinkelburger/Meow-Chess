@@ -266,6 +266,10 @@ class TournamentControllerCore extends ChangeNotifier
 
   @override
   bool _closed = false;
+
+  /// Whether the event file has closed; work that outlives a screen checks
+  /// this before it commits.
+  bool get closed => _closed;
   @override
   String newId() => const Uuid().v4();
   void create(String name, {bool practice = false}) => change(

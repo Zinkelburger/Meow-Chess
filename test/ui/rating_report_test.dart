@@ -101,11 +101,109 @@ void main() {
       await tester.pump();
       expect(c.event!.player('p0').state, 'MA');
       expect(c.event!.player('p0').membershipEvidence, isEmpty);
+      // The batch outlives the view: let its remaining lookups finish.
       await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 2));
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('a state fetch outlives Reports and shows again on return', (
+    tester,
+  ) async {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    // p3 has no ID, so one state stays missing and the notice stays shown.
+    c.savePlayer(c.event!.player('p3').copy(memberId: ''));
+    final slow = Completer<MemberObservation?>();
+    MemberObservation found(String id) => MemberObservation(
+      id: id,
+      name: 'Player',
+      retrievedAt: '2026-10-04',
+      ratings: const {},
+      state: 'NH',
+    );
+    Widget reports() => ReportsView(
+      controller: c,
+      memberLookup: (id) async => id == '12000002' ? slow.future : found(id),
+    );
+    Future<void> openAdvice() async {
+      await tester.tap(
+        find.byKey(const PageStorageKey('rating-advice-details')),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await show(tester, c, reports);
+    await openAdvice();
+    await tester.tap(find.byKey(const ValueKey('fetch-states')));
+    await tester.pump();
+    // Leave Reports mid-fetch: the lookups go on (they used to stop here
+    // and the states already found were dropped).
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    // Back on Reports, the run in progress shows instead of a second one.
+    await show(tester, c, reports);
+    await openAdvice();
+    expect(find.textContaining('Looked up 2 of 3'), findsOneWidget);
+    final button = find.byKey(const ValueKey('fetch-states'));
+    expect(
+      find.descendant(of: button, matching: find.text('Fetching states…')),
+      findsOneWidget,
+    );
+    expect(tester.widget<ButtonStyleButton>(button).onPressed, isNull);
+    slow.complete(found('12000002'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(c.repository.load()!.players.map((p) => p.state).toList(), [
+      'NH',
+      'NH',
+      'NH',
+      '',
+    ]);
+    expect(find.textContaining('Saved 3 missing states.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a state fetch left mid-run still saves what it found', (
+    tester,
+  ) async {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    c.savePlayer(c.event!.player('p3').copy(memberId: ''));
+    final slow = Completer<MemberObservation?>();
+    MemberObservation found(String id) => MemberObservation(
+      id: id,
+      name: 'Player',
+      retrievedAt: '2026-10-04',
+      ratings: const {},
+      state: 'NH',
+    );
+    await show(
+      tester,
+      c,
+      () => ReportsView(
+        controller: c,
+        memberLookup: (id) async => id == '12000002' ? slow.future : found(id),
+      ),
+    );
+    await tester.tap(find.byKey(const PageStorageKey('rating-advice-details')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('fetch-states')));
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox());
+    slow.complete(found('12000002'));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(c.repository.load()!.players.map((p) => p.state).toList(), [
+      'NH',
+      'NH',
+      'NH',
+      '',
+    ]);
+  });
 
   testWidgets('report details save inline and fill missing states on request', (
     tester,
