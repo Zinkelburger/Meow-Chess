@@ -885,9 +885,15 @@ class _PlayersViewState extends State<PlayersView> {
             onTick: tick,
           ),
         if (players.isEmpty) _EmptyGroup(standingsOnly: widget.standingsOnly),
-        // A knockout places by its bracket, not by points.
+        // A knockout places by its bracket, not by points. The bracket and
+        // the Teams table are keyed by section, so a search that drops one
+        // section cannot hand its typed advance reasons to the next.
         if (widget.standingsOnly && s != null && s.format == Format.knockout)
-          KnockoutBracketView(controller: c, section: s)
+          KnockoutBracketView(
+            key: ValueKey(('knockout', s.id)),
+            controller: c,
+            section: s,
+          )
         else
           for (final p in players)
             _row(
@@ -903,7 +909,11 @@ class _PlayersViewState extends State<PlayersView> {
             s.rounds.isNotEmpty &&
             search.text.isEmpty &&
             TeamAwards.tryOf(s) != null)
-          TeamStandingsTable(event: e, section: s),
+          TeamStandingsTable(
+            key: ValueKey(('teams', s.id)),
+            event: e,
+            section: s,
+          ),
       ],
     ];
     final table = _RosterTable(
