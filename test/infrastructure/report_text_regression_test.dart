@@ -107,4 +107,36 @@ void main() {
     }
     expect(pdf, isNot(contains('BYE=awardedpoints')));
   });
+
+  test(
+    'printed prize standings exclude withdrawals only where the screen does',
+    () async {
+      // The 30B chip offers prize standings for a round robin; a Swiss
+      // section printed beside it keeps the standings the screen shows.
+      final swiss = event();
+      final e = swiss.copy(
+        players: [
+          ...swiss.players,
+          for (final id in ['r1', 'r2', 'r3', 'r4']) Player(id: id, name: id),
+        ],
+        sections: [
+          Section(
+            id: 'robin',
+            name: 'Robin',
+            format: Format.roundRobin,
+            players: const ['r1', 'r2', 'r3', 'r4'],
+            plannedRounds: 3,
+          ),
+          ...swiss.sections,
+        ],
+      );
+      final pdf = pdfText(
+        await reportPdf(e, ReportKind.standings, forPrizes: true),
+      );
+      expect(
+        'Excludingearlyround-robinwithdrawals'.allMatches(pdf),
+        hasLength(1),
+      );
+    },
+  );
 }

@@ -125,4 +125,34 @@ void main() {
     final text = pdfText(await reportPdf(posted, ReportKind.pairings));
     expect(text, contains('startsat10:30'));
   });
+
+  test(
+    '25: open-ended class and score prizes print their real terms',
+    () async {
+      final e = sample();
+      final section = e.sections.single.copy(
+        prizes: PrizeTable.fromJson(const {
+          'list': [
+            {'id': 'top', 'kind': 'class', 'min': 1800, 'cents': 5000},
+            {'id': 'low', 'kind': 'class', 'max': 1599, 'cents': 4000},
+            {'id': 'score', 'kind': 'points', 'points': 6, 'cents': 1000},
+          ],
+        }),
+      );
+      // ignore: avoid_print
+      print(
+        pdfText(
+          await reportPdf(e.copy(sections: [section]), ReportKind.conditions),
+        ),
+      );
+      final text = pdfText(
+        await reportPdf(e.copy(sections: [section]), ReportKind.conditions),
+      );
+      // Previously "1800–0", "0–1599" and "6 half-points".
+      expect(text, contains('1800andup'));
+      expect(text, contains('Upto1599'));
+      expect(text, contains('3pointsormore'));
+      expect(text, isNot(contains('half-points')));
+    },
+  );
 }

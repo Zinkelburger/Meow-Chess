@@ -6,6 +6,8 @@ import 'package:meow_chess/domain/scheveningen.dart';
 import 'package:meow_chess/infrastructure/reports.dart';
 import 'package:meow_chess/infrastructure/tournament_tools.dart';
 
+import 'pairing_sheets_test.dart' show pdfText;
+
 void main() {
   late Directory directory;
   late TournamentTools tools;
@@ -68,6 +70,20 @@ void main() {
       // Round 1: Lions White on every board; round 2: Tigers.
       expect(scheveningenScore(e, s), (6, 6));
       expect(scheveningenScoreLine(e, s), 'Lions 3 – Tigers 3');
+
+      // The printed wall chart and standings carry the match score too.
+      expect(crosstable(e), contains('Match: Lions 3 – Tigers 3'));
+      expect(
+        crosstable(e, asciiOnly: true),
+        contains('Match: Lions 3 - Tigers 3'),
+      );
+      for (final kind in [ReportKind.standings, ReportKind.crosstable]) {
+        expect(
+          pdfText(await reportPdf(e, kind)),
+          allOf(contains('Match:Lions3'), contains('Tigers3')),
+          reason: kind.name,
+        );
+      }
 
       // Once a round is posted the home team is fixed.
       await expectLater(

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/domain/model.dart';
+import 'package:meow_chess/domain/standings.dart';
 import 'package:meow_chess/infrastructure/reports.dart';
 
 import 'pairing_sheets_test.dart' show pdfText;
@@ -69,8 +70,8 @@ void main() {
   );
 
   test('rule 28O: cumulative scores, NEW and UNR on the wall chart', () async {
-    expect(cumulativeScores(event.sections.single, 'a'), [2, 4]);
-    expect(cumulativeScores(event.sections.single, 'd'), [1, 3]);
+    expect(cumulativeScores(event, event.sections.single, 'a'), [2, 4]);
+    expect(cumulativeScores(event, event.sections.single, 'd'), [1, 3]);
     expect(wallChartRating(event.player('a')), '1800');
     expect(wallChartRating(event.player('b')), 'NEW');
     expect(wallChartRating(event.player('c')), 'UNR');
@@ -203,5 +204,70 @@ void main() {
       tail,
       contains('Alice1BlackCarolBob2WhiteDeeCarol1WhiteAliceDee2BlackBob'),
     );
+  });
+
+  group('a re-entry carrying its earlier score (28S5)', () {
+    // X won round 1 and withdrew; XR re-entered with a half-point bye, then
+    // drew. XR carries X's better score from round 1.
+    final reentry = Event(
+      id: 're',
+      name: 'Re-entry',
+      date: '2026-10-09',
+      players: [
+        Player(id: 'p', name: 'P', rating: 1600),
+        Player(id: 'x', name: 'X', rating: 1500, withdrawn: true),
+        Player(id: 'xr', name: 'XR', rating: 1500, reentryOf: 'x'),
+      ],
+      sections: [
+        Section(
+          id: 's',
+          name: 'Open',
+          players: const ['p', 'x', 'xr'],
+          plannedRounds: 3,
+          rounds: [
+            Round(
+              number: 1,
+              games: const [
+                Game(
+                  id: 'g1',
+                  white: 'p',
+                  black: 'x',
+                  board: 1,
+                  outcome: Outcome.blackWin,
+                ),
+              ],
+              byes: const [ByeAward('xr', 1, 'Re-entry half-point bye')],
+            ),
+            Round(
+              number: 2,
+              games: const [
+                Game(
+                  id: 'g2',
+                  white: 'xr',
+                  black: 'p',
+                  board: 1,
+                  outcome: Outcome.draw,
+                ),
+              ],
+              byes: const [ByeAward('x', 0, 'Withdrawn')],
+            ),
+          ],
+        ),
+      ],
+    );
+    final section = reentry.sections.single;
+
+    test('the running totals match the standings', () async {
+      final points = standings(
+        reentry,
+        section,
+      ).singleWhere((r) => r.player.id == 'xr').points;
+      expect(points, 3);
+      // Used to be [1, 2]: the re-entry's own half-point bye and draw.
+      expect(cumulativeScores(reentry, section, 'xr'), [2, 3]);
+      expect(crosstable(reentry), contains(RegExp(r'XR .*H--- 1 +D1w 1\.5')));
+      final pdf = pdfText(await reportPdf(reentry, ReportKind.crosstable));
+      expect(pdf, contains('H---\n1'.replaceAll('\n', '')));
+    });
   });
 }

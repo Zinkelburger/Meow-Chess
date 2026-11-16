@@ -102,6 +102,23 @@ void main() {
     expect(rows.map((s) => s.rank), [1, 1]);
   });
 
+  test('a printed prize class uses the assigned prize rating (28F)', () {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    // Published 2000, 1950, 1900 and 1850. The director assigned the 2000
+    // player 1800 for prizes and the 1900 player 2000.
+    final assigned = {'p0': 1800, 'p2': 2000};
+    final e = c.event!.copy(
+      players: [
+        for (final p in c.event!.players)
+          p.copy(prizeRating: assigned[p.id] ?? 0),
+      ],
+    );
+    final rows = reportStandings(e, e.sections.single, ceiling: 1950);
+    // By published rating this class was the 1900 and 1850 players.
+    expect(rows.map((s) => s.player.id), ['p0', 'p3']);
+  });
+
   test(
     'report issues retain player identities and exact repair destinations',
     () {

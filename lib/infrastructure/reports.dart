@@ -27,35 +27,65 @@ enum ReportKind {
   conditions,
 }
 
+/// A game as one player sat at it: the color they played, their opponent
+/// at that board, and the half-points their side took from it.
+typedef Seat = ({Game game, bool white, String opponent, int points});
+
+/// Where [playerId] sat in [round], legs in order. A bughouse partner plays
+/// the match's second board with the other color, facing the other partner
+/// (bughouse.dart), and takes the partnership's result.
+List<Seat> roundSeats(Round round, String playerId) {
+  Seat? seat(Game g) {
+    final o = g.outcome;
+    if (g.white == playerId) {
+      return (game: g, white: true, opponent: g.black, points: o.whiteScore);
+    }
+    if (g.black == playerId) {
+      return (game: g, white: false, opponent: g.white, points: o.blackScore);
+    }
+    if (g.whitePartner == playerId) {
+      final opponent = g.blackPartner.isEmpty ? g.black : g.blackPartner;
+      return (game: g, white: false, opponent: opponent, points: o.whiteScore);
+    }
+    if (g.blackPartner == playerId) {
+      final opponent = g.whitePartner.isEmpty ? g.white : g.whitePartner;
+      return (game: g, white: true, opponent: opponent, points: o.blackScore);
+    }
+    return null;
+  }
+
+  return [for (final g in round.games) ?seat(g)]
+    ..sort((a, b) => a.game.leg.compareTo(b.game.leg));
+}
+
+/// The section [round] belongs to in [event], when it is one of its posted
+/// rounds.
+Section? _sectionOf(Event event, Round round) => event.sections
+    .where((s) => s.rounds.any((r) => identical(r, round)))
+    .firstOrNull;
+
 /// A player's result, stable opponent number, and color. Both print and text
 /// reports use this representation; a bye is distinct from an unplayed cell.
+/// [section] is the one [round] belongs to; it is looked up in [event] when
+/// not given, for the value of a full-point bye.
 String crosstableCell(
   Event event,
   Round round,
   String playerId,
-  Map<String, int> numbers,
-) {
-  final games =
-      round.games
-          .where((g) => g.white == playerId || g.black == playerId)
-          .toList()
-        ..sort((a, b) => a.leg.compareTo(b.leg));
-  if (games.isEmpty) {
+  Map<String, int> numbers, {
+  Section? section,
+}) {
+  final seats = roundSeats(round, playerId);
+  if (seats.isEmpty) {
     final bye = round.byes.where((b) => b.player == playerId).firstOrNull;
     if (bye == null) return '--';
-    return switch (bye.points) {
-      2 => 'B---',
-      1 => 'H---',
-      _ => 'U---',
-    };
+    final doubleGames =
+        (section ?? _sectionOf(event, round))?.doubleGames ?? false;
+    return byeMark(bye.points, doubleGames: doubleGames);
   }
-  return games
-      .map((game) {
-        final white = game.white == playerId;
-        final opponent = white ? game.black : game.white;
-        final points = white
-            ? game.outcome.whiteScore
-            : game.outcome.blackScore;
+  return seats
+      .map((seat) {
+        final game = seat.game, points = seat.points;
         final code = !game.outcome.resolved
             ? '?'
             : !game.outcome.played
@@ -66,10 +96,21 @@ String crosstableCell(
             ? 'D'
             : 'L';
         // Rule 18G: an adjudicated result is marked on the chart.
-        return '$code${numbers[opponent] ?? reportName(event.player(opponent).name)}${white ? 'w' : 'b'}${game.adjudicated ? ' ADJ' : ''}';
+        return '$code${numbers[seat.opponent] ?? reportName(event.player(seat.opponent).name)}${seat.white ? 'w' : 'b'}${game.adjudicated ? ' ADJ' : ''}';
       })
       .join('/');
 }
+
+/// A bye of [points] half-points as US Chess crosstables print it: B a
+/// full-point bye, H a half-point bye, U zero (unpaired), with dashes where
+/// an opponent number would be. A full-point bye is worth the whole round:
+/// two half-points, or four in a double-game round, where anything less is
+/// a part bye. The screen and the printed reports share this mark.
+String byeMark(int points, {bool doubleGames = false}) => points <= 0
+    ? 'U---'
+    : points >= (doubleGames ? 4 : 2)
+    ? 'B---'
+    : 'H---';
 
 /// The small marks in a wall chart box: whom the player met, as a pairing
 /// number (with F/X for a forfeit, ? while unresolved) or the kind of bye,
@@ -82,40 +123,35 @@ String crosstableCell(
   // A fixed schedule's coming round: the pairing, with no result to mark.
   bool scheduled = false,
 }) {
-  final games =
-      round.games
-          .where((g) => g.white == playerId || g.black == playerId)
-          .toList()
-        ..sort((a, b) => a.leg.compareTo(b.leg));
-  if (games.isEmpty) {
+  final seats = roundSeats(round, playerId);
+  if (seats.isEmpty) {
     final bye = round.byes.where((b) => b.player == playerId).firstOrNull;
     if (bye == null) return (opponent: '-', color: '');
+    final doubleGames = _sectionOf(event, round)?.doubleGames ?? false;
     return (
-      opponent: switch (bye.points) {
-        2 => 'bye',
-        1 => '½ bye',
+      opponent: switch (byeMark(bye.points, doubleGames: doubleGames)) {
+        'B---' => 'bye',
+        'H---' => '½ bye',
         _ => '0 bye',
       },
       color: '',
     );
   }
-  String opponent(Game game) {
-    final white = game.white == playerId;
-    final other = white ? game.black : game.white;
-    final points = white ? game.outcome.whiteScore : game.outcome.blackScore;
+  String opponent(Seat seat) {
+    final game = seat.game, other = seat.opponent;
     final mark = scheduled
         ? ''
         : !game.outcome.resolved
         ? ' ?'
         : !game.outcome.played
-        ? (points == 2 ? ' X' : ' F')
+        ? (seat.points == 2 ? ' X' : ' F')
         : '';
     return '${numbers[other] ?? reportName(event.player(other).name)}$mark';
   }
 
   return (
-    opponent: games.map(opponent).join('/'),
-    color: games.map((g) => g.white == playerId ? 'W' : 'B').join('/'),
+    opponent: seats.map(opponent).join('/'),
+    color: seats.map((seat) => seat.white ? 'W' : 'B').join('/'),
   );
 }
 
@@ -140,19 +176,32 @@ Map<int, Round> wallChartScheduledRounds(Event event, Section section) {
 String reportName(String name) => name.replaceAll(RegExp(r'\s+'), ' ').trim();
 
 /// Rule 28O: the wall chart shows a player's cumulative score after each
-/// round, in half-points per posted round of [section], in order.
-List<int> cumulativeScores(Section section, String playerId) {
+/// round, in half-points per posted round of [section], in order. A
+/// bughouse partner takes the partnership's result ([roundSeats]), and a
+/// re-entry that carries an earlier entry's better score (28S5) shows it
+/// from the round the entries merged, as the standings count it.
+/// [carries] is `reentryCarries(event, section)`, for a caller totalling
+/// every player of the section.
+List<int> cumulativeScores(
+  Event event,
+  Section section,
+  String playerId, {
+  Map<String, ReentryCarry>? carries,
+}) {
+  final carry = (carries ?? reentryCarries(event, section))[playerId];
   final totals = <int>[];
   var total = 0;
   for (final round in section.rounds) {
     for (final bye in round.byes.where((b) => b.player == playerId)) {
       total += bye.points;
     }
-    for (final g in round.games) {
-      if (g.white == playerId) total += g.outcome.whiteScore;
-      if (g.black == playerId) total += g.outcome.blackScore;
+    for (final seat in roundSeats(round, playerId)) {
+      total += seat.points;
     }
-    totals.add(total);
+    final carried = carry != null && round.number >= carry.through
+        ? carry.carried - carry.own
+        : 0;
+    totals.add(total + carried);
   }
   return totals;
 }
@@ -212,23 +261,25 @@ String crosstable(
     });
     // Rule 28O: each cell is the result, then the score so far.
     final cellWidth = s.doubleGames ? 22 : 12;
+    final carries = reentryCarries(e, s);
     lines.add(
       s.format == Format.ladder
           ? '${s.name} — ladder, ${s.rounds.length} ${s.rounds.length == 1 ? 'batch' : 'batches'} of challenge games'
           : '${s.name} — ${s.rounds.length}/${s.plannedRounds} rounds',
     );
+    if (matchScoreLine(e, s) case final match?) lines.add(match);
     lines.add(
       '${'#'.padLeft(3)}  ${'Name'.padRight(nameWidth)}  ${'Rtg'.padLeft(4)}  ${'Pts'.padLeft(4)}  ${[for (final n in columns) 'R$n'.padRight(cellWidth)].join(' ')}',
     );
     for (final row in rows) {
       final id = row.player.id;
-      final totals = cumulativeScores(s, id);
+      final totals = cumulativeScores(e, s, id, carries: carries);
       final cells = columns
           .map((n) {
             final i = s.rounds.indexWhere((r) => r.number == n);
             return i < 0
                 ? ''
-                : '${crosstableCell(e, s.rounds[i], id, numbers)} ${scoreText(totals[i])}';
+                : '${crosstableCell(e, s.rounds[i], id, numbers, section: s)} ${scoreText(totals[i])}';
           })
           .map((cell) => cell.padRight(cellWidth))
           .join(' ');
@@ -250,7 +301,10 @@ String crosstable(
   }
   var text = lines.join('\n');
   if (asciiOnly) {
-    text = text.replaceAll('—', '-');
+    // The report's own punctuation has ASCII equivalents; names do not.
+    for (final MapEntry(:key, :value) in _asciiPunctuation.entries) {
+      text = text.replaceAll(key, value);
+    }
     if (text.codeUnits.any((c) => c > 127)) {
       throw const TournamentException(
         'ASCII export requires ASCII name aliases. Use UTF-8 text or PDF to preserve these names.',
@@ -259,6 +313,23 @@ String crosstable(
   }
   return text;
 }
+
+/// A Scheveningen is a match between two teams: its score so far, as
+/// "Match: Lions 5.5 – Tigers 2.5" in plain figures. Null for any other
+/// section, or a Scheveningen whose teams are not set up yet.
+String? matchScoreLine(Event e, Section s) {
+  if (s.format != Format.scheveningen || scheveningenProblem(e, s) != null) {
+    return null;
+  }
+  final (home, away) = scheveningenScore(e, s);
+  return 'Match: ${reportName(s.homeTeam)} ${scoreText(home)} – '
+      '${reportName(scheveningenAwayLabel(e, s))} ${scoreText(away)}';
+}
+
+/// The non-ASCII punctuation the text reports themselves print (dashes in
+/// headings and the knockout bracket, the separator in its summary), with
+/// the ASCII each becomes in an ASCII-only export.
+const _asciiPunctuation = {'—': '-', '–': '-', '·': '-'};
 
 /// Scholastic team standings as text (Scholastic Regulations 10.2,
 /// 12.3.3; rule 31A1): one line per team with its place, score, tie-break
@@ -511,7 +582,9 @@ Event eventThroughRound(Event event, int? roundNumber, {String? sectionId}) {
   );
 }
 
-/// Rank within the requested prize class using the same tie rules as the screen.
+/// Rank within the requested prize class using the same tie rules as the
+/// screen. Class membership is by the rating prizes use, which may be one
+/// the director assigned (rule 28F); unrated players are in no class.
 List<Standing> reportStandings(
   Event event,
   Section section, {
@@ -521,7 +594,9 @@ List<Standing> reportStandings(
   final rows = standings(event, section, forPrizes: forPrizes)
       .where(
         (r) =>
-            ceiling == 0 || (r.player.rating > 0 && r.player.rating < ceiling),
+            ceiling == 0 ||
+            (r.player.effectivePrizeRating > 0 &&
+                r.player.effectivePrizeRating < ceiling),
       )
       .toList();
   return rankStandings(rows, tiebreaks: event.useTiebreaks);
@@ -559,18 +634,13 @@ List<pw.Widget> _roundRobinPairingGrid(
       numbers[id]?.toString() ??
       ' ${reportName(event.players.where((p) => p.id == id).firstOrNull?.name ?? '?')}';
   pw.Widget roundCell(String player, Round round) {
-    final games =
-        round.games
-            .where((g) => g.white == player || g.black == player)
-            .toList()
-          ..sort((a, b) => a.leg.compareTo(b.leg));
+    final seats = roundSeats(round, player);
     final bye = round.byes.where((b) => b.player == player).firstOrNull;
-    final labels = games.isEmpty
+    final labels = seats.isEmpty
         ? [bye == null ? '-' : 'Bye']
         : [
-            for (final game in games)
-              (game.white == player ? 'W' : 'B') +
-                  opponentLabel(game.white == player ? game.black : game.white),
+            for (final seat in seats)
+              (seat.white ? 'W' : 'B') + opponentLabel(seat.opponent),
           ];
     return pw.Row(
       children: [
@@ -711,7 +781,10 @@ Future<Uint8List> reportPdf(
         : requested;
     e = eventThroughRound(source, number, sectionId: scope.id);
     final s = e.sections.firstWhere((s) => s.id == scope.id);
-    final table = reportStandings(e, s, ceiling: ceiling, forPrizes: forPrizes);
+    // Rule 30B prize standings belong to round robins and quads, as on
+    // screen: a Swiss section printed beside one keeps its own standings.
+    final prizes = forPrizes && hasFixedSchedule(s);
+    final table = reportStandings(e, s, ceiling: ceiling, forPrizes: prizes);
     final widgets = <pw.Widget>[];
     void title(String text) => widgets.add(
       pw.Padding(
@@ -722,6 +795,18 @@ Future<Uint8List> reportPdf(
         ),
       ),
     );
+    // A Scheveningen's match score under the sheet title.
+    void matchScore() {
+      if (matchScoreLine(e, s) case final line?) {
+        widgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 8),
+            child: pw.Text(line, style: const pw.TextStyle(fontSize: 12)),
+          ),
+        );
+      }
+    }
+
     void grid(List<String> headers, List<List<String>> rows) => widgets.add(
       pw.TableHelper.fromTextArray(
         headers: headers,
@@ -923,8 +1008,9 @@ Future<Uint8List> reportPdf(
       );
     } else if (kind == ReportKind.standings) {
       title(
-        'Standings${ceiling == 0 ? '' : ' · Under $ceiling'}${forPrizes ? ' · Excluding early round-robin withdrawals' : ''}',
+        'Standings${ceiling == 0 ? '' : ' · Under $ceiling'}${prizes ? ' · Excluding early round-robin withdrawals' : ''}',
       );
+      matchScore();
       // Rule 34B: the posted order, named in full under the grid.
       final methods = standingsTiebreaks(e, s);
       grid(
@@ -1020,6 +1106,7 @@ Future<Uint8List> reportPdf(
       ]..sort((a, b) => numbers[a.player.id]!.compareTo(numbers[b.player.id]!));
       final columns = wallChartRounds(s);
       final scheduled = wallChartScheduledRounds(e, s);
+      final carries = reentryCarries(e, s);
       final complete =
           columns.isNotEmpty &&
           columns.every(
@@ -1067,7 +1154,9 @@ Future<Uint8List> reportPdf(
               pw.Positioned(left: 2, bottom: 1, child: small(marks.color)),
               pw.Center(
                 child: pw.Text(
-                  _halves(cumulativeScores(s, row.player.id)[i]),
+                  _halves(
+                    cumulativeScores(e, s, row.player.id, carries: carries)[i],
+                  ),
                   style: const pw.TextStyle(fontSize: 14),
                 ),
               ),
@@ -1158,11 +1247,18 @@ Future<Uint8List> reportPdf(
     }
     if (kind == ReportKind.crosstable) {
       title('Crosstable');
+      matchScore();
       final numbers = {for (final (i, id) in s.players.indexed) id: i + 1};
       // Rule 28O: result on the first line, score so far on the second.
+      final carries = reentryCarries(e, s);
       final totals = {
         for (final row in table)
-          row.player.id: cumulativeScores(s, row.player.id),
+          row.player.id: cumulativeScores(
+            e,
+            s,
+            row.player.id,
+            carries: carries,
+          ),
       };
       grid(
         ['#', 'Player', 'Rtg', 'Pts', for (final r in s.rounds) 'R${r.number}'],
@@ -1174,7 +1270,7 @@ Future<Uint8List> reportPdf(
               wallChartRating(row.player),
               _halves(row.points),
               for (final (i, r) in s.rounds.indexed)
-                '${crosstableCell(e, r, row.player.id, numbers)}\n'
+                '${crosstableCell(e, r, row.player.id, numbers, section: s)}\n'
                     '${_halves(totals[row.player.id]![i])}',
             ],
         ],
@@ -1505,13 +1601,21 @@ Future<Uint8List> conditionsPdf(
       [
         for (final p in list)
           [
-            p.label.isEmpty ? '${p.kind.code} ${p.place}' : p.label,
+            p.title,
             switch (p.kind) {
-              PrizeKind.classRange => '${p.min}–${p.max}',
+              // A class may be open at either end.
+              PrizeKind.classRange =>
+                p.min > 0 && p.max > 0
+                    ? '${p.min}–${p.max}'
+                    : p.min > 0
+                    ? '${p.min} and up'
+                    : 'Up to ${p.max}',
               PrizeKind.under => 'Under ${p.max}',
-              PrizeKind.points => '${p.points} half-points',
+              // 33E: a score prize goes to each player with at least this
+              // score.
+              PrizeKind.points => '${scoreText(p.points)} points or more',
               PrizeKind.team => 'Team place ${p.place}',
-              final kind => kind.code,
+              final kind => kind.label,
             },
             [
               if (p.cents > 0) _conditionsDollars(p.cents),
@@ -1560,26 +1664,34 @@ Future<Uint8List> conditionsPdf(
 }
 
 /// Rule 28J TD TIP: the same round's pairings by player name, so a player
-/// who cannot find a board number can find their own name.
+/// who cannot find a board number can find their own name. A bughouse
+/// partner is listed at the second board of the match, with the other color
+/// and the other partner as opponent.
 List<pw.Widget> _alphabeticalPairings(
   Event source,
   Section scope,
   Round round,
 ) {
   final rows = <(String key, List<String> cells)>[];
-  for (final g in round.games) {
-    for (final (id, color, opponent) in [
-      (g.white, 'White', g.black),
-      (g.black, 'Black', g.white),
-    ]) {
-      final name = reportName(source.player(id).name);
+  final seated = {
+    for (final g in round.games)
+      ...[
+        g.white,
+        g.black,
+        g.whitePartner,
+        g.blackPartner,
+      ].where((id) => id.isNotEmpty),
+  };
+  for (final id in seated) {
+    final name = reportName(source.player(id).name);
+    for (final seat in roundSeats(round, id)) {
       rows.add((
         nameKey(name),
         [
           name,
-          '${g.board}${scope.doubleGames ? ' / ${g.leg}' : ''}',
-          color,
-          reportName(source.player(opponent).name),
+          '${seat.game.board}${scope.doubleGames ? ' / ${seat.game.leg}' : ''}',
+          seat.white ? 'White' : 'Black',
+          reportName(source.player(seat.opponent).name),
         ],
       ));
     }
