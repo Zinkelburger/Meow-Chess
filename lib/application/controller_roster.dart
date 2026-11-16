@@ -189,28 +189,44 @@ mixin _RosterCommands on _CommandContext {
     return players.length - additions.length;
   }
 
-  /// Reserves, changes or cancels (negative [points]) a future bye. Rules
-  /// 22C1–22C4 limit half-point byes by the section's [ByePolicy];
-  /// zero-point byes are always allowed. [irrevocable] true declares the
-  /// bye irrevocable (22C4), false withdraws the declaration, null keeps
-  /// it, so a cancelled irrevocable bye still counts under 22C5.
+  /// Reserves or changes a future bye worth [points]: 0, 1 or 2 for a zero,
+  /// half or full point, as the file stores them. Rules 22C1–22C4 limit
+  /// half-point byes by the section's [ByePolicy]; zero-point byes are always
+  /// allowed. [irrevocable] true declares the bye irrevocable (22C4), false
+  /// withdraws the declaration, null keeps it. [cancelBye] removes a bye.
   ///
   /// For a round already posted in which the player has no game (a late
   /// entrant's missed round), [points] 0 or 1 sets that round's bye to
   /// zero or half a point; see [_setMissedRoundBye].
   void reserveBye(String playerId, int round, int points, {bool? irrevocable}) {
-    // Points 0, 1 and 2 are zero, half and full point; the file stores them.
-    if (round < 1) {
-      throw const TournamentException('Choose a round from 1 on.');
-    }
-    if (points > 2) {
+    if (points < 0 || points > 2) {
       throw const TournamentException(
         'A bye is worth zero, half or one point.',
       );
     }
+    _setBye(playerId, round, points, irrevocable);
+  }
+
+  /// Cancels the bye [playerId] reserved for [round]; cancelling a bye that
+  /// is not there changes nothing. [irrevocable] is as for [reserveBye]:
+  /// kept, a cancelled irrevocable bye still counts under 22C5.
+  void cancelBye(String playerId, int round, {bool? irrevocable}) =>
+      _setBye(playerId, round, null, irrevocable);
+
+  /// The one bye edit behind [reserveBye] and [cancelBye]: [points] null
+  /// removes the bye for [round].
+  void _setBye(String playerId, int round, int? points, bool? irrevocable) {
+    if (round < 1) {
+      throw const TournamentException('Choose a round from 1 on.');
+    }
     final e = event!;
     final s = e.sectionOf(playerId);
     if (s != null && round <= s.rounds.length) {
+      if (points == null) {
+        throw TournamentException(
+          'Round $round is posted. A missed round\'s bye can be set to zero or half a point, but not cancelled.',
+        );
+      }
       _setMissedRoundBye(s, playerId, round, points);
       return;
     }
@@ -219,7 +235,7 @@ mixin _RosterCommands on _CommandContext {
     final declared = {...player.irrevocableByes};
     if (irrevocable == true) declared.add(round);
     if (irrevocable == false) declared.remove(round);
-    if (points < 0) {
+    if (points == null) {
       byes.remove(round);
     } else {
       if (points == 1 && s != null) {

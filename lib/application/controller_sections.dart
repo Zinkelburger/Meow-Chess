@@ -40,6 +40,9 @@ mixin _SectionCommands on _CommandContext {
     return entry;
   }
 
+  /// Adds one [format] section called [name] with [rounds] planned rounds.
+  /// With [assignUnassigned], every player not yet in a section and not
+  /// withdrawn joins it. Refused like [createSections].
   void addSection(
     String name,
     Format format,
@@ -47,19 +50,19 @@ mixin _SectionCommands on _CommandContext {
     bool doubleGames = false,
     bool assignUnassigned = true,
   }) {
-    final e = event!;
+    final e = event!, title = _checkedSection(e.sections, name, rounds);
     final free = e.players
         .where((p) => !p.withdrawn && e.sectionOf(p.id) == null)
         .map((p) => p.id)
         .toList();
     change(
-      'Create $name',
+      'Create $title',
       e.copy(
         sections: [
           ...e.sections,
           Section(
             id: newId(),
-            name: name,
+            name: title,
             players: assignUnassigned ? free : [],
             format: format,
             plannedRounds: rounds,
@@ -137,18 +140,7 @@ mixin _SectionCommands on _CommandContext {
       }
       label = 'Make ${created.length} sections';
     } else {
-      final title = name.trim();
-      if (title.isEmpty) {
-        throw const TournamentException('Enter the section name.');
-      }
-      if (kept.any((s) => s.name.trim().toLowerCase() == title.toLowerCase())) {
-        throw TournamentException('There is already a section called $title.');
-      }
-      if (rounds < 1 || rounds > 32) {
-        throw const TournamentException(
-          'Number of rounds must be between 1 and 32.',
-        );
-      }
+      final title = _checkedSection(kept, name, rounds);
       created.add(
         Section(
           id: newId(),
@@ -374,6 +366,8 @@ mixin _SectionCommands on _CommandContext {
   /// a section that has been paired are late entries ([enterLate], with the
   /// missed-round byes of [lateByes]); everything else is a move or a
   /// combination of sections, which after play started needs a [reason].
+  /// Only the players who change section are moved and recorded in the
+  /// transition.
   void movePlayers(
     List<String> ids,
     String targetId, {
@@ -386,20 +380,26 @@ mixin _SectionCommands on _CommandContext {
     if (unknown.isNotEmpty) {
       throw const TournamentException('A selected player no longer exists.');
     }
-    if (ids.isNotEmpty &&
-        target.rounds.isNotEmpty &&
-        ids.every((id) => e.sectionOf(id) == null)) {
-      enterLate(ids, targetId, byes: lateByes);
+    // Players already in the target stay where they are; when nobody
+    // changes section, nothing is saved or recorded.
+    final moving = [
+      for (final id in {...ids})
+        if (!target.players.contains(id)) id,
+    ];
+    if (moving.isEmpty) return;
+    if (target.rounds.isNotEmpty &&
+        moving.every((id) => e.sectionOf(id) == null)) {
+      enterLate(moving, targetId, byes: lateByes);
       return;
     }
     final sources = e.sections
-        .where((s) => s.id != targetId && s.players.any(ids.contains))
+        .where((s) => s.id != targetId && s.players.any(moving.contains))
         .toList();
     // Bughouse partners are fixed once round 1 is posted; before that a
     // move leaves the partner unpartnered, as setPartners describes.
     for (final s in sources.where((s) => s.rounds.isNotEmpty)) {
       for (final pair in s.partners) {
-        if (pair.any(ids.contains)) {
+        if (pair.any(moving.contains)) {
           throw TournamentException(
             '${e.player(pair[0]).name} and ${e.player(pair[1]).name} are partners in ${s.name}, and partnerships are fixed once round 1 is posted.',
           );
@@ -411,7 +411,7 @@ mixin _SectionCommands on _CommandContext {
     for (final s in sources) {
       if (hasFixedSchedule(s) &&
           s.rounds.isNotEmpty &&
-          !s.players.every(ids.contains)) {
+          !s.players.every(moving.contains)) {
         throw TournamentException(
           '${s.name} is a ${s.format == Format.quad ? 'quad' : 'round robin'} with games played. Move all of its players together, or none.',
         );
@@ -437,9 +437,9 @@ mixin _SectionCommands on _CommandContext {
     // a section holds at most one entry per person.
     final people = <String, String>{
       for (final id in target.players)
-        if (!ids.contains(id)) e.player(id).personId ?? id: id,
+        if (!moving.contains(id)) e.player(id).personId ?? id: id,
     };
-    for (final id in ids.toSet()) {
+    for (final id in moving) {
       final p = e.player(id), person = p.personId ?? id;
       if (people[person] case final other? when other != id) {
         throw TournamentException(
@@ -448,7 +448,7 @@ mixin _SectionCommands on _CommandContext {
       }
       people[person] = id;
     }
-    final members = {...target.players, ...ids}.toList();
+    final members = {...target.players, ...moving}.toList();
     // Before any play a move is only a roster edit; afterwards the merged
     // section's schedule no longer holds, so it continues as a Swiss.
     final played = affected.any((s) => s.rounds.isNotEmpty);
@@ -458,14 +458,14 @@ mixin _SectionCommands on _CommandContext {
         ? [
             for (final s in sources)
               for (final pair in s.partners)
-                if (pair.every(ids.contains)) pair,
+                if (pair.every(moving.contains)) pair,
           ]
         : const <List<String>>[];
     final changed = <String>{};
     final sections = e.sections.map((s) {
       final players = s.id == targetId
           ? members
-          : s.players.where((id) => !ids.contains(id)).toList();
+          : s.players.where((id) => !moving.contains(id)).toList();
       if (listEquals(players, s.players)) {
         return s.id == targetId && played ? s.copy(format: Format.swiss) : s;
       }
@@ -484,13 +484,15 @@ mixin _SectionCommands on _CommandContext {
     }).toList();
     final allocated = keepBoardRanges(e.sections, sections, changed);
     change(
-      'Move ${ids.length} players to ${target.name}',
+      moving.length == 1
+          ? 'Move ${e.player(moving.single).name} to ${target.name}'
+          : 'Move ${moving.length} players to ${target.name}',
       e.copy(
         sections: allocated,
         transitions: [
           ...e.transitions,
           {
-            'players': [...ids],
+            'players': moving,
             'target': targetId,
             'effectiveRound': target.rounds.length + 1,
             'reason': reason,
@@ -500,4 +502,22 @@ mixin _SectionCommands on _CommandContext {
       ),
     );
   }
+}
+
+/// The trimmed [name] of a new section beside [others], refusing a blank
+/// or taken name and a round count outside 1 to 32.
+String _checkedSection(Iterable<Section> others, String name, int rounds) {
+  final title = name.trim();
+  if (title.isEmpty) {
+    throw const TournamentException('Enter the section name.');
+  }
+  if (others.any((s) => s.name.trim().toLowerCase() == title.toLowerCase())) {
+    throw TournamentException('There is already a section called $title.');
+  }
+  if (rounds < 1 || rounds > 32) {
+    throw const TournamentException(
+      'Number of rounds must be between 1 and 32.',
+    );
+  }
+  return title;
 }

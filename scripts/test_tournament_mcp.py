@@ -138,6 +138,24 @@ class TournamentMcpTest(unittest.TestCase):
             c.call('add_players', players=[{'name': 'Valid'}, {'name': 'Invalid', 'rating': -1}])
         self.assertEqual(before, c.call('get_event'))
 
+    def test_cancel_bye_removes_a_reserved_bye(self):
+        s = self.create(players=6)
+        c = self.client
+        player = s['players'][0]
+        c.call('reserve_bye', playerId=player, round=2, points=1)
+        before = c.call('get_event')
+        self.assertEqual(next(p for p in before['players'] if p['id'] == player)['byes'], {'2': 1})
+        # A negative bye is refused, not taken as a cancellation.
+        with self.assertRaises(RuntimeError):
+            c.call('reserve_bye', playerId=player, round=2, points=-1)
+        self.assertEqual(before, c.call('get_event'))
+        c.call('cancel_bye', playerId=player, round=2)
+        after = c.call('get_event')
+        self.assertFalse(next(p for p in after['players'] if p['id'] == player).get('byes'))
+        # Cancelling a bye that is not there changes nothing.
+        c.call('cancel_bye', playerId=player, round=2)
+        self.assertEqual(after, c.call('get_event'))
+
     def test_path_confinement_and_overwrites(self):
         c = self.client
         with self.assertRaisesRegex(RuntimeError, 'inside'):

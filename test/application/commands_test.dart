@@ -265,7 +265,7 @@ void main() {
       );
       c.reserveBye('p0', 3, 1);
       expect(c.event!.player('p0').byes, {3: 1});
-      c.reserveBye('p0', 3, -1);
+      c.cancelBye('p0', 3);
       expect(c.event!.player('p0').byes, isEmpty);
     });
   });
@@ -335,6 +335,47 @@ void main() {
         refuses('Say why the players are moving'),
       );
     });
+
+    test('players already in the target are not moved again', () async {
+      final c = await roundRobinAndSwiss();
+      addTearDown(c.dispose);
+      final [rr, swiss] = c.event!.sections;
+      final moves = c.event!.transitions.length;
+      // Nobody changes section, so nothing is saved or recorded as moved.
+      expectUnchanged(c, () => c.movePlayers(swiss.players, swiss.id));
+      expectUnchanged(c, () => c.movePlayers(const [], swiss.id));
+      // A mixed selection moves, and records, only the one who changes.
+      c.movePlayers([swiss.players.first, rr.players.first], swiss.id);
+      expect(c.event!.transitions, hasLength(moves + 1));
+      expect(c.event!.transitions.last['players'], [rr.players.first]);
+      expect(
+        c.undoLabel,
+        'Move ${c.event!.player(rr.players.first).name} to Swiss',
+      );
+    });
+  });
+
+  test('addSection refuses what createSections refuses', () {
+    final c = fixture(count: 4);
+    addTearDown(c.dispose);
+    final taken = c.event!.sections.single.name;
+    for (final (name, rounds, message) in [
+      ('  ', 3, 'Enter the section name.'),
+      (' ${taken.toUpperCase()} ', 3, 'There is already a section called'),
+      ('Open', 0, 'between 1 and 32'),
+      ('Open', 33, 'between 1 and 32'),
+    ]) {
+      expectUnchanged(
+        c,
+        () => expect(
+          () => c.addSection(name, Format.swiss, rounds),
+          refuses(message),
+        ),
+      );
+    }
+    c.addSection('  Open ', Format.swiss, 3);
+    expect(c.event!.sections.last.name, 'Open');
+    expect(c.undoLabel, 'Create Open');
   });
 
   group('removing players', () {

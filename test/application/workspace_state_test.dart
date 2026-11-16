@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:meow_chess/application/diagnostics.dart';
 import 'package:meow_chess/application/workspace_state.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/ui/drafts.dart';
@@ -98,4 +99,30 @@ void main() {
       repository.close();
     },
   );
+
+  test('a failed draft save and an unreadable draft reach the diagnostics', () {
+    final lines = <String>[], previous = Diagnostics.sink;
+    Diagnostics.sink = lines.add;
+    addTearDown(() => Diagnostics.sink = previous);
+    final repository = FailingPreferences();
+    final store = WorkspaceState(repository);
+    repository.fail = true;
+    expect(store.write('draft', 'kept'), isFalse);
+    // Forms save on every edit: one line for the failure, not one per edit.
+    expect(store.write('draft', 'kept'.padRight(8, '!')), isFalse);
+    expect(store.read('draft'), 'kept!!!!');
+    final saved = lines.singleWhere((l) => l.contains('save draft — failed'));
+    expect(saved, contains('key: draft'));
+    expect(saved, contains('Error: Bad state: Disk full'));
+    repository.fail = false;
+    store.write('form', 'not a map');
+    // A damaged draft starts the form fresh, and says why in the log.
+    expect(store.readMap('form'), isEmpty);
+    expect(
+      lines.singleWhere((l) => l.contains('read saved draft — failed')),
+      contains('key: form'),
+    );
+    store.dispose();
+    repository.close();
+  });
 }

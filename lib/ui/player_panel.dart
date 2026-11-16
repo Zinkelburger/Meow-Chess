@@ -1402,7 +1402,9 @@ class PlayerPanelState extends State<PlayerPanel> {
               rounds: open,
               byes: p.byes,
               onToggle: (r, points) => attempt(
-                () => c.reserveBye(p.id, r, p.byes[r] == points ? -1 : points),
+                () => p.byes[r] == points
+                    ? c.cancelBye(p.id, r)
+                    : c.reserveBye(p.id, r, points),
               ),
             ),
             // FIDE checklist VCL.17: a full-point bye is allowed but
@@ -1442,12 +1444,15 @@ class PlayerPanelState extends State<PlayerPanel> {
                   ),
                   value: p.irrevocableByes.contains(r),
                   onChanged: (v) => attempt(
-                    () => c.reserveBye(
-                      p.id,
-                      r,
-                      p.byes[r] ?? -1,
-                      irrevocable: v ?? false,
-                    ),
+                    () => switch (p.byes[r]) {
+                      final points? => c.reserveBye(
+                        p.id,
+                        r,
+                        points,
+                        irrevocable: v ?? false,
+                      ),
+                      null => c.cancelBye(p.id, r, irrevocable: v ?? false),
+                    },
                   ),
                 ),
             const SizedBox(height: 8),

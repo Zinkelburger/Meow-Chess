@@ -1226,10 +1226,9 @@ class TournamentTools {
           };
         }
       case 'cancel_bye':
-        controller.reserveBye(
+        controller.cancelBye(
           args['playerId'] as String,
           args['round'] as int,
-          -1,
           irrevocable: args['irrevocable'] as bool?,
         );
       case 'hold_out_non_reporters':

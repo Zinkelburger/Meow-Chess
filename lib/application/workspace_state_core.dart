@@ -55,7 +55,18 @@ class WorkspaceStateCore extends ChangeNotifier {
     try {
       repository.writePreference(key, value);
       failures.remove(key);
-    } catch (error) {
+    } catch (error, stack) {
+      // Kept in memory and shown to the TD through [failures]; [retry] saves
+      // it. Forms save on every edit, so log only the first failure in a row.
+      if (!failures.containsKey(key)) {
+        Diagnostics.record(
+          'save draft',
+          'failed; kept in memory',
+          context: {'key': key},
+          error: error,
+          stack: stack,
+        );
+      }
       failures[key] = plainMessage(error);
     }
     // Forms also save from focus/dispose callbacks during a frame.

@@ -66,7 +66,7 @@ void main() {
     expect(() => c.reserveBye('p1', 3, 1), refuses('one half-point bye'));
     // Changing the same round's bye is not a second bye.
     c.reserveBye('p1', 2, 1);
-    c.reserveBye('p1', 2, -1);
+    c.cancelBye('p1', 2);
     c.reserveBye('p1', 3, 1);
     expect(c.event!.player('p1').byes, {3: 1});
   });
@@ -81,10 +81,10 @@ void main() {
     expect(p.byes[5], 1);
     expect(p.irrevocableByes, {5});
     // Cancelling keeps the declaration (22C5); withdrawing it clears it.
-    c.reserveBye('p2', 5, -1);
+    c.cancelBye('p2', 5);
     expect(c.event!.player('p2').byes.containsKey(5), isFalse);
     expect(c.event!.player('p2').irrevocableByes, {5});
-    c.reserveBye('p2', 5, -1, irrevocable: false);
+    c.cancelBye('p2', 5, irrevocable: false);
     expect(c.event!.player('p2').irrevocableByes, isEmpty);
   });
 
@@ -94,7 +94,7 @@ void main() {
       final c = swiss(byeRules: {'irrevocableFromRound': 2});
       addTearDown(c.dispose);
       c.reserveBye('p0', 2, 1, irrevocable: true);
-      c.reserveBye('p0', 2, -1); // the director agreed to let them play
+      c.cancelBye('p0', 2); // the director agreed to let them play
       await playRound(c);
       await playRound(c, winner: 'p0');
       final round = c.event!.sections.single.rounds.last;
@@ -188,6 +188,24 @@ void main() {
     expect(c.event!.revision, before);
     c.reserveBye('p3', 4, 2);
     expect(c.event!.player('p3').byes[4], 2);
+  });
+
+  test('a cancellation is its own command, never a negative bye', () {
+    final c = swiss();
+    addTearDown(c.dispose);
+    c.reserveBye('p3', 4, 1);
+    final before = c.event!.revision;
+    // Points are only ever 0, 1 or 2; cancelling no longer hides in -1.
+    expect(() => c.reserveBye('p3', 4, -1), refuses('zero, half or one point'));
+    expect(() => c.reserveBye('p3', 4, -5), refuses('zero, half or one point'));
+    expect(() => c.cancelBye('p3', 0), refuses('Choose a round from 1'));
+    expect(c.event!.revision, before);
+    c.cancelBye('p3', 4);
+    expect(c.event!.player('p3').byes, isNot(contains(4)));
+    expect(c.event!.revision, before + 1);
+    // Cancelling a bye that is not there changes nothing.
+    c.cancelBye('p3', 4);
+    expect(c.event!.revision, before + 1);
   });
 
   test('treatment names parse at the tool boundary and refuse others', () {

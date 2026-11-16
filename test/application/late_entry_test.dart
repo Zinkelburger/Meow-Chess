@@ -215,7 +215,11 @@ void main() {
     c.reserveBye('late', 1, 1);
     expect(points(), 1);
     expect(() => c.reserveBye('late', 1, 2), refuses('zero or half a point'));
-    expect(() => c.reserveBye('late', 1, -1), refuses('zero or half a point'));
+    expect(
+      () => c.reserveBye('late', 1, -1),
+      refuses('zero, half or one point'),
+    );
+    expect(() => c.cancelBye('late', 1), refuses('not cancelled'));
     // A round that was played is corrected through its game.
     final playing = open(c).rounds.first.games.first.white;
     expect(() => c.reserveBye(playing, 1, 1), refuses('has a game in it'));

@@ -841,14 +841,12 @@ class Harness {
         final posted = e.sectionOf(p.id)?.rounds.length ?? 0;
         final round = posted + 1 + a.arg(1).abs() % 3;
         final points = a.arg(2).abs() % 4 - 1;
+        final irrevocable = a.arg(3) % 3 == 0 ? true : null;
         _call(
           'bye',
-          () => c.reserveBye(
-            p.id,
-            round,
-            points,
-            irrevocable: a.arg(3) % 3 == 0 ? true : null,
-          ),
+          () => points < 0
+              ? c.cancelBye(p.id, round, irrevocable: irrevocable)
+              : c.reserveBye(p.id, round, points, irrevocable: irrevocable),
         );
       case 'avoid':
         final p = _pick(_players, a.arg(0)), q = _pick(_players, a.arg(1));

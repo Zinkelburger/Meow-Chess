@@ -72,9 +72,13 @@ class HistoryGraph {
   int? forwardOf(int? id) {
     final next = children[id];
     if (next == null || next.isEmpty) return null;
-    return next.reduce(
-      (a, b) => nodes[a]!.lastVisit >= nodes[b]!.lastVisit ? a : b,
-    );
+    // The most recently visited child; between equal visits the older
+    // node, so the result never depends on the order the nodes came in.
+    return next.reduce((a, b) {
+      final va = nodes[a]!.lastVisit, vb = nodes[b]!.lastVisit;
+      if (va != vb) return va > vb ? a : b;
+      return a < b ? a : b;
+    });
   }
 
   NodeStyle style(int id) => past.contains(id)
