@@ -44,33 +44,18 @@ enum RosterField {
 
 /// Decoded cells are kept as strings so IDs retain their leading zeroes.
 class RosterTable {
+  /// Reads [source] as the import window does: split on [delimiter], or on
+  /// the separator [detectSeparator] finds (none for a single column or a
+  /// one-column "Last, First" list), with `"` quoting cells.
   factory RosterTable(String source, {String? delimiter}) {
-    source = source.replaceFirst(RegExp(r'^\uFEFF'), '');
-    // A one-column "Last, First" list is not comma-separated; split on a
-    // character the text does not contain.
-    final separator =
-        delimiter ?? (_looksLikeLastFirst(source, '"') ? '\t' : null);
-    final rows = Csv(
-      dynamicTyping: false,
-      skipEmptyLines: false,
-      autoDetect: separator == null,
-      fieldDelimiter: separator ?? ',',
-    ).decode(source);
-    // The CSV decoder does not report where each record starts; count the
-    // same records here and fall back to record numbers if they disagree.
-    final split = _splitDelimited(
-      source,
-      separators: {separator ?? detectSeparator(source) ?? ','},
-      quote: '"',
-      merge: false,
-    );
-    return RosterTable._(
-      rows,
-      split.rows.length == rows.length
-          ? split.lines
-          : [for (var i = 1; i <= rows.length; i++) i],
-    );
+    final separator = delimiter ?? detectSeparator(source);
+    return RosterTable.split(source, separators: {?separator});
   }
+
+  /// Cells that are already separated, such as a web page's table; each row
+  /// is reported on its own line.
+  RosterTable.cells(List<List<String>> rows)
+    : this._(rows, [for (var i = 1; i <= rows.length; i++) i]);
 
   RosterTable._(this.rows, this.lines);
 

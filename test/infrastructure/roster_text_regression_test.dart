@@ -155,6 +155,52 @@ void main() {
     });
   });
 
+  // parseRoster once decoded with the CSV package's own delimiter guess and
+  // quote rules while the import window used RosterTable.split; the two
+  // disagreed on these files.
+  group('parseRoster reads files as the import window does', () {
+    test('semicolons win over commas inside quoted names', () {
+      const source =
+          'Name;ID\r\n'
+          '"Smith, John, Jr.";12345678\r\n'
+          '"Doe, Jane, Sr.";12345679\r\n'
+          '"Roe, Rick, III";12345670\r\n';
+      final rows = parseRoster(source);
+      expect(rows.map((r) => (r.line, r.player?.name, r.player?.memberId)), [
+        (2, 'Smith, John, Jr.', '12345678'),
+        (3, 'Doe, Jane, Sr.', '12345679'),
+        (4, 'Roe, Rick, III', '12345670'),
+      ]);
+    });
+
+    test('a quote after padding spaces opens a quoted cell', () {
+      final row = parseRoster('Name,ID\n "Smith, John", 12345678\n').single;
+      expect(
+        (row.player?.name, row.player?.memberId),
+        ('Smith, John', '12345678'),
+      );
+    });
+
+    test('a stray quote does not swallow the following rows', () {
+      final rows = parseRoster(
+        '\uFEFFName,ID\n"Bobby" Fischer,12345678\nAda,12345679\n',
+      );
+      expect(rows.map((r) => (r.line, r.player?.name)), [
+        (2, 'Bobby Fischer'),
+        (3, 'Ada'),
+      ]);
+    });
+
+    test('lines stay file lines next to quoted line breaks', () {
+      final rows = parseRoster('Name;ID\n"Multi\nLine";12345678\n\nAda;bad\n');
+      // A bad rating is a warning: the row still imports, unrated.
+      expect(rows.map((r) => (r.line, r.error, r.warnings.isEmpty)), [
+        (2, null, true),
+        (5, null, false),
+      ]);
+    });
+  });
+
   group('RosterTable.split and detectSeparator', () {
     test('doubled quotes, separators and line breaks inside quotes', () {
       expect(

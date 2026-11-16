@@ -1,4 +1,3 @@
-import 'package:csv/csv.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
 
@@ -47,14 +46,9 @@ List<ImportRow> parseWebRoster(String source) {
         .toList();
     // A caption or section heading may precede the actual column headings.
     for (var i = 0; i < rows.length; i++) {
-      final header = RosterTable(
-        Csv().encode([rows[i]]),
-        delimiter: ',',
-      ).headerColumns;
+      final header = RosterTable.cells([rows[i]]).headerColumns;
       if ([RosterField.name, RosterField.rating].every(header.containsKey)) {
-        candidates.add(
-          RosterTable(Csv().encode(rows.skip(i).toList()), delimiter: ','),
-        );
+        candidates.add(RosterTable.cells(rows.sublist(i)));
         break;
       }
     }
