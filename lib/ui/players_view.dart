@@ -750,11 +750,18 @@ class _PlayersViewState extends State<PlayersView> {
     }
   }
 
-  void printList({required Event event, required bool ranked}) => showPrint(
+  /// Prints the list as shown: with Prize standings on, the prize
+  /// standings rather than the full ones.
+  void printList({
+    required Event event,
+    required bool ranked,
+    bool forPrizes = false,
+  }) => showPrint(
     context,
     event,
     sectionId: widget.sectionId,
     kind: ranked ? ReportKind.standings : ReportKind.sections,
+    forPrizes: forPrizes,
   );
 
   void searchSubmitted() {
@@ -942,7 +949,11 @@ class _PlayersViewState extends State<PlayersView> {
         onSearchChanged: () => setState(() {}),
         onSearchSubmitted: searchSubmitted,
         onPrint: e.sections.isNotEmpty
-            ? () => printList(event: c.event!, ranked: ranked)
+            ? () => printList(
+                event: c.event!,
+                ranked: ranked,
+                forPrizes: prizeStandings && layout.prizeSection,
+              )
             : null,
         ranked: ranked,
         prizeSection: layout.prizeSection,

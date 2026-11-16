@@ -1349,10 +1349,13 @@ void showPrint(
       .whereType<int>()
       .toSet();
   final number = roundNumber ?? (numbers.length == 1 ? numbers.single : null);
+  // The prize standings are a different report from the full standings,
+  // so switching between them opens a fresh panel.
+  final id = ('print', kind, sectionId, number, forPrizes, event.revision);
   dock.show(
-    ('print', kind, sectionId, number, event.revision),
+    id,
     PrintPanel(
-      key: ValueKey(('print', kind, sectionId, number, event.revision)),
+      key: ValueKey(id),
       event: event,
       controller: dock.tournament,
       kind: kind,
