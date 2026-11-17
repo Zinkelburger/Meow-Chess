@@ -11,6 +11,7 @@ import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/ui/theme.dart';
 import 'package:meow_chess/ui/workspace.dart';
+import 'package:meow_chess/ui/workspace_toolbar.dart' show historyShortcut;
 import '../test/demo.dart';
 
 void main() {
@@ -119,7 +120,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('correction-done')));
     await tester.pumpAndSettle();
     final corrected = c.graph.head!;
-    await tester.tap(find.byTooltip('History (Ctrl+H)'));
+    await tester.tap(find.byTooltip('History ($historyShortcut)'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(ValueKey('history-$corrected')));
     await tester.pumpAndSettle();

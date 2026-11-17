@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:meow_chess/ui/theme.dart';
 import 'package:meow_chess/ui/workspace.dart';
+import 'package:meow_chess/ui/workspace_toolbar.dart' show shortcutLabel;
 import '../test/support.dart';
 
 void main() {
@@ -64,7 +65,7 @@ void main() {
     await tester.tap(find.text('Pairings').first);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('result-keys')), findsNothing);
-    expect(find.byTooltip('Find player (Ctrl+L)'), findsNothing);
+    expect(find.byTooltip('Find player (${shortcutLabel('L')})'), findsNothing);
     await capture('workspace-simplified-rounds');
     await tester.tap(find.text('Players').first);
     await tester.pumpAndSettle();

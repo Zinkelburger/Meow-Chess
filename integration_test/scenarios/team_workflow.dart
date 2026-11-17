@@ -43,6 +43,9 @@ void registerTeamWorkflowTests() {
         'Name,Rating,US Chess ID\n${List.generate(6, (i) => 'Sibling $i,${1800 - i * 50},${12000000 + i}').join('\n')}',
       );
       await tester.pumpAndSettle();
+      // A short window (GitHub's Macs) scrolls the side panel to reach it.
+      await tester.ensureVisible(find.text('Review import'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Review import'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('confirm-roster-import')));

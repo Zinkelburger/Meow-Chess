@@ -10,6 +10,7 @@ import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/ui/theme.dart';
 import 'package:meow_chess/ui/workspace.dart';
+import 'package:meow_chess/ui/workspace_toolbar.dart' show historyShortcut;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -61,7 +62,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('History (Ctrl+H)'));
+    await tester.tap(find.byTooltip('History ($historyShortcut)'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(ValueKey('history-$bye')));
     await tester.pumpAndSettle();
