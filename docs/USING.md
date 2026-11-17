@@ -3,6 +3,37 @@
 How the main screens work, in the order a TD meets them. For the day as a
 whole, see [a tournament day, in order](TD_DAY.md).
 
+## On a Mac
+
+Download `meow-chess-…-macos.zip` from
+[Releases](https://github.com/Zinkelburger/Meow-Chess/releases) (macOS 12 or
+later, Apple Silicon or Intel). Open the zip if the browser has not already, and
+drag **Meow Chess** into Applications.
+
+Meow Chess is not signed by an Apple developer account, so the first time, the
+Mac will not open it:
+
+1. Double-click Meow Chess. The Mac says it could not verify the app. Click
+   **Done**, not Move to Trash.
+2. Open **System Settings → Privacy & Security**, scroll down to the line about
+   Meow Chess and click **Open Anyway**, within an hour of step 1.
+3. Click **Open Anyway** again in the window that appears, and enter your Mac
+   password if asked.
+
+From then on it opens like any other app, and double-clicking a `.meow` file
+opens it in Meow Chess. Each new version asks once more.
+
+If there is no Open Anyway button, or the Mac says the app is damaged, open
+Terminal and run this, then double-click the app again:
+
+```
+xattr -dr com.apple.quarantine "/Applications/Meow Chess.app"
+```
+
+The [browser version](https://chessautoprep.com/meow-chess/) needs no install.
+On a Mac, use it in Chrome or Firefox: Safari can delete its events after
+seven days without a visit.
+
 ## Start
 
 Start with **New tournament** to create an event, then add or import players.

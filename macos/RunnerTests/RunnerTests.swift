@@ -6,15 +6,11 @@ import XCTest
 
 class RunnerTests: XCTestCase {
 
-  // The shipped app is sandboxed, and the bookmark and publication paths differ
-  // inside the sandbox. CI builds the test host unsigned, because GitHub's macOS
-  // runners cannot launch the ad hoc signed, sandboxed host; the sandbox paths
-  // are covered by running this scheme from Xcode, where this test asserts.
-  func testHostRunsInsideTheAppSandbox() throws {
-    try XCTSkipIf(
-      ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] == nil,
-      "the test host is unsigned, so the App Sandbox is off; run from Xcode to cover it")
-  }
+  // The app ships without the App Sandbox: it is not signed by an Apple
+  // developer account, so it cannot be in the Mac App Store, the one place the
+  // sandbox is required (scripts/lint.py keeps it off). The bookmark and grant
+  // code below is kept for a sandboxed build; these tests run it unsandboxed,
+  // as the app ships.
 
   func testFileAndFolderBookmarksSurviveStoreRecreation() throws {
     let manager = FileManager.default

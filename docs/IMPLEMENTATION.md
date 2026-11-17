@@ -202,10 +202,12 @@ from source reports and the remaining portal-validation boundary.
   Import has header inference, not a custom column-mapping
   editor. Prize-class filtering is available on screen and in printed standings;
   automated prize allocation remains separate unfinished work.
-- Full macOS workflow and sandbox qualification, signing/notarization, real printer
-  testing on each OS and working-TD usability rehearsal. Linux/Windows native
-  workflows and recovery, Windows installer launch, and macOS artifact publication
-  have automated gates described in [TESTING.md](TESTING.md).
+- Signing/notarization (the Mac download is unsigned by any Apple developer
+  account, so a Mac asks once before opening it), a first launch on a real Mac,
+  real printer testing on each OS and working-TD usability rehearsal. Native
+  workflows and recovery on Linux, Windows and macOS, the Windows installer and
+  the Mac download's launch have automated gates described in
+  [TESTING.md](TESTING.md).
 - Later tranches: team matches, native SwissSys interchange, FIDE endorsement and
   hosted services. FIDE-rated sections (Dutch pairings with Baku acceleration, all
   MTB26 tie-breaks, TRF26 reports and TRF import, the FIDE rating list, and a

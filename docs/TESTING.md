@@ -1,27 +1,37 @@
 # Release qualification and local tests
 
 CI is the release gate, with independent jobs on Ubuntu 22.04, Windows Server
-2022 and Windows Server 2025. Each runs analysis, architecture/link lint, all
+2022, Windows Server 2025 and macOS 15 (Apple Silicon). Each runs analysis, architecture/link lint, all
 unit/widget tests, independent DBF decoding, abrupt-termination recovery and the
 native Flutter desktop integration tests. A failed job blocks the release build.
-The Linux and Windows jobs also compile and exercise the MCP server through its
-portable Dart launcher, using a different working directory and Unicode paths.
-A separate macOS job compiles the app and exercises Foundation staging,
-exclusive publication, replacement, bookmark restoration and the Dart event-save
-boundary. Its test host is built unsigned, so the App Sandbox is off there:
-GitHub's macOS runners cannot launch the ad hoc signed, sandboxed host. Running
-the Runner scheme's tests from Xcode covers the sandboxed paths. That job does
-not qualify the full macOS tournament workflow
-or replace a manual save-dialog sandbox test outside the app container.
-That manual test must create an event outside the container, save a copy, choose
-an external backup folder, restart the app, reopen from Recent events and verify
-a new automatic backup without selecting either path again. Also verify that a
-disconnected backup volume reports a backup failure without preventing event
-editing, and that reconnecting and restarting restores its grant. While that
-event is open, `club.meow-wal` must appear beside it and the workspace must not
-warn that crash protection is unavailable: Info.plist declares SQLite's
-`-wal`/`-shm`/`-journal` files as related items and `SQLiteSidecarPresenter`
-extends the event's grant to them, which the unsandboxed XCTests cannot prove.
+Every job also compiles and exercises the MCP server through its portable Dart
+launcher, using a different working directory and Unicode paths. The macOS job
+also runs the Swift tests for Foundation staging, exclusive publication,
+replacement, bookmark restoration and SQLite's journal beside an event.
+
+GitHub's Macs will not launch an ad hoc signed debug app, so the macOS job
+builds its test app unsigned. The Mac download is ad hoc signed, as shipped,
+and [the macOS build](../.github/workflows/macos-build.yml) unzips it, checks
+its signature, version, architectures and file type, opens it and waits for its
+window, then quits it. When GitHub is short of Macs, a macOS job can wait in the
+queue until it is cancelled; that is not a test failure, and **Re-run failed
+jobs** tries again.
+
+The Mac app ships without the App Sandbox. The sandbox is required only in the
+Mac App Store, which needs an Apple developer account, and GitHub's Macs cannot
+launch a sandboxed app without one, so nothing could test it. `scripts/lint.py`
+refuses entitlements that turn it on. The bookmark and grant code for a
+sandboxed build is still there and still tested, unsandboxed.
+
+What CI cannot do on a Mac is the first launch of a download, because the Mac
+asks a person before opening an app from outside the App Store. Before telling
+TDs about a release's Mac download, someone with a Mac downloads it from the
+release page in a browser, follows the steps in
+[the workspace guide](USING.md#on-a-mac), creates an event in the Documents
+folder, saves a copy and chooses a backup folder, prints a pairing sheet, then
+quits and reopens the event from Recent events. The Mac may ask once whether
+Meow Chess can use the Documents folder; nothing else should ask, and the
+workspace must not warn that crash protection is unavailable.
 The workflow runs on every push to `main`, and can also run manually from
 Actions → CI without publishing anything. All work is committed directly to
 `main`; the project does not use feature branches.
@@ -349,7 +359,7 @@ printer, job submission and a printer that has gone away.
 |---|---|---|
 | Linux | A private `cupsd` on its own socket and a raw queue, needing no root and able to reach no real printer | The job leaves the plugin byte for byte |
 | Windows (CI only) | Microsoft Print To PDF on a file port, set to Letter | The job survives the GDI print path; with Paper set to A4, the sheet is laid out again for the Letter tray and comes out whole |
-| macOS (CI only) | A raw queue on the system CUPS, without the app sandbox | The job survives the Quartz print path |
+| macOS (CI only) | A queue on the system CUPS with the generic driver | The job survives the Quartz print path |
 | Flatpak (CI) | The private `cupsd`, with `meow_chess --list-printers` run from the built bundle | The sandbox lets the app see printers |
 
 The queue is named `meow-virtual`, and the test refuses any other, so a local run
@@ -368,7 +378,7 @@ sheet and a wall chart on each, and check that nothing is cut off at any edge:
 - A printer shared from another Windows computer
 - An inkjet, whose bottom margin is the largest
 - A Linux driverless (IPP Everywhere) printer, from the `.deb` and the Flatpak
-- A sandboxed, signed macOS build, if macOS is shipping
+- The Mac download, on any printer a Mac can see
 - Letter on a Letter tray, A4 on an A4 tray, and Letter on an A4 tray
 - Copies and two-sided printing through **Copies and options…**
 - Printer off, out of paper, and unplugged after being saved: the app must say so

@@ -6,6 +6,13 @@ version at https://chessautoprep.com/meow-chess/ follows the latest release.
 
 ## Unreleased
 
+- **Mac download.** Releases now include a Mac app (macOS 12 or later). It is
+  not signed by an Apple developer account, so the Mac asks once before opening
+  it; [the workspace guide](USING.md#on-a-mac) shows how. It runs without the
+  App Sandbox, which only the Mac App Store requires. CI now runs every test on
+  a Mac, including a tournament day in the real app, and opens the download
+  before each release.
+
 Fixes from an October review that never reached a release:
 
 - **Prizes:** when a tied player takes a larger points prize, they leave the
@@ -37,8 +44,7 @@ Fixes from an October review that never reached a release:
 - **Automation:** create_section refuses withdrawn players, duplicates and
   more than 32 rounds, and errors say what is allowed.
 - **Files:** reopening an event no longer leaves a -shm file beside it; the
-  Linux save dialog no longer blocks the app; the Mac sandbox build keeps SQLite's
-  journal beside the event (not yet checked on a Mac).
+  Linux save dialog no longer blocks the app.
 
 ## 1.5.1 — November 12, 2026
 

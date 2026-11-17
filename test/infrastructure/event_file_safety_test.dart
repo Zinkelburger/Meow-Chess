@@ -97,7 +97,10 @@ void main() {
       'the recovery file, ${truncated.toStringAsFixed(2)} ms with the '
       'recovery file emptied after it',
     );
-    expect(truncated, lessThan(50));
+    // CI disks differ fiftyfold (a plain save took 0.3 ms on one runner and
+    // 24 ms on another), so the checkpoint is measured against a plain save on
+    // the same disk. It has cost two to five plain saves.
+    expect(truncated, lessThan(plain * 6 + 10));
   });
 
   test('a preference can be forgotten', () {

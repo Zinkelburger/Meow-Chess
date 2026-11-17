@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import unittest
 
-from lint import architecture_issues, print_permission_issues, release_issues, whitespace_issues
+from lint import architecture_issues, mac_sandbox_issues, print_permission_issues, release_issues, whitespace_issues
 
 
 def write_metainfo(root, *versions):
@@ -15,20 +15,26 @@ def write_metainfo(root, *versions):
 
 
 class PrintPermissionTest(unittest.TestCase):
-    def tree(self, root, flatpak='--socket=cups', entitlement='com.apple.security.print'):
-        manifest = root / 'packaging/flatpak/org.meowchess.meow_chess.yml'
-        manifest.parent.mkdir(parents=True)
-        manifest.write_text(flatpak, encoding='utf-8')
-        (root / 'macos/Runner').mkdir(parents=True)
-        (root / 'macos/Runner/DebugProfile.entitlements').write_text(entitlement, encoding='utf-8')
-        (root / 'macos/Runner/Release.entitlements').write_text(entitlement, encoding='utf-8')
-
-    def test_both_sandboxes_must_allow_printing(self):
-        for options, count in [({}, 0), ({'flatpak': ''}, 1), ({'entitlement': ''}, 2)]:
-            with self.subTest(options=options), tempfile.TemporaryDirectory() as temp:
+    def test_the_flatpak_must_reach_printers(self):
+        for flatpak, count in [('--socket=cups', 0), ('', 1)]:
+            with self.subTest(flatpak=flatpak), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp).resolve()
-                self.tree(root, **options)
+                manifest = root / 'packaging/flatpak/org.meowchess.meow_chess.yml'
+                manifest.parent.mkdir(parents=True)
+                manifest.write_text(flatpak, encoding='utf-8')
                 self.assertEqual(len(print_permission_issues(root)), count)
+
+
+class MacSandboxTest(unittest.TestCase):
+    def test_neither_mac_build_may_turn_on_the_sandbox(self):
+        sandbox = '<key>com.apple.security.app-sandbox</key><true/>'
+        for debug, release, count in [('', '', 0), (sandbox, '', 1), (sandbox, sandbox, 2)]:
+            with self.subTest(debug=debug, release=release), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp).resolve()
+                (root / 'macos/Runner').mkdir(parents=True)
+                (root / 'macos/Runner/DebugProfile.entitlements').write_text(debug, encoding='utf-8')
+                (root / 'macos/Runner/Release.entitlements').write_text(release, encoding='utf-8')
+                self.assertEqual(len(mac_sandbox_issues(root)), count)
 
 
 class ArchitectureTest(unittest.TestCase):

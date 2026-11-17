@@ -8,10 +8,11 @@ US Chess first, with FIDE-rated sections too. Free software (AGPLv3).
 
 - **In a browser:** https://chessautoprep.com/meow-chess/ (events stay in the
   browser; download a `.meow` copy to keep or to open on the desktop).
-- **Desktop, Linux and Windows:** installers and portable bundles on
+- **Desktop, Linux, Windows and Mac:** installers and portable bundles on
   [Releases](https://github.com/Zinkelburger/Meow-Chess/releases). Every
   package opens `.meow` files on double-click; the portable zips offer to set
-  that up on first launch.
+  that up on first launch. The Mac app asks once before it first opens
+  ([how to open it](docs/USING.md#on-a-mac)).
 
 ## What it does
 

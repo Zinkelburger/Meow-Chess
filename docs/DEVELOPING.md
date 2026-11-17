@@ -21,8 +21,8 @@ library location for isolated testing.
 
 Every push to `main` runs [ci.yml](../.github/workflows/ci.yml): analysis,
 lint, all tests, independent DBF decoding, abrupt-termination recovery and the
-native desktop integration tests on Ubuntu 22.04, Windows Server 2022 and
-Windows Server 2025, plus a macOS job for file publication and bookmarks.
+native desktop integration tests on Ubuntu 22.04, Windows Server 2022,
+Windows Server 2025 and macOS 15, plus the Swift file-handling tests on macOS.
 [Release qualification](TESTING.md) describes each job and the manual checks
 that remain. All work lands on `main`; the project does not use feature
 branches.
@@ -39,10 +39,11 @@ git tag v1.5.1 && git push origin main v1.5.1
 
 The lint refuses a tag that does not match the package version. Pushing the
 tag runs [release.yml](../.github/workflows/release.yml): the CI gate, then a
-GitHub Release with a Windows setup `.exe` and portable zip, and Linux `.deb`,
-`.rpm`, `.flatpak` and portable zip, plus checksums. A tag with a dash
-(`v1.3.1-rc1`) is published as a pre-release. The Windows build alone can be
-tried from Actions → Windows build → Run workflow.
+GitHub Release with a Windows setup `.exe` and portable zip, Linux `.deb`,
+`.rpm`, `.flatpak` and portable zip, and a Mac zip, plus checksums. A tag with
+a dash (`v1.3.1-rc1`) is published as a pre-release. The Windows and Mac builds
+can each be tried alone from Actions → Windows build or macOS build → Run
+workflow.
 
 ## The browser version
 

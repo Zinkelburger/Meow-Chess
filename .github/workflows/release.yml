@@ -3,7 +3,8 @@
 #   git tag v0.2.0 && git push origin v0.2.0
 #
 # Linux: portable zip, .deb, .rpm and .flatpak. Windows: portable zip and a
-# setup .exe. All downloads and checksums are published without a description.
+# setup .exe. macOS: the app in a zip. All downloads and checksums are
+# published without a description.
 
 name: Release
 
@@ -166,8 +167,14 @@ jobs:
     with:
       version: ${{ github.ref_name }}
 
+  build-macos:
+    needs: quality-gate
+    uses: ./.github/workflows/macos-build.yml
+    with:
+      version: ${{ github.ref_name }}
+
   release:
-    needs: [build-linux, test-rpm, build-windows]
+    needs: [build-linux, test-rpm, build-windows, build-macos]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
