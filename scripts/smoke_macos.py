@@ -79,6 +79,9 @@ def open_and_quit(executable, data_dir):
         deadline = time.monotonic() + 30
         while not has_window(app.pid):
             if app.poll() is not None:
+                if app.returncode == -9:
+                    return ('the Mac killed the app as it started, which it does to an ad hoc '
+                            'signed app that claims an entitlement needing a developer account')
                 return f'the app exited before opening a window: {app.returncode}'
             if time.monotonic() > deadline:
                 return 'the app did not open a window within 30 seconds'

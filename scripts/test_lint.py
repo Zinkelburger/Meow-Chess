@@ -36,6 +36,15 @@ class MacSandboxTest(unittest.TestCase):
                 (root / 'macos/Runner/Release.entitlements').write_text(release, encoding='utf-8')
                 self.assertEqual(len(mac_sandbox_issues(root)), count)
 
+    def test_neither_mac_build_may_claim_a_developer_account_entitlement(self):
+        for key in ['keychain-access-groups', 'com.apple.developer.icloud-services']:
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp).resolve()
+                (root / 'macos/Runner').mkdir(parents=True)
+                (root / 'macos/Runner/DebugProfile.entitlements').write_text(f'<key>{key}</key>', encoding='utf-8')
+                (root / 'macos/Runner/Release.entitlements').write_text('', encoding='utf-8')
+                self.assertEqual(len(mac_sandbox_issues(root)), 1)
+
 
 class ArchitectureTest(unittest.TestCase):
     def test_nested_relative_and_package_imports_cannot_cross_layers(self):

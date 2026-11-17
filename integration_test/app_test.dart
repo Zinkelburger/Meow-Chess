@@ -16,7 +16,12 @@ import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:meow_chess/infrastructure/reports.dart';
 import 'package:meow_chess/ui/theme.dart';
 import 'package:meow_chess/ui/workspace.dart';
+import 'package:meow_chess/ui/workspace_toolbar.dart' show macShortcuts;
 import 'package:pdf/widgets.dart' as pw;
+
+/// The workspace's shortcut modifier: Cmd on a Mac, Ctrl elsewhere.
+LogicalKeyboardKey get commandKey =>
+    macShortcuts ? LogicalKeyboardKey.meta : LogicalKeyboardKey.control;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -183,9 +188,9 @@ void main() {
             await screenshot('print-docked');
             await tester.tap(find.byTooltip('Close (Esc)'));
             await tester.pumpAndSettle();
-            await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+            await tester.sendKeyDownEvent(commandKey);
             await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
-            await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
+            await tester.sendKeyUpEvent(commandKey);
             await tester.pumpAndSettle();
             await tester.enterText(
               find.byKey(const ValueKey('lookup-query')),
@@ -193,9 +198,9 @@ void main() {
             );
             await tester.pumpAndSettle();
             await screenshot('lookup-docked');
-            await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+            await tester.sendKeyDownEvent(commandKey);
             await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
-            await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
+            await tester.sendKeyUpEvent(commandKey);
             await tester.pumpAndSettle();
           }
         }

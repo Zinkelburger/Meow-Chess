@@ -66,17 +66,28 @@ def print_permission_issues(root):
     return []
 
 
+# Entitlements only a provisioning profile from an Apple developer account can
+# grant. The Mac kills an ad hoc signed app that claims one as it starts.
+RESTRICTED_ENTITLEMENTS = ['keychain-access-groups', 'com.apple.application-identifier',
+                           'com.apple.developer.']
+
+
 def mac_sandbox_issues(root):
     """The Mac app ships unsandboxed, because nothing could test it sandboxed.
 
     GitHub's Macs will not launch a sandboxed app without an Apple developer
-    certificate, and the project has none (docs/TESTING.md).
+    certificate, and the project has none (docs/TESTING.md). Nor may it claim
+    an entitlement that needs one.
     """
     issues = []
     for name in ['DebugProfile', 'Release']:
         file = root / f'macos/Runner/{name}.entitlements'
-        if 'com.apple.security.app-sandbox' in file.read_text(encoding='utf-8'):
+        text = file.read_text(encoding='utf-8')
+        if 'com.apple.security.app-sandbox' in text:
             issues.append(f'{file.relative_to(root)}: turns on the App Sandbox, which CI cannot launch or test')
+        for key in RESTRICTED_ENTITLEMENTS:
+            if f'<key>{key}' in text:
+                issues.append(f'{file.relative_to(root)}: claims {key}, so the Mac kills the unsigned app at launch')
     return issues
 
 

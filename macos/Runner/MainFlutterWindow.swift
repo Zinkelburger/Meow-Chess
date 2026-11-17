@@ -7,6 +7,8 @@ class MainFlutterWindow: NSWindow {
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
+    // 1280x720, as on Linux and Windows (MainMenu.xib), in the middle of the screen.
+    self.center()
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     ArtifactFileChannel.register(with: flutterViewController.engine.binaryMessenger)

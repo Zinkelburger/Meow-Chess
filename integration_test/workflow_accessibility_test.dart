@@ -12,8 +12,13 @@ import 'package:meow_chess/ui/player_panel.dart';
 import 'package:meow_chess/ui/results_view.dart';
 import 'package:meow_chess/ui/theme.dart';
 import 'package:meow_chess/ui/workspace.dart';
-import 'package:meow_chess/ui/workspace_toolbar.dart' show keyboardHelpShortcut;
+import 'package:meow_chess/ui/workspace_toolbar.dart'
+    show keyboardHelpShortcut, macShortcuts;
 import '../test/support.dart';
+
+/// The workspace's shortcut modifier: Cmd on a Mac, Ctrl elsewhere.
+LogicalKeyboardKey get commandKey =>
+    macShortcuts ? LogicalKeyboardKey.meta : LogicalKeyboardKey.control;
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -119,9 +124,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(c.event!.games.first.outcome, Outcome.blackWin);
       await capture('workflow-results-200');
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
+      await tester.sendKeyDownEvent(commandKey);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
+      await tester.sendKeyUpEvent(commandKey);
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const ValueKey('lookup-query')), '#1');
       await tester.pumpAndSettle();

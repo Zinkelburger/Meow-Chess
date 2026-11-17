@@ -135,12 +135,16 @@ jobs:
           # passes FLUTTER_XCODE_* on to xcodebuild. The release download is
           # launched signed, as shipped, by the macOS build workflow.
           FLUTTER_XCODE_CODE_SIGNING_ALLOWED: 'NO'
+        # Every file runs even after one fails, so one run shows every
+        # difference on a platform nobody here tests by hand.
         run: |
+          failed=0
           for target in integration_test/*_test.dart; do
             name=$(basename "$target" .dart)
             flutter test "$target" -d macos --reporter expanded \
-              --file-reporter "json:artifacts/desktop-$name.json"
+              --file-reporter "json:artifacts/desktop-$name.json" || failed=1
           done
+          exit $failed
       # Swift code the Dart tests reach only through a channel: staging and
       # exclusive publication of saved files, bookmarks for recent events and
       # the backup folder, and SQLite's journal beside an event.

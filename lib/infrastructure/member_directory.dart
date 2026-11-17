@@ -10,7 +10,12 @@ import '../domain/member_observation.dart';
 import 'diagnostic_log.dart';
 import 'ratings_api.dart' show RatingsApi;
 
-const _secure = FlutterSecureStorage();
+// The Mac's data protection keychain needs an entitlement only an Apple
+// developer account can grant, and the Mac app has none; the login keychain
+// works for any app.
+const _secure = FlutterSecureStorage(
+  mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+);
 const _keyName = 'uschess-v2';
 
 var _keychainFailureRecorded = false;
