@@ -4,7 +4,7 @@ Downloads for each version are on
 [Releases](https://github.com/Zinkelburger/Meow-Chess/releases); the browser
 version at https://chessautoprep.com/meow-chess/ follows the latest release.
 
-## Unreleased
+## 1.6.0 — November 23, 2026
 
 - **Entered or US Chess rating, one click.** After **Refresh from US
   Chess**, the Players table keeps both numbers for everyone it found:
