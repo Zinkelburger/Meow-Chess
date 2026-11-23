@@ -22,6 +22,7 @@ import '../domain/rulings.dart';
 import '../domain/section_placement.dart';
 import '../domain/model.dart';
 import '../domain/member_observation.dart';
+import '../domain/rating_choice.dart';
 import '../domain/rating_update.dart';
 import '../domain/ladder.dart';
 import '../domain/pairing.dart';

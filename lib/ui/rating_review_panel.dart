@@ -56,6 +56,10 @@ class RatingReviewPanel extends StatelessWidget {
           .length;
       final names = players.where(draft.nameMismatch).toList();
       final noIds = players.where(draft.missingId).toList();
+      // The rows the table marks, here with the reason in words.
+      final large = players
+          .where((p) => draft.largeChange(p) && draft.problem(p) == null)
+          .toList();
       final approved = draft.approved.length;
       return KeyedSubtree(
         key: const ValueKey('rating-review'),
@@ -150,6 +154,31 @@ class RatingReviewPanel extends StatelessWidget {
                   name: p.name,
                   detail:
                       'US Chess: ${draft.observations[p.id]!.name} · ${p.memberId}',
+                  onOpen: () => onOpenPlayer(p.id),
+                ),
+            ],
+            if (large.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              _Heading('Large rating changes (${large.length})'),
+              Padding(
+                padding: const EdgeInsets.only(left: 26, bottom: 4),
+                child: Text(
+                  'More than 50 points from the entered rating, or a first '
+                  'rating.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              for (final p in large)
+                _PlayerLink(
+                  key: ValueKey('large-change-${p.id}'),
+                  name: p.name,
+                  detail: p.rating == 0
+                      ? 'UNR → ${draft.proposed(p)} · first rating'
+                      : '${p.rating} → ${draft.proposed(p)} · '
+                            '${ratingChange(draft, p)}',
                   onOpen: () => onOpenPlayer(p.id),
                 ),
             ],

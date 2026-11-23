@@ -345,6 +345,8 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
       title: 'New section',
       onClose: widget.onClose,
       footer: [
+        // Down here beside Create, so typing never pushes the form down.
+        DraftStatus(draft: draft),
         if (error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -377,7 +379,6 @@ class _NewSectionPanelState extends State<NewSectionPanel> {
         ),
       ],
       children: [
-        DraftStatus(draft: draft),
         Text('Who goes in', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         _ChoiceGroup(

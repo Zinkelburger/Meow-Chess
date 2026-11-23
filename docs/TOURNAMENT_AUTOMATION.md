@@ -69,6 +69,11 @@ reported as tool errors. Scores and bye values are integer half-points: 1 means
 half a point, 2 means one point, and an allocated double-game bye awards 4.
 Sonneborn–Berger values in the structured standings are quarter-points.
 
+`check_event` reads the same check as the GUI's Check event button, for the
+whole event or one `sectionId`: findings with a `level` of `fix`, `look` or
+`note`, every check with whether it ran and its verdict, and each Swiss round's
+pairing quality as `count`/`of` tallies. It changes nothing.
+
 `standings`, `rating_preflight`, `export_event`, `backup_event`, `undo` and `redo`
 complete the workflow. Exports produce event JSON, standings CSV, a text
 crosstable, a text wall chart and preflight JSON. The three DBFs and a `manifest.json` (marked

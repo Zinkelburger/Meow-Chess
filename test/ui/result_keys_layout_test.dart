@@ -66,13 +66,10 @@ void main() {
     expect(white(typed('٠', PhysicalKeyboardKey.digit0)), Outcome.blackWin);
     // A letter of that layout on any other key is still not a result.
     expect(white(typed('й', PhysicalKeyboardKey.keyQ)), isNull);
-    // A forfeit board refuses the draw key there too.
+    // On a forfeit board the draw key is a played draw there too.
     expect(
-      refusedOnForfeit(
-        typed('в', PhysicalKeyboardKey.keyD),
-        Outcome.whiteForfeit,
-      ),
-      isTrue,
+      white(typed('в', PhysicalKeyboardKey.keyD), Outcome.whiteForfeit),
+      Outcome.draw,
     );
   });
 

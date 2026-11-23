@@ -59,6 +59,13 @@ List<Game> boards(TournamentController c) =>
     [...c.event!.sections.single.rounds.last.games]
       ..sort((a, b) => a.board.compareTo(b.board));
 
+/// Opens the Change pairings menu.
+Future<void> openChange(WidgetTester tester) async {
+  if (find.byKey(const ValueKey('edit-pairings')).evaluate().isNotEmpty) return;
+  await tester.tap(find.byKey(const ValueKey('change-pairings')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   final toolbar = find.byKey(const ValueKey('repair-unstarted'));
   final apply = find.byKey(const ValueKey('apply-repair'));
@@ -70,8 +77,16 @@ void main() {
     final before = boards(c);
     await mount(tester, c, sectionId: section.id);
     // Offered beside Edit pairings as soon as the round is posted.
-    expect(find.byKey(const ValueKey('edit-pairings')), findsOneWidget);
-    expect(tester.widget<TextButton>(toolbar).onPressed, isNotNull);
+    await openChange(tester);
+    expect(
+      tester
+          .widget<MenuItemButton>(find.byKey(const ValueKey('edit-pairings')))
+          .onPressed,
+      isNotNull,
+    );
+    expect(tester.widget<MenuItemButton>(toolbar).onPressed, isNotNull);
+    await tester.tap(find.byKey(const ValueKey('change-pairings')));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('repair-notice')), findsNothing);
 
     // One result in: swapping is over, re-pairing the rest is not.
@@ -79,8 +94,16 @@ void main() {
     final gone = c.event!.player(before[2].white);
     c.setWithdrawn([gone.id], true);
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('edit-pairings')), findsNothing);
-    expect(tester.widget<TextButton>(toolbar).onPressed, isNotNull);
+    await openChange(tester);
+    expect(
+      tester
+          .widget<MenuItemButton>(find.byKey(const ValueKey('edit-pairings')))
+          .onPressed,
+      isNull,
+    );
+    expect(tester.widget<MenuItemButton>(toolbar).onPressed, isNotNull);
+    await tester.tap(find.byKey(const ValueKey('change-pairings')));
+    await tester.pumpAndSettle();
     expect(
       find.text('${gone.name} withdrew but is still on board 3.'),
       findsOneWidget,
@@ -164,6 +187,7 @@ void main() {
     final c = await secondRound(tester);
     final section = c.event!.sections.single;
     await mount(tester, c, sectionId: section.id);
+    await openChange(tester);
     await tester.tap(toolbar);
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -199,19 +223,28 @@ void main() {
     // An earlier round: not offered.
     await tester.tap(find.widgetWithText(ChoiceChip, '1'));
     await tester.pumpAndSettle();
-    expect(toolbar, findsNothing);
+    expect(find.byKey(const ValueKey('change-pairings')), findsNothing);
     await tester.tap(find.widgetWithText(ChoiceChip, '2'));
     await tester.pumpAndSettle();
+    await openChange(tester);
     expect(toolbar, findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('change-pairings')));
+    await tester.pumpAndSettle();
     // Every board has a result: it stays in place, unavailable.
     for (final g in boards(c)) {
       c.recordResult(g.id, Outcome.draw);
     }
     await tester.pumpAndSettle();
-    expect(tester.widget<TextButton>(toolbar).onPressed, isNull);
+    await openChange(tester);
+    expect(tester.widget<MenuItemButton>(toolbar).onPressed, isNull);
     // Every section at once: not offered.
     await mount(tester, c);
-    expect(toolbar, findsNothing);
+    expect(
+      tester
+          .widget<OutlinedButton>(find.byKey(const ValueKey('change-pairings')))
+          .onPressed,
+      isNull,
+    );
     await tester.pumpWidget(const SizedBox());
   });
 

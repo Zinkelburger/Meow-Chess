@@ -68,7 +68,7 @@ Map<String, String> sectionValues(Section? section) {
   final values = <String, String>{
     'name': s?.name ?? '',
     'format': (s?.format ?? Format.swiss).name,
-    'rounds': s == null ? '' : '${s.plannedRounds}',
+    'rounds': s == null || s.roundsUnset ? '' : '${s.plannedRounds}',
     'board': s == null ? '' : '${s.boardStart}',
     'timeControl': s?.timeControl ?? '',
     'ratingCeiling': s == null || s.ratingCeiling == 0
@@ -323,6 +323,8 @@ Section applySectionValues(
     avoidTeammates: n.avoidTeammates,
     variations: n.variations,
     plannedRounds: n.rounds,
+    // Saving the form states the rounds, whoever named the section.
+    roundsUnset: false,
     boardStart: n.board ?? section.boardStart,
     ratingCeiling: n.ratingCeiling,
     ratingFloor: n.ratingFloor,
@@ -1986,6 +1988,11 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
       title: '${s.name} settings',
       onClose: close,
       footer: [
+        // Down here beside Save, so typing never pushes the form down.
+        DraftStatus(
+          draft: draft,
+          pending: 'Not saved yet · saves when this panel closes',
+        ),
         if (error != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -2022,10 +2029,6 @@ class _SectionSettingsPanelState extends State<SectionSettingsPanel> {
         ),
       ],
       children: [
-        DraftStatus(
-          draft: draft,
-          pending: 'Not saved yet · saves when this panel closes',
-        ),
         SectionFormFields(
           controller: c,
           current: s,

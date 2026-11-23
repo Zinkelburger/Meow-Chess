@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -7,16 +8,22 @@ import 'package:flutter/services.dart';
 import '../application/event_repository.dart';
 import '../application/member_lookup.dart';
 import '../application/tournament_controller.dart';
+import '../domain/announcement.dart';
 import '../domain/model.dart';
 import '../infrastructure/member_directory.dart';
 import '../infrastructure/remembered_printing.dart';
 import '../infrastructure/reports.dart' show ReportKind;
 import '../infrastructure/roster_import.dart' show ImportRow;
+import '../infrastructure/scoreboard.dart';
 import '../infrastructure/sqlite_event_repository.dart';
 import 'dialogs.dart';
+import 'check_panel.dart';
 import 'event_panel.dart';
 import 'help_panel.dart';
 import 'history_panel.dart';
+import 'keyboard_help.dart';
+import 'live_results.dart';
+import 'notes_panel.dart';
 import 'pairing_review.dart';
 import 'panels.dart';
 import 'players_view.dart';
@@ -25,8 +32,10 @@ import 'rating_refresh.dart';
 import 'reports_view.dart';
 import 'results_view.dart';
 import 'rulings_panel.dart';
+import 'scoreboard_panel.dart';
 import 'section_tabs.dart';
 import 'selection_keys.dart';
+import 'setup_panel.dart';
 import 'side_game_panel.dart';
 import 'side_panel.dart';
 import 'update_panels.dart';
@@ -46,6 +55,8 @@ class Workspace extends StatefulWidget {
     this.onOpenCopy,
     this.ratingLookup,
     this.rosterLoader,
+    this.announcementLoader,
+    this.resultsLoader,
     this.printing,
     super.key,
   });
@@ -57,6 +68,12 @@ class Workspace extends StatefulWidget {
   final ValueChanged<String>? onOpenCopy;
   final MemberLookup? ratingLookup;
   final Future<List<ImportRow>> Function(String)? rosterLoader;
+
+  /// Reads what a club's event page announces; tests pass their own.
+  final Future<Announcement?> Function(String)? announcementLoader;
+
+  /// Reads the club website's results page; tests pass their own.
+  final PostedResultsLoader? resultsLoader;
 
   /// The printing service for direct prints; tests pass their own.
   final RememberedPrinting? printing;
@@ -75,6 +92,10 @@ class _WorkspaceState extends State<Workspace> {
 
   /// Event details, backups and copies, docked at the right.
   bool eventOpen = false;
+
+  /// The scoreboard, made when its panel first opens. It keeps serving
+  /// while the panel is closed and stops with the event.
+  Scoreboard? scoreboard;
   final sectionScroll = ScrollController();
   (Size, double)? sectionViewport;
   final workspaceFocus = FocusNode(debugLabel: 'workspace');
@@ -87,6 +108,17 @@ class _WorkspaceState extends State<Workspace> {
   late final ratingRefresh = RatingRefresh(
     c,
     lookup: widget.ratingLookup ?? fetchMember,
+  );
+
+  /// Results from the club website, entered as they come in on any page.
+  late final liveResults = LiveResults(
+    c,
+    loader: widget.resultsLoader,
+    // Pairings being made must not find the event changed under them.
+    hold: () => pairing || c.pairingUnderWay,
+    onTaken: (message) {
+      if (mounted) showUndoNotice(context, c, message);
+    },
   );
   Timer? clock;
 
@@ -102,7 +134,7 @@ class _WorkspaceState extends State<Workspace> {
   void initState() {
     super.initState();
     c.addListener(eventChanged);
-    ratingRefresh.addListener(refresh);
+    ratingRefresh.addListener(ratingsChanged);
     c.workspaceState.addListener(stateChanged);
     dock.addListener(dockChanged);
     dock.printStatus.addListener(printStatusChanged);
@@ -118,17 +150,34 @@ class _WorkspaceState extends State<Workspace> {
     }
     historyOpen = c.workspaceState.read('historyPanel') == 'open';
     if (historyOpen) dock.claim('history');
+    liveResults.resume();
     clock = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
+      if (mounted) setState(() => minutes++);
     });
+  }
+
+  // New settings from the app, or new code while developing, reach every
+  // region.
+  @override
+  void didUpdateWidget(Workspace old) {
+    super.didUpdateWidget(old);
+    _kept.clear();
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    _kept.clear();
   }
 
   @override
   void dispose() {
+    scoreboard?.dispose();
     clock?.cancel();
     printNoticeTimer?.cancel();
+    liveResults.dispose();
     ratingRefresh
-      ..removeListener(refresh)
+      ..removeListener(ratingsChanged)
       ..dispose();
     sectionScroll.dispose();
     workspaceFocus.dispose();
@@ -146,9 +195,32 @@ class _WorkspaceState extends State<Workspace> {
     if (mounted) setState(() {});
   }
 
+  /// How often the controller has announced a change, and the minutes the
+  /// clock has counted: what a region that reads the controller or the time
+  /// was last built for.
+  int announced = 0, minutes = 0;
+
+  /// Each region as last built, with what it was built from. Flutter leaves
+  /// a region alone when it is handed the same widget again, so a change
+  /// redraws only the regions that show it: a typed result leaves the top
+  /// bar alone, and a panel opening leaves the page row and the tabs.
+  final _kept = <String, (Object, Widget)>{};
+
+  /// [region] as [build] makes it, or as kept while [from] is unchanged.
+  /// [from] is a record of everything the region shows: a region drawn from
+  /// something left out of it would go stale.
+  Widget keep(String region, Object from, Widget Function() build) {
+    final last = _kept[region];
+    if (last != null && last.$1 == from) return last.$2;
+    final built = build();
+    _kept[region] = (from, built);
+    return built;
+  }
+
   /// The event changed, or a backup ran or failed.
   void eventChanged() {
     _backupRead = false;
+    announced++;
     refresh();
   }
 
@@ -232,21 +304,96 @@ class _WorkspaceState extends State<Workspace> {
   void sectionsCreated(List<String> ids) =>
       pickSection(ids.length == 1 ? ids.single : null, next: TaskView.players);
 
-  void refreshRoster() => dock.show(
-    'web-roster',
-    WebRosterPanel(
-      controller: c,
-      loader: widget.rosterLoader,
-      onClose: dock.close,
-      onImported: (refreshRatings) {
-        dock.close();
-        if (refreshRatings) {
+  void refreshRoster() {
+    final had = {for (final s in c.event!.sections) s.id};
+    dock.show(
+      'web-roster',
+      WebRosterPanel(
+        controller: c,
+        loader: widget.rosterLoader,
+        announcementLoader: widget.announcementLoader,
+        onClose: dock.close,
+        onImported: (refreshRatings) async {
+          dock.close();
+          final started = c.event!.sections.any((s) => !had.contains(s.id));
+          if (!refreshRatings) return afterImport(started);
+          // The ratings are reviewed first: the sections are checked
+          // against them. Set up follows when that review closes.
           ratingRefresh.discard();
-          startRatingRefresh();
-        }
-      },
-    ),
-  );
+          setUpAfterRatings = started ? 2 : 1;
+          await startRatingRefresh();
+          if (mounted && setUpAfterRatings > 0 && !ratingRefresh.active) {
+            setUpAfterRatings = 0;
+            afterImport(started);
+          }
+        },
+      ),
+    );
+  }
+
+  /// Set up waits for the rating review an import started: 1 when it does,
+  /// 2 when the import also started sections, 0 otherwise.
+  int setUpAfterRatings = 0;
+  bool ratingsWereActive = false;
+
+  void ratingsChanged() {
+    final active = ratingRefresh.active;
+    if (ratingsWereActive && !active && setUpAfterRatings > 0) {
+      final started = setUpAfterRatings == 2;
+      setUpAfterRatings = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) afterImport(started);
+      });
+    }
+    ratingsWereActive = active;
+    refresh();
+  }
+
+  /// The step after an import. Sections it [started], or any still waiting
+  /// for their rounds, open Set up; a roster with no sections at all opens
+  /// New section. A refresh that only added players opens nothing.
+  void afterImport(bool started) {
+    final e = c.event;
+    if (e == null || e.players.isEmpty) return;
+    if (started || e.sections.any((s) => s.roundsUnset)) {
+      setUp();
+    } else if (e.sections.isEmpty) {
+      newSection();
+    }
+  }
+
+  /// Every section's format and rounds, the time control and the play-up
+  /// rule, docked at the right.
+  void setUp() {
+    if (view != TaskView.players && !go(TaskView.players)) return;
+    dock.show(
+      'set-up',
+      SetupPanel(
+        controller: c,
+        onClose: dock.close,
+        onNotes: registrationNotes,
+        onCombine: () => dock.show(
+          'combine-event',
+          CombinePanel(
+            key: const ValueKey('combine-event'),
+            controller: c,
+            // Combining is a step inside Set up, which comes back after.
+            onClose: setUp,
+            onCombined: (_) => setUp(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// The notes entrants left on the registration list, with their byes.
+  void registrationNotes() {
+    if (view != TaskView.players && !go(TaskView.players)) return;
+    dock.show(
+      'notes',
+      NotesPanel(controller: c, onClose: dock.close, onSetUp: setUp),
+    );
+  }
 
   void pairSideGame(String id) => dock.show(
     'side-game',
@@ -290,22 +437,26 @@ class _WorkspaceState extends State<Workspace> {
     final only = c.event!.sections.where((s) => s.id == sectionId).firstOrNull;
     setState(() => pairing = true);
     try {
-      final batch = await c.propose(sectionId: only?.id, onlyReady: true);
-      if (!mounted) return;
-      if (batch.rounds.isEmpty) {
-        throw TournamentException(
-          batch.issues.values.join('\n').isNotEmpty
-              ? batch.issues.values.join('\n')
-              : only == null
-              ? 'No section is ready for another round.'
-              : '${only.name} is not ready for another round.',
-        );
-      }
-      // The pairings go up straight away; anything worth checking is fixed
-      // afterwards with Edit pairings or Undo. If the event changed while
-      // pairing, the controller says so.
-      c.post(batch);
-      if (!mounted) return;
+      // Proposed and posted as one, so no website result lands between.
+      final batch = await c.whilePairing(() async {
+        final batch = await c.propose(sectionId: only?.id, onlyReady: true);
+        if (!mounted) return null;
+        if (batch.rounds.isEmpty) {
+          throw TournamentException(
+            batch.issues.values.join('\n').isNotEmpty
+                ? batch.issues.values.join('\n')
+                : only == null
+                ? 'No section is ready for another round.'
+                : '${only.name} is not ready for another round.',
+          );
+        }
+        // The pairings go up straight away; anything worth checking is
+        // fixed afterwards with Edit pairings or Undo. If the event changed
+        // while pairing, the controller says so.
+        c.post(batch);
+        return batch;
+      });
+      if (batch == null || !mounted) return;
       setState(() => postNotes = postReviewNotes(c.event!, batch));
       if (sectionId == null || batch.rounds.containsKey(sectionId)) {
         // The section just paired stays chosen.
@@ -334,10 +485,19 @@ class _WorkspaceState extends State<Workspace> {
       controller: c,
       sectionId: sectionId!,
       onClose: dock.close,
-      // The players' new section is the one to look at next.
+      // The players' new section is the one to look at next: its new
+      // pairings when Combine made some, otherwise its roster.
       onCombined: (into) {
         dock.close();
-        pickSection(into);
+        final latest = c.event!.sections
+            .where((s) => s.id == into)
+            .firstOrNull
+            ?.rounds
+            .lastOrNull;
+        pickSection(
+          into,
+          next: latest != null && !latest.hasPlay ? TaskView.results : null,
+        );
       },
     ),
   );
@@ -433,92 +593,65 @@ class _WorkspaceState extends State<Workspace> {
 
   void keyboardHelp() => dock.id == 'keyboard-help'
       ? dock.close()
-      : dock.show(
-          'keyboard-help',
-          SidePanel(
-            title: 'Keyboard shortcuts',
-            onClose: dock.close,
-            children: [
-              const Text(
-                'Result keys score the focused player and jump to the next missing board.',
-              ),
-              const SizedBox(height: 16),
-              for (final (keys, action) in [
-                ('1 / W', 'This player wins'),
-                ('0 / L', 'This player loses'),
-                ('D', 'Draw (½ on the sheet)'),
-                ('F', 'No-show: this player forfeits'),
-                ('F on both players', 'Double forfeit'),
-                ('1 / 0 on a forfeit', 'Who won the forfeit'),
-                ('Delete', 'Clear the result'),
-                ('↑ / ↓', 'Previous / next board'),
-                ('← / →', 'Other player'),
-                ('P / ?', 'Still playing / disputed'),
-                ('A', 'Temporary pairing assumption'),
-                ('Space', "Open a score box's player"),
-                ('Tab, then Enter', 'Open the focused player'),
-                (shortcutLabel('L'), 'Find a player'),
-                (shortcutLabel('P'), 'Print this view'),
-                (shortcutLabel('Z'), 'Undo'),
-                (
-                  macShortcuts
-                      ? shortcutLabel('Z', shift: true)
-                      : '${shortcutLabel('Z', shift: true)} / ${shortcutLabel('Y')}',
-                  'Redo',
-                ),
-                (historyShortcut, 'History'),
-                ('Shift+F10 / Menu key', 'Menu for the focused row or tab'),
-                (
-                  'Esc',
-                  'Close the panel. Section settings and player cards save '
-                      'their changes as they close; other forms keep a draft',
-                ),
-                ('F1', 'Help'),
-                (keyboardHelpShortcut, 'This list'),
-              ])
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text('$keys — $action'),
-                ),
-            ],
-          ),
-        );
+      : dock.show('keyboard-help', KeyboardHelpPanel(onClose: dock.close));
+
+  /// The page shown: Players, Pairings or Export.
+  Widget page(Section? section) => switch (view) {
+    TaskView.players => PlayersView(
+      key: ValueKey('players-${section?.id}'),
+      controller: c,
+      sectionId: section?.id,
+      ratingRefresh: ratingRefresh,
+      onRefreshRoster: refreshRoster,
+      onRefreshRatings: startRatingRefresh,
+      onSetUp: setUp,
+      onNotes: registrationNotes,
+      newSectionRequested: newSectionRequested,
+      onNewSectionShown: () => setState(() => newSectionRequested = false),
+      onSectionsCreated: sectionsCreated,
+    ),
+    TaskView.results => ResultsView(
+      key: resultsKeys.putIfAbsent(
+        section?.id ?? 'all',
+        () => GlobalKey<ResultsViewState>(),
+      ),
+      controller: c,
+      sectionId: section?.id,
+      onAddPlayers: () => go(TaskView.players),
+      onNewSection: newSection,
+      liveResults: liveResults,
+      // The new pairings get the same review as freshly created ones.
+      onRepaired: (id, round) => setState(
+        () => postNotes = postReviewNotes(
+          c.event!,
+          PairingBatch(c.event!.revision, {id: round}, const {}),
+        ),
+      ),
+    ),
+    TaskView.reports => PlayerDetailsLayout(
+      child: ReportsView(
+        key: const ValueKey('reports'),
+        controller: c,
+        onResults: (id) => pickSection(id, next: TaskView.results),
+        onBackups: showBackups,
+      ),
+    ),
+  };
 
   @override
   Widget build(BuildContext context) {
     final e = c.event!;
     final section = e.sections.where((s) => s.id == sectionId).firstOrNull;
-    final content = switch (view) {
-      TaskView.players => PlayersView(
-        key: ValueKey('players-${section?.id}'),
-        controller: c,
-        sectionId: section?.id,
-        ratingRefresh: ratingRefresh,
-        onRefreshRoster: refreshRoster,
-        onRefreshRatings: startRatingRefresh,
-        newSectionRequested: newSectionRequested,
-        onNewSectionShown: () => setState(() => newSectionRequested = false),
-        onSectionsCreated: sectionsCreated,
-      ),
-      TaskView.results => ResultsView(
-        key: resultsKeys.putIfAbsent(
-          section?.id ?? 'all',
-          () => GlobalKey<ResultsViewState>(),
-        ),
-        controller: c,
-        sectionId: section?.id,
-        onAddPlayers: () => go(TaskView.players),
-        onNewSection: newSection,
-      ),
-      TaskView.reports => PlayerDetailsLayout(
-        child: ReportsView(
-          key: const ValueKey('reports'),
-          controller: c,
-          onResults: (id) => pickSection(id, next: TaskView.results),
-          onBackups: showBackups,
-        ),
-      ),
-    };
+    // The pages read the controller freely, so they are built again for
+    // whatever it announces, and left alone when only the workspace around
+    // them changed.
+    final content = keep('page', (
+      view,
+      section?.id,
+      newSectionRequested,
+      announced,
+      minutes,
+    ), () => page(section));
     // The rating report always covers every section.
     final showSections = view != TaskView.reports;
     if (showSections) followSectionViewport(context);
@@ -574,54 +707,85 @@ class _WorkspaceState extends State<Workspace> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        WorkspaceTopBar(
-                          eventName: e.name,
-                          eventOpen: eventOpen,
-                          onToggleEvent: toggleEvent,
-                          helpOpen: dock.id == 'help',
-                          onHelp: help,
-                          rulingsOpen: dock.id == 'rulings',
-                          onRulings: rulings,
-                          keyboardHelpOpen: dock.id == 'keyboard-help',
-                          onKeyboardHelp: keyboardHelp,
-                          undoLabel: c.undoLabel,
-                          onUndo: c.canUndo ? undo : null,
-                          redoLabel: c.redoLabel,
-                          onRedo: c.canRedo ? redo : null,
-                          historyOpen: historyOpen,
-                          onToggleHistory: toggleHistory,
-                          onTheme: widget.onTheme,
-                          onClose: closeEvent,
+                        keep(
+                          'top bar',
+                          (
+                            e.name,
+                            eventOpen,
+                            dock.id,
+                            historyOpen,
+                            macShortcuts,
+                          ),
+                          () => WorkspaceTopBar(
+                            eventName: e.name,
+                            eventOpen: eventOpen,
+                            onToggleEvent: toggleEvent,
+                            helpOpen: dock.id == 'help',
+                            onHelp: help,
+                            rulingsOpen: dock.id == 'rulings',
+                            onRulings: rulings,
+                            checkOpen: dock.id == 'check',
+                            onCheck: checkEvent,
+                            scoreboardOpen: dock.id == 'scoreboard',
+                            onScoreboard: Scoreboard.supported
+                                ? showScoreboard
+                                : null,
+                            keyboardHelpOpen: dock.id == 'keyboard-help',
+                            onKeyboardHelp: keyboardHelp,
+                            undoRedo: ListenableBuilder(
+                              listenable: c,
+                              builder: (context, _) => UndoRedoButtons(
+                                undoLabel: c.undoLabel,
+                                onUndo: c.canUndo ? undo : null,
+                                redoLabel: c.redoLabel,
+                                onRedo: c.canRedo ? redo : null,
+                              ),
+                            ),
+                            historyOpen: historyOpen,
+                            onToggleHistory: toggleHistory,
+                            onTheme: widget.onTheme,
+                            onClose: closeEvent,
+                          ),
                         ),
                         if (e.practice) const PracticeBanner(),
-                        WorkspacePageRow(
-                          view: view,
-                          onGo: go,
-                          reserveAction: offersPairingControl(
-                            e,
-                            c.pairingEvent,
-                          ),
-                          action: PairingControl(
-                            event: e,
-                            pairingEvent: c.pairingEvent,
-                            section: section,
-                            pairing: pairing,
-                            onPair: pair,
-                            onPairSideGame: pairSideGame,
-                            onFinish: () => go(TaskView.reports),
+                        keep(
+                          'page row',
+                          (view, e, c.pairingEvent, sectionId, pairing),
+                          () => WorkspacePageRow(
+                            view: view,
+                            onGo: go,
+                            reserveAction: offersPairingControl(
+                              e,
+                              c.pairingEvent,
+                            ),
+                            action: PairingControl(
+                              event: e,
+                              pairingEvent: c.pairingEvent,
+                              section: section,
+                              pairing: pairing,
+                              onPair: pair,
+                              onPairSideGame: pairSideGame,
+                              onFinish: () => go(TaskView.reports),
+                              onSetUp: setUp,
+                            ),
                           ),
                         ),
                         if (showSections)
-                          SectionTabs(
-                            event: e,
-                            sectionId: sectionId,
-                            scroll: sectionScroll,
-                            tabKey: (id) =>
-                                sectionKeys.putIfAbsent(id, GlobalKey.new),
-                            onPick: pickSection,
-                            onMenu: sectionMenu,
-                            onNewSection: newSection,
-                            onEditQuadPairings: editQuadPairings,
+                          keep(
+                            'tabs',
+                            (e, sectionId),
+                            () => SectionTabs(
+                              event: e,
+                              sectionId: sectionId,
+                              scroll: sectionScroll,
+                              tabKey: (id) =>
+                                  sectionKeys.putIfAbsent(id, GlobalKey.new),
+                              onPick: pickSection,
+                              onMenu: sectionMenu,
+                              onNewSection: newSection,
+                              onEditQuadPairings: editQuadPairings,
+                              onSetUp: setUp,
+                            ),
                           ),
                         Expanded(
                           child: Row(
@@ -681,13 +845,6 @@ class _WorkspaceState extends State<Workspace> {
                                           ),
                                         ],
                                       ),
-                                    if (postNotes.isNotEmpty)
-                                      PostNotes(
-                                        notes: postNotes,
-                                        onDismiss: () => setState(
-                                          () => postNotes = const [],
-                                        ),
-                                      ),
                                     Expanded(
                                       child: LayoutBuilder(
                                         builder: (context, layout) {
@@ -717,6 +874,35 @@ class _WorkspaceState extends State<Workspace> {
                                             fit: StackFit.expand,
                                             children: [
                                               content,
+                                              // In the column kept free for
+                                              // docked panels, so the notes
+                                              // never push the page down,
+                                              // nor pull it up when dismissed.
+                                              // A panel docked there covers
+                                              // them until it closes.
+                                              if (postNotes.isNotEmpty)
+                                                Positioned(
+                                                  top: 16,
+                                                  right: 0,
+                                                  width: detailsColumnWidth(
+                                                    layout.maxWidth,
+                                                  ),
+                                                  child: ConstrainedBox(
+                                                    constraints: BoxConstraints(
+                                                      maxHeight: math.max(
+                                                        0,
+                                                        layout.maxHeight - 32,
+                                                      ),
+                                                    ),
+                                                    child: PostNotes(
+                                                      notes: postNotes,
+                                                      onDismiss: () => setState(
+                                                        () => postNotes =
+                                                            const [],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
                                               if (dock.panel case final panel?)
                                                 docked(panel),
                                               if (eventOpen)
@@ -747,7 +933,11 @@ class _WorkspaceState extends State<Workspace> {
                             ],
                           ),
                         ),
-                        statusBar(e),
+                        // It shows the time of the last save and backup.
+                        keep('status bar', (
+                          announced,
+                          minutes,
+                        ), () => statusBar(e)),
                       ],
                     ),
                   ),
@@ -837,6 +1027,50 @@ class _WorkspaceState extends State<Workspace> {
   void rulings() => dock.id == 'rulings'
       ? dock.close()
       : dock.show('rulings', RulingsPanel(controller: c, onClose: dock.close));
+
+  /// The event checked for mistakes, starting with the section in view.
+  void checkEvent() => dock.id == 'check'
+      ? dock.close()
+      : showCheck(view == TaskView.reports ? null : sectionId);
+
+  void showCheck(String? scope) => dock.show(
+    'check',
+    CheckPanel(
+      controller: c,
+      sectionId: scope,
+      // Changing section closes the panel; the check comes back beside
+      // the section it pointed at.
+      onOpenSection: (id, scope) {
+        if (pickSection(id, next: TaskView.results)) showCheck(scope);
+      },
+      onClose: dock.close,
+    ),
+  );
+
+  /// The scoreboard's controls. What it shows is kept with the event.
+  void showScoreboard() {
+    if (dock.id == 'scoreboard') {
+      dock.close();
+      return;
+    }
+    final board = scoreboard ??= Scoreboard(
+      source: c,
+      event: () => c.event,
+      settings: ScoreboardSettings.fromJson(
+        c.workspaceState.readMap('scoreboard'),
+      ),
+    );
+    dock.show(
+      'scoreboard',
+      ScoreboardPanel(
+        scoreboard: board,
+        event: () => c.event!,
+        onSettings: () =>
+            c.workspaceState.writeMap('scoreboard', board.settings.toJson()),
+        onClose: dock.close,
+      ),
+    );
+  }
 
   /// What is safe: when the file was last saved, when it was last backed
   /// up, and the revision. Backups open from here.

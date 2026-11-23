@@ -33,8 +33,8 @@ String legend(WidgetTester tester) =>
     tester.widget<Text>(find.byKey(const ValueKey('result-key-legend'))).data!;
 
 void main() {
-  testWidgets('F on one player, then the other, then 1 back to a single '
-      'forfeit, all typed in the grid', (tester) async {
+  testWidgets('F marks and unmarks a no-show; 1, 0 and D enter a played '
+      'game on a forfeit board too', (tester) async {
     final c = fixture(count: 4);
     addTearDown(c.dispose);
     c.post((await tester.runAsync(() => c.propose()))!);
@@ -59,14 +59,26 @@ void main() {
     await tester.tap(find.byKey(ValueKey('score-${g.id}-b')));
     await tester.pump();
     expect(legend(tester), startsWith('Double forfeit'));
+    // F again takes that player's no-show back: White's still stands.
+    await type(false, LogicalKeyboardKey.keyF);
+    expect(outcome(), Outcome.blackForfeit);
+    await tester.tap(find.byKey(ValueKey('score-${g.id}-w')));
+    await tester.pump();
+    expect(legend(tester), startsWith('No-show · F takes it back'));
+    // 1 is always a played win, never a forfeit win.
     await type(false, LogicalKeyboardKey.digit1);
+    expect(outcome(), Outcome.blackWin);
+    await type(true, LogicalKeyboardKey.keyF);
     expect(outcome(), Outcome.blackForfeit);
-    // No half-point forfeit: D is refused and the legend explains why.
-    await type(false, LogicalKeyboardKey.keyD);
+    await type(false, LogicalKeyboardKey.digit0);
+    expect(outcome(), Outcome.whiteWin);
+    await type(true, LogicalKeyboardKey.keyF);
+    await type(true, LogicalKeyboardKey.keyD);
+    expect(outcome(), Outcome.draw);
+    // F on the only absent player leaves the board with no result.
+    await type(true, LogicalKeyboardKey.keyF);
     expect(outcome(), Outcome.blackForfeit);
-    expect(legend(tester), startsWith('A forfeit is only won or lost'));
-    // Delete clears; then 1 is a played win again.
-    await type(true, LogicalKeyboardKey.delete);
+    await type(true, LogicalKeyboardKey.keyF);
     expect(outcome(), Outcome.unreported);
     await type(true, LogicalKeyboardKey.digit1);
     expect(outcome(), Outcome.whiteWin);

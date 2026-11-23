@@ -11,6 +11,7 @@ import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/remembered_printing.dart';
 import 'package:meow_chess/infrastructure/reports.dart';
+import 'package:meow_chess/infrastructure/swisssys_export.dart';
 import 'package:meow_chess/ui/panels.dart';
 
 import '../support.dart';
@@ -239,6 +240,7 @@ void main() {
     Widget panel(
       TournamentController c, {
       Future<Uint8List> Function(Event)? generate,
+      Future<String?> Function(String?)? chooseFolder,
     }) => MaterialApp(
       home: Scaffold(
         body: SizedBox(
@@ -249,6 +251,7 @@ void main() {
             kind: ReportKind.packet,
             onClose: () {},
             printing: service,
+            chooseFolder: chooseFolder,
             generate: generate ?? (_) async => Uint8List(3),
           ),
         ),
@@ -360,6 +363,66 @@ void main() {
       c.change('Rename event', c.event!.copy(name: 'New name'));
       await tester.pump();
       expect(save().onPressed, isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('Save SwissSys files puts each section in the chosen folder', (
+      tester,
+    ) async {
+      final c = fixture(count: 8);
+      addTearDown(c.dispose);
+      c.post((await tester.runAsync(() => c.propose()))!);
+      tester.view.physicalSize = const Size(1200, 1400);
+      addTearDown(tester.view.reset);
+      final screen = Directory('${dir.path}${Platform.pathSeparator}screen')
+        ..createSync();
+      final offered = <String?>[];
+      String? choice = screen.path;
+      await tester.pumpWidget(
+        panel(
+          c,
+          chooseFolder: (lastUsed) async {
+            offered.add(lastUsed);
+            return choice;
+          },
+        ),
+      );
+      await tester.pump();
+      final save = find.byKey(const ValueKey('save-swisssys'));
+      List<String> saved() => [
+        for (final f in screen.listSync())
+          f.path.split(Platform.pathSeparator).last,
+      ]..sort();
+
+      // Cancelling the folder window saves nothing.
+      choice = null;
+      await tester.ensureVisible(save);
+      await tester.pump();
+      await tester.tap(save);
+      await tester.pump();
+      expect(saved(), isEmpty);
+      expect(find.byKey(const ValueKey('print-saved')), findsNothing);
+
+      choice = screen.path;
+      await tester.tap(save);
+      await tester.pump();
+      final names = [for (final s in c.event!.sections) swissSysFileName(s)]
+        ..sort();
+      expect(names, hasLength(2));
+      expect(names, everyElement(endsWith('.S1A')));
+      expect(saved(), names);
+      expect(find.text('Saved to ${screen.path}'), findsOneWidget);
+
+      // The folder is offered again next time, and the files replaced.
+      await tester.tap(save);
+      await tester.pump();
+      expect(offered, [null, null, screen.path]);
+      expect(saved(), names);
+
+      // Like Save PDF, it waits for approval of an out-of-date preview.
+      c.change('Rename event', c.event!.copy(name: 'New name'));
+      await tester.pump();
+      expect(tester.widget<TextButton>(save).onPressed, isNull);
       await tester.pumpWidget(const SizedBox());
     });
 

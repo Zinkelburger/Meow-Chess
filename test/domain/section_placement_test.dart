@@ -98,16 +98,26 @@ void main() {
     expect(created.name, 'Under 500');
     expect(created.format, Format.swiss);
     expect(created.plannedRounds, 4);
+    expect(created.roundsUnset, isFalse);
+    // The name announces the cap.
+    expect(created.ratingCeiling, 500);
     expect(created.players, ['k4']);
     expect(created.boardStart, 5);
   });
 
-  test('without rounds no section is created and nobody is lost', () {
+  test('without rounds the section is started and waits for them', () {
     final event = scholastics();
-    final plan = planSections(event, {'k0': 'Under 500'});
-    final placed = applySectionPlan(event, plan, rounds: 0, newId: () => 'x');
-    expect(placed.sections, isEmpty);
-    expect(placed.players, hasLength(6));
+    final plan = planSections(event, {'k0': 'Under 500', 'k1': 'Open'});
+    final placed = applySectionPlan(event, plan, newId: () => 'x');
+    expect(placed.sections.map((s) => s.name), ['Under 500', 'Open']);
+    expect(placed.sections.every((s) => s.roundsUnset), isTrue);
+    expect(placed.sections.first.players, ['k0']);
+    expect(placed.sections.last.ratingCeiling, 0);
+    // The flag survives a save.
+    expect(
+      Event.decode(placed.encode()).sections.every((s) => s.roundsUnset),
+      isTrue,
+    );
     expect(
       () => applySectionPlan(event, plan, rounds: 40, newId: () => 'x'),
       throwsA(isA<TournamentException>()),

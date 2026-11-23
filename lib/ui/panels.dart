@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:file_selector/file_selector.dart' show getDirectoryPath;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -11,15 +12,21 @@ import 'package:printing/printing.dart';
 import '../application/diagnostics.dart';
 import '../application/failures.dart';
 import '../application/tournament_controller.dart';
+import '../domain/eligibility.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import '../domain/standings.dart';
 import '../infrastructure/artifact_save.dart';
+import '../infrastructure/browser_download.dart';
+import '../infrastructure/event_folder.dart';
+import '../infrastructure/pgn_export.dart';
 import '../infrastructure/reports.dart';
 import '../infrastructure/remembered_printing.dart';
+import '../infrastructure/swisssys_export.dart';
 import 'dialogs.dart' show FieldSpec, showFailure;
 import 'drafts.dart';
 import 'side_panel.dart';
+import 'section_panel.dart' show hasRoundsField;
 import 'select.dart';
 import 'theme.dart' show noChipAnimation;
 import 'workspace_status.dart' show showUndoNotice;
@@ -349,7 +356,6 @@ class _FieldsPanelState extends State<FieldsPanel> {
       title: widget.title,
       onClose: widget.onClose,
       children: [
-        if (draft != null) DraftStatus(draft: draft!),
         if (widget.description != null) ...[
           Text(
             widget.description!,
@@ -429,9 +435,11 @@ class _FieldsPanelState extends State<FieldsPanel> {
           child: Wrap(
             spacing: 8,
             children: [
+              // The label stays while saving, so Discard draft beside it
+              // does not move.
               FilledButton(
                 onPressed: busy ? null : save,
-                child: Text(busy ? 'Saving…' : widget.saveLabel),
+                child: Text(widget.saveLabel),
               ),
               if (draft != null)
                 TextButton(
@@ -441,25 +449,40 @@ class _FieldsPanelState extends State<FieldsPanel> {
             ],
           ),
         ),
+        // Under the buttons, so the first keystroke moves nothing.
+        if (draft != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: DraftStatus(draft: draft!),
+          ),
         ...widget.footer,
       ],
     );
   }
 }
 
-/// Moves every player of one section into another. A section that has not
-/// been paired goes with them; one with played rounds keeps those rounds
-/// and stays, empty.
+/// Makes one section of two or more. The director picks the sections,
+/// then which way they go: each choice is a whole outcome ("U1800 into
+/// Open", "Open into U1800"), and the section the players go into keeps
+/// its name and settings.
+///
+/// A section left with no rounds of its own goes with its players; one
+/// with played rounds keeps those rounds and stays, empty. Pairings nobody
+/// has played yet are discarded and the combined section is paired again.
 class CombinePanel extends StatefulWidget {
   const CombinePanel({
     required this.controller,
-    required this.sectionId,
     required this.onClose,
+    this.sectionId,
     this.onCombined,
     super.key,
   });
   final TournamentController controller;
-  final String sectionId;
+
+  /// The section Combine was opened from: one of those to combine, though
+  /// not necessarily the one that moves. Null when it was opened for the
+  /// event as a whole, as from under Set up's table.
+  final String? sectionId;
   final VoidCallback onClose;
 
   /// Closes the panel after combining, given the section the players went
@@ -470,183 +493,355 @@ class CombinePanel extends StatefulWidget {
 }
 
 class _CombinePanelState extends State<CombinePanel> {
-  String? target;
+  /// The sections ticked to become one, by ID.
+  var chosen = <String>{};
+
+  /// The section the director said everyone goes into; null while the
+  /// panel's own suggestion ([suggested]) stands.
+  String? keep;
   final reason = TextEditingController();
   String? error;
-  final targetText = TextEditingController();
+  bool busy = false;
+
+  /// Only the reason is kept as a draft: the ticks are two clicks to make
+  /// again, and a section may be gone by the time the panel reopens.
   late FormDraft draft;
   @override
   void initState() {
     super.initState();
     draft = FormDraft(
       widget.controller.workspaceState,
-      'draft-combine-${widget.sectionId}',
-      {'target': targetText, 'reason': reason},
-      {'target': '', 'reason': ''},
+      'draft-combine-${widget.sectionId ?? 'event'}',
+      {'reason': reason},
+      {'reason': ''},
     );
-    if (widget.controller.event!.sections.any(
-      (s) => s.id == targetText.text && s.id != widget.sectionId,
-    )) {
-      target = targetText.text;
+    if (widget.sectionId case final opened?
+        when widget.controller.event!.sections.any((s) => s.id == opened)) {
+      chosen.add(opened);
     }
   }
 
   @override
   void dispose() {
     draft.dispose();
-    targetText.dispose();
     reason.dispose();
     super.dispose();
   }
 
-  void combine() {
-    if (target == null) {
-      setState(() => error = 'Choose the section to combine into.');
+  /// Rounds of [s] that stay once its unplayed pairings are discarded.
+  static int played(Section s) => s.rounds.length - unplayedRounds(s);
+
+  /// The sections to combine, in tab order. With only two sections there
+  /// is nothing to tick: it is those two.
+  List<Section> picked(Event e) => [
+    for (final s in e.sections)
+      if (e.sections.length == 2 || chosen.contains(s.id)) s,
+  ];
+
+  /// How many players of the other [picked] sections [into] would not
+  /// take: rated outside its announced range, or too low to play up into
+  /// it. Set up lists the same players under Players to check.
+  static int outOfRange(Event e, List<Section> picked, Section into) => [
+    for (final s in picked)
+      if (s.id != into.id)
+        for (final id in s.players)
+          if (eligibilityProblem(e, e.player(id), into) != null) id,
+  ].length;
+
+  /// What [into] asks of a rating, for the preview: `under 1850`,
+  /// `1200 or more to play up`.
+  static String takes(Event e, Section into) {
+    final floor = playUpFloor(e, into);
+    return [
+      if (ratingRangeText(into) case final range when range.isNotEmpty) range,
+      if (floor > 0) '$floor or more to play up',
+    ].join('; ');
+  }
+
+  /// The way to combine that the panel offers first: into the section
+  /// whose rating range takes the most of the others' players (an Open
+  /// before a U1800), then the larger section, then the one Combine was
+  /// not opened from.
+  Section suggested(Event e, List<Section> picked) {
+    var best = picked.first;
+    for (final s in picked.skip(1)) {
+      final a = outOfRange(e, picked, s), b = outOfRange(e, picked, best);
+      if (a != b) {
+        if (a < b) best = s;
+      } else if (s.players.length != best.players.length) {
+        if (s.players.length > best.players.length) best = s;
+      } else if (best.id == widget.sectionId) {
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  /// The section everyone goes into, or null until two are picked.
+  Section? target(Event e, List<Section> picked) => picked.length < 2
+      ? null
+      : picked.where((s) => s.id == keep).firstOrNull ?? suggested(e, picked);
+
+  void toggle(Section s, bool on) => setState(() {
+    on ? chosen.add(s.id) : chosen.remove(s.id);
+    if (!chosen.contains(keep)) keep = null;
+    error = null;
+  });
+
+  Future<void> combine() async {
+    if (busy) return;
+    final c = widget.controller;
+    // The sections as they are now, not as they were when the panel last
+    // built.
+    final sections = picked(c.event!), into = target(c.event!, sections);
+    if (into == null) {
+      setState(
+        () => error = c.event!.sections.length < 2
+            ? 'There is no other section to combine with.'
+            : 'Tick the sections to combine: at least two.',
+      );
       return;
     }
+    final sources = sections.where((s) => s.id != into.id).toList();
+    final from = nameList([for (final s in sources) s.name]);
     try {
-      // The roster as it is now, not as it was when the panel last built.
-      final source = widget.controller.event!.sections
-          .where((s) => s.id == widget.sectionId)
-          .firstOrNull;
-      if (source == null) {
-        throw const TournamentException('This section no longer exists.');
-      }
-      final c = widget.controller, into = target!;
-      final destination = c.event!.sections
-          .where((s) => s.id == into)
-          .firstOrNull
-          ?.name;
-      c.movePlayers(source.players, into, reason: reason.text.trim());
-      // With no rounds of its own the emptied section has nothing left to
-      // show. Its removal is a second step in History.
-      var removed = false;
-      if (source.rounds.isEmpty) {
-        try {
-          c.removeSection(source.id);
-          removed = true;
-        } on TournamentException {
-          // The players have moved; the empty tab can still be deleted.
-        }
-      }
-      draft.reset({"target": "", "reason": ""});
-      final where = destination ?? 'the other section';
-      showUndoNotice(
-        context,
-        c,
-        removed
-            ? 'Combined ${source.name} into $where and removed the empty '
-                  '${source.name} tab. Undo brings the tab back; undo again '
-                  'to move the players back.'
-            : 'Combined ${source.name} into $where.',
+      final discarded = c.combineSections(
+        [for (final s in sources) s.id],
+        into.id,
+        reason: reason.text.trim(),
       );
-      (widget.onCombined ?? (_) => widget.onClose())(into);
+      draft.reset({'reason': ''});
+      final removed = [
+        for (final s in sources)
+          if (!c.event!.sections.any((x) => x.id == s.id)) s.name,
+      ];
+      var message = removed.isEmpty
+          ? 'Combined $from into ${into.name}.'
+          : 'Combined $from into ${into.name} and removed the empty '
+                '${nameList(removed)} ${removed.length == 1 ? 'tab' : 'tabs'}.';
+      // Pairings were up, so the combined section gets its round again.
+      if (discarded > 0) {
+        setState(() => busy = true);
+        String? problem;
+        try {
+          // Proposed and posted as one, so no website result lands between.
+          await c.whilePairing(() async {
+            final batch = await c.propose(sectionId: into.id, onlyReady: true);
+            if (batch.rounds.isEmpty) {
+              problem = batch.issues.values.join(' ');
+            } else {
+              c.post(batch);
+            }
+          });
+        } catch (e) {
+          problem = plainMessage(e);
+        }
+        if (!mounted) return;
+        message = problem == null
+            ? '$message Round ${c.event!.sections.firstWhere((s) => s.id == into.id).rounds.length} '
+                  'is paired again with everyone. Undo once for the '
+                  'pairings, again for the combine.'
+            : '$message The old pairings are gone, but new ones could not '
+                  'be made: $problem';
+      }
+      if (!mounted) return;
+      showUndoNotice(context, c, message);
+      (widget.onCombined ?? (_) => widget.onClose())(into.id);
     } catch (e) {
-      setState(() => error = plainMessage(e));
+      if (mounted) setState(() => error = plainMessage(e));
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
-  /// What Combine will do, in the words of the sections chosen.
-  List<String> preview(Section source, Section? into) {
-    final n = source.players.length;
-    final players = n == 1 ? 'the 1 player' : 'all $n players';
-    final to = into?.name ?? 'the section you choose';
-    if (source.rounds.isEmpty) {
-      return [
-        'Moves $players of ${source.name} into $to and removes the '
-            '${source.name} tab, which would be left empty.',
-        'Both sections must be unpaired, or have played the same number of '
-            'rounds.',
-      ];
-    }
+  /// The settings everyone plays under when [into] is the section kept,
+  /// for the line under that choice.
+  String settings(Event e, List<Section> picked, Section into) {
+    final afterPlay = picked.any((s) => played(s) > 0);
+    final format = afterPlay ? Format.swiss : into.format;
+    final range = ratingRangeText(into);
+    final out = outOfRange(e, picked, into);
     return [
-      'Moves $players of ${source.name} into $to, which pairs as a Swiss '
-          'from the next round. Games and points already played are kept.',
-      '${source.name} keeps its played rounds and stays as an empty tab.',
-      'After this the US Chess rating report cannot be made from this '
-          'event: it cannot yet report players who changed section once '
-          'play had started.',
-      'Both sections must have played the same number of rounds, with '
-          'every result in.',
+      format.label,
+      if (hasRoundsField(format) && !into.roundsUnset)
+        '${into.plannedRounds} ${into.plannedRounds == 1 ? 'round' : 'rounds'}',
+      if (range.isNotEmpty)
+        range
+      else if (picked.any((s) => ratingRangeText(s).isNotEmpty))
+        'any rating',
+      if (out > 0) '$out to check',
+    ].join(' · ');
+  }
+
+  /// What Combine will do, in the words of the sections chosen.
+  List<String> preview(Event e, List<Section> picked, Section into) {
+    final sources = picked.where((s) => s.id != into.id).toList();
+    final from = nameList([for (final s in sources) s.name]);
+    final n = sources.fold(0, (sum, s) => sum + s.players.length);
+    final players = n == 1 ? 'the 1 player' : 'all $n players';
+    final to = into.name;
+    final unplayed = picked.fold(0, (sum, s) => sum + unplayedRounds(s));
+    final staying = [
+      for (final s in sources)
+        if (played(s) > 0) s.name,
+    ];
+    final afterPlay = picked.any((s) => played(s) > 0);
+    final out = outOfRange(e, picked, into);
+    final tabs = sources.length == 1 ? 'tab' : 'tabs';
+    return [
+      if (staying.isEmpty)
+        'Moves $players of $from into $to and removes the $from $tabs, '
+            'which would be left empty.'
+      else
+        'Moves $players of $from into $to, which pairs as a Swiss from the '
+            'next round. Games and points already played are kept.',
+      if (!afterPlay) '$to keeps its own name, format, rounds and settings.',
+      if (out > 0)
+        '$out of them ${out == 1 ? 'is' : 'are'} rated outside what $to '
+            'takes (${takes(e, into)})'
+            '${afterPlay ? '.' : ', and Set up lists them under Players to check.'}',
+      if (unplayed > 0)
+        'Round ${played(into) + 1} is paired but no result is in, so those '
+            'pairings are discarded and $to is paired again with everyone.',
+      if (staying.isNotEmpty)
+        staying.length == 1
+            ? '${staying.single} keeps its played rounds and stays as an '
+                  'empty tab.'
+            : '${nameList(staying)} keep their played rounds and stay as '
+                  'empty tabs.',
+      if (afterPlay)
+        'After this the US Chess rating report cannot be made from this '
+            'event: it cannot yet report players who changed section once '
+            'play had started.',
+      if (afterPlay)
+        'The sections must have played the same number of rounds, with '
+            'every result in.',
     ];
   }
 
   @override
   Widget build(BuildContext context) {
     final e = widget.controller.event!, colors = Theme.of(context).colorScheme;
-    final source = e.sections
-        .where((s) => s.id == widget.sectionId)
-        .firstOrNull;
-    if (source == null) return const SizedBox.shrink();
-    final others = e.sections.where((s) => s.id != source.id).toList();
-    final into = others.where((s) => s.id == target).firstOrNull;
+    final muted = TextStyle(color: colors.onSurfaceVariant);
+    final caption = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
+    final sections = picked(e), into = target(e, sections);
+    // A reason is recorded only once games have been played.
+    final needsReason = into != null && sections.any((s) => played(s) > 0);
+    final total = sections.fold(0, (sum, s) => sum + s.players.length);
+    String size(Section s) => [
+      '${s.players.length} ${s.players.length == 1 ? 'player' : 'players'}',
+      if (played(s) > 0)
+        '${played(s)} ${played(s) == 1 ? 'round' : 'rounds'} played'
+      else if (s.rounds.isNotEmpty)
+        'round 1 paired, not played',
+    ].join(' · ');
     return SidePanel(
-      title: 'Combine ${source.name}',
+      title: 'Combine sections',
       onClose: widget.onClose,
       children: [
-        DraftStatus(draft: draft),
-        Column(
-          key: const ValueKey('combine-preview'),
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final line in preview(source, into))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  line,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
+        if (e.sections.length < 2)
+          const Text('There is no other section to combine with.')
+        else ...[
+          // Two sections are the two to combine; more are ticked.
+          if (e.sections.length > 2) ...[
+            Text('Sections to combine', style: caption),
+            for (final s in e.sections)
+              CheckboxListTile(
+                key: ValueKey('combine-pick-${s.id}'),
+                value: chosen.contains(s.id),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(s.name),
+                subtitle: Text(size(s)),
+                onChanged: busy ? null : (on) => toggle(s, on ?? false),
               ),
+            const SizedBox(height: 12),
           ],
-        ),
-        const SizedBox(height: 4),
-        if (others.isEmpty)
-          const Text('There is no other section to combine into.')
-        else
-          RadioGroup<String>(
-            groupValue: target,
-            onChanged: (v) => setState(() {
-              target = v;
-              targetText.text = v ?? '';
-              error = null;
-            }),
-            child: Column(
-              children: [
-                for (final s in others)
-                  RadioListTile<String>(
-                    key: ValueKey('combine-into-${s.id}'),
-                    value: s.id,
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text(s.name),
-                    subtitle: Text(
-                      '${s.players.length} players · ${s.rounds.length} rounds played',
+          if (into == null)
+            Text(
+              sections.isEmpty
+                  ? 'Tick the sections that become one.'
+                  : 'Tick the section to combine with ${sections.single.name}.',
+              key: const ValueKey('combine-hint'),
+              style: muted,
+            )
+          else ...[
+            Text('Which way', style: caption),
+            RadioGroup<String>(
+              groupValue: into.id,
+              onChanged: (v) => setState(() {
+                keep = v;
+                error = null;
+              }),
+              child: Column(
+                children: [
+                  for (final s in sections)
+                    RadioListTile<String>(
+                      key: ValueKey('combine-into-${s.id}'),
+                      value: s.id,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: Text(
+                        '${nameList([for (final o in sections)
+                          if (o.id != s.id) o.name])} into ${s.name}',
+                      ),
+                      subtitle: Text(
+                        e.sections.length > 2
+                            ? settings(e, sections, s)
+                            // No list above gives the sizes, so say them here.
+                            : '${s.name} has ${size(s)} · '
+                                  '${settings(e, sections, s)}',
+                      ),
                     ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Column(
+              key: const ValueKey('combine-preview'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final line in preview(e, sections, into))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(line, style: muted),
                   ),
               ],
             ),
+          ],
+        ],
+        if (needsReason) ...[
+          const SizedBox(height: 4),
+          TextField(
+            key: const ValueKey('combine-reason'),
+            controller: reason,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Reason'),
+            onSubmitted: (_) => combine(),
           ),
-        const SizedBox(height: 8),
-        TextField(
-          key: const ValueKey('combine-reason'),
-          controller: reason,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Reason (needed once rounds are played)',
-          ),
-          onSubmitted: (_) => combine(),
-        ),
+        ],
         if (error != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Text(error!, style: TextStyle(color: colors.error)),
           ),
         const SizedBox(height: 16),
+        // Above the button, so typing a reason never pushes the form down.
+        DraftStatus(draft: draft),
         Align(
           alignment: Alignment.centerLeft,
           child: FilledButton(
-            onPressed: others.isEmpty ? null : combine,
-            child: const Text('Combine'),
+            key: const ValueKey('combine-confirm'),
+            onPressed: e.sections.length < 2 || busy ? null : combine,
+            child: Text(
+              busy
+                  ? 'Pairing…'
+                  : into == null
+                  ? 'Combine'
+                  : 'Combine into ${into.name} · $total players',
+            ),
           ),
         ),
       ],
@@ -669,10 +864,21 @@ class PrintPanel extends StatefulWidget {
     this.generate,
     this.printing,
     this.printNow = false,
+    this.chooseFolder,
+    this.saveFile = saveArtifact,
     super.key,
   });
   final Event event;
   final TournamentController? controller;
+
+  /// Asks for the folder SwissSys files go in, offered the last one used;
+  /// null is Cancel. The computer's folder window unless a test passes its
+  /// own.
+  final Future<String?> Function(String? lastUsed)? chooseFolder;
+
+  /// Asks where to keep a file and writes it there; null when the director
+  /// cancelled. Tests pass their own.
+  final Future<String?> Function(String name, List<int> bytes) saveFile;
 
   /// The printing service; tests pass their own.
   final RememberedPrinting? printing;
@@ -928,6 +1134,14 @@ class _PrintPanelState extends State<PrintPanel> {
     }
   }
 
+  /// Saves into the event's own folder, or asks where when it has none.
+  Future<String?> save(String name, List<int> bytes) => saveForEvent(
+    widget.controller?.repository,
+    name,
+    bytes,
+    ask: widget.saveFile,
+  );
+
   /// The previewed PDF as a file, to print from another computer or to send.
   Future<void> savePdf() async {
     final job = preview;
@@ -941,7 +1155,7 @@ class _PrintPanelState extends State<PrintPanel> {
         ReportKind.prizes => 'prizes',
         ReportKind.conditions => 'event-conditions',
       };
-      final path = await saveArtifact(
+      final path = await save(
         '$what-r${job.event.revision}.pdf',
         await job.pdf,
       );
@@ -961,17 +1175,17 @@ class _PrintPanelState extends State<PrintPanel> {
     final e = snapshot;
     try {
       final path = csv
-          ? await saveArtifact(
+          ? await save(
               'standings-r${e.revision}.csv',
               utf8.encode(standingsCsv(e, sectionId: widget.sectionId)),
             )
           : widget.kind == ReportKind.prizes
-          ? await saveArtifact(
+          ? await save(
               'prizes-r${e.revision}.txt',
               utf8.encode(prizeReport(e, sectionId: widget.sectionId)),
             )
           : widget.kind == ReportKind.wallChart
-          ? await saveArtifact(
+          ? await save(
               'wall-chart-r${e.revision}.txt',
               wallChart(
                 e,
@@ -979,7 +1193,7 @@ class _PrintPanelState extends State<PrintPanel> {
                 sectionId: widget.sectionId,
               ).codeUnits,
             )
-          : await saveArtifact(
+          : await save(
               'crosstable-r${e.revision}.txt',
               crosstable(
                 e,
@@ -987,6 +1201,95 @@ class _PrintPanelState extends State<PrintPanel> {
                 sectionId: widget.sectionId,
               ).codeUnits,
             );
+      if (path != null && mounted) setState(() => savedPath = path);
+    } catch (error) {
+      if (mounted) showFailure(context, error);
+    }
+  }
+
+  /// The sections these sheets cover.
+  Iterable<Section> get scopedSections => snapshot.sections.where(
+    (s) =>
+        (widget.sectionId == null || s.id == widget.sectionId) &&
+        (widget.roundNumbers == null || widget.roundNumbers!.containsKey(s.id)),
+  );
+
+  /// The same rounds as SwissSys section files, for a screen that shows
+  /// pairings from them. They go straight into the chosen folder under the
+  /// names SwissSys gives them, replacing an earlier save of the round.
+  Future<void> saveSwissSys() async {
+    final e = snapshot;
+    try {
+      final files = swissSysFiles(
+        e,
+        sections: scopedSections.map((s) => s.id),
+        rounds: {
+          for (final s in scopedSections)
+            s.id: ?(widget.roundNumbers?[s.id] ?? widget.roundNumber),
+        },
+      );
+      final String path;
+      if (kIsWeb) {
+        path = files.length == 1
+            ? files.keys.single
+            : 'swisssys-r${e.revision}.zip';
+        downloadFile(
+          path,
+          files.length == 1 ? files.values.single : swissSysZip(files),
+        );
+      } else {
+        final preferences = widget.controller?.repository;
+        final own = eventFolder(preferences);
+        final lastUsed = preferences?.readPreference('swissSysFolder');
+        final folder =
+            own ??
+            (widget.chooseFolder != null
+                ? await widget.chooseFolder!(lastUsed)
+                : await getDirectoryPath(
+                    initialDirectory: lastUsed,
+                    confirmButtonText: 'Save here',
+                  ));
+        if (folder == null) return;
+        final written = writeSwissSysFiles(files, folder);
+        if (own == null) {
+          preferences?.writePreference('swissSysFolder', folder);
+        } else if (preferences != null) {
+          // The event's own files from now on, kept current with the rest.
+          SwissSysFolderFiles.remember(preferences, own, files.keys);
+        }
+        path = written.length == 1 ? written.single : folder;
+      }
+      if (mounted) setState(() => savedPath = path);
+    } catch (error) {
+      if (mounted) showFailure(context, error);
+    }
+  }
+
+  /// The sheets' rounds as PGN headers without moves, for whoever enters
+  /// the games afterwards.
+  Future<void> savePgn() async {
+    final e = snapshot;
+    try {
+      final sections = [
+        for (final s in e.sections)
+          if ((widget.sectionId == null || s.id == widget.sectionId) &&
+              (widget.roundNumbers == null ||
+                  widget.roundNumbers!.containsKey(s.id)))
+            s,
+      ];
+      final pgn = pgnHeaders(
+        e,
+        sections: sections.map((s) => s.id),
+        rounds: {
+          for (final s in sections)
+            s.id:
+                ?(widget.roundNumbers?[s.id] ??
+                widget.roundNumber ??
+                // A fixed schedule prints whole; its file is whole too.
+                (hasFixedSchedule(s) ? null : s.rounds.lastOrNull?.number)),
+        },
+      );
+      final path = await save('games-r${e.revision}.pgn', utf8.encode(pgn));
       if (path != null && mounted) setState(() => savedPath = path);
     } catch (error) {
       if (mounted) showFailure(context, error);
@@ -1014,12 +1317,6 @@ class _PrintPanelState extends State<PrintPanel> {
         widget.kind == ReportKind.prizes;
     final pairingSheet =
         widget.kind == ReportKind.packet || widget.kind == ReportKind.pairings;
-    final scopedSections = snapshot.sections.where(
-      (s) =>
-          (widget.sectionId == null || s.id == widget.sectionId) &&
-          (widget.roundNumbers == null ||
-              widget.roundNumbers!.containsKey(s.id)),
-    );
     String scopeLabel(Section s) {
       if (widget.kind == ReportKind.conditions) return 'Whole event';
       if (widget.kind == ReportKind.sections) {
@@ -1174,8 +1471,16 @@ class _PrintPanelState extends State<PrintPanel> {
                                 onPressed: canPrint && !printing
                                     ? printPreview
                                     : null,
-                                icon: const Icon(Icons.print_outlined),
-                                label: Text(printing ? 'Printing…' : 'Print'),
+                                // The label stays while printing and an
+                                // hourglass takes the icon's place, so the
+                                // buttons beside it do not move.
+                                icon: printing
+                                    ? const Icon(
+                                        Icons.hourglass_top,
+                                        semanticLabel: 'Printing',
+                                      )
+                                    : const Icon(Icons.print_outlined),
+                                label: const Text('Print'),
                               ),
                               TextButton(
                                 onPressed: canPrint && !printing
@@ -1221,6 +1526,29 @@ class _PrintPanelState extends State<PrintPanel> {
                                 ),
                               ),
                             ],
+                          ),
+                        ],
+                        if (pairingSheet &&
+                            scopedSections.any(swissSysExportable)) ...[
+                          const SizedBox(height: 8),
+                          TextButton(
+                            key: const ValueKey('save-swisssys'),
+                            onPressed: canPrint ? saveSwissSys : null,
+                            child: const Text('Save SwissSys files'),
+                          ),
+                        ],
+                        if (pairingSheet &&
+                            scopedSections.any(
+                              (s) => pgnExportable(s) && s.rounds.isNotEmpty,
+                            )) ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              key: const ValueKey('save-pgn'),
+                              onPressed: canPrint ? savePgn : null,
+                              child: const Text('Save PGN headers'),
+                            ),
                           ),
                         ],
                         if (savedPath != null)

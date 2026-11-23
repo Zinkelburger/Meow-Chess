@@ -15,7 +15,8 @@ Other machines can set `MEOW_JOB_RUNNER` or use the plain Flutter commands.
 
 A filename argument opens that event; in release builds a second launch hands
 its file to the window already open. `MEOW_DATA_DIR` overrides the recent-event
-library location for isolated testing.
+library location for isolated testing, and new events then go in its
+`Tournaments` folder instead of `Documents/Meow-Chess`.
 
 ## The CI gate
 

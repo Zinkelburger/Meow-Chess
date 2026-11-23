@@ -148,15 +148,34 @@ const helpArticles = [
     [
       (
         'First import',
-        'On an empty event, choose Players → Add from URL; later, choose Player tools → Refresh from URL. Paste an HTTPS URL and choose Fetch players (or Fetch updates). Boylston accepts either an event page or its entry-list URL. For other clubs, paste the page containing one HTML player table with Name and Rating columns (US Chess ID is optional); the generic importer reads that page without finding links to other pages. Review the rows, then confirm changes and save the source. Fetch ratings from US Chess is checked by default; uncheck it to skip the optional rating review.',
+        'On an empty event, choose Players → Add from URL; later, choose Player tools → Refresh from URL. Paste an HTTPS URL and choose Fetch players (or Fetch updates). Boylston accepts either an event page or its entry-list URL. For other clubs, paste the page containing one HTML player table with Name and Rating columns (US Chess ID is optional); the generic importer reads that page without finding links to other pages. The panel says how many players it found and which sections the list names; one button adds them (Add 16 players). Only rows that need a decision are listed, and All new entries opens the rest. The import never asks for rounds: sections the list names are started, with the rounds, time control and play-up rule a Boylston event page announces, and Set up opens next. Fetch ratings from US Chess is checked by default; uncheck it to skip the optional rating review.',
       ),
       (
         'Updating later',
-        'Open Refresh from the saved URL again. The saved URL is already filled in. New players are selected; changes to existing players need your explicit selection. Missing players stay in the event. Duplicate IDs and ambiguous names need manual resolution. Empty pages and failed requests do not replace the roster.',
+        'Open Refresh from the saved URL again. The saved URL is already filled in. New players are added; a change to an existing player is listed under Changed on the website and needs your tick. Missing players stay in the event. Duplicate IDs and ambiguous names need manual resolution. Empty pages and failed requests do not replace the roster.',
       ),
       (
         'What the website can tell us',
-        'After import, review proposed US Chess ratings in the panel at the right and the player table. Changes over 50 points and unrated-to-rated changes are highlighted, and a US Chess name that looks like a different person is flagged and left unticked. Confirm ticked ratings or choose Keep current ratings. Click a player to edit them; the review stays open. Missing IDs or published ratings leave current values intact. Website section and bye columns are retained in the source record; assign sections and requested byes explicitly in Meow-Chess.',
+        'After import, review proposed US Chess ratings in the panel at the right and the player table. Changes over 50 points and first ratings are marked beside the number and listed under Large rating changes, and a US Chess name that looks like a different person is flagged and left unticked. Confirm ticked ratings or choose Keep current ratings. Click a player to edit them; the review stays open. Missing IDs or published ratings leave current values intact. The website’s Section column places new players in those sections. Its bye and note column is kept as each player’s registration note and never turned into a bye for you: Set up → Review registration notes lists them with the bye grid, and Dealt with clears each one.',
+      ),
+    ],
+  ),
+  HelpArticle(
+    'website-results',
+    'Take results from the club website',
+    'Results players enter online are entered here as they come in.',
+    [
+      (
+        'Turning it on',
+        'When an event\u2019s players came from a Boylston Chess Foundation address, Pairings has a Website results button: the tinted one with a cloud on the toolbar. Choose it and the club\u2019s results page (https://beta.boylstonchess.org/results) is read straight away; the button then shows a ticked cloud and a strip above the boards says what is being followed. An event whose players were typed in or imported from a file has no such button, because there is no website to take results from. Change page asks for another address. The page is read about every ten seconds while boards are waiting, whichever page you are on, and again after the event is reopened. Stop, or the button again, turns it off. Nothing is sent to the website.',
+      ),
+      (
+        'What is taken',
+        'A result is taken only when the website shows this round\u2019s own pairings: the same section and round, and every board it lists has the same two players with the same colors as a board here. One board that differs means the website is showing other pairings, so nothing is taken from that round and the strip above the boards says which board. Save the SwissSys files again so the website has this round.',
+      ),
+      (
+        'Undo and disagreements',
+        'Each result is a step in History like one typed at the board, and a notice names it with Undo. A result you take back is not entered again; it is listed with a button to use it after all. A result you typed is never replaced: when the website says something else, both are shown with a button to use the website\u2019s. A correction the players make on the website to a result that came from the website follows by itself, until the next round is paired. From then on the website changes nothing in that round: a result it shows differently is listed for you to enter yourself, if it is right. A forfeit draw and a disputed game are left for you to enter too. When the page cannot be read, the strip says so; enter results here meanwhile.',
       ),
     ],
   ),
@@ -174,6 +193,10 @@ const helpArticles = [
         'Use Players → Refresh from US Chess for the whole event, or the refresh arrow beside a player’s US Chess ID for one person. Check the returned official name, ID, category and supplement date. Confirm the rating changes you want in the player table, or keep current ratings. A failed lookup leaves local values intact.',
       ),
       (
+        'Switch between the entered and the US Chess rating',
+        'After a refresh the Players table keeps both ratings: Entered, and US Chess with the supplement date. The tick box beside the US Chess rating shows which one the player is paired with; click it to switch, either way. The box in the column heading switches everyone listed. Nothing is looked up again and Undo takes it back. Once a section is paired its ratings stay as they are.',
+      ),
+      (
         'Check US Chess membership expiration',
         'Open a player card to see the saved US Chess membership expiration date. Choose Players → Refresh from US Chess to check everyone directly with US Chess, including unrated players and players in posted sections. Expiration dates save automatically, even if you keep current ratings. Expired dates appear in red with an Expired label. Memberships expiring later this calendar month appear in yellow with Expires this month. Dates before the event ends also receive a warning. Open the player card for provider status and the check time. No date means unknown, not lifetime membership. Failed checks keep the previous observation; changing an ID clears it.',
       ),
@@ -188,6 +211,56 @@ const helpArticles = [
       (
         'After pairing',
         'Refresh can display observations, but posted sections retain their pairing ratings. Refreshing never moves players between quads. Before play, remake quads explicitly if you want to regroup by updated ratings.',
+      ),
+    ],
+  ),
+  HelpArticle(
+    'check',
+    'Check the event before the next round',
+    'A list of likely mistakes, every check that ran, and how the pairings came out.',
+    [
+      (
+        'Open it',
+        'Choose the Check event button in the top bar. With several sections, pick the whole event or one section. The check reads the event as it is now, follows it as you work, and changes nothing. It never stops a round from being paired.',
+      ),
+      (
+        'What it finds',
+        'Fix means the event cannot go on as it stands. Look means a probable mistake: two players paired a second time, the same color three games in a row, an active player with no game and no bye, a withdrawn player still on a board, a second full-point bye, half-point byes past the announced limit, a do-not-pair request that was paired, a rating outside the section’s range, a prize nobody entered can win, an earlier round still missing results, or one person entered in two sections. Note means something allowed that is worth knowing, such as team-mates who had to be paired, players in no section, or a section waiting to be paired while the others have moved on. A forfeit is not a meeting, so two players who forfeited may be paired again.',
+      ),
+      (
+        'What it checked',
+        'Under Checked, every check says what it looked at: Clear: 24 pairings checked. A check that did not apply says so and why, such as Not checked: no section limits half-point byes, so a check that never ran is not mistaken for a clean one.',
+      ),
+      (
+        'Pairing quality',
+        'Each Swiss section lists, round by round, how many boards stayed inside one score group, how many players got the color they were due, third games in a row with one color, players two colors out of balance, players who left their score group the same way twice running, and repeat pairings. Each figure is a count out of the number it could have been. They are worked out from the posted rounds; the reasons for a pairing are in the round’s own explanations on Pairings. Accelerated rounds pair across scores on purpose.',
+      ),
+      (
+        'Keep a copy',
+        'Copy report puts the findings, the checks and the quality figures on the clipboard as plain text, for an appeal or a note to another director.',
+      ),
+    ],
+  ),
+  HelpArticle(
+    'scoreboard',
+    'Show pairings and standings on a second screen',
+    'A scoreboard page for a projector, a TV or phones.',
+    [
+      (
+        'Start it',
+        'Choose the Scoreboard button in the top bar, then Start scoreboard and Open in browser. Drag the browser window to the projector and press F11 for full screen. The page cycles through each section’s current pairings and its standings, and follows the event: a posted round or a result appears within a few seconds. A round you are still reviewing is not shown until you post it. The scoreboard keeps running while its panel is closed and stops when you close the event. It needs the desktop app.',
+      ),
+      (
+        'TVs and phones',
+        'Tick Let TVs and phones on this network open it. The panel then shows an address and a QR code for devices on the same Wi-Fi. Type the address into a smart TV’s browser, or let players scan the code. Anyone on that network can read the board; nobody can change anything through it. If a phone cannot open it, the venue Wi-Fi may keep devices apart: a phone hotspot shared by the laptop and the TV works without it. Your computer’s firewall may ask once whether to allow Meow Chess on the network.',
+      ),
+      (
+        'What it shows',
+        'Choose pairings, standings or both, which sections, and how many seconds each screen stays up. A long section is split across screens rather than shrunk. A Swiss shows its latest round; quads and round robins show the first round still being played. Standings appear once a round is complete. The board shows what is posted on the wall: names, boards, results, ratings and scores. IDs, notes and contact details never leave the computer.',
+      ),
+      (
+        'At the screen',
+        'The corner shows a clock, so a frozen screen is obvious, and the time of the last change to pairings or results. Space pauses, the left and right arrows step, and A− and A+ change the text size for that screen. On a phone, swipe to step. If the page loses contact with the director’s computer it says so and keeps showing the last board it received.',
       ),
     ],
   ),

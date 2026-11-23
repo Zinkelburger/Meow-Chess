@@ -26,12 +26,20 @@ class PlainSelect<T> extends StatefulWidget {
     required this.options,
     required this.onChanged,
     this.label,
+    this.semanticLabel,
     this.hint,
     this.focusNode,
     this.dense = false,
+    this.width,
     this.openOnMount = false,
     super.key,
   });
+
+  /// A fixed width for the field. Without one the field fills the width it
+  /// is given, which it measures while laying out; a toolbar whose height
+  /// is measured ahead of layout (an [IntrinsicHeight] row) cannot hold
+  /// that, so it gives the width here.
+  final double? width;
 
   /// Opens the list as soon as the field appears, for a select that a text
   /// action reveals ("Other format…"): one press, one list.
@@ -44,6 +52,10 @@ class PlainSelect<T> extends StatefulWidget {
   /// Null disables the field.
   final ValueChanged<T>? onChanged;
   final String? label;
+
+  /// What a screen reader calls a field with no visible [label], as in a
+  /// table whose column header names it.
+  final String? semanticLabel;
 
   /// Shown in the field while nothing is chosen.
   final String? hint;
@@ -164,142 +176,156 @@ class _PlainSelectState<T> extends State<PlainSelect<T>> {
           ? colors.onSurfaceVariant
           : colors.onSurface.withValues(alpha: 0.38),
     );
+    if (widget.width case final width?) {
+      return SizedBox(
+        width: width,
+        child: field(context, width, chosen, text, style, arrow),
+      );
+    }
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.hasBoundedWidth ? constraints.maxWidth : 0.0;
-        return MenuAnchor(
-          controller: menu,
-          childFocusNode: focus,
-          consumeOutsideTap: true,
-          onClose: () {
-            if (mounted) setState(() {});
-          },
-          onOpen: () {
-            if (mounted) setState(() {});
-          },
-          style: MenuStyle(
-            minimumSize: WidgetStatePropertyAll(Size(width, 0)),
-            maximumSize: WidgetStatePropertyAll(
-              Size(math.max(width, 420), 360),
-            ),
-          ),
-          menuChildren: [
-            for (final (i, o) in widget.options.indexed)
-              Focus(
-                canRequestFocus: false,
-                skipTraversal: true,
-                onKeyEvent: typeahead,
-                child: MenuItemButton(
-                  key: ValueKey(('select-option', i)),
-                  focusNode: itemFocus.putIfAbsent(i, FocusNode.new),
-                  closeOnActivate: false,
-                  leadingIcon: SizedBox(
-                    width: 18,
-                    child: i == current
-                        ? const Icon(Icons.check, size: 18)
-                        : null,
-                  ),
-                  onPressed: o.enabled ? () => pick(o.value) : null,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: math.max(width, 420) - 64,
-                    ),
-                    child: Text(o.label, overflow: TextOverflow.ellipsis),
-                  ),
-                ),
-              ),
-          ],
-          builder: (context, controller, _) => Semantics(
-            button: true,
-            enabled: enabled,
-            expanded: controller.isOpen,
-            label: widget.label,
-            value: text,
-            excludeSemantics: true,
-            child: FocusableActionDetector(
-              focusNode: focus,
-              enabled: enabled,
-              mouseCursor: enabled
-                  ? SystemMouseCursors.click
-                  : MouseCursor.defer,
-              onShowFocusHighlight: (v) => setState(() => focused = v),
-              onShowHoverHighlight: (v) => setState(() => hovered = v),
-              shortcuts: const {
-                SingleActivator(LogicalKeyboardKey.arrowDown): ActivateIntent(),
-                SingleActivator(LogicalKeyboardKey.arrowDown, alt: true):
-                    ActivateIntent(),
-                SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
-                SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-                SingleActivator(LogicalKeyboardKey.numpadEnter):
-                    ActivateIntent(),
-              },
-              actions: {
-                ActivateIntent: CallbackAction<ActivateIntent>(
-                  onInvoke: (_) => open(),
-                ),
-              },
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: enabled
-                    ? () {
-                        focus.requestFocus();
-                        open();
-                      }
-                    : null,
-                child: widget.dense
-                    ? Container(
-                        height: 32,
-                        padding: const EdgeInsets.only(left: 8, right: 4),
-                        decoration: BoxDecoration(
-                          color: hovered || controller.isOpen
-                              ? colors.surfaceContainerHigh
-                              : null,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: focused ? colors.onSurface : colors.outline,
-                            width: focused ? 2 : 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                text,
-                                style: style.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            arrow,
-                          ],
-                        ),
-                      )
-                    : InputDecorator(
-                        isFocused: focused || controller.isOpen,
-                        isHovering: hovered,
-                        isEmpty: chosen == null && widget.hint == null,
-                        decoration: InputDecoration(
-                          labelText: widget.label,
-                          enabled: enabled,
-                          suffixIcon: arrow,
-                          suffixIconConstraints: const BoxConstraints(
-                            minWidth: 36,
-                            minHeight: 20,
-                          ),
-                        ),
-                        child: Text(
-                          text,
-                          style: style,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-              ),
-            ),
-          ),
-        );
+      builder: (context, constraints) => field(
+        context,
+        constraints.hasBoundedWidth ? constraints.maxWidth : 0.0,
+        chosen,
+        text,
+        style,
+        arrow,
+      ),
+    );
+  }
+
+  /// The field and its list, which is at least [width] wide.
+  Widget field(
+    BuildContext context,
+    double width,
+    SelectOption<T>? chosen,
+    String text,
+    TextStyle style,
+    Widget arrow,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    return MenuAnchor(
+      controller: menu,
+      childFocusNode: focus,
+      consumeOutsideTap: true,
+      onClose: () {
+        if (mounted) setState(() {});
       },
+      onOpen: () {
+        if (mounted) setState(() {});
+      },
+      style: MenuStyle(
+        minimumSize: WidgetStatePropertyAll(Size(width, 0)),
+        maximumSize: WidgetStatePropertyAll(Size(math.max(width, 420), 360)),
+      ),
+      menuChildren: [
+        for (final (i, o) in widget.options.indexed)
+          Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onKeyEvent: typeahead,
+            child: MenuItemButton(
+              key: ValueKey(('select-option', i)),
+              focusNode: itemFocus.putIfAbsent(i, FocusNode.new),
+              closeOnActivate: false,
+              leadingIcon: SizedBox(
+                width: 18,
+                child: i == current ? const Icon(Icons.check, size: 18) : null,
+              ),
+              onPressed: o.enabled ? () => pick(o.value) : null,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: math.max(width, 420) - 64,
+                ),
+                child: Text(o.label, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+          ),
+      ],
+      builder: (context, controller, _) => Semantics(
+        button: true,
+        enabled: enabled,
+        expanded: controller.isOpen,
+        label: widget.label ?? widget.semanticLabel,
+        value: text,
+        excludeSemantics: true,
+        child: FocusableActionDetector(
+          focusNode: focus,
+          enabled: enabled,
+          mouseCursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+          onShowFocusHighlight: (v) => setState(() => focused = v),
+          onShowHoverHighlight: (v) => setState(() => hovered = v),
+          shortcuts: const {
+            SingleActivator(LogicalKeyboardKey.arrowDown): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.arrowDown, alt: true):
+                ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+            SingleActivator(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
+          },
+          actions: {
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) => open(),
+            ),
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: enabled
+                ? () {
+                    focus.requestFocus();
+                    open();
+                  }
+                : null,
+            child: widget.dense
+                ? Container(
+                    height: 32,
+                    padding: const EdgeInsets.only(left: 8, right: 4),
+                    decoration: BoxDecoration(
+                      color: hovered || controller.isOpen
+                          ? colors.surfaceContainerHigh
+                          : null,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: focused ? colors.onSurface : colors.outline,
+                        width: focused ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            text,
+                            style: style.copyWith(fontWeight: FontWeight.w600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        arrow,
+                      ],
+                    ),
+                  )
+                : InputDecorator(
+                    isFocused: focused || controller.isOpen,
+                    isHovering: hovered,
+                    isEmpty: chosen == null && widget.hint == null,
+                    decoration: InputDecoration(
+                      labelText: widget.label,
+                      enabled: enabled,
+                      suffixIcon: arrow,
+                      suffixIconConstraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 20,
+                      ),
+                    ),
+                    child: Text(
+                      text,
+                      style: style,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+          ),
+        ),
+      ),
     );
   }
 }

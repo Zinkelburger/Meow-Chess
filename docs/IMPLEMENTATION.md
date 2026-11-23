@@ -36,8 +36,9 @@ Backups use SQLite `VACUUM INTO` followed by an integrity check. A secondary cop
 recovers its explicitly recorded revision, not later edits saved only on the first
 laptop. Copying a live main database file without its WAL is unsupported. Use Save
 independent copy, Back up now, or close the app before ordinary file copying.
-New tournament and Save independent copy honor the native save dialog's Replace
-confirmation; Linux explicitly enables GTK's overwrite prompt. Replacement
+New tournament creates `<tournaments folder>/<event name>/<event>.meow`,
+refusing a folder that already holds files. Save independent copy honors the
+native save dialog's Replace confirmation; Linux explicitly enables GTK's overwrite prompt. Replacement
 publishes a verified snapshot atomically and refuses active event files or files
 with pending recovery data. SQLite cleans up empty WAL files left by read-only
 inspection after acquiring the required locks. Automatic backups still never replace existing files.

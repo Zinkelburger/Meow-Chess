@@ -32,13 +32,14 @@ final _byPosition = {
 
 /// Scores are commands for the focused player. D is the only draw key.
 ///
-/// F is the only forfeit key: F marks the focused player as a no-show (0F,
-/// the opponent wins 1F), and F on the other player of that board as well
-/// makes it a double forfeit. A forfeit is only ever won or lost, so on a
-/// forfeit board 1 and 0 say who won it (1 on one player of a double
-/// forfeit turns it back into a single forfeit), while D, P and ? are
-/// refused (see [refusedOnForfeit]). Delete or Backspace clears the result,
-/// after which 1, 0 and D record a played game again.
+/// F is the only forfeit key, and it switches the focused player's no-show
+/// mark on and off. F marks the player absent (0F, the opponent wins 1F); F
+/// on the other player of that board as well makes it a double forfeit; F
+/// on a player already marked absent takes that mark back, which leaves the
+/// other player's forfeit, or no result when there was only the one.
+///
+/// 1, 0, D, P and ? never mean a forfeit: on any board, a forfeit board
+/// included, they enter a played game. Delete or Backspace clears.
 ///
 /// Keys are read through [commandKey], so they also work on a keyboard
 /// layout without Latin letters.
@@ -48,35 +49,35 @@ Outcome? resultFromKey(
   Outcome current = Outcome.unreported,
 }) {
   final key = commandKey(event);
-  final forfeitBoard = isForfeit(current);
   final wins = white ? Outcome.whiteWin : Outcome.blackWin;
   final loses = white ? Outcome.blackWin : Outcome.whiteWin;
   final winsByForfeit = white ? Outcome.whiteForfeit : Outcome.blackForfeit;
   final forfeits = white ? Outcome.blackForfeit : Outcome.whiteForfeit;
   if (key == LogicalKeyboardKey.keyF) {
     // The opponent was already marked absent: neither player showed.
-    return current == winsByForfeit || current == Outcome.doubleForfeit
-        ? Outcome.doubleForfeit
-        : forfeits;
+    if (current == winsByForfeit) return Outcome.doubleForfeit;
+    // F again takes this player's mark back; the opponent's stays.
+    if (current == Outcome.doubleForfeit) return winsByForfeit;
+    if (current == forfeits) return Outcome.unreported;
+    return forfeits;
   }
   if ([
     LogicalKeyboardKey.digit1,
     LogicalKeyboardKey.numpad1,
     LogicalKeyboardKey.keyW,
   ].contains(key)) {
-    return forfeitBoard ? winsByForfeit : wins;
+    return wins;
   }
   if ([
     LogicalKeyboardKey.digit0,
     LogicalKeyboardKey.numpad0,
     LogicalKeyboardKey.keyL,
   ].contains(key)) {
-    return forfeitBoard ? forfeits : loses;
+    return loses;
   }
   if ([LogicalKeyboardKey.delete, LogicalKeyboardKey.backspace].contains(key)) {
     return Outcome.unreported;
   }
-  if (forfeitBoard) return null;
   if (key == LogicalKeyboardKey.keyD) return Outcome.draw;
   if (key == LogicalKeyboardKey.keyP) return Outcome.unfinished;
   if (event.character == '?') return Outcome.disputed;
@@ -89,15 +90,6 @@ bool isForfeit(Outcome o) => const {
   Outcome.blackForfeit,
   Outcome.doubleForfeit,
 }.contains(o);
-
-/// A result key that has no forfeit meaning: there is no half-point,
-/// still-playing or disputed forfeit.
-bool refusedOnForfeit(KeyEvent event, Outcome current) =>
-    isForfeit(current) &&
-    (commandKey(event) == LogicalKeyboardKey.keyD ||
-        commandKey(event) == LogicalKeyboardKey.keyP ||
-        event.character == '?' ||
-        isDrawAttempt(event));
 
 /// A key a director reaches for to enter a draw as "0.5" or "=": 5, = and
 /// the decimal point, on the number row or the numpad. None of them is a
@@ -120,15 +112,22 @@ bool isDrawAttempt(KeyEvent event) {
 
 /// What the keys do on a forfeit board, from the focused player's side.
 String forfeitKeyHint(Outcome current, {required bool white}) {
+  const played = '1, 0 or D enters a played game';
   if (current == Outcome.doubleForfeit) {
-    return 'Double forfeit · 1 gives this player the forfeit win · Delete clears';
+    return 'Double forfeit · F takes this player\'s no-show back · $played';
   }
   final forfeited =
       current == (white ? Outcome.blackForfeit : Outcome.whiteForfeit);
   return forfeited
-      ? 'Forfeit · F on the other player makes it a double forfeit · 1 gives this player the win · Delete clears'
-      : 'Forfeit · F here makes it a double forfeit · 0 gives the win to the other player · Delete clears';
+      ? 'No-show · F takes it back · F on the other player makes it a double forfeit · $played'
+      : 'Won by forfeit · F here makes it a double forfeit · $played';
 }
+
+/// The longest of the [forfeitKeyHint]s, which the legend keeps room for.
+String longestForfeitKeyHint() => [
+  for (final o in [Outcome.whiteForfeit, Outcome.doubleForfeit])
+    for (final white in [true, false]) forfeitKeyHint(o, white: white),
+].reduce((a, b) => a.length >= b.length ? a : b);
 
 const resultKeyHint =
     '1 / W win · 0 / L loss · D draw · F no-show (F on both: double forfeit)';

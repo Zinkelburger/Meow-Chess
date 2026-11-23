@@ -506,7 +506,8 @@ class MoveFields extends StatelessWidget {
           onChanged: onTarget,
         ),
         if (to case final s?)
-          if (ratingRangeProblem(event.player(playerId), s) case final problem?)
+          if (eligibilityProblem(event, event.player(playerId), s)
+              case final problem?)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(

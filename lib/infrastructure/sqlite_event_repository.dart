@@ -257,6 +257,9 @@ CREATE TABLE IF NOT EXISTS preference (key TEXT PRIMARY KEY, value TEXT NOT NULL
 
   final bool _created;
   final String _path;
+
+  /// The event file as it was given when opened; `:memory:` for none.
+  String get path => _path;
   String? _ownershipPath;
 
   /// What identified the file when it was opened ([eventFileIdentity]).

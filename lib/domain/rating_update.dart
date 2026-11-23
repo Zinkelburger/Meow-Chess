@@ -1,5 +1,6 @@
 import 'member_observation.dart';
 import 'model.dart';
+import 'rating_choice.dart';
 import 'rating_system.dart';
 
 /// Explains why an observed rating cannot replace the reviewed local value.
@@ -57,12 +58,9 @@ Player applyRatingObservation(
   final retrieved = DateTime.tryParse(observation.retrievedAt);
   return player.copy(
     rating: observation.ratings[system.code],
-    ratingEvidence: {
-      ...player.ratingEvidence,
-      ...observation.toJson(),
-      'kind': 'monthly supplement',
-      'category': system.code,
-    },
+    // The rating this replaces stays on file, so the director can switch
+    // back to it.
+    ratingEvidence: supplementEvidence(player, observation.toJson(), system),
     membershipEvidence:
         previous != null && (retrieved == null || previous.isAfter(retrieved))
         ? player.membershipEvidence

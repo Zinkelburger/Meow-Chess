@@ -23,7 +23,7 @@ the built files, and nothing runs on a server except one small fetch function.
 | Save dialogs for reports, DBF and TRF exports | Downloads. The US Chess rating package is one `.zip` (the three DBFs and `manifest.json`); the FIDE report is a `.zip` of TRF files. |
 | FIDE-rated sections pair with BBP Pairings (native C++) | Not available yet: pairing a FIDE-rated section says to use the desktop app or pair by hand. US Chess Swiss, quads, round robins and the other formats pair as on desktop. |
 | FIDE rating list download and lookup | Not available (a 45 MB list indexed on disk). Enter FIDE ratings by hand. |
-| Web roster import, US Chess rating lookups | The same, through the site's fetch function (below). |
+| Web roster import, website results, US Chess rating lookups | The same, through the site's fetch function (below). |
 | Several windows | One tab at a time: a second tab says Meow-Chess is open elsewhere, because two tabs would overwrite each other's copy of an event. |
 
 ### What keeps an event, and what loses it

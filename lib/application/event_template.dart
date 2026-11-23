@@ -36,6 +36,7 @@ Event templateFrom(
     online: source.online,
     fide: source.fide,
     fideTiebreaks: source.fideTiebreaks,
+    playUpLimit: source.playUpLimit,
     sections: [for (final s in source.sections) _sectionTemplate(s, id())],
   );
 }
@@ -46,6 +47,7 @@ Section _sectionTemplate(Section s, String id) => Section(
   players: const [],
   format: s.format,
   plannedRounds: s.plannedRounds,
+  roundsUnset: s.roundsUnset,
   boardStart: s.boardStart,
   doubleGames: s.doubleGames,
   ratingCeiling: s.ratingCeiling,

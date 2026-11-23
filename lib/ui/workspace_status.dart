@@ -4,6 +4,30 @@ import '../application/tournament_controller.dart';
 import '../domain/model.dart' show TournamentException;
 import 'dialogs.dart' show showFailure;
 
+/// Says something that needs no answer, where [showUndoNotice] says what
+/// changed: the same bar, without Undo, for when nothing was saved.
+void showNotice(BuildContext context, String message) {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+  final colors = Theme.of(context).colorScheme;
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        key: const ValueKey('notice'),
+        content: Text(
+          message,
+          style: TextStyle(color: colors.onInverseSurface),
+        ),
+        backgroundColor: colors.inverseSurface,
+        duration: const Duration(seconds: 10),
+        showCloseIcon: true,
+        closeIconColor: colors.onInverseSurface,
+      ),
+      snackBarAnimationStyle: AnimationStyle.noAnimation,
+    );
+}
+
 /// Says what just changed, with Undo, without stopping the work: a bar at
 /// the bottom of the window that leaves by itself. Undo takes back that
 /// change only while it is still the latest one; after another change it
@@ -102,7 +126,7 @@ class PostNotes extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       key: const ValueKey('post-notes'),
-      margin: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHigh,
@@ -120,16 +144,19 @@ class PostNotes extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+          // Many notes scroll within the card rather than run off screen.
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final note in notes)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(note),
-                  ),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final note in notes)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text(note),
+                    ),
+                ],
+              ),
             ),
           ),
           IconButton(
@@ -199,7 +226,13 @@ class WorkspaceStatusBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final style = TextStyle(fontSize: 12, color: colors.onSurfaceVariant);
+    // Times and counts in even-width digits, so a new save time does not
+    // nudge what follows.
+    final style = TextStyle(
+      fontSize: 12,
+      color: colors.onSurfaceVariant,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
     return Container(
       key: const ValueKey('status-bar'),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -210,34 +243,6 @@ class WorkspaceStatusBar extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            // Always here, so a screen reader hears each change; it takes
-            // no room while there is nothing to say.
-            Semantics(
-              key: const ValueKey('status-print'),
-              container: true,
-              liveRegion: true,
-              child: printing == null
-                  ? const SizedBox.shrink()
-                  : Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          printingNow ? Icons.print_outlined : Icons.check,
-                          size: 14,
-                          color: colors.onSurface,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          printing!,
-                          style: style.copyWith(
-                            color: colors.onSurface,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        ExcludeSemantics(child: Text('  ·  ', style: style)),
-                      ],
-                    ),
-            ),
             Icon(
               fileProblem == null ? Icons.check : Icons.warning_amber,
               size: 14,
@@ -254,6 +259,19 @@ class WorkspaceStatusBar extends StatelessWidget {
                   ? style
                   : style.copyWith(color: colors.error),
             ),
+            ExcludeSemantics(child: Text('  ·  ', style: style)),
+            TextButton(
+              key: const ValueKey('status-backup'),
+              onPressed: onBackups,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 24),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+              child: Text(backup),
+            ),
+            // What comes and goes sits after Event saved and Backup, so
+            // they never shift sideways; only the summary at the end moves.
             if (moved != null) ...[
               ExcludeSemantics(child: Text('  ·  ', style: style)),
               Text(moved!, key: const ValueKey('status-moved'), style: style),
@@ -269,16 +287,33 @@ class WorkspaceStatusBar extends StatelessWidget {
                   child: Text(moveBack!),
                 ),
             ],
-            ExcludeSemantics(child: Text('  ·  ', style: style)),
-            TextButton(
-              key: const ValueKey('status-backup'),
-              onPressed: onBackups,
-              style: TextButton.styleFrom(
-                minimumSize: const Size(0, 24),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                textStyle: const TextStyle(fontSize: 12),
-              ),
-              child: Text(backup),
+            // Always here, so a screen reader hears each change; it takes
+            // no room while there is nothing to say.
+            Semantics(
+              key: const ValueKey('status-print'),
+              container: true,
+              liveRegion: true,
+              child: printing == null
+                  ? const SizedBox.shrink()
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ExcludeSemantics(child: Text('  ·  ', style: style)),
+                        Icon(
+                          printingNow ? Icons.print_outlined : Icons.check,
+                          size: 14,
+                          color: colors.onSurface,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          printing!,
+                          style: style.copyWith(
+                            color: colors.onSurface,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
             ExcludeSemantics(child: Text('  ·  ', style: style)),
             Text(summary, overflow: TextOverflow.ellipsis, style: style),
@@ -289,6 +324,11 @@ class WorkspaceStatusBar extends StatelessWidget {
               ),
               TextButton(
                 onPressed: onRetryWorkspaceState,
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  textStyle: const TextStyle(fontSize: 12),
+                ),
                 child: const Text('Retry'),
               ),
             ],

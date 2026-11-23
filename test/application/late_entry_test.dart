@@ -253,4 +253,40 @@ void main() {
       refuses('not been paired'),
     );
   });
+
+  test(
+    'a late entrant combined before round 1 starts is paired, not given a bye',
+    () async {
+      final c = swiss(count: 5);
+      addTearDown(c.dispose);
+      await post(c);
+      c.savePlayer(walkIn('late'));
+      c.enterLate(['late'], open(c).id);
+      expect(c.event!.player('late').byes.keys, [1]);
+      final from = open(c).id;
+      c.addSection('Combined', Format.swiss, 3);
+      final into = c.event!.sections.firstWhere((s) => s.id != from).id;
+      expect(c.combineSections([from], into), 1);
+      // The bye went with the discarded round.
+      expect(c.event!.player('late').byes, isEmpty);
+      await post(c);
+      final round = open(c).rounds.single;
+      expect(round.byes.where((b) => b.player == 'late'), isEmpty);
+      expect(
+        round.games.where((g) => g.white == 'late' || g.black == 'late'),
+        hasLength(1),
+      );
+    },
+  );
+
+  test('a quad or ladder waiting for its rounds still pairs', () async {
+    final c = swiss(count: 4, format: Format.quad);
+    addTearDown(c.dispose);
+    c.change(
+      'Rounds left unset by a registration list',
+      c.event!.copy(sections: [open(c).copy(roundsUnset: true)]),
+    );
+    await post(c);
+    expect(open(c).rounds, hasLength(1));
+  });
 }

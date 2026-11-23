@@ -4,6 +4,7 @@ import '../application/tournament_controller.dart';
 import '../domain/model.dart';
 import '../domain/prizes.dart';
 import '../domain/team_standings.dart';
+import '../domain/upsets.dart';
 import '../infrastructure/reports.dart' show ReportKind, reportName;
 import 'membership_style.dart' show attentionColor;
 import 'panels.dart' show Dock, showPrint;
@@ -267,7 +268,27 @@ class _AwardsBoardState extends State<AwardsBoard> {
         ),
       ],
     );
-    if (rows.isEmpty) return heading;
+    // For an upset prize the director announced: the table does not award
+    // it, so the board only says who it would be.
+    final upsets = biggestUpsets(e, s);
+    final upset = upsets.isEmpty
+        ? null
+        : Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: SelectableText(
+              'Biggest upset: ${upsets.map((u) => u.text).join('; ')}.',
+              key: ValueKey('awards-upset-${s.id}'),
+              style: muted,
+            ),
+          );
+    if (rows.isEmpty) {
+      return upset == null
+          ? heading
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [heading, upset],
+            );
+    }
     final ticks = handed;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -295,6 +316,7 @@ class _AwardsBoardState extends State<AwardsBoard> {
             ],
           ),
         ),
+        ?upset,
       ],
     );
   }

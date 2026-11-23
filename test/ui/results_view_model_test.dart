@@ -484,24 +484,12 @@ void main() {
       );
       expect(
         act(const GridKeyPress(GridKey.other, printable: true)),
-        isA<GridRefuse>()
-            .having((a) => a.draw, 'draw', isFalse)
-            .having((a) => a.forfeit, 'forfeit', isFalse),
+        isA<GridRefuse>().having((a) => a.draw, 'draw', isFalse),
       );
       // The numpad decimal may type nothing, yet still asks for a draw.
       expect(
         act(const GridKeyPress(GridKey.other, drawAttempt: true)),
         isA<GridRefuse>().having((a) => a.draw, 'draw', isTrue),
-      );
-      expect(
-        act(
-          const GridKeyPress(
-            GridKey.other,
-            printable: true,
-            refusedOnForfeit: true,
-          ),
-        ),
-        isA<GridRefuse>().having((a) => a.forfeit, 'forfeit', isTrue),
       );
       expect(act(const GridKeyPress(GridKey.other)), isA<GridKeyIgnored>());
     });

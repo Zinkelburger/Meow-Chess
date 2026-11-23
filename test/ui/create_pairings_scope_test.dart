@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
+import 'package:meow_chess/domain/pairing.dart';
+import 'package:meow_chess/ui/workspace.dart' show postState;
 import 'package:meow_chess/ui/results_view.dart';
 
 import '../support.dart';
@@ -18,6 +20,17 @@ Future<void> press(WidgetTester tester, TournamentController c) async {
   await tester.pumpAndSettle();
 }
 
+/// Sets the rounds [sectionId] plans to play.
+void rounds(TournamentController c, String sectionId, int planned) => c.change(
+  'Set rounds',
+  c.event!.copy(
+    sections: [
+      for (final s in c.event!.sections)
+        s.id == sectionId ? s.copy(plannedRounds: planned) : s,
+    ],
+  ),
+);
+
 void finish(TournamentController c, String sectionId) {
   final s = c.event!.sections.firstWhere((s) => s.id == sectionId);
   for (final g in s.rounds.lastOrNull?.games ?? const <Game>[]) {
@@ -28,6 +41,62 @@ void finish(TournamentController c, String sectionId) {
 void main() {
   final button = find.byKey(const ValueKey('pair-next-round'));
   final why = find.byKey(const ValueKey('post-blocked'));
+
+  testWidgets('a section too small for its rounds is cautioned, not held '
+      'back', (tester) async {
+    final c = fixture(format: Format.swiss);
+    addTearDown(c.dispose);
+    final [q1, q2] = c.event!.sections;
+    // Four players can meet each other in three rounds, not five.
+    expect(postState(c.event!, null).caution, isNull);
+    rounds(c, q1.id, 5);
+    final small =
+        '${q1.name} has 4 players for 5 rounds, so some will '
+        'meet twice.';
+    expect(tooFewPlayers(c.event!, c.event!.sections.first), small);
+    expect(postState(c.event!, null).caution, small);
+    expect(postState(c.event!, q2).caution, isNull);
+
+    await mountWorkspace(tester, c);
+    await tester.tap(find.text('Pairings').first);
+    await tester.pumpAndSettle();
+    // A caution triangle and the words, beside a button that still works.
+    expect(find.byKey(const ValueKey('post-caution')), findsOneWidget);
+    expect(tester.widget<Text>(why).data, small);
+    await pickTab(tester, q2.id);
+    expect(find.byKey(const ValueKey('post-caution')), findsNothing);
+    await pickTab(tester, q1.id);
+    expect(find.byKey(const ValueKey('post-caution')), findsOneWidget);
+    await press(tester, c);
+    expect(c.event!.sections.first.rounds, hasLength(1));
+    // Said before round 1 only: after that the section is under way.
+    finish(c, q1.id);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('post-caution')), findsNothing);
+    expect(postState(c.event!, c.event!.sections.first).caution, isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  test('too few players: one alone, and an odd field sitting out', () {
+    final c = fixture(count: 5, format: Format.swiss);
+    addTearDown(c.dispose);
+    Section only() => c.event!.sections.first;
+    final n = only().players.length;
+    rounds(c, only().id, n.isEven ? n - 1 : n);
+    expect(tooFewPlayers(c.event!, only()), isNull);
+    rounds(c, only().id, n + 1);
+    expect(
+      tooFewPlayers(c.event!, only()),
+      '${only().name} has $n players for ${n + 1} rounds, so some will '
+      'meet twice.',
+    );
+    // Withdrawn players are not there to pair.
+    c.setWithdrawn(only().players.skip(1), true);
+    expect(
+      tooFewPlayers(c.event!, only()),
+      '${only().name} has only 1 player.',
+    );
+  });
 
   testWidgets('Create pairings pairs the chosen section and says which', (
     tester,

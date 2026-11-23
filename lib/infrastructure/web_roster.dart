@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
+import '../domain/announcement.dart';
 import '../domain/model.dart';
+import '../domain/rating_choice.dart';
 import '../domain/section_placement.dart';
 import '../domain/us_chess.dart';
 import 'roster_import.dart';
@@ -32,12 +34,52 @@ class WebRoster {
     return uri;
   }
 
+  ClubRosterSource _sourceFor(Uri supplied) =>
+      sources.where((source) => source.matches(supplied)).firstOrNull ??
+      const HtmlTableRosterSource();
+
   Future<List<ImportRow>> fetch(String url) async {
     final supplied = _validatedUrl(url);
-    final source =
-        sources.where((source) => source.matches(supplied)).firstOrNull ??
-        const HtmlTableRosterSource();
+    final source = _sourceFor(supplied);
     final uri = _validatedUrl(source.entryListUrl(supplied).toString());
+    final (:status, :text, location: _) = await _get(uri);
+    if (status != 200) {
+      throw TournamentException(
+        'Could not read the entry list (HTTP $status). For a redirect, paste the final page URL. Your roster is unchanged.',
+      );
+    }
+    return source.parse(text);
+  }
+
+  /// What the club's event page announces for the event of [url]: rounds,
+  /// time control and its play-up and merge rules. Null when the club has
+  /// no such page or it could not be read; an entry list imports without
+  /// it. One redirect is followed, and only to another of the club's event
+  /// pages (a short address to the full one).
+  Future<Announcement?> fetchAnnouncement(String url) async {
+    try {
+      final supplied = _validatedUrl(url);
+      final source = _sourceFor(supplied);
+      final page = source.eventPageUrl(supplied);
+      if (page == null) return null;
+      var response = await _get(_validatedUrl(page.toString()));
+      if (response.status >= 301 &&
+          response.status <= 308 &&
+          response.location != null) {
+        final next = page.resolve(response.location!);
+        if (!source.isEventPage(next)) return null;
+        response = await _get(_validatedUrl(next.toString()));
+      }
+      return response.status == 200 ? source.parseEvent(response.text) : null;
+    } on TournamentException {
+      return null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// One page of at most 2 MB, without following redirects.
+  Future<({int status, String text, String? location})> _get(Uri uri) async {
     final request = http.Request('GET', uri)..followRedirects = false;
     final unreachable =
         'Could not reach ${uri.host}. Check the internet connection and the '
@@ -48,11 +90,6 @@ class WebRoster {
       response = await client
           .send(request)
           .timeout(const Duration(seconds: 20));
-      if (response.statusCode != 200) {
-        throw TournamentException(
-          'Could not read the entry list (HTTP ${response.statusCode}). For a redirect, paste the final page URL. Your roster is unchanged.',
-        );
-      }
       const limit = 2 * 1024 * 1024;
       await for (final chunk in response.stream.timeout(
         const Duration(seconds: 20),
@@ -74,8 +111,12 @@ class WebRoster {
     } on IOException {
       throw TournamentException(unreachable);
     }
-    return source.parse(
-      decodeWebText(bytes, contentType: response.headers['content-type']),
+    return (
+      status: response.statusCode,
+      text: response.statusCode == 200
+          ? decodeWebText(bytes, contentType: response.headers['content-type'])
+          : '',
+      location: response.headers['location'],
     );
   }
 }
@@ -128,7 +169,7 @@ class RosterChange {
 
 /// A proposal against one event revision. Never infers identity from a name.
 class RosterReview {
-  RosterReview(Event event, this.url, this.rows)
+  RosterReview(Event event, this.url, this.rows, {this.announcement})
     : eventId = event.id,
       revision = event.revision,
       fetchedAt = DateTime.now().toUtc().toIso8601String() {
@@ -200,6 +241,9 @@ class RosterReview {
   final String eventId;
   final String url, fetchedAt;
   final List<ImportRow> rows;
+
+  /// What the club's event page announces, when it could be read.
+  final Announcement? announcement;
   final changes = <RosterChange>[];
   late final List<Player> missing;
 
@@ -228,19 +272,25 @@ class RosterReview {
   );
 
   /// Applies the [selected] changes. Sections named by the list that the
-  /// event does not have start as Swiss sections of [newSectionRounds].
-  Event apply(
-    Event event,
-    Set<String> selected, {
-    int newSectionRounds = 0,
-    String Function()? newId,
-  }) {
+  /// event does not have start as Swiss sections: of the announced number
+  /// of rounds when the event page states one, otherwise with their rounds
+  /// still to be set. An event with no players and no sections yet also
+  /// takes the announced time control and play-up rule.
+  Event apply(Event event, Set<String> selected, {String Function()? newId}) {
+    final fresh = event.players.isEmpty && event.sections.isEmpty;
     final placed = _apply(event, selected);
-    return applySectionPlan(
+    final rounds = announcement?.rounds ?? 0;
+    final sectioned = applySectionPlan(
       placed,
       planSections(placed, _labels(selected)),
-      rounds: newSectionRounds,
+      rounds: rounds > 0 ? rounds : null,
       newId: newId ?? const Uuid().v4,
+    );
+    final announced = announcement;
+    if (!fresh || announced == null) return sectioned;
+    return sectioned.copy(
+      timeControl: announced.timeControl.isEmpty ? null : announced.timeControl,
+      playUpLimit: announced.playUpLimit > 0 ? announced.playUpLimit : null,
     );
   }
 
@@ -282,19 +332,30 @@ class RosterReview {
           );
           continue;
         }
+        final registration = {
+          'source': url,
+          'kind': 'self-reported registration',
+          'retrievedAt': fetchedAt,
+          'registrationRating': incoming.rating,
+        };
         result[result.indexWhere((p) => p.id == old.id)] = old.copy(
           name: incoming.name,
           registrationNote: incoming.registrationNote,
-          rating: old.ratingEvidence['supplementDate'] != null
-              ? old.rating
-              : incoming.rating,
-          ratingEvidence: old.ratingEvidence['supplementDate'] != null
-              ? {...old.ratingEvidence, 'registrationRating': incoming.rating}
-              : {
-                  'source': url,
-                  'kind': 'self-reported registration',
-                  'retrievedAt': fetchedAt,
+          rating: usesSupplement(old) ? old.rating : incoming.rating,
+          // Either way the rating not in use stays on file: the website's
+          // number beside a supplement, the supplement beside the website's.
+          ratingEvidence: usesSupplement(old)
+              ? {
+                  ...old.ratingEvidence,
                   'registrationRating': incoming.rating,
+                  'entered': {
+                    'rating': incoming.rating,
+                    'evidence': registration,
+                  },
+                }
+              : {
+                  ...registration,
+                  'supplement': ?old.ratingEvidence['supplement'],
                 },
         );
       }
@@ -324,6 +385,11 @@ class RosterReview {
         'rows': rows
             .map((r) => {'line': r.line, 'raw': r.raw, 'error': r.error})
             .toList(),
+        if (announcement != null)
+          'announced': announcement!.toJson()
+        else if (event.rosterSource['url'] == url &&
+            event.rosterSource['announced'] != null)
+          'announced': event.rosterSource['announced'],
       },
     );
   }

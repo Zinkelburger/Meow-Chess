@@ -373,7 +373,7 @@ mixin _SectionCommands on _CommandContext {
             byes: [
               ...r.byes,
               for (final MapEntry(key: id, value: mine) in awards.entries)
-                ByeAward(id, mine[r.number]!, 'Late entry'),
+                ByeAward(id, mine[r.number]!, lateEntryBye),
             ],
           ),
       ],
@@ -409,9 +409,114 @@ mixin _SectionCommands on _CommandContext {
     String targetId, {
     String reason = '',
     Map<int, int> lateByes = const {},
+  }) => _moveInto(event!, ids, targetId, reason: reason, lateByes: lateByes);
+
+  /// Combines the sections [sourceIds] into [targetId]: every player of
+  /// each source moves over, in one step. The target keeps its name and
+  /// settings.
+  ///
+  /// Pairings nobody has played yet do not stand in the way. Where the
+  /// latest round of any section involved is paired but not started and has
+  /// no result in ([unplayedRounds]), those pairings are discarded first, so
+  /// the combined section is paired afresh with everyone in it. Returns how
+  /// many rounds were discarded; the caller pairs again when it is not
+  /// zero. A source left with no rounds of its own goes with its players.
+  ///
+  /// Everything else is as [movePlayers]: the sections must then have
+  /// played the same number of rounds, with every result in, and once
+  /// rounds are played the move needs a [reason].
+  int combineSections(
+    Iterable<String> sourceIds,
+    String targetId, {
+    String reason = '',
   }) {
     final e = event!;
     final target = _section(targetId);
+    final ids = {...sourceIds};
+    if (ids.isEmpty || ids.contains(targetId)) {
+      throw const TournamentException('Choose a different section.');
+    }
+    for (final id in ids) {
+      _section(id);
+    }
+    // In the order of the tabs, whatever order they were chosen in.
+    final sources = [
+      for (final s in e.sections)
+        if (ids.contains(s.id)) s,
+    ];
+    var discarded = 0;
+    // A late entrant's bye in a discarded round was given only because the
+    // round was already posted, as in repairRound; it goes with the round,
+    // so the fresh pairing gives them a board.
+    final lateByes = <String, Set<int>>{};
+    Section trimmed(Section s) {
+      final n = unplayedRounds(s);
+      if (n == 0) return s;
+      discarded += n;
+      for (final r in s.rounds.skip(s.rounds.length - n)) {
+        for (final b in r.byes) {
+          if (b.reason == lateEntryBye) {
+            (lateByes[b.player] ??= {}).add(r.number);
+          }
+        }
+      }
+      final rounds = s.rounds.take(s.rounds.length - n).toList();
+      // What round 1 fixed is free again once round 1 is gone.
+      return rounds.isEmpty
+          ? s.copy(rounds: rounds, bakuLast: '', fideOrder: const [])
+          : s.copy(rounds: rounds);
+    }
+
+    final sections = [
+      for (final s in e.sections)
+        ids.contains(s.id) || s.id == targetId ? trimmed(s) : s,
+    ];
+    final cleared = e.copy(
+      players: [
+        for (final p in e.players)
+          lateByes[p.id] == null
+              ? p
+              : p.copy(
+                  byes: {...p.byes}
+                    ..removeWhere((r, _) => lateByes[p.id]!.contains(r)),
+                ),
+      ],
+      sections: sections,
+    );
+    final emptied = {
+      for (final s in cleared.sections)
+        if (ids.contains(s.id) && s.rounds.isEmpty) s.id,
+    };
+    _moveInto(
+      cleared,
+      [for (final s in sources) ...s.players],
+      targetId,
+      reason: reason,
+      action:
+          'Combine ${nameList([for (final s in sources) s.name])} '
+          'into ${target.name}',
+      dropSections: emptied,
+      always: discarded > 0 || emptied.isNotEmpty,
+    );
+    return discarded;
+  }
+
+  /// [movePlayers] from [e]: the event as it stands, or with unplayed
+  /// pairings already cleared by [combineSections]. [dropSections] are
+  /// removed in the same step, and [always] commits even when no
+  /// player changes section.
+  void _moveInto(
+    Event e,
+    List<String> ids,
+    String targetId, {
+    String reason = '',
+    Map<int, int> lateByes = const {},
+    String? action,
+    Set<String> dropSections = const {},
+    bool always = false,
+  }) {
+    _section(targetId);
+    final target = e.sections.firstWhere((s) => s.id == targetId);
     final unknown = ids.where((id) => !e.players.any((p) => p.id == id));
     if (unknown.isNotEmpty) {
       throw const TournamentException('A selected player no longer exists.');
@@ -422,8 +527,9 @@ mixin _SectionCommands on _CommandContext {
       for (final id in {...ids})
         if (!target.players.contains(id)) id,
     ];
-    if (moving.isEmpty) return;
-    if (target.rounds.isNotEmpty &&
+    if (moving.isEmpty && !always) return;
+    if (moving.isNotEmpty &&
+        target.rounds.isNotEmpty &&
         moving.every((id) => e.sectionOf(id) == null)) {
       enterLate(moving, targetId, byes: lateByes);
       return;
@@ -520,20 +626,25 @@ mixin _SectionCommands on _CommandContext {
     }).toList();
     final allocated = keepBoardRanges(e.sections, sections, changed);
     change(
-      moving.length == 1
-          ? 'Move ${e.player(moving.single).name} to ${target.name}'
-          : 'Move ${moving.length} players to ${target.name}',
+      action ??
+          (moving.length == 1
+              ? 'Move ${e.player(moving.single).name} to ${target.name}'
+              : 'Move ${moving.length} players to ${target.name}'),
       e.copy(
-        sections: allocated,
+        sections: [
+          for (final s in allocated)
+            if (!dropSections.contains(s.id)) s,
+        ],
         transitions: [
           ...e.transitions,
-          {
-            'players': moving,
-            'target': targetId,
-            'effectiveRound': target.rounds.length + 1,
-            'reason': reason,
-            'revision': e.revision,
-          },
+          if (moving.isNotEmpty)
+            {
+              'players': moving,
+              'target': targetId,
+              'effectiveRound': target.rounds.length + 1,
+              'reason': reason,
+              'revision': e.revision,
+            },
         ],
       ),
     );

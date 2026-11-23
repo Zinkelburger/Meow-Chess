@@ -18,7 +18,9 @@ import '../domain/pairing.dart';
 import '../domain/standings.dart';
 import '../domain/team_standings.dart' show TeamAwards;
 import '../domain/scheveningen.dart';
+import '../domain/rating_choice.dart';
 import '../domain/rating_preview.dart';
+import '../domain/rating_system.dart';
 import 'dialogs.dart';
 import 'focus_pool.dart';
 import 'result_correction_panel.dart';
@@ -29,6 +31,7 @@ import '../infrastructure/reports.dart' show ReportKind;
 import 'players_view_model.dart';
 import 'theme.dart';
 import 'result_format.dart';
+import 'select.dart';
 
 import 'fide_list_panel.dart';
 import 'side_panel.dart';
@@ -51,6 +54,8 @@ class PlayersView extends StatefulWidget {
     this.sectionId,
     this.onRefreshRoster,
     this.onRefreshRatings,
+    this.onSetUp,
+    this.onNotes,
     this.newSectionRequested = false,
     this.onNewSectionShown,
     this.onSectionsCreated,
@@ -64,6 +69,10 @@ class PlayersView extends StatefulWidget {
   final TournamentController controller;
   final String? sectionId;
   final VoidCallback? onRefreshRoster, onRefreshRatings;
+
+  /// Opens Set up (format and rounds of every section) and the
+  /// registration notes, both docked by the workspace.
+  final VoidCallback? onSetUp, onNotes;
 
   /// The workspace's New section button was pressed: open (or close) the
   /// New section panel, then report it with [onNewSectionShown].
@@ -113,7 +122,18 @@ class _PlayersViewState extends State<PlayersView> {
     if (!showSide(PlayersSide.done)) showUndoNotice(context, c, message);
   }
 
-  void imported(String summary) => showDone('Import saved', summary);
+  /// A file or pasted list is in. Sections it started wait for their
+  /// rounds, so Set up opens for them; otherwise the import is confirmed
+  /// at the right.
+  void imported(String summary) {
+    final setUp = widget.onSetUp;
+    if (setUp != null && c.event!.sections.any((s) => s.roundsUnset)) {
+      showUndoNotice(context, c, summary);
+      setUp();
+      return;
+    }
+    showDone('Import saved', summary);
+  }
 
   /// Where the column returns when a panel closes: the ticked players'
   /// actions, then an open rating review, then nothing.
@@ -361,6 +381,20 @@ class _PlayersViewState extends State<PlayersView> {
   /// Rule 30B on screen: standings without early round-robin withdrawals.
   bool prizeStandings = false;
 
+  /// The order the crosstable lists each section in: one choice for the
+  /// whole event, so every section's crosstable reads the same way.
+  CrosstableOrder crosstableOrder = CrosstableOrder.rating;
+  static const crosstableOrderPreference = 'crosstable-order';
+
+  void sortCrosstable(CrosstableOrder order) {
+    c.workspaceState.write(crosstableOrderPreference, order.name);
+    setState(() {
+      crosstableOrder = order;
+      // The rows held in place for result entry take the new order.
+      entryOrder = null;
+    });
+  }
+
   bool showIds = true;
 
   /// The sections this view lists: one, or all of them.
@@ -402,6 +436,9 @@ class _PlayersViewState extends State<PlayersView> {
     activeResult = restored.activeResult;
     showRatingPreview = !widget.standingsOnly && restored.showRatingPreview;
     prizeStandings = widget.standingsOnly && restored.prizeStandings;
+    crosstableOrder = CrosstableOrder.named(
+      c.workspaceState.read(crosstableOrderPreference),
+    );
     picks.moveTo = restored.moveTo;
     moveReason.text = restored.moveReason;
     // The revision the move or swap was reviewed at comes back with it, so
@@ -467,6 +504,33 @@ class _PlayersViewState extends State<PlayersView> {
       if (side == PlayersSide.ratingReview) return closeSide();
     }
     setState(() {});
+  }
+
+  /// The entered and US Chess supplement ratings of the players listed who
+  /// have both, and which of those are not yet paired, so can still switch.
+  Map<String, RatingChoice> ratingChoices = const {};
+  Set<String> openChoices = const {};
+
+  /// Puts players on their US Chess supplement rating, or back on the
+  /// rating entered for them. Applied at once; Undo takes it back.
+  void chooseRatings(
+    Iterable<String> ids,
+    bool supplement, {
+    bool notice = false,
+  }) {
+    try {
+      final count = c.chooseRatings(ids, supplement: supplement);
+      if (notice && count > 0) {
+        showUndoNotice(
+          context,
+          c,
+          'Using ${supplement ? 'US Chess' : 'entered'} ratings for '
+          '$count ${count == 1 ? 'player' : 'players'}.',
+        );
+      }
+    } catch (e) {
+      showFailure(context, e);
+    }
   }
 
   void confirmRatings(RatingRefresh draft) {
@@ -861,6 +925,7 @@ class _PlayersViewState extends State<PlayersView> {
       standingsOnly: widget.standingsOnly,
       query: search.text,
       prizeStandings: prizeStandings,
+      order: crosstableOrder,
       entryOrder: entryOrder,
     );
     final started = layout.started, ranked = started;
@@ -873,6 +938,15 @@ class _PlayersViewState extends State<PlayersView> {
     entryCell = widget.standingsOnly
         ? entryCellFor(order, cellGames, activeResult)
         : null;
+    // Before pairing, anyone listed with both an entered rating and a US
+    // Chess supplement rating can be switched between them in the table.
+    ratingChoices = widget.standingsOnly
+        ? const {}
+        : {for (final p in order) p.id: ?ratingChoice(p)};
+    openChoices = {
+      for (final id in ratingChoices.keys)
+        if (e.sectionOf(id)?.rounds.isEmpty ?? true) id,
+    };
     columns = ShownColumns.of(
       standingsOnly: widget.standingsOnly,
       // Ticks are acted on in the column beside the table, which an
@@ -880,6 +954,7 @@ class _PlayersViewState extends State<PlayersView> {
       checkboxes: widget.onPlayer == null,
       started: started,
       reviewing: refreshDraft != null,
+      ratingChoices: openChoices.isNotEmpty,
       ratingPreview: showRatingPreview,
       showIds: showIds,
       usChessView: usChessView,
@@ -909,7 +984,20 @@ class _PlayersViewState extends State<PlayersView> {
             section: s,
           )
         else
-          for (final p in players)
+          for (final (i, p) in players.indexed) ...[
+            if (s != null && layout.setApart[s.id] == i)
+              _OutsideRangeBar(
+                key: ValueKey(('outside-range', s.id)),
+                event: e,
+                section: s,
+                players: players.sublist(i),
+                picked: players
+                    .skip(i)
+                    .where((p) => selected.contains(p.id))
+                    .length,
+                checkbox: columns.checkbox,
+                onTick: tick,
+              ),
             _row(
               s == null ? '' : '${layout.numbers[p.id] ?? ''}',
               p,
@@ -917,6 +1005,7 @@ class _PlayersViewState extends State<PlayersView> {
               s == null ? null : layout.tables[s.id]?[p.id],
               rank: '${layout.ranks[p.id] ?? ''}',
             ),
+          ],
         // Scholastic team awards: the Teams table under the individuals.
         if (widget.standingsOnly &&
             s != null &&
@@ -936,7 +1025,13 @@ class _PlayersViewState extends State<PlayersView> {
       scroll: scroll,
       standingsOnly: widget.standingsOnly,
       searched: search.text.trim().isNotEmpty,
-      columns: _ColumnHeader(columns: columns, draft: refreshDraft),
+      columns: _ColumnHeader(
+        columns: columns,
+        draft: refreshDraft,
+        choices: [for (final id in openChoices) ratingChoices[id]!],
+        onChooseAll: (supplement) =>
+            chooseRatings(openChoices, supplement, notice: true),
+      ),
     );
     if (widget.standingsOnly) {
       // A Scheveningen shows its match score beside the title.
@@ -969,6 +1064,11 @@ class _PlayersViewState extends State<PlayersView> {
           setState(() => prizeStandings = v);
           remember();
         },
+        // A knockout places by its bracket, which no order rearranges.
+        order: layout.groups.any((g) => g.$1?.format != Format.knockout)
+            ? crosstableOrder
+            : null,
+        onOrder: sortCrosstable,
         tiebreakColumns: columns.tiebreaks,
         invalidKey: invalidKey,
       );
@@ -997,6 +1097,7 @@ class _PlayersViewState extends State<PlayersView> {
         tools: _PlayerTools(
           controller: c,
           onRefreshRoster: widget.onRefreshRoster,
+          onNotes: widget.onNotes,
           onImport: importFile,
           onPaste: () => showSide(PlayersSide.paste),
           showRatingPreview: showRatingPreview,
@@ -1083,6 +1184,10 @@ class _PlayersViewState extends State<PlayersView> {
       standingsOnly: widget.standingsOnly,
       columns: columns,
       draft: refreshDraft,
+      choice: ratingChoices[p.id],
+      onChoose: openChoices.contains(p.id)
+          ? (supplement) => chooseRatings([p.id], supplement)
+          : null,
       roundCells: [
         for (var r = 1; r <= columns.rounds; r++) _roundCell(p, s, r),
       ],

@@ -109,3 +109,74 @@ class PaneHeading extends StatelessWidget {
     ),
   );
 }
+
+/// Shows [hint] floating just under [child], over whatever is below, so a
+/// passing hint never pushes the page down or pulls it back up. Null shows
+/// nothing.
+class FloatingHint extends StatefulWidget {
+  const FloatingHint({
+    required this.child,
+    required this.hint,
+    this.inset = 0,
+    super.key,
+  });
+  final Widget child;
+  final Widget? hint;
+
+  /// How far in from [child]'s left edge the hint starts.
+  final double inset;
+
+  @override
+  State<FloatingHint> createState() => _FloatingHintState();
+}
+
+class _FloatingHintState extends State<FloatingHint> {
+  final portal = OverlayPortalController();
+  final link = LayerLink();
+
+  @override
+  void initState() {
+    super.initState();
+    portal.show();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return CompositedTransformTarget(
+      link: link,
+      child: OverlayPortal(
+        controller: portal,
+        overlayChildBuilder: (context) => switch (widget.hint) {
+          null => const SizedBox.shrink(),
+          final hint => CompositedTransformFollower(
+            link: link,
+            targetAnchor: Alignment.bottomLeft,
+            offset: Offset(widget.inset, 0),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: IgnorePointer(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Material(
+                    elevation: 2,
+                    color: colors.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      child: hint,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        },
+        child: widget.child,
+      ),
+    );
+  }
+}

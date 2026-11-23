@@ -324,7 +324,13 @@ class _LadderViewState extends State<LadderView> {
       children: [
         heading,
         recordRow,
-        notice,
+        // One line kept for it, so recording a game never drops the table.
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.textScalerOf(context).scale(48),
+          ),
+          child: notice,
+        ),
         if (section.players.isEmpty)
           const Expanded(
             child: EmptyState(

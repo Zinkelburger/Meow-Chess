@@ -50,6 +50,17 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
     input = snapshot;
     widget.id.addListener(changed);
     widget.name?.addListener(changed);
+    FocusManager.instance.addListener(focusMoved);
+  }
+
+  /// Whether the ID is being typed now: its field has focus.
+  bool typingId = false;
+
+  void focusMoved() {
+    final editing = FocusManager.instance.primaryFocus?.context
+        ?.findAncestorWidgetOfExactType<EditableText>();
+    final now = editing?.controller == widget.id;
+    if (now != typingId && mounted) setState(() => typingId = now);
   }
 
   @override
@@ -86,6 +97,7 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(focusMoved);
     widget.id.removeListener(changed);
     widget.name?.removeListener(changed);
     query.dispose();
@@ -187,7 +199,12 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
   Widget build(BuildContext context) {
     final id = widget.id.text.trim();
     final token = generation;
-    final badFormat = id.isNotEmpty && !isMemberId(id);
+    // Digits still being typed are not wrong yet: the warning waits until
+    // the field is left, or the ID cannot become eight digits, so it does
+    // not appear on the first keystroke and push the form down.
+    final unfinished =
+        typingId && id.length < 8 && RegExp(r'^\d+$').hasMatch(id);
+    final badFormat = id.isNotEmpty && !isMemberId(id) && !unfinished;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -209,11 +226,12 @@ class _MemberIdentityLookupState extends State<MemberIdentityLookup> {
                 icon: const Icon(Icons.search, size: 18),
                 label: const Text('Find by name'),
               ),
-              if (id.isNotEmpty)
-                OutlinedButton(
-                  onPressed: busy ? null : check,
-                  child: const Text('Check ID'),
-                ),
+              // Always there, greyed with no ID, so typing the first digit
+              // does not add a button.
+              OutlinedButton(
+                onPressed: busy || id.isEmpty ? null : check,
+                child: const Text('Check ID'),
+              ),
             ],
           ),
           if (notice != null || expanded || busy) const SizedBox(height: 8),

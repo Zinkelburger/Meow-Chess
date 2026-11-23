@@ -52,8 +52,9 @@ void main() {
     );
     expect(find.byType(HelpPanel), findsNothing);
     expect(find.text('Keyboard shortcuts'), findsOneWidget);
-    expect(find.text('F1 — Help'), findsOneWidget);
-    expect(find.text('Shift+F1 — This list'), findsOneWidget);
+    expect(find.text('F1'), findsOneWidget);
+    expect(find.text('Shift+F1'), findsOneWidget);
+    expect(find.text('This list'), findsOneWidget);
     // What Esc does to an edit is said as it is.
     expect(
       find.textContaining('save their changes as they close'),

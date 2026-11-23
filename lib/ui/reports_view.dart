@@ -13,6 +13,7 @@ import '../domain/fide.dart';
 import '../domain/fixed_schedule.dart';
 import '../infrastructure/browser_download.dart';
 import '../infrastructure/dbf_export.dart';
+import '../infrastructure/event_folder.dart';
 import '../infrastructure/fide_export.dart';
 import 'dialogs.dart';
 import 'awards_view.dart';
@@ -181,7 +182,9 @@ class _ReportsViewState extends State<ReportsView> {
         path = 'meow-r${event.revision}.zip';
         downloadFile(path, ratingPackageZip(event));
       } else {
-        final folder = await getDirectoryPath(confirmButtonText: 'Save here');
+        final folder =
+            eventFolder(controller.repository) ??
+            await getDirectoryPath(confirmButtonText: 'Save here');
         if (folder == null) return;
         path = await writeRatingPackage(event, folder);
       }
@@ -206,7 +209,9 @@ class _ReportsViewState extends State<ReportsView> {
         path = 'meow-fide-r${event.revision}.zip';
         downloadFile(path, fideReportZip(event));
       } else {
-        final folder = await getDirectoryPath(confirmButtonText: 'Save here');
+        final folder =
+            eventFolder(controller.repository) ??
+            await getDirectoryPath(confirmButtonText: 'Save here');
         if (folder == null) return;
         path = await writeFideReport(event, folder);
       }
@@ -1227,7 +1232,6 @@ class ReportDetailsState extends State<ReportDetails> {
       key: const ValueKey('report-details'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DraftStatus(draft: draft),
         Row(
           children: [
             Expanded(
@@ -1342,6 +1346,12 @@ class ReportDetailsState extends State<ReportDetails> {
             padding: const EdgeInsets.only(top: 8),
             child: Text(error!, style: TextStyle(color: colors.error)),
           ),
+        // With Save, under the fields, so the field being typed in never
+        // moves when the draft starts.
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: DraftStatus(draft: draft),
+        ),
         if (dirty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -1432,7 +1442,6 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        DraftStatus(draft: draft),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: TextField(
@@ -1458,6 +1467,10 @@ class _SubmissionNotesState extends State<SubmissionNotes> {
             padding: const EdgeInsets.only(top: 8),
             child: Text(error!, style: TextStyle(color: colors.error)),
           ),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: DraftStatus(draft: draft),
+        ),
         if (dirty)
           Padding(
             padding: const EdgeInsets.only(top: 8),

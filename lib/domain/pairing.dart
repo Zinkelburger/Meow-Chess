@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'announcement.dart';
 import 'fixed_schedule.dart';
 import 'model.dart';
 import 'bughouse.dart';
@@ -105,6 +106,10 @@ void checkPairingRequests(Event event, Iterable<Game> games) {
 /// Names one game of round [round] from its colors. Within a round an ordered
 /// pair is unique, so a derived ID never outlives the pairing it names.
 typedef GameIdFor = String Function(int round, String white, String black);
+
+/// The reason on the bye a late entrant is given for a round that was
+/// already posted when they entered.
+const lateEntryBye = 'Late entry';
 
 /// Players unavailable in round [n] receive their bye award up front. Shared
 /// by every format that pairs round by round or from a fixed table.
@@ -234,6 +239,46 @@ bool pairsWithoutResult(Section section, int round, Game g) =>
         pairingFormat(section) == Format.swiss &&
         round == section.rounds.length);
 
+/// How many of [section]'s latest rounds are paired but untouched: not
+/// started, and with no result entered. Their pairings can be remade
+/// without losing anything that happened.
+int unplayedRounds(Section section) {
+  var n = 0;
+  for (final r in section.rounds.reversed) {
+    if (r.hasPlay) break;
+    n++;
+  }
+  return n;
+}
+
+/// Why [section] has too few players to pair as it is set up, in the
+/// director's words, or null when it has enough: a single player; a Swiss
+/// with more rounds than its players can play without two of them meeting
+/// twice; or fewer players than the event page says a section may be
+/// merged below. Withdrawn players do not count. It is a caution for round
+/// 1, never a reason to hold pairings back: combining sections or changing
+/// the rounds is the director's call.
+String? tooFewPlayers(Event event, Section section) {
+  final n = section.players.where((id) => !event.player(id).withdrawn).length;
+  if (n == 0) return null;
+  if (n == 1) return '${section.name} has only 1 player.';
+  final rounds = section.plannedRounds;
+  // An even field can meet everyone in n − 1 rounds; an odd one takes n,
+  // each sitting out once.
+  if (pairingFormat(section) == Format.swiss &&
+      !section.roundsUnset &&
+      rounds > (n.isEven ? n - 1 : n)) {
+    return '${section.name} has $n players for $rounds rounds, so some '
+        'will meet twice.';
+  }
+  final merge = Announcement.of(event)?.mergeBelow ?? 0;
+  if (n < merge) {
+    return '${section.name} has $n players; the event page says under '
+        '$merge may be merged.';
+  }
+  return null;
+}
+
 /// Whether every game of [section] has a result the next pairing can use.
 bool readyToPair(Section section) => section.rounds.every(
   (r) => r.games.every(
@@ -245,6 +290,18 @@ bool readyToPair(Section section) => section.rounds.every(
 /// otherwise US Chess Swiss pairings (rules 27–29) from `swiss_pairing.dart`.
 Round proposeRound(Event event, Section section, String Function() id) {
   final n = section.rounds.length + 1;
+  // Quads play three rounds, a ladder has none and a knockout follows its
+  // bracket, so only the other formats wait for the rounds to be set.
+  if (section.roundsUnset &&
+      !const [
+        Format.quad,
+        Format.ladder,
+        Format.knockout,
+      ].contains(section.format)) {
+    throw TournamentException(
+      'Set the number of rounds for ${section.name} before pairing it.',
+    );
+  }
   // A knockout's length follows its bracket (tie-break postings add
   // rounds), and it names unreported boards itself.
   if (pairingFormat(section) == Format.knockout) {

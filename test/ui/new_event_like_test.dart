@@ -14,7 +14,6 @@ import '../support.dart';
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
   const open = MethodChannel('meow_chess/file_open');
-  const save = MethodChannel('meow_chess/file_save');
   late Directory directory;
 
   setUp(() {
@@ -27,7 +26,6 @@ void main() {
 
   tearDown(() {
     binding.defaultBinaryMessenger.setMockMethodCallHandler(open, null);
-    binding.defaultBinaryMessenger.setMockMethodCallHandler(save, null);
     directory.deleteSync(recursive: true);
   });
 
@@ -44,10 +42,13 @@ void main() {
     File(
       p.join(directory.path, 'library.json'),
     ).writeAsStringSync(jsonEncode([source]));
-    final destination = p.join(directory.path, 'next.meow');
-    binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      save,
-      (_) async => destination,
+    File(
+      p.join(directory.path, 'settings.json'),
+    ).writeAsStringSync(jsonEncode({'tournamentsFolder': directory.path}));
+    final destination = p.join(
+      directory.path,
+      'Friday Blitz 2',
+      'friday-blitz-2.meow',
     );
     // A laptop window (the brief's fidelity target). At the 800x600 test
     // default the welcome header pushes the one-line copy note just below
@@ -86,8 +87,5 @@ void main() {
     expect(made.sections.map((s) => s.name), ['Quad 1', 'Quad 2']);
     expect(made.sections.every((s) => s.players.isEmpty), isTrue);
     expect(made.sections.every((s) => s.format == Format.swiss), isTrue);
-    // The mocked meow_chess/file_save channel is the Linux save dialog;
-    // under the test default (Android) the file_selector path ran instead
-    // and nothing was saved.
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 }

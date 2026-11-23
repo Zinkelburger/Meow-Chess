@@ -120,7 +120,14 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
     }
   }
 
-  void recordResult(String gameId, Outcome outcome, {String reason = ''}) {
+  /// [source] names where a result came from when it was not typed here,
+  /// such as the club website, and is kept in the history.
+  void recordResult(
+    String gameId,
+    Outcome outcome, {
+    String reason = '',
+    String source = '',
+  }) {
     final (e, game) = _materialize(gameId);
     if (game.outcome == outcome && game.note == reason) return;
     _refuseReopenWhilePlaying(e, gameId, outcome);
@@ -135,7 +142,7 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
     change(
       // Quads share board numbers across rounds, so the step is named by
       // section, round and players as well.
-      'Result, ${section.name} round ${_roundOf(e, gameId).number} board ${game.board}'
+      'Result${source.isEmpty ? '' : ' from $source'}, ${section.name} round ${_roundOf(e, gameId).number} board ${game.board}'
       '${game.leg > 1 ? ' game ${game.leg}' : ''}: '
       '${e.player(game.white).name} – ${e.player(game.black).name}',
       _withIrrevocableByeRule(
@@ -158,6 +165,45 @@ mixin _ResultCommands on _CommandContext, _QuadCommands {
     if (!_roundOf(e, gameId).complete && _roundOf(event!, gameId).complete) {
       secondaryBackup();
     }
+  }
+
+  /// Enters results a club website reports for boards still waiting for
+  /// one. Each is its own revision, like a result typed at the board, so
+  /// History can take any one of them back. [source] names the website in
+  /// the history.
+  ///
+  /// A board is left alone, and its game ID returned, when it already has
+  /// a result, is marked disputed, is no longer in the event, or had a
+  /// later round paired around it: those are the director's to settle.
+  List<String> recordPostedResults(
+    Map<String, Outcome> results, {
+    required String source,
+    void Function(String gameId)? onEntered,
+  }) {
+    final skipped = <String>[];
+    for (final MapEntry(key: id, value: outcome) in results.entries) {
+      var enter = outcome.resolved;
+      try {
+        final (_, game) = _materialize(id);
+        enter &=
+            !game.outcome.resolved &&
+            game.outcome != Outcome.disputed &&
+            !correctionHasDependencies(id);
+      } on TournamentException {
+        enter = false;
+      }
+      // A failed save is not caught: it is reported, not counted as a
+      // board left alone.
+      if (enter) {
+        recordResult(id, outcome, source: source);
+        // Reported as each is saved, so a later board's failure does not
+        // lose track of the ones already entered.
+        onEntered?.call(id);
+      } else {
+        skipped.add(id);
+      }
+    }
+    return skipped;
   }
 
   static Round _roundOf(Event e, String gameId) => e.sections

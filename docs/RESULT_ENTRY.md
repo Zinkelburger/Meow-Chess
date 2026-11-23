@@ -55,9 +55,9 @@ the crosstable never move when the cursor enters or leaves the grid.
 | 1 | Win for labelled player | Save and advance immediately; no Enter needed |
 | 0 | Loss for labelled player | Save and advance immediately; no Enter needed |
 | F | Labelled player is a no-show (0F; opponent wins 1F). F is the only forfeit key | Save as an unplayed forfeit and advance immediately; F replaces a played result typed by mistake |
-| F on both players of a board | Double forfeit | The second F, on the player who won by forfeit, makes it a double forfeit. F again on a player already absent changes nothing |
-| 1 / W or 0 / L on a forfeit board | Who won the forfeit | 1 gives the labelled player the forfeit win (1F), 0 gives it to the opponent. On a double forfeit, 1 on one player turns it back into a single forfeit |
-| D, P or ? on a forfeit board | Refused | A forfeit is only won or lost (no ½ forfeit, no playing or disputed forfeit). Saves nothing; the legend says so and points at Delete |
+| F on both players of a board | Double forfeit | The second F, on the player who won by forfeit, makes it a double forfeit |
+| F on a player already marked absent | Takes that no-show back | On a double forfeit the other player's no-show stays, so the labelled player now wins by forfeit. On a single forfeit the board goes back to no result and the cursor stays |
+| 1 / W, 0 / L, D, P or ? on a forfeit board | A played game, as on any board | These keys never mean a forfeit. The forfeit is replaced, with the same notice and Undo as any replaced result |
 | P | Game still playing | Save as unfinished and advance; a pairing assumption still shows in brackets with “playing” |
 | ? | Disputed | Save as disputed and advance |
 | A | Assume a result for pairing only (unresolved games) | Opens the assumption beside the table |
@@ -80,16 +80,18 @@ Show a persistent compact legend: **1 / W win · 0 / L loss · D draw · F no-sh
 After a key that is not a result it adds **P playing · ? disputed · Delete or
 Backspace clears**.
 While a forfeit board has focus the legend says what the keys do there, from that
-player's side: on the absent player "F on the other player makes it a double
-forfeit · 1 gives this player the win", on the winner "F here makes it a double
-forfeit · 0 gives the win to the other player", on a double forfeit "1 gives this
-player the forfeit win". Delete clears a forfeit; after that 1, 0 and D record a
-played game again.
+player's side: on the absent player "F takes it back · F on the other player
+makes it a double forfeit", on the winner "F here makes it a double forfeit", on
+a double forfeit "F takes this player's no-show back", each followed by "1, 0 or
+D enters a played game".
 
-There is one forfeit key so that every forfeit state is reached the same way: a
-box showing a forfeit win always means the opponent was marked absent, and F on
-it always means both were absent. (X, + and − were forfeit keys in earlier versions;
-they now say "Not a result key".)
+There is one forfeit key so that every forfeit state is reached the same way: F
+switches the labelled player's no-show mark on and off, a box showing a forfeit
+win always means the opponent was marked absent, and F on it always means both
+were absent. 1, 0 and D mean a played game on every board, so no key changes
+meaning with what the board already holds. (X, + and − were forfeit keys in
+earlier versions; they now say "Not a result key". Until November 2026, 1 and 0
+on a forfeit board chose who won the forfeit and D was refused there.)
 
 Score boxes and crosstables use the US Chess letters for unplayed games:
 **X** won by forfeit, **F** forfeited (both players show F after a double
@@ -206,8 +208,8 @@ remaining rounds (K08), in the same words as the player menu (“Withdraw after
 round 2”) and named “Withdraw <player>” in History; declining has no side
 effect, and the app never withdraws on its own. When a withdrawn player still
 sits at a board that has not started, a notice above the boards says so, and
-**Re-pair unstarted boards** (also in the toolbar of a US Chess Swiss section's
-latest round) opens beside the boards: boards with a result, a pairing
+**Re-pair unstarted boards** (also in the **Change pairings** menu of a US Chess
+Swiss section's latest round) opens beside the boards: boards with a result, a pairing
 assumption or a tick for “already started” are kept, the rest are paired again
 without withdrawn players, a reason is required and is printed with the round's
 pairings, and the panel then says what changed, with Undo and a reminder to
@@ -267,8 +269,8 @@ lookup and the boards stay usable while it is open. It names the section,
 round, board, colors and game leg. Results are buttons named for the players
 ("Jamie Patel won", Draw), with forfeits and other outcomes behind one
 disclosure; the usual result keys also select them (F on a forfeit win picks
-Double forfeit), and Enter or Ctrl+Enter saves. The keys score the player whose
-box the review was opened from, as in the grid: opened from Black's box, the
+Double forfeit, and F on a no-show takes it back), and Enter or Ctrl+Enter
+saves. The keys score the player whose box the review was opened from, as in the grid: opened from Black's box, the
 panel says “Keys score <Black>” and 1 picks Black's win. Opened from History,
 which has no box, they score White. A held key does not repeat, so
 holding Enter saves once and never presses Done. In the note Enter also saves and

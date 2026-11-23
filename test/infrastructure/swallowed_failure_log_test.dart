@@ -25,9 +25,8 @@ void main() {
 
   group('US Chess responses', () {
     const secret = 'Private Member Response';
-    RatingsApi api(String body) => RatingsApi(
-      MockClient((request) async => http.Response(body, 200)),
-    );
+    RatingsApi api(String body) =>
+        RatingsApi(MockClient((request) async => http.Response(body, 200)));
 
     test('an unreadable search is logged without the response', () async {
       await expectLater(

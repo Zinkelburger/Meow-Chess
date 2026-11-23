@@ -43,13 +43,8 @@ SectionPlan importSectionPlan(Event event, List<ImportRow> rows) {
 bool _needsLook(ImportRow r) => r.error != null || r.warnings.isNotEmpty;
 
 /// Commits the same interpreted rows that were reviewed in the preview.
-/// [newSectionRounds] is the planned rounds of any section the Section
-/// column starts.
-String importRosterRows(
-  TournamentController c,
-  List<ImportRow> rows, {
-  int newSectionRounds = 0,
-}) {
+/// A section the Section column starts waits for its rounds in Set up.
+String importRosterRows(TournamentController c, List<ImportRow> rows) {
   final valid = rows.where((r) => r.player != null).toList();
   if (valid.isEmpty) {
     throw const TournamentException('No players found.');
@@ -58,7 +53,6 @@ String importRosterRows(
   final skipped = c.importPlayers(
     valid.map((r) => r.player!).toList(),
     sections: {for (final r in valid) r.player!.id: r.section},
-    newSectionRounds: newSectionRounds,
   );
   final bad = rows.where((r) => r.error != null).map((r) => r.line).toList();
   return [
@@ -126,9 +120,6 @@ class RosterImportDialog extends StatefulWidget {
 class _RosterImportDialogState extends State<RosterImportDialog> {
   final separators = <String>{};
   final other = TextEditingController();
-
-  /// Planned rounds for sections the Section column starts.
-  final newRounds = TextEditingController();
   final across = ScrollController(), down = ScrollController();
   String? quote = '"';
   bool merge = false;
@@ -163,7 +154,6 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   @override
   void dispose() {
     other.dispose();
-    newRounds.dispose();
     across.dispose();
     down.dispose();
     super.dispose();
@@ -238,30 +228,16 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   RosterField? fieldOf(int index) =>
       columns.entries.where((e) => e.value == index).firstOrNull?.key;
 
-  /// The rounds entered for new sections; null until a valid number is.
-  int? get roundsForNew {
-    final n = int.tryParse(newRounds.text.trim());
-    return n != null && n >= 1 && n <= 32 ? n : null;
-  }
-
   String? get mappingError =>
       !columns.containsKey(RosterField.name) &&
           !columns.containsKey(RosterField.firstName) &&
           !columns.containsKey(RosterField.lastName)
       ? 'Choose the column that holds player names'
-      : plan.creates.isNotEmpty && roundsForNew == null
-      ? 'Enter the number of rounds for the new sections, from 1 to 32'
       : null;
 
   void commit() {
     try {
-      Navigator.of(context).pop(
-        importRosterRows(
-          widget.controller,
-          rows,
-          newSectionRounds: roundsForNew ?? 0,
-        ),
-      );
+      Navigator.of(context).pop(importRosterRows(widget.controller, rows));
     } catch (e) {
       setState(() => importError = plainMessage(e));
     }
@@ -543,7 +519,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
   }
 
   /// Sections the Section column names that the event does not have yet:
-  /// importing starts them as Swiss sections of the rounds entered here.
+  /// importing starts them, and their format and rounds are set afterwards.
   Widget _newSections(BuildContext context) {
     final muted = TextStyle(
       fontSize: 13,
@@ -559,7 +535,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
-            'Creates $n Swiss ${n == 1 ? 'section' : 'sections'}',
+            'Starts $n ${n == 1 ? 'section' : 'sections'}',
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           Text(
@@ -572,24 +548,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
               fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
-          SizedBox(
-            width: 96,
-            height: controlHeight,
-            child: TextField(
-              key: const ValueKey('import-new-section-rounds'),
-              controller: newRounds,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Rounds',
-                isDense: true,
-              ),
-              onChanged: (_) => setState(() => importError = null),
-            ),
-          ),
-          Text(
-            'Change the format later in each section’s settings',
-            style: muted,
-          ),
+          Text('Format and rounds come next, in Set up', style: muted),
         ],
       ),
     );
@@ -603,7 +562,7 @@ class _RosterImportDialogState extends State<RosterImportDialog> {
     if (plan.skipped[p.id] case final why?) return (text: why, why: why);
     if (plan.joins[p.id] case final id?) {
       final s = widget.controller.event!.sections.firstWhere((s) => s.id == id);
-      final problem = ratingRangeProblem(p, s);
+      final problem = eligibilityProblem(widget.controller.event!, p, s);
       return problem == null
           ? (text: s.name, why: null)
           : (text: '${s.name} · outside its rating range', why: problem);

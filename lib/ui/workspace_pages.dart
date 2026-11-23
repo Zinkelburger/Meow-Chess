@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../domain/eligibility.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
+import 'membership_style.dart' show attentionColor;
 import 'theme.dart' show controlHeight;
 
 enum TaskView { players, results, reports }
@@ -101,6 +102,19 @@ class WorkspacePageRow extends StatelessWidget {
   );
 }
 
+/// What Create pairings would do: its [label], [why] it is held back,
+/// whether every round has been played ([complete]), and whether a section
+/// in scope still needs its rounds set ([setUp]). [caution] is said with a
+/// warning mark beside the button, never instead of it: a section about to
+/// be paired for round 1 with too few players ([tooFewPlayers]).
+typedef PostState = ({
+  String? label,
+  String? why,
+  bool complete,
+  bool setUp,
+  String? caution,
+});
+
 /// What [PairingControl] shows for one choice of section.
 enum PairingOffer {
   /// Nothing: a fixed quad schedule, a ladder, or All sections with nothing
@@ -124,8 +138,11 @@ enum PairingOffer {
 /// the [postState] behind a [PairingOffer.pairings] or
 /// [PairingOffer.sectionComplete] answer. [pairingEvent] is [event] as the
 /// pairer sees it, with any temporary pairing assumptions applied.
-({PairingOffer offer, ({String? label, String? why, bool complete})? state})
-pairingOffer(Event event, Event pairingEvent, Section? section) {
+({PairingOffer offer, PostState? state}) pairingOffer(
+  Event event,
+  Event pairingEvent,
+  Section? section,
+) {
   if (section?.sideGames == true) {
     return (offer: PairingOffer.sideGame, state: null);
   }
@@ -157,6 +174,7 @@ pairingOffer(Event event, Event pairingEvent, Section? section) {
   final explained =
       state.why != null &&
       (state.label != null ||
+          state.setUp ||
           event.sections.isEmpty ||
           event.sections.every((s) => s.players.isEmpty));
   if (state.complete || (state.label == null && !explained)) {
@@ -168,6 +186,8 @@ pairingOffer(Event event, Event pairingEvent, Section? section) {
       label: state.label,
       why: explained ? state.why : null,
       complete: false,
+      setUp: state.setUp,
+      caution: state.caution,
     ),
   );
 }
@@ -192,6 +212,7 @@ class PairingControl extends StatelessWidget {
     required this.onPair,
     required this.onPairSideGame,
     required this.onFinish,
+    required this.onSetUp,
     super.key,
   });
 
@@ -205,6 +226,9 @@ class PairingControl extends StatelessWidget {
   /// Whether pairings are being created now.
   final bool pairing;
   final VoidCallback onPair, onFinish;
+
+  /// Opens Set up, where a section's rounds are set.
+  final VoidCallback onSetUp;
   final ValueChanged<String> onPairSideGame;
 
   @override
@@ -258,38 +282,93 @@ class PairingControl extends StatelessWidget {
         );
       case PairingOffer.pairings:
         final label = state!.label;
+        // The caution leads: it is the one to read before pressing.
+        final caution = state.caution;
+        final note = [?caution, ?state.why].join(' ');
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (state.why != null)
+            if (note.isNotEmpty)
               Flexible(
                 child: Padding(
                   padding: EdgeInsets.only(right: label == null ? 0 : 12),
-                  child: Text(
-                    state.why!,
-                    key: const ValueKey('post-blocked'),
-                    style: muted,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
-                    textAlign: TextAlign.right,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (caution != null) ...[
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          key: const ValueKey('post-caution'),
+                          size: 18,
+                          color: attentionColor(colors),
+                          semanticLabel: 'Caution',
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Flexible(
+                        // Two lines may not hold it all; hovering does.
+                        child: Tooltip(
+                          message: caution == null ? '' : note,
+                          child: Text(
+                            note,
+                            key: const ValueKey('post-blocked'),
+                            style: caution == null
+                                ? muted
+                                : TextStyle(color: colors.onSurface),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                            // Beside its mark, the words start at it.
+                            textAlign: caution == null
+                                ? TextAlign.right
+                                : TextAlign.left,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+              ),
+            // Setting the rounds is the next step while nothing can be
+            // paired without it; beside Create pairings it is the quieter
+            // of the two.
+            if (state.setUp)
+              Padding(
+                padding: EdgeInsets.only(
+                  left: note.isEmpty || label != null ? 0 : 12,
+                  right: label == null ? 0 : 8,
+                ),
+                child: label == null
+                    ? FilledButton(
+                        key: const ValueKey('pair-set-up'),
+                        onPressed: onSetUp,
+                        child: const Text('Set up sections'),
+                      )
+                    : OutlinedButton(
+                        key: const ValueKey('pair-set-up'),
+                        onPressed: onSetUp,
+                        child: const Text('Set up sections'),
+                      ),
               ),
             if (label != null)
               Flexible(
                 // Never squeezed out by the note beside it.
                 flex: 2,
+                // While pairing, the label stays and an hourglass takes the
+                // arrow's place: the button keeps its size, so nothing in
+                // the row moves.
                 child: FilledButton.icon(
                   key: const ValueKey('pair-next-round'),
                   onPressed: pairing ? null : onPair,
-                  icon: const Icon(Icons.arrow_forward, size: 18),
-                  iconAlignment: IconAlignment.end,
-                  label: pairing
-                      ? const Text(
-                          'Creating pairings…',
-                          overflow: TextOverflow.ellipsis,
+                  icon: pairing
+                      ? const Icon(
+                          Icons.hourglass_top,
+                          key: ValueKey('pairing-progress'),
+                          size: 18,
+                          semanticLabel: 'Creating pairings',
                         )
-                      : section == null
+                      : const Icon(Icons.arrow_forward, size: 18),
+                  iconAlignment: IconAlignment.end,
+                  label: section == null
                       ? Text(label, overflow: TextOverflow.ellipsis)
                       : _sectionLabel(label, section),
                 ),
@@ -347,10 +426,7 @@ class PairingControl extends StatelessWidget {
 
 /// What Create pairings would do for [section] (null for every section):
 /// its label, why it is held back, or that every round has been played.
-({String? label, String? why, bool complete}) postState(
-  Event e,
-  Section? section,
-) {
+PostState postState(Event e, Section? section) {
   final scope = section == null
       ? e.sections.where((s) => !s.sideGames).toList()
       : [section];
@@ -359,6 +435,8 @@ class PairingControl extends StatelessWidget {
       label: null,
       why: 'Choose New section to put players in a section first.',
       complete: false,
+      setUp: false,
+      caution: null,
     );
   }
   final active = scope.where((s) => s.players.isNotEmpty).toList();
@@ -369,9 +447,30 @@ class PairingControl extends StatelessWidget {
           ? 'Move players into a section first.'
           : 'Move players into ${section.name} first.',
       complete: false,
+      setUp: false,
+      caution: null,
     );
   }
-  final open = active.where((s) => s.rounds.length < s.plannedRounds).toList();
+  // A section a registration list named waits for its rounds to be set.
+  final unset = active.where((s) => s.roundsUnset).toList();
+  final setUp = unset.isNotEmpty;
+  final unsetWhy = unset.isEmpty
+      ? null
+      : unset.length == 1
+      ? '${unset.single.name} has no rounds set.'
+      : '${unset.length} sections have no rounds set.';
+  final open = active
+      .where((s) => !s.roundsUnset && s.rounds.length < s.plannedRounds)
+      .toList();
+  if (open.isEmpty && setUp) {
+    return (
+      label: null,
+      why: unsetWhy,
+      complete: false,
+      setUp: true,
+      caution: null,
+    );
+  }
   int waiting(Section s) => [
     for (final r in s.rounds)
       for (final g in r.games)
@@ -383,12 +482,22 @@ class PairingControl extends StatelessWidget {
         .expand((r) => r.games)
         .where((g) => !g.outcome.resolved)
         .length;
-    if (missing == 0) return (label: null, why: null, complete: true);
+    if (missing == 0) {
+      return (
+        label: null,
+        why: null,
+        complete: true,
+        setUp: false,
+        caution: null,
+      );
+    }
     return (
       label: null,
       why:
           'Final pairings created · $missing ${missing == 1 ? 'result' : 'results'} still to enter.',
       complete: false,
+      setUp: false,
+      caution: null,
     );
   }
   final ready = open.where((s) => waiting(s) == 0).toList();
@@ -404,7 +513,16 @@ class PairingControl extends StatelessWidget {
     final n = held.fold(0, (n, s) => n + waiting(s));
     why = '${held.length} sections wait for ${results(n)}.';
   }
-  if (ready.isEmpty) return (label: null, why: why, complete: false);
+  if (unsetWhy != null) why = [?why, unsetWhy].join(' ');
+  if (ready.isEmpty) {
+    return (
+      label: null,
+      why: why,
+      complete: false,
+      setUp: setUp,
+      caution: null,
+    );
+  }
   // K03: flagged before round 1, never a reason to hold pairings back.
   final outside = ready
       .where((s) => s.rounds.isEmpty)
@@ -412,16 +530,29 @@ class PairingControl extends StatelessWidget {
   if (outside > 0) {
     why = [
       ?why,
-      '$outside ${outside == 1 ? 'player is' : 'players are'} outside '
-          'their section’s rating range.',
+      '$outside ${outside == 1 ? 'player is' : 'players are'} rated '
+          'outside what their section takes.',
     ].join(' ');
   }
+  // Likewise said before round 1 and never a reason to hold back: a
+  // section with too few players, which Combine or fewer rounds answers.
+  final few = [
+    for (final s in ready)
+      if (s.rounds.isEmpty) ?tooFewPlayers(e, s),
+  ];
+  final caution = few.isEmpty
+      ? null
+      : few.length == 1
+      ? few.single
+      : '${few.length} sections have too few players.';
   final numbers = ready.map((s) => s.rounds.length + 1).toSet();
   if (section != null) {
     return (
       label: 'Create pairings · ${section.name} · Round ${numbers.single}',
       why: why,
       complete: false,
+      setUp: setUp,
+      caution: caution,
     );
   }
   final round = numbers.length == 1
@@ -430,5 +561,11 @@ class PairingControl extends StatelessWidget {
   final label = ready.length > 1 || e.sections.length > 1
       ? '$round · ${ready.length} ${ready.length == 1 ? 'section' : 'sections'}'
       : round;
-  return (label: label, why: why, complete: false);
+  return (
+    label: label,
+    why: why,
+    complete: false,
+    setUp: setUp,
+    caution: caution,
+  );
 }

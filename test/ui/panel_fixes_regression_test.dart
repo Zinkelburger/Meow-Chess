@@ -112,7 +112,7 @@ void main() {
     );
     await tester.tap(find.text('Fetch updates'));
     await tester.pumpAndSettle();
-    final confirm = find.text('Confirm 1 changes & save source');
+    final confirm = find.text('Add 1 player');
     repository.failWrites = true;
     await tester.tap(confirm);
     await tester.pumpAndSettle();
@@ -120,7 +120,7 @@ void main() {
     repository.failWrites = false;
     await tester.tap(confirm);
     await tester.pumpAndSettle();
-    expect(find.textContaining('changes applied'), findsOneWidget);
+    expect(find.textContaining('Added 1 player.'), findsOneWidget);
     expect(find.textContaining('Disk is full'), findsNothing);
   });
 

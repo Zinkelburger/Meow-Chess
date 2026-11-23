@@ -132,7 +132,10 @@ List<String> stateSummary(Event e) {
     final done = last?.games.where((g) => g.outcome.resolved).length ?? 0;
     // A knockout runs to its bracket and a ladder to its batches, so only
     // the scheduled formats say "of N".
-    final of = s.format == Format.knockout || s.format == Format.ladder
+    final of =
+        s.format == Format.knockout ||
+            s.format == Format.ladder ||
+            s.roundsUnset
         ? ''
         : ' of ${s.plannedRounds}';
     final where = posted == 0

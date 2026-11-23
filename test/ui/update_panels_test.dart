@@ -37,11 +37,14 @@ void main() {
       await tester.tap(find.text('Fetch updates'));
       await tester.pumpAndSettle();
       expect(c.event!.players.length, 4);
+      // One count and one button: no rounds question, no row to untick.
+      expect(find.text('1 new player'), findsOneWidget);
+      expect(find.byType(CheckboxListTile), findsNothing);
       expect(
-        find.textContaining('Website note: Arriving late'),
-        findsOneWidget,
+        find.byKey(const ValueKey('web-new-section-rounds')),
+        findsNothing,
       );
-      final confirm = find.text('Confirm 1 changes & save source');
+      final confirm = find.text('Add 1 player');
       await tester.ensureVisible(confirm);
       await tester.tap(confirm);
       await tester.pumpAndSettle();

@@ -17,6 +17,7 @@ import 'theme.dart';
 import '../infrastructure/member_directory.dart';
 import 'member_identity_lookup.dart';
 import '../domain/member_observation.dart';
+import '../domain/rating_choice.dart';
 
 import 'player_actions.dart';
 import 'fide_list_panel.dart';
@@ -655,7 +656,8 @@ class PlayerPanelState extends State<PlayerPanel> {
     if (typed.isEmpty) return null;
     final rating = parseRating(typed);
     if (rating == null) return null;
-    return ratingRangeProblem(
+    return eligibilityProblem(
+      c.event!,
       Player(id: '', name: text['name']!.text.trim(), rating: rating),
       s,
     );
@@ -687,7 +689,7 @@ class PlayerPanelState extends State<PlayerPanel> {
         ),
       ];
     }
-    final problem = ratingRangeProblem(p, s);
+    final problem = eligibilityProblem(c.event!, p, s);
     if (problem == null) return const [];
     void allow() {
       if (allowReason.text.trim().isEmpty) {
@@ -1068,7 +1070,6 @@ class PlayerPanelState extends State<PlayerPanel> {
         title: 'Add player',
         onClose: close,
         children: [
-          DraftStatus(draft: draft),
           field('name'),
           field('memberId'),
           field('rating'),
@@ -1193,6 +1194,11 @@ class PlayerPanelState extends State<PlayerPanel> {
               ],
             ),
           ),
+          // Under the buttons, so the first keystroke moves nothing.
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: DraftStatus(draft: draft),
+          ),
           if (added != null)
             Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -1261,7 +1267,9 @@ class PlayerPanelState extends State<PlayerPanel> {
       title: p.name,
       onClose: close,
       footer: [
+        // Down here with Save, so typing never pushes the card down.
         if (dirty || error != null || notice != null) ...[
+          DraftStatus(draft: draft),
           ?problem,
           if (dirty)
             Wrap(
@@ -1277,7 +1285,6 @@ class PlayerPanelState extends State<PlayerPanel> {
         ],
       ],
       children: [
-        DraftStatus(draft: draft),
         // Who this is and the two decisions TDs make about a player mid-event.
         Wrap(
           spacing: 8,
@@ -1483,11 +1490,19 @@ class PlayerPanelState extends State<PlayerPanel> {
                   ),
                 if (p.ratingEvidence['supplementDate'] case final date?)
                   factRow('Supplement', '$date')
-                else if (p.ratingEvidence.isNotEmpty)
+                else if (plainRatingEvidence(p.ratingEvidence).isNotEmpty)
                   factRow(
                     'Registration',
                     '${p.ratingEvidence['registrationRating'] ?? p.rating}',
                   ),
+                // The rating not in use; the Players table switches.
+                if (ratingChoice(p) case final choice?)
+                  choice.usingSupplement
+                      ? factRow('Entered', ratingText(choice.entered))
+                      : factRow(
+                          'US Chess',
+                          '${choice.supplement} · ${choice.supplementDate}',
+                        ),
               ],
             ),
             if (p.memberId.isNotEmpty) ...[

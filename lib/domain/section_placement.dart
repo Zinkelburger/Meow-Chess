@@ -1,3 +1,4 @@
+import 'eligibility.dart';
 import 'model.dart';
 
 /// Registration lists name each entry's section in words ("Under 1000",
@@ -66,21 +67,22 @@ SectionPlan planSections(Event event, Map<String, String> labels) {
 }
 
 /// [event] with [plan] carried out. Every planned player must already be in
-/// the event. New sections are Swiss with [rounds] planned rounds, on the
-/// next free boards; with [rounds] 0 none is created and their players stay
-/// out of every section. A section that grows keeps its boards unless it
-/// now runs into another's.
+/// the event. New sections are Swiss, on the next free boards, with the
+/// rating cap their name announces ("U1800"). They take [rounds] planned
+/// rounds; without [rounds] the number is left for the director to set
+/// ([Section.roundsUnset]) and the section is not paired until then. A
+/// section that grows keeps its boards unless it now runs into another's.
 Event applySectionPlan(
   Event event,
   SectionPlan plan, {
-  required int rounds,
+  int? rounds,
   required String Function() newId,
 }) {
   if (plan.isEmpty) return event;
-  if (plan.creates.isNotEmpty && rounds != 0 && (rounds < 1 || rounds > 32)) {
-    throw const TournamentException(
-      'Enter the number of rounds for the new sections, from 1 to 32.',
-    );
+  if (plan.creates.isNotEmpty &&
+      rounds != null &&
+      (rounds < 1 || rounds > 32)) {
+    throw const TournamentException('A section has from 1 to 32 rounds.');
   }
   final joining = <String, List<String>>{};
   for (final MapEntry(key: player, value: section) in plan.joins.entries) {
@@ -104,16 +106,15 @@ Event applySectionPlan(
         s,
   ];
   final sections = keepBoardRanges(event.sections, grown, joining.keys.toSet());
-  for (final MapEntry(key: name, value: ids)
-      in rounds == 0
-          ? const <MapEntry<String, List<String>>>[]
-          : plan.creates.entries) {
+  for (final MapEntry(key: name, value: ids) in plan.creates.entries) {
     sections.add(
       Section(
         id: newId(),
         name: name,
         players: [...ids]..sort(byOrder),
-        plannedRounds: rounds,
+        plannedRounds: rounds ?? 3,
+        roundsUnset: rounds == null,
+        ratingCeiling: ratingCapInName(name),
         boardStart: nextBoard(sections),
       ),
     );

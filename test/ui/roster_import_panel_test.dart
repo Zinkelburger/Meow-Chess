@@ -349,14 +349,12 @@ void main() {
     expect(find.text('New player · Under 1000'), findsOneWidget);
     expect(find.text('New player · Under 500 (new)'), findsNWidgets(2));
     expect(find.text('Championship 1 · Under 500 2'), findsOneWidget);
-    expect(enabled(tester), isFalse);
-    expect(summary(tester), contains('rounds for the new sections'));
-
-    await tester.enterText(
+    // Importing never asks for rounds: that is Set up's question.
+    expect(
       find.byKey(const ValueKey('import-new-section-rounds')),
-      '4',
+      findsNothing,
     );
-    await tester.pump();
+    expect(find.text('Starts 2 sections'), findsOneWidget);
     expect(enabled(tester), isTrue);
     await tester.tap(importButton);
     await tester.pumpAndSettle();
@@ -368,7 +366,8 @@ void main() {
     expect(sectionOf('Ben Cho'), 'Under 1000');
     expect(sectionOf('Di Eng'), 'Under 500');
     final created = e.sections.firstWhere((s) => s.name == 'Under 500');
-    expect(created.plannedRounds, 4);
+    expect(created.roundsUnset, isTrue);
+    expect(created.ratingCeiling, 500);
     expect(created.format, Format.swiss);
     expect(e.players.firstWhere((p) => p.name == 'Ben Cho').byes, isEmpty);
 

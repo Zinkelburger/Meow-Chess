@@ -217,10 +217,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Combine sections…'));
     await tester.pumpAndSettle();
-    expectFieldFocus(tester, 'combine-reason');
-    await tester.tap(find.byKey(ValueKey('combine-into-${q2.id}')));
-    await tester.pump();
-    await tester.tap(find.text('Combine'));
+    // Nothing is played, so no reason is asked for, and with one other
+    // section there is nothing to choose.
+    expect(find.byKey(const ValueKey('combine-reason')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('combine-confirm')));
     await tester.pumpAndSettle();
     // The unpaired section goes with its players.
     expect(c.event!.sections.single.id, q2.id);
@@ -242,8 +242,10 @@ void main() {
         builder: (_, _) => ResultsView(controller: c, sectionId: id),
       ),
     );
+    await tester.tap(find.byKey(const ValueKey('change-pairings')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('edit-pairings')));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('swap-banner')), findsOneWidget);
     await tester.tap(find.byKey(ValueKey('round-player-${a.id}-${a.black}')));
     await tester.pump();

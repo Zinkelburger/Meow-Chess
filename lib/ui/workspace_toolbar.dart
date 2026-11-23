@@ -33,14 +33,15 @@ class WorkspaceTopBar extends StatelessWidget {
     required this.onRulings,
     required this.keyboardHelpOpen,
     required this.onKeyboardHelp,
-    required this.undoLabel,
-    required this.onUndo,
-    required this.redoLabel,
-    required this.onRedo,
+    required this.undoRedo,
     required this.historyOpen,
     required this.onToggleHistory,
     required this.onTheme,
     required this.onClose,
+    this.checkOpen = false,
+    this.onCheck,
+    this.scoreboardOpen = false,
+    this.onScoreboard,
     super.key,
   });
   final String eventName;
@@ -48,11 +49,15 @@ class WorkspaceTopBar extends StatelessWidget {
   final VoidCallback onToggleEvent, onHelp, onRulings, onKeyboardHelp;
   final VoidCallback onToggleHistory, onTheme, onClose;
 
-  /// What Undo and Redo would change, named in their tooltips.
-  final String? undoLabel, redoLabel;
+  /// The Undo and Redo buttons, [UndoRedoButtons]. They name the last
+  /// change, so they are handed in to follow the event by themselves: a
+  /// typed result then leaves the rest of the bar alone.
+  final Widget undoRedo;
 
-  /// Null when there is nothing to undo or redo.
-  final VoidCallback? onUndo, onRedo;
+  /// The event check and the scoreboard panels; a null callback leaves
+  /// the button out.
+  final bool checkOpen, scoreboardOpen;
+  final VoidCallback? onCheck, onScoreboard;
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +127,24 @@ class WorkspaceTopBar extends StatelessWidget {
                 selected: rulingsOpen,
                 key: const ValueKey('rulings'),
               ),
+              if (onCheck != null)
+                _barIcon(
+                  colors,
+                  Icons.fact_check_outlined,
+                  'Check event',
+                  onCheck,
+                  selected: checkOpen,
+                  key: const ValueKey('check-event'),
+                ),
+              if (onScoreboard != null)
+                _barIcon(
+                  colors,
+                  Icons.tv_outlined,
+                  'Scoreboard for a second screen',
+                  onScoreboard,
+                  selected: scoreboardOpen,
+                  key: const ValueKey('scoreboard'),
+                ),
               _barIcon(
                 colors,
                 Icons.keyboard_outlined,
@@ -131,24 +154,7 @@ class WorkspaceTopBar extends StatelessWidget {
                 key: const ValueKey('keyboard-help'),
               ),
               _divider(colors),
-              _barIcon(
-                colors,
-                Icons.undo,
-                onUndo != null
-                    ? 'Undo $undoLabel (${shortcutLabel('Z')})'
-                    : 'Nothing to undo',
-                onUndo,
-                key: const ValueKey('undo'),
-              ),
-              _barIcon(
-                colors,
-                Icons.redo,
-                onRedo != null
-                    ? 'Redo $redoLabel (${shortcutLabel('Z', shift: true)})'
-                    : 'Nothing to redo',
-                onRedo,
-                key: const ValueKey('redo'),
-              ),
+              undoRedo,
               _barIcon(
                 colors,
                 Icons.history,
@@ -224,4 +230,49 @@ class WorkspaceTopBar extends StatelessWidget {
     disabledColor: colors.onSurface.withValues(alpha: 0.35),
     visualDensity: VisualDensity.compact,
   );
+}
+
+/// Undo and Redo in the top bar, each naming what it would change.
+class UndoRedoButtons extends StatelessWidget {
+  const UndoRedoButtons({
+    required this.undoLabel,
+    required this.onUndo,
+    required this.redoLabel,
+    required this.onRedo,
+    super.key,
+  });
+
+  /// What Undo and Redo would change, named in their tooltips.
+  final String? undoLabel, redoLabel;
+
+  /// Null when there is nothing to undo or redo.
+  final VoidCallback? onUndo, onRedo;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        WorkspaceTopBar._barIcon(
+          colors,
+          Icons.undo,
+          onUndo != null
+              ? 'Undo $undoLabel (${shortcutLabel('Z')})'
+              : 'Nothing to undo',
+          onUndo,
+          key: const ValueKey('undo'),
+        ),
+        WorkspaceTopBar._barIcon(
+          colors,
+          Icons.redo,
+          onRedo != null
+              ? 'Redo $redoLabel (${shortcutLabel('Z', shift: true)})'
+              : 'Nothing to redo',
+          onRedo,
+          key: const ValueKey('redo'),
+        ),
+      ],
+    );
+  }
 }

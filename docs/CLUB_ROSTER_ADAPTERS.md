@@ -31,6 +31,12 @@ on later refreshes.
    `parseWebRoster`, or translate club-specific columns and call `parseRoster`.
    Keep IDs as strings to preserve leading zeroes, retain raw source rows, and
    report invalid rows instead of silently inventing names, IDs or ratings.
+   A club whose event page states the format can also override
+   `eventPageUrl`, `isEventPage` and `parseEvent` to return an `Announcement`
+   (rounds, time control, play-up limit, merge threshold), as `boylston.dart`
+   does from the page's labelled facts. It is optional: without it the
+   director sets the rounds in **Set up**. The page is fetched without
+   following redirects, except one to another page `isEventPage` accepts.
 5. Import and add the adapter to `clubRosterSources` in `registry.dart`.
    The first matching adapter wins; the generic fallback is automatic.
 6. Add tests using synthetic HTML and `MockClient`: both URL forms, another
@@ -68,6 +74,39 @@ website scripts or download parser code. `WebRoster` handles the shared HTTP
 client, timeouts, response size limit and redirect policy. Tests can inject
 adapters through `WebRoster(client, sources: [ExampleClubSource()])`;
 `sources: []` selects generic parsing for every URL.
+
+## Results pages
+
+A club whose website shows the round's pairings with the results players
+enter there can have those results entered in Meow-Chess as they come in
+(**Website results** on Pairings). That is a second, separate adapter:
+implement `ClubResultsSource` under `lib/infrastructure/results_sources/`,
+using `boylston.dart` there as the example, and add it to
+`clubResultsSources` in its `registry.dart`.
+
+- `matches` and `resultsUrl` name the exact hosts and paths, as for rosters.
+- `parse` returns a `PostedRound` per section (its name and round number) with
+  a `PostedGame` per board: both players' names as shown and the two result
+  cells as text. Leave byes out. Throw `FormatException` for a page that is
+  not the results page (a sign-in page, an error page); return no rounds only
+  when the page really lists none.
+- `resultsUrlForRoster` gives the results address for an event imported from
+  the club's entry list. It is also what puts **Website results** on the
+  Pairings toolbar: an event whose roster address no adapter answers for has
+  no button.
+
+There is no generic fallback: results are never guessed from an unknown
+page. What the result cells may say (`1`, `0`, `½`, and `X`/`F` forfeit
+letters) and how boards are matched to the event are shared, in
+`lib/domain/posted_results.dart`; nothing is taken from a round unless every
+board the page lists matches a board here by both names and colors. Test with
+synthetic pages and invented names, as `test/infrastructure/web_results_test.dart`
+does. For the browser version the host must also be on the fetch function's
+allowlist (see [WEB.md](WEB.md)).
+
+The Boylston page lists the current round only: an earlier round disappears
+when the next one is posted, so it cannot be used to backfill or re-check a
+past round.
 
 ## Parsing and review
 

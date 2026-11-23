@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -34,6 +36,7 @@ class SectionTabs extends StatelessWidget {
     required this.onMenu,
     required this.onNewSection,
     required this.onEditQuadPairings,
+    this.onSetUp,
     super.key,
   });
   final Event event;
@@ -55,6 +58,9 @@ class SectionTabs extends StatelessWidget {
   )
   onMenu;
   final VoidCallback onNewSection, onEditQuadPairings;
+
+  /// Opens Set up: every section's format and rounds in one panel.
+  final VoidCallback? onSetUp;
 
   @override
   Widget build(BuildContext context) {
@@ -108,6 +114,27 @@ class SectionTabs extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+          if (onSetUp != null && e.sections.any((s) => !s.sideGames)) ...[
+            // In a narrow window or at large text the label gives way, so
+            // the tabs keep their room.
+            if (MediaQuery.sizeOf(context).width /
+                    MediaQuery.textScalerOf(context).scale(1) <
+                1100)
+              IconButton(
+                key: const ValueKey('set-up-sections'),
+                tooltip: 'Set up',
+                onPressed: onSetUp,
+                icon: const Icon(Icons.tune, size: 18),
+              )
+            else
+              OutlinedButton.icon(
+                key: const ValueKey('set-up-sections'),
+                onPressed: onSetUp,
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Set up'),
+              ),
+            const SizedBox(width: 8),
+          ],
           OutlinedButton.icon(
             key: const ValueKey('new-section'),
             onPressed: onNewSection,
@@ -148,6 +175,56 @@ class SectionTabs extends StatelessWidget {
       : s.rounds.isEmpty
       ? '${s.players.length} players'
       : 'Round ${s.rounds.length} · ${s.rounds.last.complete ? 'Complete' : '${s.rounds.last.games.where((g) => !g.outcome.resolved).length} missing'}';
+
+  static const _widestName = 200.0;
+
+  static TextStyle _subtitleStyle(ColorScheme? colors) => TextStyle(
+    fontSize: 12,
+    color: colors?.onSurfaceVariant,
+    fontFeatures: const [FontFeature.tabularFigures()],
+  );
+
+  /// The widest a tab's text gets: [label] in bold (up to the cut), and
+  /// [subtitle] or any progress line [section] can show later.
+  static double _reservedWidth(
+    BuildContext context,
+    String label,
+    String subtitle,
+    Section? section,
+  ) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final base = DefaultTextStyle.of(context).style;
+    double width(String text, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: base.merge(style)),
+        textDirection: Directionality.of(context),
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final w = painter.width;
+      painter.dispose();
+      return w;
+    }
+
+    final name = math.min(
+      width(label, const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+      scaler.scale(_widestName),
+    );
+    final lines = [subtitle];
+    if (section != null && !section.sideGames) {
+      final last = math.max(section.plannedRounds, section.rounds.length);
+      final boards = (section.players.length / 2).ceil();
+      final fide = section.fideRated ? 'FIDE · ' : '';
+      lines.addAll([
+        '${fide}Round $last · $boards missing',
+        '${fide}Round $last · Complete',
+      ]);
+    }
+    final progress = lines
+        .map((l) => width(l, _subtitleStyle(null)))
+        .fold(0.0, math.max);
+    return math.max(name, progress);
+  }
 
   Widget _sectionLink(
     ColorScheme colors,
@@ -190,46 +267,58 @@ class SectionTabs extends StatelessWidget {
                     ),
                     shape: const RoundedRectangleBorder(),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // A very long name is cut short, so the tab and its
-                      // menu button always fit in the strip together.
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.textScalerOf(context).scale(200),
-                        ),
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: active
-                                ? FontWeight.w600
-                                : FontWeight.w500,
+                  // As wide as the widest the tab gets: its name in bold and
+                  // its progress at any point of the event. Results going in
+                  // and choosing a tab never slide the tabs after it.
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minWidth: _reservedWidth(
+                        context,
+                        label,
+                        subtitle,
+                        section,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // A very long name is cut short, so the tab and its
+                        // menu button always fit in the strip together.
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.textScalerOf(
+                              context,
+                            ).scale(_widestName),
+                          ),
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: active
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(subtitle, style: _subtitleStyle(colors)),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-            if (active)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: _menuButton(colors, label, id, section),
-              ),
+            // Every tab keeps room for the menu button, so choosing a tab
+            // never shifts the tabs after it.
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: active
+                  ? _menuButton(colors, label, id, section)
+                  : const SizedBox(width: 32, height: 32),
+            ),
           ],
         ),
       ),

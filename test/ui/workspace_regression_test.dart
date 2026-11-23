@@ -169,9 +169,12 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('undo')));
       await tester.pumpAndSettle();
       expect(c.event!.sectionOf(visitor)?.id, q3.id);
+      await tester.tap(find.byKey(ValueKey('combine-pick-${q2.id}')));
+      await tester.pump();
       await tester.tap(find.byKey(ValueKey('combine-into-${q2.id}')));
       await tester.pump();
-      await tester.tap(find.text('Combine'));
+      await tester.ensureVisible(find.byKey(const ValueKey('combine-confirm')));
+      await tester.tap(find.byKey(const ValueKey('combine-confirm')));
       await tester.pumpAndSettle();
       final sections = {for (final s in c.event!.sections) s.id: s};
       // The emptied, unpaired section is removed with the move.
@@ -244,6 +247,7 @@ void main() {
     });
 
     testWidgets('a Mac uses Command for workspace shortcuts', (tester) async {
+      final semantics = tester.ensureSemantics();
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       try {
         final c = fixture();
@@ -276,12 +280,15 @@ void main() {
         await tester.sendKeyEvent(LogicalKeyboardKey.f1);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
         await tester.pumpAndSettle();
-        expect(find.text('⌘Z — Undo'), findsOneWidget);
-        expect(find.text('⌘⇧Z — Redo'), findsOneWidget);
+        // Each shortcut is drawn as keycaps beside its action, and read
+        // out as one line.
+        expect(find.bySemanticsLabel('⌘Z: Undo'), findsOneWidget);
+        expect(find.bySemanticsLabel('⌘⇧Z: Redo'), findsOneWidget);
         expect(find.textContaining('Ctrl'), findsNothing);
         await tester.pumpWidget(const SizedBox());
       } finally {
         debugDefaultTargetPlatformOverride = null;
+        semantics.dispose();
       }
     });
 

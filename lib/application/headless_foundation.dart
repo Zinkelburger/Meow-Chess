@@ -37,6 +37,23 @@ bool mapEquals<K, V>(Map<K, V>? a, Map<K, V>? b) =>
         a.length == b.length &&
         a.keys.every((key) => b.containsKey(key) && a[key] == b[key]));
 
+/// Equal by value through nested maps and lists, as JSON evidence is after
+/// a save and reload.
+bool deepEquals(Object? a, Object? b) {
+  if (a is Map && b is Map) {
+    return a.length == b.length &&
+        a.keys.every((key) => b.containsKey(key) && deepEquals(a[key], b[key]));
+  }
+  if (a is List && b is List) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (!deepEquals(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  return a == b;
+}
+
 bool listEquals<T>(List<T>? a, List<T>? b) =>
     identical(a, b) ||
     (a != null &&

@@ -6,10 +6,27 @@ mixin _RoundCommands on _CommandContext {
   /// Proposes the next round of [sectionId], or of every section that can be
   /// paired, on a background isolate. With [onlyReady], sections waiting on
   /// results or following a fixed quad schedule are left out.
-  Future<PairingBatch> propose({
-    String? sectionId,
-    bool onlyReady = false,
-  }) async => runProposal(event!, sectionId, onlyReady);
+  Future<PairingBatch> propose({String? sectionId, bool onlyReady = false}) =>
+      whilePairing(() => runProposal(event!, sectionId, onlyReady));
+
+  int _pairingRuns = 0;
+
+  /// True while pairings are being worked out. Pairing refuses to post
+  /// onto an event that changed meanwhile, so results arriving from a
+  /// club website wait until it is over.
+  bool get pairingUnderWay => _pairingRuns > 0;
+
+  /// Runs [work], making pairings and posting them, with
+  /// [pairingUnderWay] true throughout. A screen that proposes and then
+  /// posts wraps both, so nothing slips in between.
+  Future<T> whilePairing<T>(Future<T> Function() work) async {
+    _pairingRuns++;
+    try {
+      return await work();
+    } finally {
+      _pairingRuns--;
+    }
+  }
 
   /// How long a proposal may take before it is stopped and refused. Pairing
   /// a few hundred players takes seconds; anything near this limit is a
@@ -150,9 +167,19 @@ mixin _RoundCommands on _CommandContext {
         'No section is ready for its next round.',
       );
     }
+    change(
+      'Create pairings for ${batch.rounds.length} section${batch.rounds.length == 1 ? '' : 's'}',
+      _posted(e, batch.rounds),
+    );
+    secondaryBackup();
+  }
+
+  /// [e] with each of [rounds] (section ID → round) posted as its section's
+  /// next round, or a refusal when the boards or the people are taken.
+  Event _posted(Event e, Map<String, Round> rounds) {
     final now = DateTime.now().toUtc().toIso8601String();
     final updated = e.sections.map((s) {
-      final r = batch.rounds[s.id];
+      final r = rounds[s.id];
       if (r == null) return s;
       final posted = s.copy(
         // Record the format actually paired, so an odd-sized quad stays
@@ -179,7 +206,7 @@ mixin _RoundCommands on _CommandContext {
     // the toss the first Swiss round used is recorded on the event.
     final tossed =
         e.colorToss == ColorToss.none &&
-        batch.rounds.values.any(
+        rounds.values.any(
           (r) =>
               (r.policy == swissPolicy || r.policy == fideDutchPolicy) &&
               r.number == 1,
@@ -202,15 +229,177 @@ mixin _RoundCommands on _CommandContext {
         busy[board] = s.name;
       }
     }
-    _refuseBusyPeople(e, batch.rounds);
-    for (final r in batch.rounds.values) {
+    _refuseBusyPeople(e, rounds);
+    for (final r in rounds.values) {
       checkPairingRequests(e, r.games);
     }
+    return e.copy(sections: updated, colorToss: colorToss);
+  }
+
+  /// Pairs the latest round of [sectionId] again from the entries as they
+  /// are now, while none of its games has a result: withdrawn players and
+  /// new bye requests leave, changed ratings count, and anyone entered
+  /// since joins. An entrant's bye for this round was given only because
+  /// the round was already posted ([enterLate]), so it is dropped and they
+  /// are paired; a bye they ask for is requested on their card afterwards.
+  /// One step that Undo takes back. With nothing changed the engine gives
+  /// the same pairings. Returns the new round.
+  ///
+  /// [flipColors] pairs round 1 with the coin toss reversed, so the other
+  /// player on board 1 has white (to match another program's pairings).
+  /// One toss decides board 1 of every section (29E2 TIP), so every other
+  /// section whose round 1 is posted from the toss is paired again with it
+  /// in the same step; if one of them has started, nothing is flipped.
+  Future<Round> repairRound(String sectionId, {bool flipColors = false}) =>
+      whilePairing(() => _repairRound(sectionId, flipColors));
+
+  /// Whether [r] took its board 1 colors from the event's coin toss.
+  static bool _tossed(Round r) =>
+      r.number == 1 && (r.policy == swissPolicy || r.policy == fideDutchPolicy);
+
+  Future<Round> _repairRound(String sectionId, bool flipColors) async {
+    final e = event!;
+    final s = _section(sectionId);
+    final old = s.rounds.lastOrNull;
+    if (old == null) {
+      throw const TournamentException('Create pairings for the round first.');
+    }
+    if (s.sideGames || pairingFormat(s) != Format.swiss) {
+      throw const TournamentException(
+        'Only a Swiss round can be paired again.',
+      );
+    }
+    bool started(Round r) =>
+        r.hasPlay || r.games.any((g) => g.pairingAssumption != null);
+    if (started(old)) {
+      throw TournamentException(
+        'Round ${old.number} has started. Keep the games being played and re-pair only the boards not started.',
+      );
+    }
+    // As the section stood before this round. Round 1 also fixes the FIDE
+    // pairing numbers and the Baku group, so those are settled again.
+    final first = old.number == 1;
+    if (flipColors && !first) {
+      throw const TournamentException(
+        'Only round 1 colors come from the coin toss.',
+      );
+    }
+    // The sections paired again: this one, and with a flip every other
+    // section whose round 1 came from the same toss.
+    final others = [
+      if (flipColors)
+        for (final x in e.sections)
+          if (x.id != s.id &&
+              !x.sideGames &&
+              x.rounds.isNotEmpty &&
+              _tossed(x.rounds.first))
+            x,
+    ];
+    for (final x in others) {
+      if (x.rounds.length > 1 || started(x.rounds.single)) {
+        throw TournamentException(
+          '${x.name} has started round ${x.rounds.length > 1 ? x.rounds.length : 1} with this coin toss, and one toss decides board 1 in every section, so the colors cannot be flipped now.',
+        );
+      }
+    }
+    final group = {s.id, for (final x in others) x.id};
+    final late = <String, Set<int>>{};
+    for (final x in [s, ...others]) {
+      for (final b in x.rounds.last.byes) {
+        if (b.reason == lateEntryBye) {
+          (late[b.player] ??= {}).add(x.rounds.last.number);
+        }
+      }
+    }
+    final before = e.copy(
+      colorToss: flipColors
+          ? effectiveColorToss(e) == ColorToss.higherWhite
+                ? ColorToss.higherBlack
+                : ColorToss.higherWhite
+          : null,
+      players: [
+        for (final p in e.players)
+          late[p.id] == null
+              ? p
+              : p.copy(
+                  byes: {...p.byes}
+                    ..removeWhere((r, _) => late[p.id]!.contains(r)),
+                ),
+      ],
+      sections: [
+        for (final x in e.sections)
+          !group.contains(x.id)
+              ? x
+              : x.copy(
+                  rounds: x.rounds.sublist(0, x.rounds.length - 1),
+                  fideOrder: first ? const [] : null,
+                  bakuLast: first ? '' : null,
+                ),
+      ],
+    );
+    final proposals = <String, Round>{};
+    for (final x in [s, ...others]) {
+      final batch = await runProposal(before, x.id, false);
+      if (event?.revision != e.revision) {
+        throw const TournamentException(
+          'The event changed while pairing. Re-pair again.',
+        );
+      }
+      final proposed = batch.rounds[x.id];
+      if (proposed == null) {
+        throw TournamentException(
+          batch.issues[x.id] ?? '${x.name} cannot be paired again.',
+        );
+      }
+      proposals[x.id] = proposed.copy(revision: x.rounds.last.revision + 1);
+    }
+    final next = _posted(before, proposals);
+    // The same pairings again would differ only in when they were posted.
+    // Saving that would put a step in the history that changes nothing, and
+    // Undo would then seem to do nothing each time it took one back.
+    if (others.isEmpty && _samePairings(e, next, sectionId, old)) {
+      Diagnostics.record(
+        'save event',
+        'unchanged',
+        context: {
+          'action': 'Re-pair round ${old.number}',
+          'eventId': e.id,
+          'revision': e.revision,
+        },
+      );
+      return old;
+    }
     change(
-      'Create pairings for ${batch.rounds.length} section${batch.rounds.length == 1 ? '' : 's'}',
-      e.copy(sections: updated, colorToss: colorToss),
+      flipColors
+          ? others.isEmpty
+                ? 'Flip round ${old.number} pairing'
+                : 'Flip round ${old.number} pairing in '
+                      '${nameList([s.name, for (final x in others) x.name])}'
+          : 'Re-pair round ${old.number}',
+      next,
     );
     secondaryBackup();
+    return _section(sectionId).rounds.last;
+  }
+
+  /// Whether [next], which is [e] with [sectionId]'s latest round paired
+  /// again, seats everyone as [old] did and changes nothing else.
+  bool _samePairings(Event e, Event next, String sectionId, Round old) {
+    String seats(Round r) => [
+      for (final g in r.games) '${g.board}/${g.leg}/${g.white}/${g.black}',
+      for (final b in r.byes) 'bye/${b.player}/${b.points}/${b.reason}',
+    ].join('|');
+    final again = next.sections.firstWhere((s) => s.id == sectionId).rounds;
+    if (seats(again.last) != seats(old)) return false;
+    final kept = next.copy(
+      sections: [
+        for (final s in next.sections)
+          s.id != sectionId
+              ? s
+              : s.copy(rounds: [...s.rounds.sublist(0, again.length - 1), old]),
+      ],
+    );
+    return kept.encode() == e.encode();
   }
 
   /// A person still at a board elsewhere, typically a side game played
@@ -516,6 +705,8 @@ PairingBatch proposeRounds(Event snapshot, String? sectionId, bool onlyReady) {
         (!onlyReady || !hasFixedQuadSchedule(s)) &&
         (sectionId == null || s.id == sectionId) &&
         (knockout(s) || !s.finished) &&
+        // A section still waiting for its rounds does not hold the rest up.
+        (!onlyReady || sectionId != null || !s.roundsUnset) &&
         (!onlyReady || (roundsLeft(s) && readyToPair(s))),
   )) {
     try {

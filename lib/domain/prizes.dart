@@ -525,11 +525,19 @@ class PrizeAllocation {
     required List<String> explanations,
     required this.entries,
     required this.payoutPercent,
+    Map<String, int> eligible = const {},
   }) : lines = List.unmodifiable(lines),
        awards = List.unmodifiable(awards),
+       eligible = Map.unmodifiable(eligible),
        explanations = List.unmodifiable(explanations);
   final PrizeTable table;
   final List<PrizeLine> lines;
+
+  /// Prize ID → how many entrants could win it, by rating, the names it
+  /// lists and the rest of its terms, whatever they go on to score. Zero
+  /// means the prize cannot be won as announced: a mistyped rating range,
+  /// or a class nobody entered in.
+  final Map<String, int> eligible;
 
   /// In standings order; only players who receive something.
   final List<PlayerAward> awards;
@@ -1457,5 +1465,9 @@ PrizeAllocation allocatePrizes(Event event, Section section) {
     explanations: notes,
     entries: entries,
     payoutPercent: payout.percent,
+    eligible: {
+      for (final p in table.list)
+        p.id: entrants.where((e) => eligible(e, p)).length,
+    },
   );
 }

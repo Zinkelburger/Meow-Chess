@@ -158,7 +158,7 @@ void main() {
     expect(state.label, startsWith('Create pairings'));
     expect(
       state.why,
-      contains('3 players are outside their section’s rating range'),
+      contains('3 players are rated outside what their section takes'),
     );
   });
 
@@ -199,7 +199,19 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.textContaining('outside the rating range'), findsOneWidget);
+    // The row carries a mark alone; the bar above it says why in words.
+    expect(find.byKey(const ValueKey('range-mark-p0')), findsOneWidget);
+    expect(
+      find.byTooltip(
+        '${eligibilityProblem(c.event!, c.event!.player('p0'), c.event!.sections.single)} '
+        'Open the player to move them or allow them in.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Outside the rating range (1)', findRichText: true),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('panel-range-problem')), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('panel-range-allow')));
     await tester.pump();
@@ -215,7 +227,11 @@ void main() {
       'p0': 'Plays up with the organizer’s approval',
     });
     expect(find.byKey(const ValueKey('panel-range-allowed')), findsOneWidget);
-    expect(find.textContaining('outside the rating range'), findsNothing);
+    expect(find.byKey(const ValueKey('range-mark-p0')), findsNothing);
+    expect(
+      find.textContaining('Outside the rating range', findRichText: true),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 }

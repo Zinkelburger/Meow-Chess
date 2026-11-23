@@ -21,6 +21,7 @@ import '../domain/model.dart';
 import '../domain/pairing.dart';
 import 'dialogs.dart';
 import 'focus_pool.dart';
+import 'live_results.dart';
 import 'result_correction_panel.dart';
 import 'player_panel.dart';
 import 'player_format.dart';
@@ -47,11 +48,20 @@ class ResultsView extends StatefulWidget {
     this.roundAction,
     this.onAddPlayers,
     this.onNewSection,
+    this.liveResults,
+    this.onRepaired,
     super.key,
   });
   final TournamentController controller;
   final String? sectionId;
   final Widget? roundAction;
+
+  /// Told the section and its new round once Re-pair round has replaced
+  /// the pairings, so the page's owner can show what is worth checking.
+  final void Function(String sectionId, Round round)? onRepaired;
+
+  /// Results from the club website; without it the page offers none.
+  final LiveResults? liveResults;
 
   /// Where the empty page sends the director next: the Players page while
   /// the event has no players, and creating a section once it has. Each
@@ -136,9 +146,6 @@ class ResultsViewState extends State<ResultsView> {
   /// keys are.
   bool invalidKey = false;
 
-  /// The last key was a draw, playing or disputed key on a forfeit board.
-  bool forfeitRefused = false;
-
   /// The last key was 5, = or a decimal point: the legend leads with the
   /// draw key.
   bool drawHint = false;
@@ -169,6 +176,8 @@ class ResultsViewState extends State<ResultsView> {
   @override
   void initState() {
     super.initState();
+    widget.liveResults?.addListener(liveChanged);
+    liveShown = widget.liveResults?.shown ?? false;
     selection.showAllRounds = allQuads;
     roundSignature = signature();
     final saved = c.workspaceState.readMap(preference);
@@ -236,6 +245,11 @@ class ResultsViewState extends State<ResultsView> {
   @override
   void didUpdateWidget(covariant ResultsView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.liveResults != widget.liveResults) {
+      oldWidget.liveResults?.removeListener(liveChanged);
+      widget.liveResults?.addListener(liveChanged);
+      liveShown = widget.liveResults?.shown ?? false;
+    }
     final next = signature();
     // A round was posted or undone: go back to the current round.
     if (roundSignature.isNotEmpty && next != roundSignature) {
@@ -255,6 +269,7 @@ class ResultsViewState extends State<ResultsView> {
 
   @override
   void dispose() {
+    widget.liveResults?.removeListener(liveChanged);
     remember();
     scrollSave?.cancel();
     ready = false;
@@ -265,6 +280,15 @@ class ResultsViewState extends State<ResultsView> {
     jump.dispose();
     repairReason.dispose();
     super.dispose();
+  }
+
+  /// Whether the website-results strip is above the boards. The strip
+  /// redraws itself as readings come in; the page only when it comes or
+  /// goes.
+  bool liveShown = false;
+  void liveChanged() {
+    final shown = widget.liveResults?.shown ?? false;
+    if (shown != liveShown && mounted) setState(() => liveShown = shown);
   }
 
   FocusNode box(String gameId, bool white) => boxes.node(boxKey(gameId, white));
@@ -554,7 +578,6 @@ class ResultsViewState extends State<ResultsView> {
     outcome: resultFromKey(event, white: white, current: current),
     drawAttempt: isDrawAttempt(event),
     printable: (event.character ?? '').trim().isNotEmpty,
-    refusedOnForfeit: refusedOnForfeit(event, current),
   );
 
   KeyEventResult onKey(BoardRow row, bool white, KeyEvent event) {
@@ -589,10 +612,9 @@ class ResultsViewState extends State<ResultsView> {
             if (mounted) focusBox(g.id, white);
           },
         );
-      case GridRefuse(:final forfeit, :final draw):
+      case GridRefuse(:final draw):
         setState(() {
           invalidKey = true;
-          forfeitRefused = forfeit;
           drawHint = draw;
         });
       case GridEnter(:final outcome, :final clearsHint):
@@ -634,6 +656,60 @@ class ResultsViewState extends State<ResultsView> {
   void closeRepair() {
     Dock.maybeOf(context)?.close();
     setState(() => repairing = false);
+  }
+
+  /// Re-pair round is working: the engine runs off the UI thread.
+  bool repairingRound = false;
+
+  /// Pairs the round on screen again from the entries as they are now.
+  /// Applied at once; the notice offers Undo.
+  Future<void> repairRound(Section section, {bool flipColors = false}) async {
+    if (repairingRound || !applyCardEdits()) return;
+    final old = section.rounds.last;
+    // A flip pairs every section's round 1 again; the notice names the
+    // others, whose boards are not on screen.
+    final firsts = {
+      for (final x in c.event!.sections)
+        if (x.id != section.id && x.rounds.isNotEmpty)
+          x.id: x.rounds.first.revision,
+    };
+    setState(() {
+      repairingRound = true;
+      swapping = false;
+      swapPick = null;
+    });
+    try {
+      final round = await c.repairRound(section.id, flipColors: flipColors);
+      if (!mounted) return;
+      // The same pairings again: nothing was saved, so there is nothing to
+      // review and nothing for Undo to take back.
+      if (round.revision == old.revision) {
+        showNotice(context, repairedNotice(c.event!, old, round));
+        return;
+      }
+      widget.onRepaired?.call(section.id, round);
+      showUndoNotice(
+        context,
+        c,
+        flipColors
+            ? flippedNotice(
+                c.event!,
+                round,
+                also: [
+                  for (final x in c.event!.sections)
+                    if (firsts.containsKey(x.id) &&
+                        x.rounds.isNotEmpty &&
+                        x.rounds.first.revision != firsts[x.id])
+                      x.name,
+                ],
+              )
+            : repairedNotice(c.event!, old, round),
+      );
+    } catch (error) {
+      if (mounted) showFailure(context, error);
+    } finally {
+      if (mounted) setState(() => repairingRound = false);
+    }
   }
 
   void closeAssume() {
@@ -707,6 +783,7 @@ class ResultsViewState extends State<ResultsView> {
     final everySection = widget.sectionId == null;
     final repair = repairableRound(shown, singleSection: !everySection);
     if (repair == null) repairing = false;
+    final whole = wholeRoundRepairable(shown, singleSection: !everySection);
     final single = everySection ? null : shown.singleOrNull;
     if (viewingPast || single == null || single.$2.hasPlay) {
       swapping = false;
@@ -778,12 +855,23 @@ class ResultsViewState extends State<ResultsView> {
           : null,
       repair: repair,
       onRepair: repair == null ? null : () => openRepair(repair.round),
+      onRepairRound: viewingPast || whole == null
+          ? null
+          : () => repairRound(whole),
+      onFlipColors:
+          viewingPast || whole == null || whole.rounds.last.number != 1
+          ? null
+          : () => repairRound(whole, flipColors: true),
+      repairingRound: repairingRound,
       missingOnly: missingOnly,
       onMissingOnly: shown.isEmpty
           ? null
           : (v) => setState(
               () => c.workspaceState.write('pairings-missing-only', '$v'),
             ),
+      // Always there, greyed until the boards are, so pairing the round
+      // does not reflow the toolbar.
+      live: widget.liveResults,
       printTooltip: sections.every(hasFixedQuadSchedule)
           ? 'Print pairings and result sheets'
           : selection.showAllRounds
@@ -794,6 +882,8 @@ class ResultsViewState extends State<ResultsView> {
     // Notices belong to the boards, so they sit in the boards pane and never
     // push the crosstable beside it down.
     final notices = [
+      if (widget.liveResults case final live? when live.shown)
+        LiveResultsStrip(live: live, controller: c),
       for (final s in sections)
         if (c.quadScheduleIssues[s.id] case final issue?)
           _ScheduleIssue(
@@ -995,7 +1085,6 @@ class ResultsViewState extends State<ResultsView> {
             )
           : null,
       invalidKey: invalidKey,
-      forfeitRefused: forfeitRefused,
       drawHint: drawHint,
       forfeitHint: row != null && !locked && isForfeit(row.game.outcome)
           ? forfeitKeyHint(row.game.outcome, white: white)

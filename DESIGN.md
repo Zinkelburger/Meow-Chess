@@ -270,6 +270,7 @@ Plain and immediate.
 - **Filled:** Ledger Blue with white label. At most one per region, and only for the action that commits or moves the day forward: Create pairings / Pair a side game and Generate DBF files on a page; Save, Add, Move, Import N players, Create section, Print in a panel or window. The Players page has no filled button.
 - **Outlined:** white sheet fill, Ruling Grey border, ink (`onSurface`) label. Everything else: toolbar actions (Add player, Refresh from USCF, Player tools, New section), Cancel, and acknowledgements (Done, Done correcting, Done editing, Refresh preview), which never take the blue.
 - **Text / Icon:** no fill; toolbar icons and inline actions.
+- **Tinted:** an outlined button on the seed `secondaryContainer` with an ink label and a leading 18px icon. One use: **Website results** on the Pairings toolbar, shown only when the event's players came from a club website (a Boylston address) and results are not yet being taken, because missing it means typing a round the website already has. Once on, it takes the Step surface and a ticked cloud (a crossed cloud while the page cannot be read) and the strip above the boards carries the tint. The label never changes, so nothing beside it moves. Not a second filled button, and not for anything that is merely useful.
 - **Hover / Focus:** colour changes instantly (zero animation, no ripple). Keyboard focus draws a 2px ring in `onSurface` (dark on light paper, light on dark), so it shows on filled buttons too.
 
 ### View tabs
@@ -301,6 +302,11 @@ The heart of the Rounds wall sheet: a 64px by 44px box at each end of a board ro
 ### Board row and table
 52px ruled rows (hairline at 50%), 19px tabular board number, white on the left and black on the right, row menu at the end. The column header is sticky, on Shelf, 12px. Standings mark shared ranks "T-2".
 
+### Attention marks
+Something in a table row worth a second look is one 16px circled-exclamation icon in the attention colour, in a 20px box directly after what it flags: the end of the name cell for a player outside the section's rating range, after the change for a rating that moved more than 50 points or is a first rating. No words sit beside the icon, because a row's words truncate; and no cell is filled for emphasis, because a filled cell reads as a ticked row. Hovering the mark tints its box and shows the reason at once, with no tooltip delay. The reason is always on screen in words as well: the review panel lists **Large rating changes (N)** under a line stating the 50-point rule, and the player's card states a range problem with its Move and Allow actions.
+
+Until a section is paired, the entrants its rating range or the play-up rule puts elsewhere are listed last, under a bar: Shelf surface, Ruling Grey top edge, the icon, **Outside the rating range (N)**, then the rule in muted words ("Playing up into Open takes 1600 or more. Unrated players may enter."). Its tick box selects them all, so one Move puts them in the right section. An unrated player the rule admits stays above the bar; an allowed exception returns to the list. The bar wraps and never truncates. Once the section is paired the rows keep pairing order and only the marks remain.
+
 ### Round header
 Round title with muted tabular facts and, when there is more than one round, the round chips (1, 2, 3, All) all on one line. The title, the read-only status and the chips each occupy a band one control tall, so the title stays level with the Crosstable title even when the chips wrap. Pane headings are at least one control tall, so a section with round chips and one without (a quad beside a Swiss) start their tables at the same height. Each heading's first line is pinned to a top band one control tall, so when round chips wrap on a narrow pane, the Crosstable title and the round title still share one horizontal axis. Before round 1 the heading reads "Round 1 of N · Not paired yet" and the toolbar stays in place with its filters disabled. The nav row reserves the Create pairings button's height whether or not it is shown.
 
@@ -316,7 +322,7 @@ Strips with an icon and words, 4px corners, for states that need a sentence: edi
 White sheet, hairline border, square corners, title row (15px SemiBold) with a close button; Esc closes. 360px for details and short forms; 480px for print and the player lookup, whose answer runs at 26px / 24px so it reads from standing height.
 
 ### Player card
-The player panel leads with what TDs decide mid-event: a muted facts line (section · rating, plus a Withdrawn StatusPill) and outlined status (**Remove from event** before the section is paired, then **Withdraw after round N**; **Reinstate** when withdrawn) and **Move…** buttons. Move… opens the move form in place under those buttons on a Shelf inset (Move to, Swap with when a quad needs it, Reason once play has started, then Move / Cancel); there is no Section group. Identity fields (Full name, US Chess ID, Rating, State) stay open, all the same 36px-class field height; the ID field carries no inline icon, and Find by name / Check ID sit under it as outlined buttons. Check ID never saves anything: it shows the US Chess record on a Shelf inset, a bold verdict line ("ID 12345678 is Alex Chen", or in `error` "…belongs to Someone Else, not Alex Chen" with name matches offered below) over a label/value table of State, Regular, Quick, Blitz, Expires and Supplement. Status lines in this area never end in a period. Everything else is a DisclosureGroup: a hairline-ruled header row with a chevron, the 15px title and, when closed, its value as a 13px muted summary at the right edge ("R3 ½", "Not checked", "Lee / Patel"). Groups open and close instantly; a TD's choice is remembered across players. Byes opens by default in a Swiss; US Chess opens itself for a membership warning or a lookup; a report fix opens the group holding its field. Groups: Byes (hidden for a withdrawn player), US Chess, Pairing requests, Team, Notes. Groups carry no explanatory sentences; labels do the work. US Chess is a label/value table at one 13px size (Expires, coloured only when it needs attention, with its warning word; Checked; Supplement or Registration rating), an outlined Refresh from US Chess button, and the Name on rating report field. Save and Discard draft sit in the panel footer whenever a field is edited. Adding a player shows only Name, US Chess ID, Rating and Section, with the rest under More details.
+The player panel leads with what TDs decide mid-event: a muted facts line (section · rating, plus a Withdrawn StatusPill) and outlined status (**Remove from event** before the section is paired, then **Withdraw after round N**; **Reinstate** when withdrawn) and **Move…** buttons. Move… opens the move form in place under those buttons on a Shelf inset (Move to, Swap with when a quad needs it, Reason once play has started, then Move / Cancel); there is no Section group. Identity fields (Full name, US Chess ID, Rating, State) stay open, all the same 36px-class field height; the ID field carries no inline icon, and Find by name / Check ID sit under it as outlined buttons. Check ID never saves anything: it shows the US Chess record on a Shelf inset, a bold verdict line ("ID 12345678 is Alex Chen", or in `error` "…belongs to Someone Else, not Alex Chen" with name matches offered below) over a label/value table of State, Regular, Quick, Blitz, Expires and Supplement. Status lines in this area never end in a period. Everything else is a DisclosureGroup: a hairline-ruled header row with a chevron, the 15px title and, when closed, its value as a 13px muted summary at the right edge ("R3 ½", "Not checked", "Lee / Patel"). Groups open and close instantly; a TD's choice is remembered across players. Byes opens by default in a Swiss; US Chess opens itself for a membership warning or a lookup; a report fix opens the group holding its field. Groups: Byes (hidden for a withdrawn player), US Chess, Pairing requests, Team, Notes. Groups carry no explanatory sentences; labels do the work. US Chess is a label/value table at one 13px size (Expires, coloured only when it needs attention, with its warning word; Checked; Supplement or Registration rating, then the rating not in use: Entered, or US Chess with its date), an outlined Refresh from US Chess button, and the Name on rating report field. Save and Discard draft sit in the panel footer whenever a field is edited. Adding a player shows only Name, US Chess ID, Rating and Section, with the rest under More details.
 
 ### Bye grid
 A compact table: a 12px muted "Round" header row with the unpaired round numbers across, then rows 0 pt, ½ pt, 1 pt (in that order) of 32px cells. Empty cells are outlined; a chosen cell fills with `onSurface` and shows its points in `surface` (13px SemiBold); choosing it again clears it. Hover is the Step surface; focus is the 2px ring outside the cell. Cells grow with text scale and the table scrolls sideways if rounds run past the panel.
@@ -369,7 +375,98 @@ Print previews name their sections and rounds (per section when they differ), ne
 
 ### Reviewed external changes
 
-Website imports, rating updates and player transfers once play has started use explicit before/after confirmation in the dock or the selection panel. Existing-player website changes start unchecked; missing website entries stay local. Registration ratings are labelled self-reported. Help opens searchable offline articles in the same dock, with contextual pairing explanations. These deliberate confirmation steps supersede the general immediate-edit guidance for these workflows.
+Website imports, rating updates and player transfers once play has started use explicit confirmation in the dock or the selection panel: a website import states its counts and takes one press, and a change to an existing player is ticked by the TD. Existing-player website changes start unchecked; missing website entries stay local. Registration ratings are labelled self-reported. Help opens searchable offline articles in the same dock, with contextual pairing explanations. These deliberate confirmation steps supersede the general immediate-edit guidance for these workflows.
+
+### Import, Set up and notes (November 21 update)
+
+The day runs in one order: import, set up, notes and byes, Create pairings,
+then changes. Each step is one docked panel and hands on to the next.
+
+**Add from URL / Refresh from URL** shows the URL field and Fetch players,
+then a count ("16 players" at 22px, tabular), the sections the list names
+with their sizes, and one filled button in the footer named for what it does
+("Add 16 players", "Add 3 and update 2", "Update 2 players"). An import never
+asks for rounds and never lists every player with a checkbox. Only rows that
+need a decision appear, under plain bold headings: Left out, Not added,
+Added without a section, Changed on the website (PlainCheckbox rows, unticked
+by default, with the difference beneath in 13px muted) and No longer on the
+website. **All N new entries** is a closed DisclosureGroup of one-line rows.
+Fetch ratings from US Chess is a checkbox above the button.
+
+**Set up** (outlined, beside New section; opens by itself after an import
+that started sections) is the tournament in one panel, read top to bottom in
+a fixed order so nothing moves when something is resolved.
+
+First the three things every section shares, in the order an event page
+states them: Time control with **Rounds** beside it, then **Play up within**
+(suffix "points") with what it comes to in 13px muted beside it ("Open:
+1600 and over"), dropping beneath when several sections or long names would
+not fit. The event's Rounds field fills every section as it is
+typed, shows their number while they agree and reads "Varies" when they
+differ; it is absent when only one section takes rounds. Under the fields
+one muted line with a check says "Matches the event page"; when the fields
+differ it names the page's values in ink ("Event page: 4 rounds · G/60 d5 ·
+play up within 200", breaking only between facts) over an outlined Use these.
+
+**Sections** is a table whose heading is its header row: the 15px title at
+the left, 12px muted Format and Rounds captions over their columns (132px
+and 76px, the same Rounds column as the event's field, so the numbers stack).
+Each section is a hairline-ruled row: its name (SemiBold) against a
+label-less Format select and Rounds field (a name that would need more than
+two lines there, or break a word, takes the line above and the fields keep
+their columns), then one 13px muted line with its
+size and rating range ("8 players · under 1800"). Fields in the table carry
+no floating label; the caption names them once. Combine belongs to no one
+row, so its entry here is a single 13px **Combine sections…** text button
+under the table, its label starting on the column edge, shown whenever there
+are two or more sections. A small section is not marked in the table: before
+round 1 the line beside Create pairings leads with an 18px caution triangle
+in the attention colour and the reason in ink ("U1800 has 4 players for 5
+rounds, so some will meet twice."), left-aligned from the mark, two lines at
+most with the whole text on hover. It shares the slot already reserved for
+why pairings are held back, so nothing moves, and it never disables the
+button.
+A bad value is named in `error` directly under the row's fields. At large
+text (above 130%) the fixed columns would clip, so the captions go and each
+section stacks: its name, then labelled Format and Rounds fields beneath. "A section is not paired until its
+rounds are set." is said once under the table, never per row.
+
+**Players to check** comes last: each entrant a rating cap or the play-up
+rule puts elsewhere is a ruled item with the name, the reason in 13px muted,
+and two outlined buttons that apply at once (Move to U1800, Keep in Open).
+Because the list sits below the table, the section's own row counts them
+after its facts, with an icon and words in attention colour ("1 to check"),
+on the same line while it fits and on its own line when it does not.
+
+"Not saved yet" sits in the footer above Save, not at the top of the form,
+so the first keystroke never pushes the fields down. The footer holds Save
+and Discard draft while edited; otherwise the next step (Review N
+registration notes, filled) and Done.
+
+A section whose rounds are not known is never paired. Create pairings says
+"Open has no rounds set." and offers **Set up sections** in its place
+(filled when nothing else can be paired, outlined beside Create pairings).
+
+**Registration notes** lists each waiting note under the player's name,
+section and rating, with the bye grid and an outlined **Dealt with**. Notes
+are never interpreted. Dealt-with notes fold into a closed group with Reopen.
+
+**Combine** ("Combine sections", never "Combine U1800") belongs to no one
+section: the tab or row it is opened from is one of the sections to combine,
+not the one that moves. With two sections the panel is a single choice under
+a 12px muted **Which way** caption: one radio per outcome, titled as the
+whole sentence ("U1800 into Open", "Open into U1800"), with a muted line
+under it giving what everyone then plays under ("Open has 12 players · Swiss
+· 4 rounds · any rating") and, when it applies, how many fall outside that
+range. The way whose rating range takes the most players is selected to
+start with, then the larger section. With three or more sections a
+**Sections to combine** checklist comes first (the opening section ticked);
+until two are ticked a muted line asks for another and no direction is
+shown. Muted sentences then say what will happen. The Reason field appears
+only once games have been played, and its draft note sits above the button
+so typing never pushes the form down. The filled button names the outcome
+("Combine into Open · 16 players"). Pairings nobody has played are discarded
+and made again.
 
 ### Players and Pairings workflow (October 3 update)
 

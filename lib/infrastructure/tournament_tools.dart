@@ -5,12 +5,14 @@ import 'package:path/path.dart' as p;
 
 import '../application/failures.dart';
 import '../application/tournament_controller_core.dart';
+import '../domain/event_check.dart';
 import '../domain/fide.dart';
 import '../domain/knockout.dart';
 import '../domain/ladder.dart';
 import '../domain/model.dart';
 import '../domain/prizes.dart';
 import '../domain/pairing.dart';
+import '../domain/pairing_quality.dart';
 import '../domain/standings.dart';
 import '../domain/team_standings.dart';
 import '../domain/us_chess.dart';
@@ -296,6 +298,7 @@ class TournamentTools {
           'get_event',
           'standings',
           'prize_report',
+          'check_event',
           'propose_pairings',
           'rating_preflight',
         ].contains(name),
@@ -628,6 +631,11 @@ class TournamentTools {
       tool(
         'prize_report',
         'Read the prize allocation (rules 32–33) for one section or all: paid amounts, who wins what, and the pooling arithmetic.',
+        {'sectionId': _string()},
+      ),
+      tool(
+        'check_event',
+        'Read the event check for one section or all: findings (fix, look, note) such as repeat pairings, a third game with one color, players without a game or bye, byes past the announced limit and one person entered twice; every check that ran or did not apply; and each Swiss round\'s pairing quality as count/of tallies. Changes nothing.',
         {'sectionId': _string()},
       ),
       tool(
@@ -1082,6 +1090,11 @@ class TournamentTools {
                             (args['timeControl'] ?? x.timeControl).trim()
                                 as String?,
                         plannedRounds: rounds,
+                        // Stating the rounds is what a section started by
+                        // a registration list was waiting for.
+                        roundsUnset: args['plannedRounds'] == null
+                            ? null
+                            : false,
                         boardStart:
                             (args['boardStart'] ?? x.boardStart) as int?,
                         rrTable: rrTable,
@@ -1348,6 +1361,60 @@ class TournamentTools {
                       when !teams.isEmpty)
                     'teamPrizes': teams.toJson(),
                 },
+          ],
+        };
+      case 'check_event':
+        final sectionId = args['sectionId'] as String?;
+        if (sectionId != null) _section(sectionId);
+        final check = checkEvent(event, sectionId: sectionId);
+        Json tally(Tally t) => {'count': t.count, 'of': t.of};
+        return {
+          'revision': event.revision,
+          'scope': check.scope,
+          'findings': [
+            for (final f in check.findings)
+              {
+                'level': f.level.name,
+                'message': f.message,
+                if (f.sectionId.isNotEmpty) 'sectionId': f.sectionId,
+                if (f.round > 0) 'round': f.round,
+                if (f.players.isNotEmpty) 'players': f.players,
+              },
+          ],
+          'checks': [
+            for (final c in check.checks)
+              {
+                'title': c.title,
+                'ran': c.ran,
+                'verdict': c.verdict,
+                'found': c.findings.length,
+              },
+          ],
+          'pairingQuality': [
+            for (final s in event.sections)
+              if (sectionId == null || s.id == sectionId)
+                if (pairingQuality(event, s) case final q?)
+                  {
+                    'sectionId': q.sectionId,
+                    'name': q.name,
+                    if (q.note.isNotEmpty) 'note': q.note,
+                    'rounds': [
+                      for (final r in q.rounds)
+                        {
+                          'round': r.round,
+                          'boards': r.boards,
+                          'sameScoreBoards': tally(r.sameScore),
+                          'colorsDueReceived': tally(r.colorsDue),
+                          'thirdSameColor': tally(r.thirdInRow),
+                          'colorImbalance': tally(r.imbalance),
+                          'repeatFloats': tally(r.repeatFloats),
+                          'rematches': tally(r.rematches),
+                          if (r.teammates case final t?)
+                            'teammatesPaired': tally(t),
+                          'requestsPaired': tally(r.requests),
+                        },
+                    ],
+                  },
           ],
         };
       case 'standings':

@@ -4,7 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:meow_chess/domain/announcement.dart';
+import 'package:meow_chess/domain/eligibility.dart';
 import 'package:meow_chess/domain/model.dart';
+import 'package:meow_chess/infrastructure/roster_sources/boylston.dart';
 import 'package:meow_chess/infrastructure/web_roster.dart';
 import 'package:meow_chess/infrastructure/roster_import.dart';
 import 'package:meow_chess/infrastructure/roster_sources/html_table.dart';
@@ -437,7 +440,7 @@ void main() {
     final all = review.changes.map((r) => r.key).toSet();
     final plan = review.sectionPlan(c.event!, all);
     expect(plan.creates.keys, ['Under 500']);
-    final next = review.apply(c.event!, all, newSectionRounds: 4);
+    final next = review.apply(c.event!, all);
     String? sectionOf(String name) =>
         next.sectionOf(next.players.firstWhere((p) => p.name == name).id)?.name;
     expect(sectionOf('Loose End'), 'Under 1000');
@@ -445,13 +448,159 @@ void main() {
     expect(sectionOf('Another Kid'), 'Under 500');
     // Already in a quad: a registration list never moves anyone.
     expect(sectionOf('Player 00'), 'Quad 1');
-    // Without rounds, the new section waits and its player stays unplaced.
-    final waiting = review.apply(c.event!, all);
+    // The list does not say how many rounds, so the new section waits.
+    final created = next.sections.firstWhere((s) => s.name == 'Under 500');
+    expect(created.roundsUnset, isTrue);
+    expect(created.ratingCeiling, 500);
+    // With an event page that announces them, it is ready.
+    final announced = RosterReview(
+      c.event!,
+      url,
+      rows,
+      announcement: const Announcement(rounds: 4, timeControl: 'G/60 d5'),
+    ).apply(c.event!, all);
+    final ready = announced.sections.firstWhere((s) => s.name == 'Under 500');
+    expect(ready.roundsUnset, isFalse);
+    expect(ready.plannedRounds, 4);
+    expect(announced.rosterSource['announced'], {
+      'rounds': 4,
+      'timeControl': 'G/60 d5',
+    });
+    // An event that already has players keeps its own time control.
+    expect(announced.timeControl, c.event!.timeControl);
+  });
+
+  test('a new event takes the announced time control and play-up rule', () {
+    final c = TournamentController(SqliteEventRepository(':memory:'))
+      ..create('Tornado');
+    addTearDown(c.dispose);
+    String entry(String id, String name, String rating, String section) =>
+        '<tr><td>1</td><td>$name</td><td>$rating</td><td>$id</td><td>$section</td><td></td></tr>';
+    final review = RosterReview(
+      c.event!,
+      url,
+      parseWebRoster(
+        table(
+          entry('30000001', 'Top Seed', '2000', 'Open') +
+              entry('30000002', 'Low Seed', '1500', 'Open') +
+              entry('30000003', 'Club Player', '1700', 'U1800'),
+        ),
+      ),
+      announcement: const Announcement(
+        rounds: 4,
+        format: Format.swiss,
+        timeControl: 'G/60 d5',
+        playUpLimit: 200,
+        mergeBelow: 8,
+      ),
+    );
+    final next = review.apply(
+      c.event!,
+      review.changes.map((r) => r.key).toSet(),
+    );
+    expect(next.timeControl, 'G/60 d5');
+    expect(next.playUpLimit, 200);
+    expect(next.sections.map((s) => '${s.name} ${s.plannedRounds}'), [
+      'Open 4',
+      'U1800 4',
+    ]);
+    expect(Announcement.of(next)!.mergeBelow, 8);
+    final open = next.sections.first;
+    expect(playUpFloor(next, open), 1600);
     expect(
-      waiting.sectionOf(
-        waiting.players.firstWhere((p) => p.name == 'Another Kid').id,
+      sectionRangeProblems(next, open).keys.map((id) => next.player(id).name),
+      ['Low Seed'],
+    );
+  });
+
+  test('a Boylston event page states the format, clock and club rules', () {
+    String page(String format, String description) =>
+        '<html><body><h1>Tornado</h1><dl class="event-info box">'
+        '<dt>Date</dt><dd>Saturday</dd><dt>Event Format</dt><dd>$format</dd>'
+        '<dt>Time Control</dt><dd>G/60 d5</dd><dt>Sections</dt>'
+        '<dd>Open &amp; U1800</dd><dt>Description</dt><dd>$description</dd>'
+        '</dl></body></html>';
+    final tornado = parseBoylstonEvent(
+      page(
+        '4SS',
+        'Sections with fewer than eight players may be merged.<br />'
+            'Players rated within 200 points of the lower section maximum '
+            'may play up one section.',
+      ),
+    )!;
+    expect(tornado.rounds, 4);
+    expect(tornado.format, Format.swiss);
+    expect(tornado.timeControl, 'G/60 d5');
+    expect(tornado.playUpLimit, 200);
+    expect(tornado.mergeBelow, 8);
+    expect(tornado.summary, '4 rounds · G/60 d5');
+    final weekly = parseBoylstonEvent(
+      page(
+        '5SS (One game each Tuesday)',
+        'Sections with fewer than 6 players may be merged.',
+      ),
+    )!;
+    expect((weekly.rounds, weekly.mergeBelow, weekly.playUpLimit), (5, 6, 0));
+    expect(parseBoylstonEvent(page('3RR', ''))!.format, Format.roundRobin);
+    expect(parseBoylstonEvent('<html><body>Nothing</body></html>'), isNull);
+    // Saved and read back with the event.
+    expect(
+      Announcement.fromJson(tornado.toJson()).summary,
+      '4 rounds · G/60 d5',
+    );
+  });
+
+  test('the event page is found from either URL, one redirect deep', () async {
+    const page =
+        '<dl class="event-info"><dt>Event Format</dt><dd>4SS</dd></dl>';
+    final asked = <String>[];
+    final client = MockClient((request) async {
+      asked.add(request.url.path);
+      return switch (request.url.path) {
+        '/events/1505' => http.Response(
+          '',
+          301,
+          headers: {'location': '/events/1505/tornado-147'},
+        ),
+        '/events/1505/tornado-147' => http.Response(page, 200),
+        '/events/1600' => http.Response(
+          '',
+          302,
+          headers: {'location': 'https://elsewhere.example/x'},
+        ),
+        _ => http.Response('', 404),
+      };
+    });
+    addTearDown(client.close);
+    final web = WebRoster(client);
+    expect(
+      (await web.fetchAnnouncement(
+        'https://boylstonchess.org/tournament/entries/1505',
+      ))!.rounds,
+      4,
+    );
+    expect(asked, ['/events/1505', '/events/1505/tornado-147']);
+    expect(
+      (await web.fetchAnnouncement(
+        'https://boylstonchess.org/events/1505/tornado-147',
+      ))!.rounds,
+      4,
+    );
+    // A redirect off the club's event pages is not followed, a missing
+    // page and another club's site announce nothing, and none of it throws.
+    expect(
+      await web.fetchAnnouncement(
+        'https://boylstonchess.org/tournament/entries/1600',
       ),
       isNull,
     );
+    expect(
+      await web.fetchAnnouncement(
+        'https://boylstonchess.org/tournament/entries/1',
+      ),
+      isNull,
+    );
+    expect(await web.fetchAnnouncement('https://example.org/entries'), isNull);
+    expect(await web.fetchAnnouncement('not a url'), isNull);
   });
 }

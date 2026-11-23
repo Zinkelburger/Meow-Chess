@@ -1,134 +1,122 @@
+// A change redraws the regions of the workspace that show it and leaves the
+// others alone: a typed result does not rebuild the top bar, and opening a
+// panel does not rebuild the tabs or the page row.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meow_chess/application/tournament_controller.dart';
 import 'package:meow_chess/domain/model.dart';
 import 'package:meow_chess/infrastructure/sqlite_event_repository.dart';
-import 'package:meow_chess/ui/workspace.dart';
-
+import 'package:meow_chess/ui/section_tabs.dart';
+import 'package:meow_chess/ui/workspace_pages.dart';
+import 'package:meow_chess/ui/workspace_status.dart';
+import 'package:meow_chess/ui/workspace_toolbar.dart';
 import 'workspace_host.dart';
 
-/// Counts what the workspace asks of the event file.
-class _Counting extends SqliteEventRepository {
-  _Counting() : super(':memory:');
-  final writes = <String>[];
-  final reads = <String>[];
-  bool refuseDrafts = false;
-
+class _Direct extends TournamentController {
+  _Direct(super.repository);
   @override
-  void writePreference(String key, String value) {
-    if (refuseDrafts && key.startsWith('draft-')) {
-      throw const TournamentException('The disk is full.');
-    }
-    writes.add(key);
-    super.writePreference(key, value);
-  }
-
-  @override
-  String? readPreference(String key) {
-    reads.add(key);
-    return super.readPreference(key);
-  }
+  Future<PairingBatch> runProposal(
+    Event snapshot,
+    String? sectionId,
+    bool onlyReady,
+  ) async => proposeRounds(snapshot, sectionId, onlyReady);
 }
 
-void main() {
-  late _Counting file;
-  late TournamentController c;
+/// Sixteen players in one Swiss section with round 1 posted, on Pairings.
+Future<TournamentController> onPairings(WidgetTester tester) async {
+  final c = _Direct(SqliteEventRepository(':memory:'));
+  addTearDown(c.dispose);
+  c.create('Club Open');
+  c.importPlayers([
+    for (var i = 0; i < 16; i++)
+      Player(id: 'p$i', name: 'Player $i', rating: 2000 - i * 50),
+  ]);
+  c.addSection('Open', Format.swiss, 4);
+  c.post(await c.propose());
+  await mountWorkspace(tester, c);
+  await tester.tap(find.text('Pairings'));
+  await tester.pumpAndSettle();
+  return c;
+}
 
-  setUp(() {
-    file = _Counting();
-    c = TournamentController(file);
-    c.create('Saturday Swiss');
-    c.importPlayers([
-      for (var i = 0; i < 8; i++)
-        Player(id: 'p$i', name: 'Player $i', rating: 2000 - i * 50),
-    ]);
-    c.applyQuads(c.quadPreview(), c.event!.revision);
-  });
-  tearDown(() => c.dispose());
-
-  /// Workspace rebuilds from here on.
-  int Function() countBuilds() {
-    var builds = 0;
-    debugOnRebuildDirtyWidget = (element, _) {
-      if (element.widget is Workspace) builds++;
-    };
-    addTearDown(() => debugOnRebuildDirtyWidget = null);
-    return () => builds;
-  }
-
-  testWidgets('typing in a panel does not rebuild the workspace', (
-    tester,
-  ) async {
-    final id = c.event!.sections.first.id;
-    await mountWorkspace(tester, c);
-    await tabMenu(tester, id, 'Rename / section settings…');
-    final builds = countBuilds();
-    file.writes.clear();
-    file.reads.clear();
-    const typed = ['O', 'Op', 'Ope', 'Open', 'Open A'];
-    for (final text in typed) {
-      await tester.enterText(find.byKey(const ValueKey('field-name')), text);
-      await tester.pump();
-    }
-    // The draft is written as it is typed, and that is all that happens.
-    expect(builds(), 0);
-    expect(file.writes, List.filled(typed.length, 'draft-section-$id'));
-    expect(file.reads.where((key) => key == 'lastBackup'), isEmpty);
-    // The typing is all there, on screen and in the file.
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const ValueKey('field-name')))
-          .controller!
-          .text,
-      'Open A',
-    );
-    expect(c.workspaceState.read('draft-section-$id'), contains('Open A'));
+/// The widgets rebuilt while [act] runs and the next frame is drawn.
+Future<Set<Type>> rebuiltBy(
+  WidgetTester tester,
+  Future<void> Function() act,
+) async {
+  final rebuilt = <Type>{};
+  debugOnRebuildDirtyWidget = (e, _) => rebuilt.add(e.widget.runtimeType);
+  try {
+    await act();
+    await tester.pump();
+  } finally {
     debugOnRebuildDirtyWidget = null;
-    await tester.pumpWidget(const SizedBox());
-  });
+  }
+  return rebuilt;
+}
 
-  testWidgets('the last backup is read again only when the event changes', (
+String? undoTip(WidgetTester tester) =>
+    tester.widget<IconButton>(find.byKey(const ValueKey('undo'))).tooltip;
+
+void main() {
+  testWidgets('a result leaves the top bar alone and renames Undo', (
     tester,
   ) async {
-    await mountWorkspace(tester, c);
-    int backupReads() => file.reads.where((k) => k == 'lastBackup').length;
-    final before = backupReads();
-    // Redraws for other reasons, such as opening and closing panels.
-    await tester.tap(find.byKey(const ValueKey('event-details')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('event-details')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Pairings').first);
-    await tester.pumpAndSettle();
-    expect(backupReads(), before);
-    c.savePlayer(c.event!.players.first.copy(name: 'Renamed'));
-    await tester.pumpAndSettle();
-    expect(backupReads(), before + 1);
-    await tester.pumpWidget(const SizedBox());
-  });
-
-  testWidgets('a draft that cannot be written is still reported', (
-    tester,
-  ) async {
-    final id = c.event!.sections.first.id;
-    await mountWorkspace(tester, c);
-    await tabMenu(tester, id, 'Rename / section settings…');
-    final failed = find.textContaining('Draft or workspace state not saved');
-    expect(failed, findsNothing);
-    file.refuseDrafts = true;
-    await tester.enterText(find.byKey(const ValueKey('field-name')), 'Open');
-    await tester.pumpAndSettle();
-    expect(failed, findsOneWidget);
-    file.refuseDrafts = false;
-    final retry = find.descendant(
-      of: find.byKey(const ValueKey('status-bar')),
-      matching: find.text('Retry'),
+    final c = await onPairings(tester);
+    final games = c.event!.sections.single.rounds.last.games;
+    final before = undoTip(tester);
+    final rebuilt = await rebuiltBy(
+      tester,
+      () async => c.recordResult(games[0].id, Outcome.whiteWin),
     );
-    await tester.ensureVisible(retry);
+    expect(rebuilt, isNot(contains(WorkspaceTopBar)));
+    expect(rebuilt, contains(UndoRedoButtons));
+    // What the result changed is redrawn: its tab's progress, the pairing
+    // action, the save time.
+    expect(
+      rebuilt,
+      containsAll([SectionTabs, WorkspacePageRow, WorkspaceStatusBar]),
+    );
+    expect(undoTip(tester), isNot(before));
+    expect(undoTip(tester), contains(c.undoLabel!));
+  });
+
+  testWidgets('opening a panel leaves the tabs and the page row alone', (
+    tester,
+  ) async {
+    await onPairings(tester);
+    final rebuilt = await rebuiltBy(
+      tester,
+      () => tester.tap(find.byKey(const ValueKey('help'))),
+    );
+    expect(rebuilt, contains(WorkspaceTopBar));
+    expect(rebuilt, isNot(contains(SectionTabs)));
+    expect(rebuilt, isNot(contains(WorkspacePageRow)));
+    expect(rebuilt, isNot(contains(WorkspaceStatusBar)));
     await tester.pumpAndSettle();
-    await tester.tap(retry);
-    await tester.pumpAndSettle();
-    expect(failed, findsNothing);
-    await tester.pumpWidget(const SizedBox());
+    expect(
+      tester.widget<IconButton>(find.byKey(const ValueKey('help'))).isSelected,
+      true,
+    );
+  });
+
+  testWidgets('a kept region still follows the event', (tester) async {
+    final c = await onPairings(tester);
+    c.change('Rename event', c.event!.copy(name: 'Winter Open'));
+    c.addSection('Reserve', Format.swiss, 4);
+    await tester.pump();
+    expect(find.text('Winter Open'), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('section-chip-${c.event!.sections.last.id}')),
+      findsOneWidget,
+    );
+    c.undo();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('section-chip-all')), findsOneWidget);
+    expect(find.text('Reserve'), findsNothing);
+    expect(
+      tester.widget<IconButton>(find.byKey(const ValueKey('redo'))).onPressed,
+      isNotNull,
+    );
   });
 }

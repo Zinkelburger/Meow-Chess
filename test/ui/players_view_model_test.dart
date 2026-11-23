@@ -284,6 +284,83 @@ void main() {
       },
     );
 
+    test('until a section is paired, players outside its rating range are '
+        'listed last; unrated players the rule admits are not', () {
+      final e = Event(
+        id: 'e',
+        name: 'Tornado',
+        date: '2026-11-21',
+        playUpLimit: 200,
+        players: [
+          Player(id: 'top', name: 'Top Seed', rating: 2000),
+          Player(id: 'low', name: 'Too Low', rating: 1500),
+          Player(id: 'mid', name: 'Mid Field', rating: 1700),
+          Player(id: 'unr', name: 'No Rating', rating: 0),
+          Player(id: 'over', name: 'Over Cap', rating: 1850),
+          Player(id: 'fits', name: 'Fits In', rating: 1650),
+        ],
+        sections: [
+          Section(
+            id: 'open',
+            name: 'Open',
+            players: const ['top', 'low', 'mid', 'unr'],
+          ),
+          Section(
+            id: 'u1800',
+            name: 'U1800',
+            players: const ['over', 'fits'],
+            ratingCeiling: 1800,
+          ),
+        ],
+      );
+      RosterLayout layout(Event e, {bool crosstable = false}) => layoutRoster(
+        e,
+        sectionId: null,
+        standingsOnly: crosstable,
+        query: '',
+        prizeStandings: false,
+      );
+      final roster = layout(e);
+      expect(idsOf(roster.order), ['top', 'mid', 'unr', 'low', 'fits', 'over']);
+      expect(roster.setApart, {'open': 3, 'u1800': 1});
+      // The crosstable lists each section by rating, unrated last.
+      expect(idsOf(layout(e, crosstable: true).order), [
+        'top',
+        'mid',
+        'low',
+        'unr',
+        'over',
+        'fits',
+      ]);
+      expect(layout(e, crosstable: true).setApart, isEmpty);
+      // An allowed exception goes back among the rest, and a paired section
+      // is left in pairing order.
+      final allowed = e.copy(
+        sections: [
+          e.sections.first.copy(rangeExceptions: const {'low': 'TD approved'}),
+          e.sections.last.copy(
+            rounds: [
+              Round(
+                number: 1,
+                games: const [
+                  Game(id: 'g', white: 'over', black: 'fits', board: 1),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      expect(idsOf(layout(allowed).order), [
+        'top',
+        'low',
+        'mid',
+        'unr',
+        'over',
+        'fits',
+      ]);
+      expect(layout(allowed).setApart, isEmpty);
+    });
+
     test('a search keeps whole-section numbers and drops empty groups', () {
       final e = club();
       final layout = layoutRoster(
@@ -326,8 +403,8 @@ void main() {
         );
         expect(layout.started, isTrue);
         expect(layout.groups.single.$1!.id, 'open');
-        expect(layout.order.first.id, 'b');
-        expect(layout.order.last.id, 'a');
+        // The rows stay in rating order; Rank is the place.
+        expect(idsOf(layout.order), ['a', 'b', 'c', 'd']);
         expect(layout.ranks['b'], 1);
         expect(layout.ranks['a'], 4);
         expect(layout.tables['open']!['b']!.points, 2);
@@ -349,6 +426,104 @@ void main() {
         );
       },
     );
+
+    test('the crosstable is in rating order unless another is chosen', () {
+      List<String> order(Event e, String section, CrosstableOrder order) =>
+          idsOf(
+            layoutRoster(
+              e,
+              sectionId: section,
+              standingsOnly: true,
+              query: '',
+              prizeStandings: false,
+              order: order,
+            ).order,
+          );
+      // A roster in the order it was entered, with an assigned pairing
+      // rating and two players rated alike.
+      final e = Event(
+        id: 'e',
+        name: 'Open',
+        date: '2026-11-21',
+        players: [
+          Player(id: 'zed', name: 'Zed Young', rating: 1500),
+          Player(id: 'unr', name: 'Una Rook', rating: 0),
+          Player(id: 'amy', name: 'Amy Bishop', rating: 1900),
+          Player(id: 'new', name: 'Ned West', rating: 0, pairingRating: 1700),
+          Player(id: 'bob', name: 'Bob Knight', rating: 1500),
+        ],
+        sections: [
+          Section(
+            id: 'open',
+            name: 'Open',
+            players: const ['zed', 'unr', 'amy', 'new', 'bob'],
+          ),
+        ],
+      );
+      // Highest rated first by the rating pairing uses, equal ratings in
+      // pairing-number order, unrated last. Nobody has a place before
+      // round 1, so standings order is rating order too.
+      const byRating = ['amy', 'new', 'zed', 'bob', 'unr'];
+      expect(CrosstableOrder.values.first, CrosstableOrder.rating);
+      expect(order(e, 'open', CrosstableOrder.rating), byRating);
+      expect(order(e, 'open', CrosstableOrder.standings), byRating);
+      expect(order(e, 'open', CrosstableOrder.pairingNumber), [
+        'zed',
+        'unr',
+        'amy',
+        'new',
+        'bob',
+      ]);
+      expect(order(e, 'open', CrosstableOrder.alphabetical), [
+        'amy',
+        'bob',
+        'new',
+        'unr',
+        'zed',
+      ]);
+      // Once play starts the default is still rating order; standings
+      // order is the places: b 1, c and d on a half, a 0.
+      final started = club();
+      expect(order(started, 'open', CrosstableOrder.rating), [
+        'a',
+        'b',
+        'c',
+        'd',
+      ]);
+      expect(order(started, 'open', CrosstableOrder.standings), [
+        'b',
+        'c',
+        'd',
+        'a',
+      ]);
+      // A saved choice comes back; none, or one unknown here, is rating.
+      expect(CrosstableOrder.named('standings'), CrosstableOrder.standings);
+      expect(CrosstableOrder.named(null), CrosstableOrder.rating);
+      expect(CrosstableOrder.named('by-lot'), CrosstableOrder.rating);
+    });
+
+    test('the Players page keeps each section in its list order', () {
+      final e = club();
+      final shuffled = e.copy(
+        sections: [
+          e.sections.first.copy(players: const ['d', 'a', 'c', 'b']),
+          e.sections.last,
+        ],
+      );
+      expect(
+        idsOf(
+          layoutRoster(
+            shuffled,
+            sectionId: 'open',
+            standingsOnly: false,
+            query: '',
+            prizeStandings: false,
+            order: CrosstableOrder.alphabetical,
+          ).order,
+        ),
+        ['d', 'a', 'c', 'b'],
+      );
+    });
 
     test('standings are ranked once per event, not once per build', () {
       final e = club();
@@ -400,12 +575,12 @@ void main() {
             entryOrder: held,
           ).order,
         );
-        // Standings order without a held order: b 2, c and d 1½... a 0.
-        final standings = order(null);
-        expect(standings.take(4), ['b', 'c', 'd', 'a']);
-        expect(standings.skip(4), ['q1', 'q2', 'q3', 'q4', 'y', 'x']);
+        // Rating order without a held order.
+        final unheld = order(null);
+        expect(unheld.take(4), ['a', 'b', 'c', 'd']);
+        expect(unheld.skip(4), ['q1', 'q2', 'q3', 'q4', 'y', 'x']);
         // Held: each group follows the held list; rows missing from it lead,
-        // in standings, list or rating order.
+        // in the order they would have had.
         expect(order(['x', 'a', 'q4', 'y', 'b', 'q1']), [
           'c',
           'd',
@@ -484,6 +659,7 @@ void main() {
       bool? checkboxes,
       bool started = false,
       bool reviewing = false,
+      bool ratingChoices = false,
       bool usChessView = true,
       bool fideListed = false,
       bool showIds = true,
@@ -494,6 +670,7 @@ void main() {
       checkboxes: checkboxes ?? !standingsOnly,
       started: started,
       reviewing: reviewing,
+      ratingChoices: ratingChoices,
       ratingPreview: false,
       showIds: showIds,
       usChessView: usChessView,
@@ -534,6 +711,18 @@ void main() {
       final roster = columns();
       expect(roster.checkbox && roster.ids && roster.rating, isTrue);
       expect(roster.membership && roster.note, isTrue);
+    });
+
+    test('the US Chess rating column shows while there is a choice', () {
+      expect(columns().choice, isFalse);
+      final choosing = columns(ratingChoices: true);
+      expect(choosing.choice, isTrue);
+      expect(choosing.width, columns().width + 176);
+      // The review has its own tick boxes; the crosstable and a FIDE-only
+      // list have no US Chess rating to switch.
+      expect(columns(ratingChoices: true, reviewing: true).choice, isFalse);
+      expect(columns(ratingChoices: true, standingsOnly: true).choice, isFalse);
+      expect(columns(ratingChoices: true, usChessView: false).choice, isFalse);
     });
 
     test('a rating review always shows IDs and ratings', () {

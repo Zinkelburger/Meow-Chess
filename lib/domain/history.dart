@@ -313,6 +313,13 @@ List<String> describeChanges(
   if (jsonEncode(before.rosterSource) != jsonEncode(after.rosterSource)) {
     out.add('Roster source changed');
   }
+  if (before.playUpLimit != after.playUpLimit) {
+    out.add(
+      after.playUpLimit == 0
+          ? 'Play-up limit removed'
+          : 'Play-up limit ${value(before.playUpLimit, after.playUpLimit)} points',
+    );
+  }
   if (before.online != after.online) {
     out.add(after.online ? 'Marked as an online event' : 'Online mark removed');
   }
@@ -400,6 +407,11 @@ List<String> describeChanges(
       if (o.notes != p.notes) 'notes ${_short(p.notes)}',
       if (o.registrationNote != p.registrationNote)
         'registration note ${_short(p.registrationNote)}',
+      if (o.noteWaiting != p.noteWaiting &&
+          o.registrationNote == p.registrationNote)
+        p.noteWaiting
+            ? 'registration note reopened'
+            : 'registration note dealt with',
       if (o.house != p.house)
         p.house ? 'marked house player' : 'no longer house player',
       for (final r in {...o.byes.keys, ...p.byes.keys}.toList()..sort())
@@ -427,7 +439,9 @@ List<String> describeChanges(
       if (o.name != s.name) 'renamed from ${o.name}',
       if (o.format != s.format)
         'format ${value(_format(o.format), _format(s.format))}',
-      if (o.plannedRounds != s.plannedRounds)
+      if (o.roundsUnset && !s.roundsUnset)
+        'rounds set to ${s.plannedRounds}'
+      else if (o.plannedRounds != s.plannedRounds)
         'rounds ${value(o.plannedRounds, s.plannedRounds)}',
       if (o.boardStart != s.boardStart)
         'first board ${value(o.boardStart, s.boardStart)}',

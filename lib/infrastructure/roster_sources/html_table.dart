@@ -1,6 +1,7 @@
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html;
 
+import '../../domain/announcement.dart';
 import '../../domain/model.dart';
 import '../roster_import.dart';
 import 'source.dart';
@@ -17,6 +18,12 @@ class HtmlTableRosterSource implements ClubRosterSource {
   Uri entryListUrl(Uri url) => url;
   @override
   List<ImportRow> parse(String source) => parseWebRoster(source);
+  @override
+  Uri? eventPageUrl(Uri url) => null;
+  @override
+  bool isEventPage(Uri url) => false;
+  @override
+  Announcement? parseEvent(String source) => null;
 }
 
 /// Finds a table by column names, independent of column order and page styling.

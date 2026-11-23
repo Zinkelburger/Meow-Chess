@@ -349,7 +349,6 @@ class GridKeyPress {
     this.outcome,
     this.drawAttempt = false,
     this.printable = false,
-    this.refusedOnForfeit = false,
   });
   final GridKey key;
 
@@ -368,9 +367,6 @@ class GridKeyPress {
 
   /// The key types a visible character.
   final bool printable;
-
-  /// A result key with no forfeit meaning, typed on a forfeit board.
-  final bool refusedOnForfeit;
 }
 
 /// What a key on a score box does.
@@ -420,10 +416,10 @@ final class GridEnter extends GridKeyAction {
 }
 
 /// A printable key that is not a result: the legend says which keys are,
-/// leading with the forfeit rule or the draw key where that is the slip.
+/// leading with the draw key where that is the slip.
 final class GridRefuse extends GridKeyAction {
-  const GridRefuse({required this.forfeit, required this.draw});
-  final bool forfeit, draw;
+  const GridRefuse({required this.draw});
+  final bool draw;
 }
 
 /// What [press] does on a score box whose board has [current] as its result.
@@ -467,10 +463,7 @@ GridKeyAction gridKeyAction(
     // 5, = and the decimal point are answered with the draw key, whether
     // or not the key carries a character (the numpad decimal may not).
     if (press.drawAttempt || press.printable) {
-      return GridRefuse(
-        forfeit: press.refusedOnForfeit,
-        draw: press.drawAttempt,
-      );
+      return GridRefuse(draw: press.drawAttempt);
     }
     return const GridKeyIgnored();
   }
@@ -526,9 +519,10 @@ String readOnlyText(
   required bool showAllRounds,
 }) {
   final numbers = shown.map((x) => x.$2.number).toSet().toList()..sort();
+  // A section whose rounds are not set yet has no "of N" to show.
   final planned = [
     for (final s in shown.isEmpty ? sections : shown.map((x) => x.$1))
-      s.plannedRounds,
+      s.roundsUnset ? 0 : s.plannedRounds,
   ].fold(0, math.max);
   final title = numbers.isEmpty
       ? planned == 0
@@ -589,6 +583,70 @@ String entryContext(
     return null;
   }
   return (section: s, round: r, boards: unstartedBoards(r));
+}
+
+/// The section whose round on screen can be paired again as a whole: one
+/// Swiss section's latest round, alone on screen ([singleSection]), before
+/// any of its games has a result or a pairing assumption. Null otherwise.
+Section? wholeRoundRepairable(
+  List<(Section, Round)> shown, {
+  required bool singleSection,
+}) {
+  final only = singleSection ? shown.singleOrNull : null;
+  if (only == null) return null;
+  final (s, r) = only;
+  return s.sideGames ||
+          pairingFormat(s) != Format.swiss ||
+          r.number != s.rounds.length ||
+          r.games.isEmpty ||
+          r.hasPlay ||
+          r.games.any((g) => g.pairingAssumption != null)
+      ? null
+      : s;
+}
+
+/// What to say once [next] has replaced [old] by pairing the round again.
+/// With the same entries the engine gives the same pairings, so it says
+/// when nothing moved; and it names the late entrants now at a board, who
+/// had a bye only because the round was already posted.
+String repairedNotice(Event e, Round old, Round next) {
+  Set<String> seats(Round r) => {
+    for (final g in r.games) '${g.board}/${g.leg}/${g.white}/${g.black}',
+    for (final b in r.byes) 'bye/${b.player}/${b.points}',
+  };
+  final before = seats(old), after = seats(next);
+  final done = 'Round ${next.number} paired again.';
+  if (before.length == after.length && before.containsAll(after)) {
+    return 'Round ${next.number} pairings stay as they are: nothing has changed since it was paired.';
+  }
+  final seated = {
+    for (final g in next.games) ...[g.white, g.black],
+  };
+  final joined = [
+    for (final b in old.byes)
+      if (b.reason == lateEntryBye && seated.contains(b.player))
+        e.player(b.player).name,
+  ];
+  if (joined.isEmpty) return done;
+  final who = joined.length == 1
+      ? '${joined.single} is'
+      : '${joined.take(joined.length - 1).join(', ')} and ${joined.last} are';
+  return '$done $who paired instead of taking a late-entry bye.';
+}
+
+/// Round 1 paired again with the coin toss reversed: who has white on
+/// board 1 now.
+String flippedNotice(Event e, Round next, {List<String> also = const []}) {
+  final played = next.games.where((g) => g.black.isNotEmpty).toList()
+    ..sort((a, b) => a.board.compareTo(b.board));
+  final first = played.firstOrNull;
+  final done = also.isEmpty
+      ? 'Round ${next.number} pairing flipped.'
+      : 'Round ${next.number} pairing flipped, and in ${nameList(also)} too: '
+            'one coin toss decides board 1 in every section.';
+  return first == null
+      ? done
+      : '$done ${e.player(first.white).name} has white on board ${first.board}.';
 }
 
 /// The reason re-pairing starts with: the withdrawal that usually prompts

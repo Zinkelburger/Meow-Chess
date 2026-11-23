@@ -49,12 +49,6 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.byKey(const ValueKey('update-event')));
         await tester.pumpAndSettle();
-        final option = find.byKey(const ValueKey('import-refresh-ratings'));
-        expect(tester.widget<CheckboxListTile>(option).value, true);
-        if (!refresh) {
-          await tester.tap(option);
-          await tester.pump();
-        }
         await tester.enterText(
           find.byKey(const ValueKey('roster-url')),
           'https://boylstonchess.org/events/1563/october-quads',
@@ -62,7 +56,15 @@ void main() {
         await tester.tap(find.text('Fetch updates'));
         await tester.pumpAndSettle();
         expect(c.event!.players, hasLength(4));
-        final confirm = find.text('Confirm 2 changes & save source');
+        // The ratings option sits with the button it belongs to.
+        final option = find.byKey(const ValueKey('import-refresh-ratings'));
+        expect(tester.widget<PlainCheckbox>(option).value, true);
+        if (!refresh) {
+          await tester.ensureVisible(option);
+          await tester.tap(option);
+          await tester.pump();
+        }
+        final confirm = find.text('Add 2 players');
         await tester.ensureVisible(confirm);
         await tester.tap(confirm);
         for (var i = 0; i < 8; i++) {
@@ -95,17 +97,21 @@ void main() {
           );
           await tester.drag(find.byType(ListView).first, const Offset(0, 1000));
           await tester.pumpAndSettle();
-          final proposal = tester.widget<Container>(
-            find.byKey(const ValueKey('rating-proposal-p0')),
-          );
-          expect(proposal.color, isNotNull);
-          // Hovering a shaded cell says why it is shaded.
+          // A large change is marked beside its number; hovering the mark
+          // says why, and the panel lists it in words.
+          expect(find.byKey(const ValueKey('rating-large-p0')), findsOneWidget);
           expect(
-            find.byTooltip(
-              'Highlighted: large rating change, more than 50 points.\n'
-              'Supplement 2026-10-01',
-            ),
+            find.byTooltip('Changed by more than 50 points.'),
             findsWidgets,
+          );
+          expect(find.byTooltip('Supplement 2026-10-01'), findsWidgets);
+          expect(find.byKey(const ValueKey('large-change-p0')), findsOneWidget);
+          expect(
+            find.text(
+              'More than 50 points from the entered rating, or a first '
+              'rating.',
+            ),
+            findsOneWidget,
           );
           // Review details stay on one line, so rows keep their height.
           expect(

@@ -46,6 +46,41 @@ mixin _RatingCommands on _CommandContext {
     return updates.length;
   }
 
+  /// Switches players between the rating entered for them and the US Chess
+  /// supplement rating on file, as one revision. Players with only one of
+  /// the two, or already on the chosen one, are left alone. Returns how many
+  /// changed.
+  int chooseRatings(Iterable<String> playerIds, {required bool supplement}) {
+    final current = event!;
+    final ids = playerIds.toSet();
+    final updates = <String, Player>{};
+    for (final player in current.players.where((p) => ids.contains(p.id))) {
+      final choice = ratingChoice(player);
+      if (choice == null || choice.usingSupplement == supplement) continue;
+      if (current.sectionOf(player.id)?.rounds.isNotEmpty ?? false) {
+        throw TournamentException(
+          '${player.name}\'s section is paired. The pairing rating stays.',
+        );
+      }
+      updates[player.id] = supplement
+          ? useSupplementRating(player)
+          : useEnteredRating(player);
+    }
+    if (updates.isEmpty) return 0;
+    final which = supplement ? 'US Chess' : 'entered';
+    change(
+      updates.length == 1
+          ? 'Use $which rating '
+                '${updates.values.single.rating == 0 ? 'UNR' : updates.values.single.rating} '
+                'for ${updates.values.single.name}'
+          : 'Use $which ratings for ${updates.length} players',
+      current.copy(
+        players: [for (final p in current.players) updates[p.id] ?? p],
+      ),
+    );
+    return updates.length;
+  }
+
   /// Stores membership data and fills a missing state for the requested identity.
   /// A late response must never restore an edited ID or overwrite a newer check.
   bool recordMembership(String eventId, String playerId, Json observation) =>
@@ -92,6 +127,9 @@ mixin _RatingCommands on _CommandContext {
           ])
             if (observation.containsKey(key)) key: observation[key],
         },
+        // The supplement stays on file beside an entered rating, so the
+        // director can switch to it later without another lookup.
+        ratingEvidence: withSupplementOnFile(player, observation),
         state: player.state.isEmpty && isStateCode(state) ? state : null,
       );
       String? text(String key) =>

@@ -1,10 +1,12 @@
 import 'dart:collection';
 import 'dart:math' as math;
 
+import '../domain/eligibility.dart';
 import '../domain/fide.dart';
 import '../domain/model.dart';
 import '../domain/pairing.dart';
 import '../domain/standings.dart';
+import '../domain/us_chess.dart' show compareNames;
 import '../infrastructure/reports.dart' show Seat, roundSeats;
 import 'player_format.dart';
 import 'result_format.dart';
@@ -161,6 +163,40 @@ Map<String, int> pairingNumbers(Event e, Section s) => {
     id: i + 1,
 };
 
+/// The order the crosstable lists a section's players in. Rating order is
+/// the default before and after play starts, so a row stays where the
+/// director last saw it whatever the scores do; the Rank column gives the
+/// place in every order.
+enum CrosstableOrder {
+  rating('Rating order'),
+  standings('Standings order'),
+  pairingNumber('Pairing number order'),
+  alphabetical('Name order');
+
+  const CrosstableOrder(this.label);
+  final String label;
+
+  /// The saved choice, or rating order for none or one this version does
+  /// not know.
+  static CrosstableOrder named(String? name) =>
+      values.where((v) => v.name == name).firstOrNull ?? rating;
+}
+
+/// Highest rated first in [s], the way its pairing system ranks: the FIDE
+/// ranking (C.04.2: rating, title, name) in a FIDE-rated section, else the
+/// pairing rating with the pairing number ranking equal ratings (28A).
+/// Unrated players come last.
+int Function(Player, Player) ratingOrder(Event e, Section s) {
+  if (s.fideRated) return (a, b) => compareFideRanking(e, s, a, b);
+  final number = {for (final (i, id) in s.players.indexed) id: i};
+  return (a, b) {
+    final r = b.effectivePairingRating.compareTo(a.effectivePairingRating);
+    if (r != 0) return r;
+    final n = (number[a.id] ?? 1 << 20).compareTo(number[b.id] ?? 1 << 20);
+    return n != 0 ? n : a.id.compareTo(b.id);
+  };
+}
+
 /// The rows of the players table or crosstable, worked out once a build.
 class RosterLayout {
   const RosterLayout({
@@ -169,6 +205,7 @@ class RosterLayout {
     required this.numbers,
     required this.ranks,
     required this.order,
+    required this.setApart,
     required this.cellGames,
     required this.rounds,
     required this.started,
@@ -189,6 +226,11 @@ class RosterLayout {
   /// Players in on-screen order, for arrow-key movement.
   final List<Player> order;
 
+  /// By section, where its listed players outside the rating range begin.
+  /// Until a section is paired they are listed last, under one bar;
+  /// sections with nobody outside the range have no entry.
+  final Map<String, int> setApart;
+
   /// The games each listed player has a score cell for, rounds left to
   /// right: where Left and Right move.
   final Map<String, List<Game>> cellGames;
@@ -196,8 +238,8 @@ class RosterLayout {
   /// Round columns in the crosstable; none on the Players page.
   final int rounds;
 
-  /// Play has started in a section of the crosstable: rows are in
-  /// standings order with points.
+  /// Play has started in a section of the crosstable: rows have a place
+  /// and points.
   final bool started;
 
   /// The section ranked plays a fixed schedule, so prize standings apply.
@@ -221,7 +263,9 @@ final _standingsCache = Expando<Map<(String, bool), Map<String, Standing>>>(
 
 /// Lays out the players of [e] in section [sectionId] (every section when
 /// null). The crosstable ([standingsOnly]) ranks a paired section by its
-/// standings, [prizeStandings] leaving out early round-robin withdrawals.
+/// standings, [prizeStandings] leaving out early round-robin withdrawals,
+/// and lists each section in [order]: by rating unless the director chose
+/// otherwise. The Players page keeps each section's own list order.
 /// Only players matching [query] are listed. While a result is being
 /// entered the rows keep the [entryOrder] they had, so a score never moves
 /// the row under the cursor.
@@ -231,6 +275,7 @@ RosterLayout layoutRoster(
   required bool standingsOnly,
   required String query,
   required bool prizeStandings,
+  CrosstableOrder order = CrosstableOrder.rating,
   List<String>? entryOrder,
 }) {
   bool viewed(Section s) => sectionId == null || s.id == sectionId;
@@ -265,6 +310,7 @@ RosterLayout layoutRoster(
         ),
   };
   final numbers = <String, int>{}, ranks = <String, int>{};
+  final setApart = <String, int>{};
   // While a result is entered each row keeps its place on the frozen list;
   // a row not on it goes first. Ties keep the order the rows came in.
   final frozen = entryOrder == null
@@ -283,24 +329,58 @@ RosterLayout layoutRoster(
   }
 
   List<Player> ordered(Section s) {
-    final table = tables[s.id];
-    final players = ranked && table != null
-        ? [
-            for (final row in table.values) row.player,
-            for (final id in s.players)
-              if (!table.containsKey(id)) e.player(id),
-          ]
-        : s.players.map(e.player).toList();
+    final table = ranked ? tables[s.id] : null;
+    final players = s.players.map(e.player).toList();
     // Numbers and places cover the whole section, whatever a search or
     // the order held during result entry shows of it.
-    numbers.addAll(pairingNumbers(e, s));
-    if (ranked && table != null) {
+    final numbered = pairingNumbers(e, s);
+    numbers.addAll(numbered);
+    if (table != null) {
       for (final (i, id) in table.keys.indexed) {
         ranks[id] = i + 1;
       }
     }
+    if (standingsOnly) {
+      final byRating = ratingOrder(e, s);
+      // Standings order is the order every report ranks in. A section
+      // nobody has a place in yet is listed by rating, and so are the
+      // players left out of the prize standings, who go last.
+      int place(Player p) => ranks[p.id] ?? s.players.length + 1;
+      final by = switch (order) {
+        CrosstableOrder.rating => byRating,
+        CrosstableOrder.standings => (Player a, Player b) {
+          final c = place(a).compareTo(place(b));
+          return c != 0 ? c : byRating(a, b);
+        },
+        CrosstableOrder.pairingNumber => (Player a, Player b) {
+          final c = numbered[a.id]!.compareTo(numbered[b.id]!);
+          return c != 0 ? c : byRating(a, b);
+        },
+        CrosstableOrder.alphabetical => (Player a, Player b) {
+          final c = compareNames(a.name, b.name);
+          return c != 0 ? c : byRating(a, b);
+        },
+      };
+      players.sort(by);
+    }
     final listed = players.where((p) => playerMatches(p, query)).toList();
     holdOrder(listed);
+    // Until the section is paired, the entrants its rating range or the
+    // play-up rule puts elsewhere go last, under one bar. An unrated
+    // player the rules admit stays above it.
+    if (!standingsOnly && s.rounds.isEmpty) {
+      final outside = [
+        for (final p in listed)
+          if (eligibilityProblem(e, p, s) != null) p,
+      ];
+      if (outside.isNotEmpty) {
+        final ids = {for (final p in outside) p.id};
+        listed
+          ..removeWhere((p) => ids.contains(p.id))
+          ..addAll(outside);
+        setApart[s.id] = listed.length - outside.length;
+      }
+    }
     return listed;
   }
 
@@ -329,6 +409,7 @@ RosterLayout layoutRoster(
     numbers: numbers,
     ranks: ranks,
     order: [for (final g in groups) ...g.$2],
+    setApart: setApart,
     cellGames: {
       if (standingsOnly)
         for (final (s, players) in groups)
@@ -374,6 +455,7 @@ abstract final class RosterColumns {
       rating = 64.0,
       preview = 132.0,
       proposal = 192.0,
+      choice = 176.0,
       uscfName = 200.0,
       membership = 216.0,
       note = 240.0,
@@ -395,6 +477,7 @@ final class ShownColumns {
     required this.rating,
     required this.fide,
     required this.review,
+    required this.choice,
     required this.ratingPreview,
     required this.membership,
     required this.note,
@@ -407,7 +490,9 @@ final class ShownColumns {
   /// ticked players' actions show; a crosstable embedded in Pairings opens
   /// players in its parent instead, so it has no tick boxes and stays one
   /// Tab stop. [started]: play has begun in a section shown, so rows are
-  /// ranked with points. [reviewing]: a US Chess rating review is open. [showIds] is the
+  /// ranked with points. [reviewing]: a US Chess rating review is open.
+  /// [ratingChoices]: someone listed, not yet paired, has both an entered
+  /// rating and a US Chess supplement rating to choose between. [showIds] is the
   /// TD's choice, [usChessView] that something listed is US Chess rated and
   /// [fideListed] that something listed is FIDE rated.
   factory ShownColumns.of({
@@ -415,6 +500,7 @@ final class ShownColumns {
     required bool checkboxes,
     required bool started,
     required bool reviewing,
+    required bool ratingChoices,
     required bool ratingPreview,
     required bool showIds,
     required bool usChessView,
@@ -433,6 +519,8 @@ final class ShownColumns {
       rating: roster && (usChessView || reviewing),
       fide: roster && fideListed,
       review: reviewing,
+      // The review has its own tick boxes for the same two ratings.
+      choice: roster && usChessView && ratingChoices && !reviewing,
       ratingPreview: ratingPreview,
       membership: roster && usChessView,
       note: roster,
@@ -455,6 +543,10 @@ final class ShownColumns {
 
   /// The proposed US Chess rating and the US Chess name, during a review.
   final bool review;
+
+  /// The US Chess supplement rating beside the entered one, ticked when it
+  /// is the rating in use.
+  final bool choice;
   final bool ratingPreview;
 
   /// US Chess membership expiry, and the registration note.
@@ -474,6 +566,7 @@ final class ShownColumns {
       (rating ? RosterColumns.rating : 0) +
       (fide ? RosterColumns.id + RosterColumns.rating : 0) +
       (review ? RosterColumns.proposal + RosterColumns.uscfName : 0) +
+      (choice ? RosterColumns.choice : 0) +
       (ratingPreview ? RosterColumns.preview : 0) +
       (membership ? RosterColumns.membership : 0) +
       (note ? RosterColumns.note : 0) +

@@ -266,6 +266,77 @@ class _RoundLine extends StatelessWidget {
         child: child,
       ),
     );
+    final chips = roundNumbers.length > 1
+        ? Semantics(
+            label: 'Show round',
+            container: true,
+            child: Wrap(
+              key: const ValueKey('round-selector'),
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                for (final n in roundNumbers)
+                  ChoiceChip(
+                    label: Text('$n'),
+                    showCheckmark: false,
+                    selected:
+                        !showAllRounds &&
+                        (selectedRound ?? roundNumbers.last) == n,
+                    onSelected: (_) => onPickRound(n),
+                  ),
+                ChoiceChip(
+                  key: const ValueKey('all-rounds'),
+                  label: const Text('All'),
+                  showCheckmark: false,
+                  selected: showAllRounds,
+                  onSelected: (_) => onShowAll(),
+                ),
+              ],
+            ),
+          )
+        : null;
+    TextSpan heading(List<String> facts) => TextSpan(
+      children: [
+        TextSpan(
+          text: title,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            height: 1.2,
+            fontFeatures: tabular,
+          ),
+        ),
+        TextSpan(
+          text: '   ${facts.join('  ·  ')}',
+          style: TextStyle(
+            fontSize: 14,
+            color: colors.onSurfaceVariant,
+            fontFeatures: tabular,
+          ),
+        ),
+      ],
+    );
+    // As wide as "6 of 6 results in", the longer way to say the round is
+    // done, so the chips beside it stay put as the last result goes in.
+    final widest = TextPainter(
+      text: TextSpan(
+        style: DefaultTextStyle.of(context).style,
+        children: [
+          heading([
+            for (final f in facts)
+              f.replaceFirstMapped(
+                RegExp(r'^All (\d+) results in$'),
+                (m) => '${m[1]} of ${m[1]} results in',
+              ),
+          ]),
+        ],
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final reserve = widest.width;
+    widest.dispose();
     return PaneHeading(
       child: Wrap(
         spacing: 24,
@@ -273,34 +344,17 @@ class _RoundLine extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           line(
-            Semantics(
-              header: true,
-              child: Text.rich(
-                key: const ValueKey('round-line'),
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        height: 1.2,
-                      ),
-                    ),
-                    TextSpan(
-                      text: '   ${facts.join('  ·  ')}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: colors.onSurfaceVariant,
-                        fontFeatures: tabular,
-                      ),
-                    ),
-                  ],
+            ConstrainedBox(
+              constraints: BoxConstraints(minWidth: reserve),
+              child: Semantics(
+                header: true,
+                child: Text.rich(
+                  key: const ValueKey('round-line'),
+                  heading(facts),
                 ),
               ),
             ),
           ),
-          if (pastStatus case final status?) line(status),
           if (partners case final s?)
             line(
               TextButton(
@@ -311,34 +365,10 @@ class _RoundLine extends StatelessWidget {
             ),
           // The round chips share the title's line, so a section with them
           // is no taller than one without.
-          if (roundNumbers.length > 1)
-            Semantics(
-              label: 'Show round',
-              container: true,
-              child: Wrap(
-                key: const ValueKey('round-selector'),
-                spacing: 4,
-                runSpacing: 4,
-                children: [
-                  for (final n in roundNumbers)
-                    ChoiceChip(
-                      label: Text('$n'),
-                      showCheckmark: false,
-                      selected:
-                          !showAllRounds &&
-                          (selectedRound ?? roundNumbers.last) == n,
-                      onSelected: (_) => onPickRound(n),
-                    ),
-                  ChoiceChip(
-                    key: const ValueKey('all-rounds'),
-                    label: const Text('All'),
-                    showCheckmark: false,
-                    selected: showAllRounds,
-                    onSelected: (_) => onShowAll(),
-                  ),
-                ],
-              ),
-            ),
+          ?chips,
+          // After the chips, so picking an earlier round never moves the
+          // chip just clicked.
+          if (pastStatus case final status?) line(status),
         ],
       ),
     );
@@ -361,8 +391,12 @@ class _BoardToolbar extends StatelessWidget {
     required this.onEditPairings,
     required this.repair,
     required this.onRepair,
+    required this.onRepairRound,
+    this.onFlipColors,
+    required this.repairingRound,
     required this.missingOnly,
     required this.onMissingOnly,
+    required this.live,
     required this.printTooltip,
     required this.onPrint,
   });
@@ -378,8 +412,22 @@ class _BoardToolbar extends StatelessWidget {
   final VoidCallback? onEditPairings;
   final ({Section section, Round round, List<int> boards})? repair;
   final VoidCallback? onRepair;
+
+  /// Null hides Re-pair round: the round has a result, or is not a Swiss
+  /// section's latest round shown alone.
+  final VoidCallback? onRepairRound;
+
+  /// Null hides Flip pairing: only round 1 colors come from the coin toss.
+  final VoidCallback? onFlipColors;
+
+  /// Re-pair round is working, so it waits greyed.
+  final bool repairingRound;
   final bool missingOnly;
   final ValueChanged<bool>? onMissingOnly;
+
+  /// Null hides Website results, as does an event that did not come from
+  /// a club website.
+  final LiveResults? live;
   final String printTooltip;
   final VoidCallback? onPrint;
 
@@ -411,24 +459,16 @@ class _BoardToolbar extends StatelessWidget {
             onPressed: onCorrect,
             child: const Text('Correct a result'),
           )
-        else if (onEditPairings case final edit?)
-          TextButton(
-            key: const ValueKey('edit-pairings'),
-            onPressed: edit,
-            child: const Text('Edit pairings'),
-          ),
-        // Stays in place, greyed, once every board has started, so the
-        // toolbar does not reflow under the last result being typed.
-        if (repair case final repair?)
-          Tooltip(
-            message: repair.boards.isEmpty
-                ? 'Every board has a result or has started'
-                : 'Pair the boards that have not started again, as after a withdrawal',
-            child: TextButton(
-              key: const ValueKey('repair-unstarted'),
-              onPressed: repair.boards.isEmpty ? null : onRepair,
-              child: const Text('Re-pair unstarted boards'),
-            ),
+        else
+          // One button whatever the round allows, so the toolbar keeps its
+          // line when the first result makes Edit pairings and Re-pair
+          // round unavailable.
+          _ChangePairings(
+            onEditPairings: onEditPairings,
+            onRepairRound: repairingRound ? null : onRepairRound,
+            onFlipColors: repairingRound ? null : onFlipColors,
+            repair: repair,
+            onRepair: onRepair,
           ),
         FilterChip(
           chipAnimationStyle: noChipAnimation,
@@ -436,6 +476,10 @@ class _BoardToolbar extends StatelessWidget {
           selected: missingOnly,
           onSelected: onMissingOnly,
         ),
+        // Only for an event whose results the club website can have: one
+        // imported from its entry list.
+        if (live case final live? when live.available)
+          LiveResultsButton(live, enabled: searchable),
         IconButton(
           key: const ValueKey('print-round'),
           constraints: const BoxConstraints.tightFor(width: 36, height: 36),
@@ -447,6 +491,83 @@ class _BoardToolbar extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// The Change pairings menu: edit, re-pair or flip the round on screen, or
+/// re-pair the boards that have not started. Always one button; what the
+/// round no longer allows is greyed in the menu, so the toolbar never
+/// reflows as results come in.
+class _ChangePairings extends StatelessWidget {
+  const _ChangePairings({
+    required this.onEditPairings,
+    required this.onRepairRound,
+    required this.onFlipColors,
+    required this.repair,
+    required this.onRepair,
+  });
+  final VoidCallback? onEditPairings, onRepairRound, onFlipColors, onRepair;
+  final ({Section section, Round round, List<int> boards})? repair;
+
+  @override
+  Widget build(BuildContext context) {
+    final repair = this.repair;
+    final any =
+        onEditPairings != null ||
+        onRepairRound != null ||
+        onFlipColors != null ||
+        repair != null;
+    return MenuAnchor(
+      builder: (context, menu, _) => OutlinedButton.icon(
+        key: const ValueKey('change-pairings'),
+        icon: const Icon(Icons.expand_more, size: 18),
+        iconAlignment: IconAlignment.end,
+        label: const Text('Change pairings'),
+        onPressed: any ? () => menu.isOpen ? menu.close() : menu.open() : null,
+      ),
+      menuChildren: [
+        MenuItemButton(
+          key: const ValueKey('edit-pairings'),
+          leadingIcon: const Icon(Icons.swap_horiz),
+          onPressed: onEditPairings,
+          child: const Text('Edit pairings'),
+        ),
+        MenuItemButton(
+          key: const ValueKey('repair-round'),
+          leadingIcon: const Icon(Icons.refresh),
+          onPressed: onRepairRound,
+          child: const Tooltip(
+            message:
+                'Pair this round again from the entries as they are now: late entries, withdrawals, byes and rating changes',
+            child: Text('Re-pair round'),
+          ),
+        ),
+        // Only round 1 colors come from the coin toss.
+        if (onFlipColors case final flip?)
+          MenuItemButton(
+            key: const ValueKey('flip-pairing'),
+            leadingIcon: const Icon(Icons.flip),
+            onPressed: flip,
+            child: const Tooltip(
+              message:
+                  'Flip the round 1 coin toss: every board swaps colors, so the other player on board 1 has white',
+              child: Text('Flip pairing'),
+            ),
+          ),
+        if (repair != null)
+          MenuItemButton(
+            key: const ValueKey('repair-unstarted'),
+            leadingIcon: const Icon(Icons.person_remove_outlined),
+            onPressed: repair.boards.isEmpty ? null : onRepair,
+            child: Tooltip(
+              message: repair.boards.isEmpty
+                  ? 'Every board has a result or has started'
+                  : 'Pair the boards that have not started again, as after a withdrawal',
+              child: const Text('Re-pair unstarted boards'),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// Where focus rests after the last missing result, so the next key
@@ -659,7 +780,6 @@ class _Legend extends StatelessWidget {
     required this.line,
     required this.entered,
     required this.invalidKey,
-    required this.forfeitRefused,
     required this.drawHint,
     required this.forfeitHint,
   });
@@ -669,7 +789,7 @@ class _Legend extends StatelessWidget {
 
   /// The completion status, once every board was entered.
   final Widget? entered;
-  final bool invalidKey, forfeitRefused, drawHint;
+  final bool invalidKey, drawHint;
 
   /// The forfeit keys, when the focused board is an open forfeit.
   final String? forfeitHint;
@@ -712,25 +832,62 @@ class _Legend extends StatelessWidget {
                         )),
             ),
           ),
-          Semantics(
-            liveRegion: invalidKey,
-            child: Text(
-              invalidKey && forfeitRefused
-                  ? 'A forfeit is only won or lost. 1 or 0 picks who won it · Delete clears it to enter a played game'
-                  : invalidKey && drawHint
-                  ? '$drawKeyHint · $resultKeyHint'
-                  : invalidKey
-                  ? 'Not a result key. $resultKeyHint · $moreResultKeys'
-                  : forfeitHint != null
-                  ? '$forfeitHint · $gridKeyHint'
-                  : '$resultKeyHint · $gridKeyHint',
-              key: const ValueKey('result-key-legend'),
-              style: TextStyle(
-                fontSize: 12,
-                color: invalidKey ? colors.onSurface : colors.onSurfaceVariant,
-                fontWeight: invalidKey ? FontWeight.w600 : null,
-              ),
-            ),
+          // As tall as the longest thing it can say at this width, so a
+          // wrong key or a forfeit board never makes the sheet jump.
+          LayoutBuilder(
+            builder: (context, box) {
+              const style = TextStyle(fontSize: 12);
+              const bold = TextStyle(fontSize: 12, fontWeight: FontWeight.w600);
+              final scaler = MediaQuery.textScalerOf(context);
+              final direction = Directionality.of(context);
+              double height(String text, TextStyle style) {
+                final painter = TextPainter(
+                  text: TextSpan(
+                    text: text,
+                    style: DefaultTextStyle.of(context).style.merge(style),
+                  ),
+                  textDirection: direction,
+                  textScaler: scaler,
+                  maxLines: 2,
+                )..layout(maxWidth: box.maxWidth);
+                final h = painter.height;
+                painter.dispose();
+                return h;
+              }
+
+              final tallest = [
+                height('$drawKeyHint · $resultKeyHint', bold),
+                height(
+                  'Not a result key. $resultKeyHint · $moreResultKeys',
+                  bold,
+                ),
+                height('${longestForfeitKeyHint()} · $gridKeyHint', style),
+                height('$resultKeyHint · $gridKeyHint', style),
+              ].fold(0.0, math.max);
+              return ConstrainedBox(
+                constraints: BoxConstraints(minHeight: tallest),
+                child: Semantics(
+                  liveRegion: invalidKey,
+                  child: Text(
+                    invalidKey && drawHint
+                        ? '$drawKeyHint · $resultKeyHint'
+                        : invalidKey
+                        ? 'Not a result key. $resultKeyHint · $moreResultKeys'
+                        : forfeitHint != null
+                        ? '$forfeitHint · $gridKeyHint'
+                        : '$resultKeyHint · $gridKeyHint',
+                    key: const ValueKey('result-key-legend'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: (invalidKey ? bold : style).copyWith(
+                      color: invalidKey
+                          ? colors.onSurface
+                          : colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -1351,32 +1508,57 @@ class _GameRow extends StatelessWidget {
           (p.id == g.white && g.outcome == Outcome.blackForfeit) ||
           (p.id == g.black && g.outcome == Outcome.whiteForfeit);
       if (!forfeited || past) return playerLink;
-      return Column(
-        crossAxisAlignment: right
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          playerLink,
-          if (p.withdrawn)
-            Text(
+      // On the name's line, compact, so a no-show keeps the row its height
+      // and the boards below stay where they were.
+      final extra = p.withdrawn
+          ? Text(
               'Withdrawn',
               style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
             )
-          else
-            // Reached with Tab only from this board's score boxes.
+          : // Reached with Tab only from this board's score boxes.
             ExcludeFocusTraversal(
               excluding: !{
                 boxKey(g.id, true),
                 boxKey(g.id, false),
               }.contains(entryBox),
-              child: TextButton(
-                key: ValueKey('withdraw-${g.id}-${p.id}'),
-                onPressed: () => onWithdraw(p.id),
-                // The same words as the player menu and the player card.
-                child: Text(statusLabel(e, StatusAction.withdraw, [p.id])),
+              child: Tooltip(
+                message: statusLabel(e, StatusAction.withdraw, [p.id]),
+                child: TextButton(
+                  key: ValueKey('withdraw-${g.id}-${p.id}'),
+                  onPressed: () => onWithdraw(p.id),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                  // The same words as the player menu and the player card,
+                  // cut short where the name leaves no room.
+                  child: Text(
+                    statusLabel(e, StatusAction.withdraw, [p.id]),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
-            ),
-        ],
+            );
+      return Row(
+        mainAxisAlignment: right
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        children: right
+            ? [
+                Flexible(child: extra),
+                const SizedBox(width: 6),
+                Flexible(child: playerLink),
+              ]
+            : [
+                Flexible(child: playerLink),
+                const SizedBox(width: 6),
+                Flexible(child: extra),
+              ],
       );
     }
 

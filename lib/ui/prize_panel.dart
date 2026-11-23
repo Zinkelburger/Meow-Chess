@@ -165,6 +165,11 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
     if (s == null) return const Text('This section no longer exists.');
     final table = s.prizes;
     final muted = TextStyle(color: colors.onSurfaceVariant, fontSize: 13);
+    // How many entrants could win each prize; nothing to count before
+    // anyone has entered.
+    final canWin = s.players.isEmpty || table.isEmpty
+        ? const <String, int>{}
+        : allocatePrizes(widget.controller.event!, s).eligible;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -224,7 +229,7 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text('No prizes yet.', style: muted),
           ),
-        for (final p in table.list) _prizeRow(context, s, table, p),
+        for (final p in table.list) _prizeRow(context, s, table, p, canWin),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -284,7 +289,13 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
     );
   }
 
-  Widget _prizeRow(BuildContext context, Section s, PrizeTable table, Prize p) {
+  Widget _prizeRow(
+    BuildContext context,
+    Section s,
+    PrizeTable table,
+    Prize p,
+    Map<String, int> canWin,
+  ) {
     final colors = Theme.of(context).colorScheme;
     final named = p.kind == PrizeKind.junior || p.kind == PrizeKind.senior;
     return Container(
@@ -443,6 +454,21 @@ class _PrizeTableEditorState extends State<PrizeTableEditor>
               ),
             ],
           ),
+          if (canWin[p.id] case final n?)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                n == 0
+                    ? 'Nobody entered can win this. Check its rating range '
+                          'and the players it names.'
+                    : '$n ${n == 1 ? 'entrant' : 'entrants'} can win this',
+                key: ValueKey('prize-can-win-${p.id}'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: n == 0 ? colors.error : colors.onSurfaceVariant,
+                ),
+              ),
+            ),
           if (table.basedOn > 0)
             CheckboxListTile(
               key: ValueKey('prize-guaranteed-${p.id}'),

@@ -31,13 +31,19 @@ mixin _RosterCommands on _CommandContext {
     if (previous != null &&
         (previous.rating != player.rating ||
             previous.memberId != player.memberId) &&
-        mapEquals(previous.ratingEvidence, player.ratingEvidence)) {
+        // By value: the evidence holds the rating not in use as a nested
+        // record, which a reload rebuilds.
+        deepEquals(previous.ratingEvidence, player.ratingEvidence)) {
       player = player.copy(
         ratingEvidence: {
           'kind': 'TD-assigned',
           if (previous.memberId == player.memberId &&
               previous.ratingEvidence['registrationRating'] != null)
             'registrationRating': previous.ratingEvidence['registrationRating'],
+          // The supplement stays on file for the same ID: a typed rating is
+          // the entered one, and the director can still switch back.
+          if (previous.memberId == player.memberId)
+            'supplement': ?supplementOnFile(previous),
         },
       );
     }
@@ -71,10 +77,13 @@ mixin _RosterCommands on _CommandContext {
     if (previous != null &&
         section != null &&
         previous.effectivePairingRating != player.effectivePairingRating) {
-      if (ratingRangeProblem(player, section) case final problem?) {
+      if (eligibilityProblem(event!, player, section) case final problem?) {
+        // Rule 28H is about a section's announced range; a play-up limit is
+        // the event's own rule, so only the range is cited.
+        final rangeRule = ratingRangeProblem(player, section) != null;
         playerNotice =
-            '$problem (rule 28H) '
-            'Move the player to an appropriate section, with half-point byes for rounds missed (28H2), or remove them (28H1).';
+            '$problem${rangeRule ? ' (rule 28H)' : ''} '
+            'Move the player to an appropriate section, with half-point byes for rounds missed${rangeRule ? ' (28H2)' : ''}, or remove them${rangeRule ? ' (28H1)' : ''}.';
       }
     }
   }
@@ -89,7 +98,7 @@ mixin _RosterCommands on _CommandContext {
     }
     final why = reason.trim();
     if (why.isNotEmpty &&
-        ratingRangeProblem(p, s.copy(rangeExceptions: const {})) == null) {
+        eligibilityProblem(e, p, s.copy(rangeExceptions: const {})) == null) {
       throw TournamentException(
         '${p.name} is within the ${s.name} rating range already.',
       );
@@ -158,18 +167,37 @@ mixin _RosterCommands on _CommandContext {
     );
   }
 
+  /// Marks [playerId]'s registration note as dealt with, or with [handled]
+  /// false as waiting again.
+  void markNoteHandled(String playerId, {bool handled = true}) {
+    final e = event!, p = e.player(playerId);
+    if (p.registrationNote.trim().isEmpty || p.noteWaiting != handled) return;
+    change(
+      handled
+          ? 'Deal with ${p.name}’s registration note'
+          : 'Reopen ${p.name}’s registration note',
+      e.copy(
+        players: [
+          for (final x in e.players)
+            x.id == playerId
+                ? x.copy(noteHandled: handled ? x.registrationNote : '')
+                : x,
+        ],
+      ),
+    );
+  }
+
   /// Adds new entries and returns how many rows were skipped as existing.
   /// A member ID is identity; a name only identifies someone when either side
   /// lacks an ID, so two members who share a name are both admitted.
   ///
   /// [sections] (player ID → section label, from the registration list)
   /// places the new entries as [planSections] describes, in the same undo
-  /// step; a label no section matches starts a Swiss section of
-  /// [newSectionRounds] rounds.
+  /// step; a label no section matches starts a Swiss section whose rounds
+  /// the director sets afterwards ([Section.roundsUnset]).
   int importPlayers(
     List<Player> players, {
     Map<String, String> sections = const {},
-    int newSectionRounds = 0,
   }) {
     final e = event!;
     final additions = newEntries(e.players, players);
@@ -184,7 +212,7 @@ mixin _RosterCommands on _CommandContext {
     });
     change(
       'Import ${additions.length} players',
-      applySectionPlan(added, plan, rounds: newSectionRounds, newId: newId),
+      applySectionPlan(added, plan, newId: newId),
     );
     return players.length - additions.length;
   }

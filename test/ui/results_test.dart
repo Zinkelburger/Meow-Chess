@@ -283,7 +283,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
     },
   );
-  testWidgets('crosstable ranks by points once play starts', (tester) async {
+  testWidgets('crosstable stays in rating order once play starts, and lists '
+      'by standings when asked', (tester) async {
     final c = fixture();
     addTearDown(c.dispose);
     c.post((await tester.runAsync(() => c.propose()))!);
@@ -292,12 +293,33 @@ void main() {
     c.recordResult(g.id, Outcome.blackWin);
     await mountPlayers(tester, c);
     expect(find.text('Pts'), findsOneWidget);
-    // The winner, seeded lower, is now listed first in the section.
-    final top = tester.getTopLeft(find.byKey(ValueKey('player-${g.black}')));
-    final seed1 = tester.getTopLeft(
-      find.byKey(ValueKey('player-${section.players.first}')),
-    );
-    expect(top.dy, lessThan(seed1.dy));
+    double rowOf(String id) =>
+        tester.getTopLeft(find.byKey(ValueKey('player-$id'))).dy;
+    final byRating = [...section.players]
+      ..sort(
+        (a, b) =>
+            c.event!.player(b).rating.compareTo(c.event!.player(a).rating),
+      );
+    final topRated = byRating.first;
+    expect(topRated, isNot(g.black), reason: 'the lower seed won');
+    // The winner does not jump the queue: rows stay in rating order.
+    expect(find.text('Rating order'), findsOneWidget);
+    expect(rowOf(topRated), lessThan(rowOf(g.black)));
+    for (final [higher, lower] in [
+      for (var i = 1; i < byRating.length; i++) [byRating[i - 1], byRating[i]],
+    ]) {
+      expect(rowOf(higher), lessThan(rowOf(lower)));
+    }
+    // Standings order puts the winner first, without moving the toolbar.
+    final menu = find.byKey(const ValueKey('crosstable-order'));
+    final print = find.byKey(const ValueKey('print-standings'));
+    final menuAt = tester.getRect(menu), printAt = tester.getRect(print);
+    await chooseOption(tester, menu, 'Standings order');
+    expect(rowOf(g.black), lessThan(rowOf(topRated)));
+    expect(tester.getRect(menu), menuAt);
+    expect(tester.getRect(print), printAt);
+    // The choice is the event's: another crosstable opens the same way.
+    expect(c.workspaceState.read('crosstable-order'), 'standings');
     // Rank is the standing; # stays the pairing number.
     expect(
       find.descendant(

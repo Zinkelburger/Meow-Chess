@@ -42,7 +42,8 @@ proposals start ticked, but no pairing rating changes before confirmation. A USC
 name that looks like a different person (the entered name shares no close word
 with the US Chess last name) is flagged with an icon, listed under **Names to
 check**, and starts unticked. Changes of more than 50 points in either direction
-and unrated-to-rated changes are bold and shaded. Clicking a player opens their
+and first ratings are marked beside the number and listed under **Large rating
+changes** in the panel, which states the 50-point rule. Clicking a player opens their
 editable card in place of the review, with that player's proposal under Rating
 and **Back to rating review**; a rating typed there is kept and that row reads
 "Your edit is kept." Missing IDs,
@@ -55,6 +56,21 @@ name and all returned categories; choosing a rating offers a before/after
 confirmation. Missing ratings remain unknown. Posted sections keep their pairing
 ratings, and late results cannot override an edited event. Manual rating or ID
 edits clear the old verified-rating attribution.
+
+After the review closes, with **Confirm** or **Keep current ratings**, both
+ratings stay on file for every player whose lookup returned a dated supplement:
+the entered rating (registration, import or typed) and the supplement rating in
+the system reviewed. While any listed player's section is unpaired the table
+shows **Entered** and **US Chess <supplement date>**: a tick box beside the
+supplement rating, with the change, marks the rating in use, and the rating not
+in use is muted. Ticking or unticking switches that player at once, as one
+undoable revision, with no request to US Chess. The heading's tick box (mixed
+when players differ) puts everyone listed on the supplement, or everyone back
+on the entered rating, and confirms the count with Undo. Players with no
+supplement on file show a dash. A website update refreshes the entered rating
+on file without replacing a supplement in use; a typed rating becomes the
+entered rating and keeps the supplement on file unless the ID changed. Once a
+section is paired its players cannot switch and the column is hidden.
 
 **Players → Refresh from USCF** fetches each member profile along with the rating
 supplement, so membership expiry is saved for everyone found, unrated players included.

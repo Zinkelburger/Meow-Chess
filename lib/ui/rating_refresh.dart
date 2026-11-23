@@ -31,7 +31,12 @@ class RatingRefresh extends ChangeNotifier {
 
   void _recordMemberships() {
     if (_unrecordedEvent case final eventId? when _unrecorded.isNotEmpty) {
-      controller.recordMemberships(eventId, {..._unrecorded});
+      // With the rating system reviewed, so a supplement kept on file beside
+      // an entered rating is the one the director looked at.
+      controller.recordMemberships(eventId, {
+        for (final MapEntry(:key, :value) in _unrecorded.entries)
+          key: {...value, 'category': category},
+      });
     }
     _unrecorded.clear();
   }
@@ -293,6 +298,10 @@ class RatingRefresh extends ChangeNotifier {
   void showCategory(String value) {
     if (busy || value == category) return;
     category = value;
+    // Saved again when the review closes, under the system now shown.
+    for (final MapEntry(:key, :value) in observations.entries) {
+      _unrecorded[key] = value.toJson();
+    }
     selected
       ..clear()
       ..addAll(controller.event!.players.where(suggested).map((p) => p.id));

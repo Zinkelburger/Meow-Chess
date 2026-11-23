@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:ui' show AppExitResponse;
 import 'application/diagnostics.dart';
 import 'infrastructure/diagnostic_log.dart';
+import 'infrastructure/event_folder.dart';
 import 'infrastructure/event_save.dart';
 import 'infrastructure/file_access.dart';
 import 'package:file_selector/file_selector.dart';
@@ -23,7 +24,7 @@ import 'infrastructure/fide_cli.dart';
 import 'infrastructure/native_file_requests.dart';
 import 'infrastructure/remembered_printing.dart';
 import 'infrastructure/sqlite_event_repository.dart';
-import 'infrastructure/save_location.dart';
+import 'infrastructure/save_location.dart' show fileStem;
 import 'ui/brand.dart';
 import 'ui/desktop_window.dart';
 import 'ui/dialogs.dart';
@@ -64,6 +65,23 @@ Future<void> main(List<String> args) async {
       : Directory(configured);
   await directory.create(recursive: true);
   DiagnosticLog.initialize(directory);
+  // New events go in Documents/Meow-Chess until the TD picks somewhere else,
+  // so the first event is made without a folder window. A data directory set
+  // for a test run keeps its events to itself.
+  String? tournaments;
+  try {
+    tournaments = configured == null
+        ? p.join((await getApplicationDocumentsDirectory()).path, 'Meow-Chess')
+        : p.join(configured, 'Tournaments');
+  } catch (error, stack) {
+    // No Documents folder to be found: the first event asks where to go.
+    Diagnostics.record(
+      'find Documents folder',
+      'failed',
+      error: error,
+      stack: stack,
+    );
+  }
   await restoreFileAccess();
   await RememberedPrinting.shared.loadPaper();
   final previousFlutterError = FlutterError.onError;
@@ -104,13 +122,23 @@ Future<void> main(List<String> args) async {
   runApp(
     // A .meow named on the command line arrives through NativeFileRequests,
     // along with any double-clicked while the app is running.
-    MeowApp(dataDirectory: directory),
+    MeowApp(dataDirectory: directory, defaultTournamentsFolder: tournaments),
   );
 }
 
 class MeowApp extends StatefulWidget {
-  const MeowApp({required this.dataDirectory, this.initialPath, super.key});
+  const MeowApp({
+    required this.dataDirectory,
+    this.defaultTournamentsFolder,
+    this.initialPath,
+    super.key,
+  });
   final Directory dataDirectory;
+
+  /// Where new events get their folders until the TD chooses another place:
+  /// Documents/Meow-Chess. Null when there is no such place, and the first
+  /// new event asks instead.
+  final String? defaultTournamentsFolder;
 
   /// An event to open at launch; tests use it in place of a desktop request.
   final String? initialPath;
@@ -150,16 +178,83 @@ class _MeowAppState extends State<MeowApp> {
   /// App-wide choices that outlive one event, such as the theme.
   File get settings => File(p.join(widget.dataDirectory.path, 'settings.json'));
 
+  /// Where the TD chose to keep event folders; null until they choose, and
+  /// [MeowApp.defaultTournamentsFolder] is used meanwhile.
+  String? tournamentsFolder;
+
+  /// Where the next new event's folder goes; null when it has to be asked.
+  String? get newEventsFolder =>
+      tournamentsFolder ?? widget.defaultTournamentsFolder;
+
   void toggleTheme() {
     setState(() => light = !light);
+    _writeSettings();
+  }
+
+  void _writeSettings() {
     try {
       settings.writeAsStringSync(
-        jsonEncode({'theme': light ? 'light' : 'dark'}),
+        jsonEncode({
+          'theme': light ? 'light' : 'dark',
+          'tournamentsFolder': ?tournamentsFolder,
+        }),
         flush: true,
       );
     } catch (_) {
-      // The theme still switches; it just will not be remembered.
+      // The choice still applies now; it just will not be remembered.
     }
+  }
+
+  /// Asks where tournament folders go and remembers the answer. Null when
+  /// the picker was cancelled.
+  Future<String?> chooseTournamentsFolder() async {
+    final folder = await getDirectoryPath(
+      initialDirectory: _pickerStart(),
+      confirmButtonText: 'Put tournaments here',
+    );
+    if (folder == null) return null;
+    await rememberFileAccess(folder);
+    if (mounted) setState(() => tournamentsFolder = folder);
+    _writeSettings();
+    return folder;
+  }
+
+  /// The folder window opens on the current tournaments folder, or the
+  /// nearest folder above it that exists.
+  String? _pickerStart() {
+    var folder = newEventsFolder;
+    while (folder != null && !Directory(folder).existsSync()) {
+      final parent = p.dirname(folder);
+      folder = parent == folder ? null : parent;
+    }
+    return folder;
+  }
+
+  /// Where a new event's folder goes. A folder the TD chose is used while it
+  /// is still there; before any choice, Documents/Meow-Chess is made and
+  /// used without asking. Only when neither can be used is the TD asked.
+  Future<String?> _tournamentsFolder() async {
+    final chosen = tournamentsFolder;
+    if (chosen != null) {
+      if (Directory(chosen).existsSync()) return chosen;
+      return chooseTournamentsFolder();
+    }
+    final standard = widget.defaultTournamentsFolder;
+    if (standard != null) {
+      try {
+        Directory(standard).createSync(recursive: true);
+        return standard;
+      } on FileSystemException catch (error, stack) {
+        Diagnostics.record(
+          'make tournaments folder',
+          'failed',
+          error: error,
+          stack: stack,
+          context: {'path': standard},
+        );
+      }
+    }
+    return chooseTournamentsFolder();
   }
 
   @override
@@ -184,7 +279,9 @@ class _MeowAppState extends State<MeowApp> {
     _readRecentStamps();
     try {
       if (settings.existsSync()) {
-        light = jsonDecode(settings.readAsStringSync())['theme'] != 'dark';
+        final saved = jsonDecode(settings.readAsStringSync()) as Map;
+        light = saved['theme'] != 'dark';
+        tournamentsFolder = saved['tournamentsFolder'] as String?;
       }
     } catch (_) {}
     if (widget.initialPath != null) open(widget.initialPath!);
@@ -233,6 +330,10 @@ class _MeowAppState extends State<MeowApp> {
   }
 
   void _closeForExit() {
+    for (final keeper in _swissSys.values) {
+      keeper.stop();
+    }
+    _swissSys.clear();
     _closeRetiring();
     controller?.dispose();
     controller = null;
@@ -250,6 +351,8 @@ class _MeowAppState extends State<MeowApp> {
   /// state as they dispose still reach an open event file.
   void _retire(TournamentController? old) {
     if (old == null) return;
+    // The last change is written while the event file is still open.
+    _swissSys.remove(old)?.stop();
     _retiring.add(old);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_retiring.remove(old)) old.dispose();
@@ -257,6 +360,15 @@ class _MeowAppState extends State<MeowApp> {
       if (mounted && controller == null) setState(_readRecentStamps);
     });
   }
+
+  /// SwissSys files for a pairings screen, kept current in the event's own
+  /// folder for as long as the event is open.
+  void _keepSwissSysFiles(TournamentController c) {
+    _swissSys.remove(c)?.stop();
+    _swissSys[c] = _SwissSysKeeper(c);
+  }
+
+  final _swissSys = <TournamentController, _SwissSysKeeper>{};
 
   void _readRecentStamps() {
     recentEvents = [for (final filename in recent) RecentEvent.read(filename)];
@@ -280,6 +392,7 @@ class _MeowAppState extends State<MeowApp> {
       _retire(controller);
       controller = next;
       path = filename;
+      _keepSwissSysFiles(next);
       error = null;
       recent = [
         filename,
@@ -365,15 +478,17 @@ class _MeowAppState extends State<MeowApp> {
         return;
       }
     }
-    String? destination;
+    String? destination, folder;
     try {
-      final location = await chooseSaveLocation(
-        suggestedName: '${fileStem(name)}.meow',
-      );
-      if (location == null || !context.mounted) return;
-      destination = location.path;
-      // Build a fresh event independently: opening the chosen file first would
-      // load its previous tournament instead of honoring Replace.
+      final parent = await _tournamentsFolder();
+      if (parent == null || !context.mounted) return;
+      // Each event gets a folder of its own, holding its .meow file and
+      // everything saved from it.
+      final made = createEventFolder(parent, name);
+      // Only a folder made just now is removed if saving fails; an empty
+      // one the director made ahead of time stays.
+      if (made.created) folder = made.path;
+      destination = p.join(made.path, '${fileStem(name)}.meow');
       final fresh = TournamentController(SqliteEventRepository(':memory:'));
       try {
         if (source == null) {
@@ -388,7 +503,8 @@ class _MeowAppState extends State<MeowApp> {
             ),
           );
         }
-        await saveSelectedEvent(fresh.repository, location.path);
+        markEventFolder(fresh.repository, p.dirname(destination));
+        await saveSelectedEvent(fresh.repository, destination);
         Diagnostics.record(
           'create event file',
           'succeeded',
@@ -397,13 +513,13 @@ class _MeowAppState extends State<MeowApp> {
       } finally {
         fresh.dispose();
       }
-      final remembered = await rememberFileAccess(location.path);
+      final remembered = await rememberFileAccess(destination);
       if (!mounted) return;
       newName.clear();
       naming = false;
       templating = false;
       templatePath = null;
-      open(location.path);
+      open(destination);
       if (!remembered && context.mounted) {
         showFailure(
           context,
@@ -418,7 +534,21 @@ class _MeowAppState extends State<MeowApp> {
         stack: stack,
         context: {'path': ?destination},
       );
+      _removeIfEmpty(folder);
       if (context.mounted) showFailure(context, e);
+    }
+  }
+
+  /// A new event's folder, when saving the event into it failed.
+  void _removeIfEmpty(String? folder) {
+    if (folder == null) return;
+    try {
+      final directory = Directory(folder);
+      if (directory.existsSync() && directory.listSync().isEmpty) {
+        directory.deleteSync();
+      }
+    } catch (_) {
+      // An empty folder left behind is harmless.
     }
   }
 
@@ -480,10 +610,10 @@ class _MeowAppState extends State<MeowApp> {
   }
 
   /// Import FIDE report: a TRF (TRF26, TRF16 or TRF06) becomes a new event
-  /// file with one FIDE-rated section, saved where the TD chooses. What the
+  /// file with one FIDE-rated section, saved in a folder of its own. What the
   /// file holds that Meow-Chess cannot keep is listed in the event's notes.
   Future<void> importTrf(BuildContext context) async {
-    String? destination;
+    String? destination, folder;
     try {
       final file = await openFile(
         acceptedTypeGroups: [
@@ -509,15 +639,18 @@ class _MeowAppState extends State<MeowApp> {
         );
       }
       if (!context.mounted) return;
-      final location = await chooseSaveLocation(
-        suggestedName: '${fileStem(event.name)}.meow',
-      );
-      if (location == null || !context.mounted) return;
-      destination = location.path;
+      final parent = await _tournamentsFolder();
+      if (parent == null || !context.mounted) return;
+      final made = createEventFolder(parent, event.name);
+      // Only a folder made just now is removed if saving fails; an empty
+      // one the director made ahead of time stays.
+      if (made.created) folder = made.path;
+      destination = p.join(made.path, '${fileStem(event.name)}.meow');
       final fresh = TournamentController(SqliteEventRepository(':memory:'));
       try {
         fresh.change('Import ${p.basename(file.path)}', event);
-        await saveSelectedEvent(fresh.repository, location.path);
+        markEventFolder(fresh.repository, p.dirname(destination));
+        await saveSelectedEvent(fresh.repository, destination);
       } finally {
         fresh.dispose();
       }
@@ -526,9 +659,9 @@ class _MeowAppState extends State<MeowApp> {
         'succeeded',
         context: {'path': destination},
       );
-      await rememberFileAccess(location.path);
+      await rememberFileAccess(destination);
       if (!mounted) return;
-      open(location.path);
+      open(destination);
       if (imported.warnings.isNotEmpty) {
         _notify(
           'Imported. ${imported.warnings.length} ${imported.warnings.length == 1 ? 'thing' : 'things'} could not be carried over; the event notes list them.',
@@ -542,6 +675,7 @@ class _MeowAppState extends State<MeowApp> {
         stack: stack,
         context: {'path': ?destination},
       );
+      _removeIfEmpty(folder);
       if (context.mounted) {
         // A format problem names the line at fault.
         final why = e is TrfFormatException ? '$e.' : plainMessage(e);
@@ -609,7 +743,11 @@ class _MeowAppState extends State<MeowApp> {
                             spacing: 12,
                             runSpacing: 12,
                             children: [
-                              FilledButton.icon(
+                              // Filled until it is pressed; then Save below
+                              // is the one next step.
+                              (naming
+                                  ? OutlinedButton.icon
+                                  : FilledButton.icon)(
                                 onPressed: () => setState(() {
                                   naming = true;
                                   templating = false;
@@ -687,6 +825,8 @@ class _MeowAppState extends State<MeowApp> {
                                         labelText: 'Event name',
                                       ),
                                       onSubmitted: (_) => create(context),
+                                      // The folder line below names it.
+                                      onChanged: (_) => setState(() {}),
                                     ),
                                   ),
                                   FilledButton(
@@ -700,6 +840,50 @@ class _MeowAppState extends State<MeowApp> {
                                       newName.clear();
                                     }),
                                     child: const Text('Cancel'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          if (naming)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Wrap(
+                                spacing: 4,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  Text(
+                                    newEventsFolder == null
+                                        ? 'Each event gets a folder of its '
+                                              'own. Choose where they go.'
+                                        : newName.text.trim().isEmpty
+                                        ? 'Saved in a new folder in $newEventsFolder'
+                                        : 'Saved in ${p.join(newEventsFolder!, eventFolderName(newName.text))}',
+                                    key: const ValueKey('new-event-folder'),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  TextButton(
+                                    key: const ValueKey(
+                                      'choose-tournaments-folder',
+                                    ),
+                                    onPressed: () async {
+                                      try {
+                                        await chooseTournamentsFolder();
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          showFailure(context, e);
+                                        }
+                                      }
+                                    },
+                                    child: Text(
+                                      newEventsFolder == null
+                                          ? 'Choose folder…'
+                                          : 'Change…',
+                                    ),
                                   ),
                                 ],
                               ),
@@ -841,5 +1025,38 @@ class RecentEvent {
       return 'Changed today ${two(t.hour)}:${two(t.minute)}';
     }
     return 'Changed ${t.year}-${two(t.month)}-${two(t.day)}';
+  }
+}
+
+/// Keeps one open event's SwissSys files current. Every section's workbook
+/// is rebuilt for an update, so a run of changes (results typed one after
+/// another) is written once, a moment after the last, not on every key.
+class _SwissSysKeeper {
+  _SwissSysKeeper(this.c) : files = SwissSysFolderFiles(c.repository) {
+    c.addListener(_changed);
+    _write();
+  }
+
+  final TournamentController c;
+  final SwissSysFolderFiles files;
+  Timer? _timer;
+
+  void _changed() {
+    _timer?.cancel();
+    _timer = Timer(const Duration(milliseconds: 750), _write);
+  }
+
+  void _write() {
+    _timer = null;
+    if (!c.closed && c.event != null) files.update(c.event!);
+  }
+
+  /// Writes a change still waiting, and stops following the event.
+  void stop() {
+    c.removeListener(_changed);
+    if (_timer case final timer?) {
+      timer.cancel();
+      _write();
+    }
   }
 }

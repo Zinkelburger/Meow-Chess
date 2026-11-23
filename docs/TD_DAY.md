@@ -11,7 +11,9 @@ Everything saves as you go. **Undo** (Ctrl+Z) takes back the last step and
 
 ## Before players arrive
 
-1. **New tournament**, type the event's name and choose where to keep its file.
+1. **New tournament** and type the event's name. It gets a folder of its own
+   inside `Documents/Meow-Chess` (**Change…** picks another place), and its
+   PDFs, DBF files and SwissSys files are saved there too.
 2. Click the event's name at the top left to open **Event details**: date, time
    control, venue, city, state and ZIP, the chief TD's US Chess ID and the
    affiliate ID. The rating report needs all of these, so enter them now rather
@@ -66,8 +68,11 @@ nothing to create: print the sheet and start.
   opponent wins by forfeit, and **Withdraw from future rounds** appears on the
   board for the absent player.
 - **A player has to leave.** Right-click, **Withdraw after round N**.
-- **A withdrawal after pairings are up but before play.** **Re-pair unstarted
-  boards** keeps the boards that have results and pairs the rest again.
+- **Something changed after pairings went up, before any result.** **Re-pair
+  round** pairs the whole round again in one click: a walk-up is paired in,
+  a withdrawal is left out. **Undo** puts the first pairings back.
+- **A withdrawal once games are under way.** **Re-pair unstarted boards**
+  keeps the boards that have results and pairs the rest again.
 - **Two players paired wrongly.** **Edit pairings** swaps players on boards
   that have no result yet.
 

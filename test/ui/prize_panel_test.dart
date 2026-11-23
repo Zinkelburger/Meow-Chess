@@ -45,6 +45,11 @@ void main() {
     expect(c.graph.nodes[c.graph.head]!.action, 'Edit prizes for Quad 1');
     final id = table().list.single.id;
 
+    // Every entrant of the quad can win a place prize.
+    Text canWin() =>
+        tester.widget<Text>(find.byKey(ValueKey('prize-can-win-$id')));
+    expect(canWin().data, '4 entrants can win this');
+
     await tester.enterText(find.byKey(ValueKey('prize-cents-$id')), '150');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();

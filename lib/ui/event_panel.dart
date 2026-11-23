@@ -357,7 +357,6 @@ class EventPanelState extends State<EventPanel> {
       onClose: widget.onClose,
       backLabel: widget.backLabel,
       children: [
-        DraftStatus(draft: draft),
         for (final (key, label, lines) in _fields)
           if (!_fideFields.contains(key) &&
               (usChessRated || !_usChessFields.contains(key))) ...[
@@ -434,6 +433,9 @@ class EventPanelState extends State<EventPanel> {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(error!, style: TextStyle(color: colors.error)),
           ),
+        // With Save, under the fields, so the field being typed in never
+        // moves when the draft starts.
+        DraftStatus(draft: draft),
         if (dirty)
           Wrap(
             spacing: 8,

@@ -119,6 +119,7 @@ class Player {
     Set<String> avoid = const {},
     this.notes = '',
     this.registrationNote = '',
+    this.noteHandled = '',
     this.source = '',
     Map<int, int> byes = const {},
     this.personId,
@@ -214,6 +215,15 @@ class Player {
   /// Free-form registration text from the roster source, separate from private notes.
   final String registrationNote;
 
+  /// The [registrationNote] the director has dealt with (a bye given, a
+  /// request declined). A note the website later changes differs from this
+  /// and so asks to be read again.
+  final String noteHandled;
+
+  /// A registration note the director has not dealt with yet.
+  bool get noteWaiting =>
+      registrationNote.trim().isNotEmpty && noteHandled != registrationNote;
+
   /// Two-letter state for the rating report; empty when unknown.
   final String state;
 
@@ -240,6 +250,7 @@ class Player {
     Set<String>? avoid,
     String? notes,
     String? registrationNote,
+    String? noteHandled,
     Map<int, int>? byes,
     bool? house,
     String? state,
@@ -277,6 +288,7 @@ class Player {
     avoid: avoid ?? this.avoid,
     notes: notes ?? this.notes,
     registrationNote: registrationNote ?? this.registrationNote,
+    noteHandled: noteHandled ?? this.noteHandled,
     source: source,
     byes: byes ?? this.byes,
     house: house ?? this.house,
@@ -324,6 +336,7 @@ class Player {
     'avoid': avoid.toList()..sort(),
     'notes': notes,
     'registrationNote': registrationNote,
+    if (noteHandled.isNotEmpty) 'noteHandled': noteHandled,
     'source': source,
     'house': house,
     'byes': byes.map((k, v) => MapEntry('$k', v)),
@@ -364,6 +377,7 @@ class Player {
     avoid: Set<String>.from(j['avoid'] as Iterable? ?? const []),
     notes: j['notes'] as String,
     registrationNote: (j['registrationNote'] ?? '') as String,
+    noteHandled: (j['noteHandled'] ?? '') as String,
     source: j['source'] as String,
     house: (j['house'] ?? false) as bool,
     byes: (j['byes'] as Map).map(
@@ -644,6 +658,7 @@ class Section {
     List<String> fideOrder = const [],
     this.pabPoints = 2,
     this.bakuLast = '',
+    this.roundsUnset = false,
   }) : fideOrder = List.unmodifiable(fideOrder),
        rangeExceptions = Map.unmodifiable(rangeExceptions),
        players = List.unmodifiable(players),
@@ -733,6 +748,11 @@ class Section {
   final Format format;
   final int plannedRounds, boardStart;
 
+  /// A registration list named this section but not its number of rounds,
+  /// and the director has not said yet. [plannedRounds] is only a stand-in
+  /// until then, and the section is not paired.
+  final bool roundsUnset;
+
   /// Rule 28H: the announced rating range. Entrants rated at or above
   /// [ratingCeiling] or below [ratingFloor] do not belong; zero is no
   /// limit. Unrated players are below any floor and under any ceiling.
@@ -788,6 +808,7 @@ class Section {
     List<String>? fideOrder,
     int? pabPoints,
     String? bakuLast,
+    bool? roundsUnset,
   }) => Section(
     id: id,
     name: name ?? this.name,
@@ -820,6 +841,7 @@ class Section {
     fideOrder: fideOrder ?? this.fideOrder,
     pabPoints: pabPoints ?? this.pabPoints,
     bakuLast: bakuLast ?? this.bakuLast,
+    roundsUnset: roundsUnset ?? this.roundsUnset,
   );
   Json toJson() => {
     'id': id,
@@ -853,6 +875,7 @@ class Section {
     if (fideOrder.isNotEmpty) 'fideOrder': fideOrder,
     if (pabPoints != 2) 'pabPoints': pabPoints,
     if (bakuLast.isNotEmpty) 'bakuLast': bakuLast,
+    if (roundsUnset) 'roundsUnset': roundsUnset,
   };
   factory Section.fromJson(Json j) => Section(
     id: j['id'] as String,
@@ -907,6 +930,7 @@ class Section {
     fideOrder: List<String>.from(j['fideOrder'] as Iterable? ?? const []),
     pabPoints: (j['pabPoints'] ?? 2) as int,
     bakuLast: (j['bakuLast'] ?? '') as String,
+    roundsUnset: (j['roundsUnset'] ?? false) as bool,
   );
 }
 
@@ -1046,6 +1070,7 @@ class Event {
     List<Json> rulings = const [],
     this.fide = const FideRegistration(),
     List<String> fideTiebreaks = const [],
+    this.playUpLimit = 0,
   }) : rosterSource = Map.unmodifiable(rosterSource),
        fideTiebreaks = List.unmodifiable(fideTiebreaks),
        players = List.unmodifiable(players),
@@ -1068,6 +1093,11 @@ class Event {
 
   /// Chapter 10: an online event, reported with online rating categories.
   final bool online;
+
+  /// The announced play-up rule: a player may enter the section above
+  /// their own when rated within this many points of the lower section's
+  /// rating cap. Zero is no rule. See `playUpProblem`.
+  final int playUpLimit;
 
   /// FIDE registration details shared by the event's FIDE-rated sections.
   final FideRegistration fide;
@@ -1151,6 +1181,7 @@ class Event {
     List<Json>? rulings,
     FideRegistration? fide,
     List<String>? fideTiebreaks,
+    int? playUpLimit,
   }) => Event(
     id: id,
     name: name ?? this.name,
@@ -1186,6 +1217,7 @@ class Event {
     rulings: rulings ?? this.rulings,
     fide: fide ?? this.fide,
     fideTiebreaks: fideTiebreaks ?? this.fideTiebreaks,
+    playUpLimit: playUpLimit ?? this.playUpLimit,
   );
   Json toJson() => {
     'id': id,
@@ -1220,6 +1252,7 @@ class Event {
     if (rulings.isNotEmpty) 'rulings': rulings,
     if (!fide.isEmpty) 'fide': fide.toJson(),
     if (fideTiebreaks.isNotEmpty) 'fideTiebreaks': fideTiebreaks,
+    if (playUpLimit > 0) 'playUpLimit': playUpLimit,
   };
   factory Event.fromJson(Json j) => Event(
     id: j['id'] as String,
@@ -1264,6 +1297,7 @@ class Event {
     fideTiebreaks: List<String>.from(
       j['fideTiebreaks'] as Iterable? ?? const [],
     ),
+    playUpLimit: (j['playUpLimit'] ?? 0) as int,
   );
   String encode() => jsonEncode(toJson());
   factory Event.decode(String source) =>
@@ -1667,3 +1701,9 @@ void validateEvent(Event e) {
     }
   }
 }
+
+/// [names] as they are said in a sentence: "Open", "Open and U1800",
+/// "Open, U1800 and U1400".
+String nameList(List<String> names) => names.length < 2
+    ? names.join()
+    : '${names.take(names.length - 1).join(', ')} and ${names.last}';

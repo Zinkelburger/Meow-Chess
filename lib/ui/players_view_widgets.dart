@@ -152,11 +152,23 @@ class _SelectionPanel extends StatelessWidget {
         ),
       ],
       children: [
-        Text(
-          names.length <= 6
-              ? names.join(', ')
-              : '${names.take(5).join(', ')} and ${names.length - 5} more',
-          style: muted,
+        // Two lines whatever is ticked, so ticking another player never
+        // moves the section chips below while they are being aimed at.
+        SizedBox(
+          height: MediaQuery.textScalerOf(context).scale(14 * 1.4 * 2),
+          child: Text(
+            names.length <= 6
+                ? names.join(', ')
+                : '${names.take(5).join(', ')} and ${names.length - 5} more',
+            style: muted.copyWith(fontSize: 14),
+            strutStyle: const StrutStyle(
+              fontSize: 14,
+              height: 1.4,
+              forceStrutHeight: true,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         ...[
           heading(e.sections.isEmpty ? 'Put in a section' : 'Move to section'),
@@ -456,9 +468,16 @@ class _RosterPage extends StatelessWidget {
                       runSpacing: 8,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
+                        // Even-width digits, so the count changing as
+                        // players are found or added does not nudge Print.
                         Text(
                           title,
-                          style: Theme.of(context).textTheme.titleLarge,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
                         ),
                         if (onPrint case final printList?)
                           OutlinedButton.icon(
@@ -490,6 +509,7 @@ class _PlayerTools extends StatelessWidget {
   const _PlayerTools({
     required this.controller,
     required this.onRefreshRoster,
+    required this.onNotes,
     required this.onImport,
     required this.onPaste,
     required this.showRatingPreview,
@@ -498,7 +518,7 @@ class _PlayerTools extends StatelessWidget {
     required this.onShowIds,
   });
   final TournamentController controller;
-  final VoidCallback? onRefreshRoster;
+  final VoidCallback? onRefreshRoster, onNotes;
   final VoidCallback onImport, onPaste;
   final bool showRatingPreview, showIds;
   final ValueChanged<bool?> onShowRatingPreview, onShowIds;
@@ -530,6 +550,21 @@ class _PlayerTools extends StatelessWidget {
         onPressed: onPaste,
         child: const Text('Paste'),
       ),
+      if (onNotes != null &&
+          controller.event!.players.any(
+            (p) => p.registrationNote.trim().isNotEmpty,
+          ))
+        MenuItemButton(
+          key: const ValueKey('registration-notes-menu'),
+          leadingIcon: const Icon(Icons.sticky_note_2_outlined),
+          onPressed: onNotes,
+          child: Text(switch (controller.event!.players
+              .where((p) => p.noteWaiting && !p.withdrawn)
+              .length) {
+            0 => 'Registration notes',
+            final n => 'Registration notes ($n)',
+          }),
+        ),
       if (hasFideSection(controller.event!))
         MenuItemButton(
           key: const ValueKey('fide-ratings'),
@@ -586,8 +621,9 @@ class _CrosstableHeading extends StatelessWidget {
   );
 }
 
-/// Find a player, print, switch to prize standings, and the tie-break
-/// order; a key that is not a result says which keys are.
+/// Find a player, choose the order of the rows, print, switch to prize
+/// standings, and the tie-break order; a key that is not a result says
+/// which keys are.
 class _CrosstableToolbar extends StatelessWidget {
   const _CrosstableToolbar({
     required this.search,
@@ -598,11 +634,18 @@ class _CrosstableToolbar extends StatelessWidget {
     required this.prizeSection,
     required this.prizeStandings,
     required this.onPrizeStandings,
+    required this.order,
+    required this.onOrder,
     required this.tiebreakColumns,
     required this.invalidKey,
   });
   final TextEditingController search;
   final VoidCallback onSearchChanged, onSearchSubmitted;
+
+  /// The order the rows are listed in; null where there are no rows to
+  /// order.
+  final CrosstableOrder? order;
+  final ValueChanged<CrosstableOrder> onOrder;
 
   /// Null when there is no section to print.
   final VoidCallback? onPrint;
@@ -614,44 +657,12 @@ class _CrosstableToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          SearchField(
-            key: const ValueKey('player-search'),
-            controller: search,
-            onChanged: onSearchChanged,
-            onSubmitted: onSearchSubmitted,
-          ),
-          if (onPrint != null)
-            IconButton(
-              key: const ValueKey('print-standings'),
-              constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-              padding: EdgeInsets.zero,
-              tooltip: ranked ? 'Print standings' : 'Print player list',
-              onPressed: onPrint,
-              icon: const Icon(Icons.print_outlined, size: 18),
-            ),
-          if (prizeSection)
-            FilterChip(
-              key: const ValueKey('prize-standings'),
-              chipAnimationStyle: noChipAnimation,
-              label: const Text('Prize standings'),
-              selected: prizeStandings,
-              onSelected: onPrizeStandings,
-            ),
-          if (tiebreakColumns.isNotEmpty)
-            Text(
-              key: const ValueKey('standings-tiebreak-order'),
-              'Tie-breaks: ${tiebreakColumns.map((m) => m.label).join(', ')}',
-              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
-            ),
-          if (invalidKey)
-            Semantics(
+    // A key that is not a result is answered under the toolbar, over the
+    // table, so the table does not drop and come back up.
+    return FloatingHint(
+      inset: 12,
+      hint: invalidKey
+          ? Semantics(
               liveRegion: true,
               child: Text(
                 key: const ValueKey('standing-key-hint'),
@@ -662,8 +673,64 @@ class _CrosstableToolbar extends StatelessWidget {
                   color: colors.onSurface,
                 ),
               ),
+            )
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SearchField(
+              key: const ValueKey('player-search'),
+              controller: search,
+              onChanged: onSearchChanged,
+              onSubmitted: onSearchSubmitted,
             ),
-        ],
+            if (order case final order?)
+              PlainSelect<CrosstableOrder>(
+                key: const ValueKey('crosstable-order'),
+                dense: true,
+                // Wide enough for the longest choice, so picking one never
+                // moves the controls beside it.
+                width: MediaQuery.textScalerOf(context).scale(204),
+                semanticLabel: 'Crosstable order',
+                value: order,
+                options: [
+                  for (final o in CrosstableOrder.values)
+                    SelectOption(o, o.label),
+                ],
+                onChanged: onOrder,
+              ),
+            if (onPrint != null)
+              IconButton(
+                key: const ValueKey('print-standings'),
+                constraints: const BoxConstraints.tightFor(
+                  width: 36,
+                  height: 36,
+                ),
+                padding: EdgeInsets.zero,
+                tooltip: ranked ? 'Print standings' : 'Print player list',
+                onPressed: onPrint,
+                icon: const Icon(Icons.print_outlined, size: 18),
+              ),
+            if (prizeSection)
+              FilterChip(
+                key: const ValueKey('prize-standings'),
+                chipAnimationStyle: noChipAnimation,
+                label: const Text('Prize standings'),
+                selected: prizeStandings,
+                onSelected: onPrizeStandings,
+              ),
+            if (tiebreakColumns.isNotEmpty)
+              Text(
+                key: const ValueKey('standings-tiebreak-order'),
+                'Tie-breaks: ${tiebreakColumns.map((m) => m.label).join(', ')}',
+                style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -763,11 +830,21 @@ class _RosterTable extends StatelessWidget {
 
 /// The column headings, matching the cells each row shows.
 class _ColumnHeader extends StatelessWidget {
-  const _ColumnHeader({required this.columns, required this.draft});
+  const _ColumnHeader({
+    required this.columns,
+    required this.draft,
+    this.choices = const [],
+    this.onChooseAll,
+  });
   final ShownColumns columns;
 
   /// The open rating review, whose columns show when [columns] has them.
   final RatingRefresh? draft;
+
+  /// The rating choices still open among the players listed, which the
+  /// heading's tick box switches together.
+  final List<RatingChoice> choices;
+  final ValueChanged<bool>? onChooseAll;
 
   @override
   Widget build(BuildContext context) {
@@ -795,14 +872,17 @@ class _ColumnHeader extends StatelessWidget {
           children: [
             if (columns.checkbox)
               SizedBox(width: _columnWidth(context, RosterColumns.check)),
-            // Once play starts the rows are in standings order: Rank is the
-            // place, # stays the pairing number.
+            // Once play starts Rank is the place, whatever order the rows
+            // are listed in; # stays the pairing number.
             if (columns.scores) cell(RosterColumns.rank, 'Rank'),
             cell(RosterColumns.number, '#'),
             const Expanded(child: Text('Name')),
             if (columns.ids) cell(RosterColumns.id, 'US Chess ID'),
             if (columns.rating)
-              cell(RosterColumns.rating, draft == null ? 'Rating' : 'Entered'),
+              cell(
+                RosterColumns.rating,
+                draft == null && !columns.choice ? 'Rating' : 'Entered',
+              ),
             if (columns.fide) ...[
               cell(RosterColumns.id, 'FIDE ID'),
               cell(RosterColumns.rating, 'FIDE'),
@@ -811,6 +891,8 @@ class _ColumnHeader extends StatelessWidget {
               cell(RosterColumns.proposal, proposedHeading(draft)),
               cell(RosterColumns.uscfName, 'US Chess name'),
             ],
+            if (columns.choice)
+              _RatingChoiceHeading(choices: choices, onChooseAll: onChooseAll),
             if (columns.ratingPreview)
               cell(RosterColumns.preview, 'Est. regular (Δ)'),
             if (columns.membership)
@@ -914,6 +996,127 @@ class _GroupHeader extends StatelessWidget {
   }
 }
 
+/// The bar over a section's entrants outside its rating range, who are
+/// listed last until the section is paired. It says the rule in words, so
+/// the marks on the rows below need none, and its box ticks them all.
+class _OutsideRangeBar extends StatelessWidget {
+  const _OutsideRangeBar({
+    required this.event,
+    required this.section,
+    required this.players,
+    required this.picked,
+    required this.checkbox,
+    required this.onTick,
+    super.key,
+  });
+  final Event event;
+  final Section section;
+
+  /// The listed players outside the range.
+  final List<Player> players;
+
+  /// How many of [players] are ticked.
+  final int picked;
+  final bool checkbox;
+  final void Function(Iterable<String> ids, bool value) onTick;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final ids = players.map((p) => p.id).toSet();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        border: Border(
+          top: BorderSide(color: colors.outline),
+          bottom: BorderSide(color: colors.outlineVariant),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (checkbox)
+            SizedBox(
+              width: _columnWidth(context, RosterColumns.check),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: PlainCheckbox(
+                  label:
+                      'Select the players outside the rating range of '
+                      '${section.name}',
+                  tristate: true,
+                  value: picked == 0
+                      ? false
+                      : picked == ids.length
+                      ? true
+                      : null,
+                  onChanged: (_) => onTick(ids, picked != ids.length),
+                ),
+              ),
+            ),
+          Icon(Icons.error_outline, size: 16, color: attentionColor(colors)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                style: const TextStyle(fontSize: 13),
+                children: [
+                  TextSpan(
+                    text: 'Outside the rating range (${ids.length})',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(
+                    text: '   ${eligibilityRule(event, section)}',
+                    style: TextStyle(color: colors.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A mark at the right edge of a cell for something worth a second look:
+/// an icon alone, so it never crowds or truncates the cell. Its [reason]
+/// shows at once on hover and is read by screen readers; the same reason
+/// is in words in the player's card and beside the table.
+class _AttentionMark extends StatefulWidget {
+  const _AttentionMark({required this.reason, super.key});
+  final String reason;
+
+  @override
+  State<_AttentionMark> createState() => _AttentionMarkState();
+}
+
+class _AttentionMarkState extends State<_AttentionMark> {
+  bool hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final attention = attentionColor(Theme.of(context).colorScheme);
+    return Tooltip(
+      message: widget.reason,
+      waitDuration: Duration.zero,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => hovered = true),
+        onExit: (_) => setState(() => hovered = false),
+        child: Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: hovered ? attention.withValues(alpha: 0.16) : null,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Icon(Icons.error_outline, size: 16, color: attention),
+        ),
+      ),
+    );
+  }
+}
+
 /// A section with nobody listed in it.
 class _EmptyGroup extends StatelessWidget {
   const _EmptyGroup({required this.standingsOnly});
@@ -947,6 +1150,8 @@ class _PlayerRow extends StatelessWidget {
     required this.standingsOnly,
     required this.columns,
     required this.draft,
+    required this.choice,
+    required this.onChoose,
     required this.roundCells,
     required this.onMenu,
     required this.onRemove,
@@ -971,6 +1176,13 @@ class _PlayerRow extends StatelessWidget {
 
   /// The open rating review, whose columns show when [columns] has them.
   final RatingRefresh? draft;
+
+  /// The entered and US Chess supplement ratings, when the player has both.
+  final RatingChoice? choice;
+
+  /// Switches to the supplement rating (true) or the entered one; null once
+  /// the player's section is paired.
+  final ValueChanged<bool>? onChoose;
   final List<Widget> roundCells;
   final ValueChanged<Offset> onMenu;
   final VoidCallback onRemove, onOpen;
@@ -990,18 +1202,11 @@ class _PlayerRow extends StatelessWidget {
         style: style,
       ),
     );
-    // The name cell, explained when the player is outside the section's
-    // rating range.
-    Widget rangeTooltip(Widget child) {
-      final problem = standingsOnly || s == null
-          ? null
-          : ratingRangeProblem(p, s);
-      if (problem == null) return child;
-      return Tooltip(
-        message: '$problem Open the player to move them or allow them in.',
-        child: child,
-      );
-    }
+    // Why the player is outside the section's rating range, marked at the
+    // end of the name cell.
+    final rangeProblem = standingsOnly || s == null
+        ? null
+        : eligibilityProblem(event, p, s);
 
     return ContextMenuKeys(
       onMenu: onMenu,
@@ -1064,61 +1269,49 @@ class _PlayerRow extends StatelessWidget {
                       child: cell(RosterColumns.number, number, muted),
                     ),
                     Expanded(
-                      child: rangeTooltip(
-                        Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: p.name,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: p.withdrawn
-                                      ? colors.onSurfaceVariant
-                                      : null,
-                                  decoration: p.withdrawn
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                ),
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: p.name,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: p.withdrawn
+                                    ? colors.onSurfaceVariant
+                                    : null,
+                                decoration: p.withdrawn
+                                    ? TextDecoration.lineThrough
+                                    : null,
                               ),
-                              if (p.team.isNotEmpty)
-                                TextSpan(
-                                  text: '  · ${p.team}',
-                                  style: muted.copyWith(fontSize: 12),
-                                ),
-                              if (p.withdrawn)
-                                TextSpan(
-                                  text: '  withdrawn',
-                                  style: muted.copyWith(fontSize: 12),
-                                ),
-                              if (!standingsOnly &&
-                                  s != null &&
-                                  ratingRangeProblem(p, s) != null) ...[
-                                const TextSpan(text: '  '),
-                                WidgetSpan(
-                                  alignment: PlaceholderAlignment.middle,
-                                  child: Icon(
-                                    Icons.error_outline,
-                                    size: 16,
-                                    color: attentionColor(colors),
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: ' outside the rating range',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: attentionColor(colors),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                            ),
+                            if (p.team.isNotEmpty)
+                              TextSpan(
+                                text: '  · ${p.team}',
+                                style: muted.copyWith(fontSize: 12),
+                              ),
+                            if (p.withdrawn)
+                              TextSpan(
+                                text: '  withdrawn',
+                                style: muted.copyWith(fontSize: 12),
+                              ),
+                          ],
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    // Outside the name, so a long name never hides it.
+                    if (rangeProblem != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4, right: 8),
+                        child: _AttentionMark(
+                          key: ValueKey('range-mark-${p.id}'),
+                          reason:
+                              '$rangeProblem Open the player to move them '
+                              'or allow them in.',
+                        ),
+                      ),
                     if (columns.ids)
                       cell(
                         RosterColumns.id,
@@ -1126,10 +1319,22 @@ class _PlayerRow extends StatelessWidget {
                         muted.copyWith(fontFamily: 'SourceCodePro'),
                       ),
                     if (columns.rating)
+                      // Beside the US Chess column this is the entered
+                      // rating, muted while the supplement is in use.
                       cell(
                         RosterColumns.rating,
-                        ratingText(p.rating),
-                        const TextStyle(fontFamily: 'SourceCodePro'),
+                        ratingText(
+                          columns.choice
+                              ? choice?.entered ?? p.rating
+                              : p.rating,
+                        ),
+                        TextStyle(
+                          fontFamily: 'SourceCodePro',
+                          color:
+                              columns.choice && choice?.usingSupplement == true
+                              ? colors.onSurfaceVariant
+                              : null,
+                        ),
                       ),
                     if (columns.fide) ...[
                       cell(
@@ -1154,6 +1359,12 @@ class _PlayerRow extends StatelessWidget {
                       _ProposedRating(player: p, draft: draft),
                       _UscfName(player: p, draft: draft),
                     ],
+                    if (columns.choice)
+                      _RatingChoiceCell(
+                        player: p,
+                        choice: choice,
+                        onChoose: onChoose,
+                      ),
                     if (columns.ratingPreview)
                       _RatingPreview(event: event, player: p, section: s),
                     if (columns.membership)
@@ -1359,95 +1570,276 @@ class _ProposedRating extends StatelessWidget {
         : numbers
         ? ratingChange(draft, p)
         : null;
-    return Tooltip(
+    final review = Tooltip(
       message: [
         ?problem,
-        if (highlight)
-          p.rating == 0
-              ? 'Highlighted: first rating. Entered as unrated (UNR).'
-              : 'Highlighted: large rating change, more than 50 points.',
         if (m != null) 'Supplement ${m.supplementDate ?? 'date unavailable'}',
       ].join('\n'),
-      child: Container(
-        key: ValueKey('rating-proposal-${p.id}'),
-        width: _columnWidth(context, RosterColumns.proposal) - 12,
-        margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        color: highlight ? colors.tertiary.withValues(alpha: 0.16) : null,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PlainCheckbox(
+            key: ValueKey('approve-rating-${p.id}'),
+            label: 'Apply US Chess rating for ${p.name}',
+            value: problem == null && draft.selected.contains(p.id),
+            onChanged: draft.busy || problem != null
+                ? null
+                : (value) => draft.select(p, value == true),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text.rich(
+              draft.missingId(p)
+                  ? TextSpan(
+                      children: [
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Icon(
+                            Icons.error_outline,
+                            size: 16,
+                            color: attentionColor(colors),
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' No US Chess ID',
+                          style: TextStyle(
+                            color: attentionColor(colors),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    )
+                  : shown == null
+                  ? TextSpan(
+                      // The first sentence fits; the tooltip has the rest.
+                      text: problem?.split('. ').first ?? '—',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    )
+                  : TextSpan(
+                      children: [
+                        TextSpan(
+                          text: shown,
+                          style: TextStyle(
+                            fontFamily: 'SourceCodePro',
+                            fontWeight: highlight
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: problem == null
+                                ? null
+                                : colors.onSurfaceVariant,
+                          ),
+                        ),
+                        if (change != null)
+                          TextSpan(
+                            text: '  $change',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: highlight
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
+                              color: highlight
+                                  ? attentionColor(colors)
+                                  : colors.onSurfaceVariant,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+    return Container(
+      key: ValueKey('rating-proposal-${p.id}'),
+      width: _columnWidth(context, RosterColumns.proposal) - 12,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          Flexible(child: review),
+          // Right after the change it explains, so it is not read as a
+          // flag on the US Chess name in the next column; and beside the
+          // tooltip above, not inside it: one reason per hover.
+          if (highlight)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: _AttentionMark(
+                key: ValueKey('rating-large-${p.id}'),
+                reason: p.rating == 0
+                    ? 'First rating. Entered as unrated.'
+                    : 'Changed by more than 50 points.',
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "US Chess 2026-10-01", or with the rating system when it is not Regular;
+/// the date is left out when the players' supplements differ.
+String ratingChoiceHeading(List<RatingChoice> choices) {
+  final dates = {for (final c in choices) c.supplementDate};
+  final systems = {for (final c in choices) c.system};
+  return [
+    'US Chess',
+    if (systems.length == 1 && systems.single != RatingSystem.regular)
+      systems.single.label.toLowerCase(),
+    if (dates.length == 1) dates.single,
+  ].join(' ');
+}
+
+/// The US Chess column's heading, whose tick box puts everyone listed on
+/// their supplement rating or back on their entered one.
+class _RatingChoiceHeading extends StatelessWidget {
+  const _RatingChoiceHeading({
+    required this.choices,
+    required this.onChooseAll,
+  });
+  final List<RatingChoice> choices;
+  final ValueChanged<bool>? onChooseAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final using = choices.where((c) => c.usingSupplement).length;
+    final all = choices.isNotEmpty && using == choices.length;
+    return SizedBox(
+      width: _columnWidth(context, RosterColumns.choice),
+      child: Tooltip(
+        message:
+            'Ticked players are paired with their US Chess rating, the '
+            'others with their entered rating. This box switches everyone '
+            'listed.',
+        child: Row(
+          children: [
+            // A full-size tick box that leaves the heading its height.
+            SizedBox(
+              width: 24,
+              height: 16,
+              child: OverflowBox(
+                minHeight: 24,
+                maxHeight: 24,
+                child: PlainCheckbox(
+                  key: const ValueKey('use-supplement-all'),
+                  label: 'Use US Chess ratings for everyone listed',
+                  tristate: true,
+                  value: all
+                      ? true
+                      : using == 0
+                      ? false
+                      : null,
+                  // Some or none ticked: tick them all. All: untick.
+                  onChanged: onChooseAll == null
+                      ? null
+                      : (_) => onChooseAll!(!all),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                ratingChoiceHeading(choices),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A player's US Chess supplement rating beside their entered one, ticked
+/// when it is the rating in use. One click switches; Undo takes it back.
+class _RatingChoiceCell extends StatelessWidget {
+  const _RatingChoiceCell({
+    required this.player,
+    required this.choice,
+    required this.onChoose,
+  });
+  final Player player;
+  final RatingChoice? choice;
+  final ValueChanged<bool>? onChoose;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = player, choice = this.choice;
+    final colors = Theme.of(context).colorScheme;
+    final muted = TextStyle(color: colors.onSurfaceVariant);
+    final width = _columnWidth(context, RosterColumns.choice);
+    if (choice == null) {
+      return SizedBox(
+        width: width,
+        child: Tooltip(
+          message: p.memberId.trim().isEmpty
+              ? 'No US Chess ID.'
+              : 'No US Chess rating to switch to. Refresh from US Chess '
+                    'looks it up.',
+          child: Padding(
+            // Under the ratings, past where the tick boxes sit.
+            padding: const EdgeInsets.only(left: 30),
+            child: Text('—', style: muted),
+          ),
+        ),
+      );
+    }
+    final delta = choice.supplement - choice.entered;
+    final change = choice.entered == 0
+        ? 'from UNR'
+        : delta == 0
+        ? '±0'
+        : '${delta > 0 ? '+' : ''}$delta';
+    return SizedBox(
+      key: ValueKey('rating-choice-${p.id}'),
+      width: width,
+      child: Tooltip(
+        message: [
+          '${choice.system.label} rating, ${choice.supplementDate} supplement',
+          if (onChoose == null)
+            'Pairings are posted. The pairing rating stays.',
+        ].join('\n'),
         child: Row(
           children: [
             PlainCheckbox(
-              key: ValueKey('approve-rating-${p.id}'),
-              label: 'Apply US Chess rating for ${p.name}',
-              value: problem == null && draft.selected.contains(p.id),
-              onChanged: draft.busy || problem != null
+              key: ValueKey('use-supplement-${p.id}'),
+              label: 'Use US Chess rating ${choice.supplement} for ${p.name}',
+              value: choice.usingSupplement,
+              onChanged: onChoose == null
                   ? null
-                  : (value) => draft.select(p, value == true),
+                  : (value) => onChoose!(value == true),
             ),
             const SizedBox(width: 6),
-            Expanded(
+            Flexible(
               child: Text.rich(
-                draft.missingId(p)
-                    ? TextSpan(
-                        children: [
-                          WidgetSpan(
-                            alignment: PlaceholderAlignment.middle,
-                            child: Icon(
-                              Icons.error_outline,
-                              size: 16,
-                              color: attentionColor(colors),
-                            ),
-                          ),
-                          TextSpan(
-                            text: ' No US Chess ID',
-                            style: TextStyle(
-                              color: attentionColor(colors),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      )
-                    : shown == null
-                    ? TextSpan(
-                        // The first sentence fits; the tooltip has the rest.
-                        text: problem?.split('. ').first ?? '—',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      )
-                    : TextSpan(
-                        children: [
-                          TextSpan(
-                            text: shown,
-                            style: TextStyle(
-                              fontFamily: 'SourceCodePro',
-                              fontWeight: highlight
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: problem == null
-                                  ? null
-                                  : colors.onSurfaceVariant,
-                            ),
-                          ),
-                          if (change != null)
-                            TextSpan(
-                              text: '  $change',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: highlight
-                                    ? FontWeight.w700
-                                    : FontWeight.w400,
-                                color: highlight
-                                    ? colors.onSurface
-                                    : colors.onSurfaceVariant,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                            ),
-                        ],
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '${choice.supplement}',
+                      style: TextStyle(
+                        fontFamily: 'SourceCodePro',
+                        color: choice.usingSupplement
+                            ? null
+                            : colors.onSurfaceVariant,
                       ),
+                    ),
+                    TextSpan(
+                      text: '  $change',
+                      style: muted.copyWith(
+                        fontSize: 12,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
